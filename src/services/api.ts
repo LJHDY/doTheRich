@@ -1,0 +1,97 @@
+import axios from 'axios';
+import {
+  ApartmentComplex,
+  ApartmentComplexRequest,
+  PriceHistory,
+  PriceHistoryRequest,
+} from '../types';
+
+// 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
+const api = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8080',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 10000,
+});
+
+// 요청 인터셉터
+api.interceptors.request.use(
+  (config) => {
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// 응답 인터셉터 — 서버/네트워크 오류를 콘솔에 출력 후 상위로 전파
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      console.error('API 오류:', error.response.status, error.response.data);
+    } else if (error.request) {
+      console.error('서버 연결 실패:', error.request);
+    }
+    return Promise.reject(error);
+  }
+);
+
+/** 단지 목록 조회 (금액대 필터) */
+export const getComplexes = async (priceRange?: string): Promise<ApartmentComplex[]> => {
+  const params = priceRange ? { priceRange } : {}; // 필터 없으면 전체 조회
+  const { data } = await api.get<ApartmentComplex[]>('/api/complexes', { params });
+  return data;
+};
+
+/** 단지 상세 조회 */
+export const getComplexById = async (id: number): Promise<ApartmentComplex> => {
+  const { data } = await api.get<ApartmentComplex>(`/api/complexes/${id}`);
+  return data;
+};
+
+/** 단지 등록 */
+export const createComplex = async (
+  request: ApartmentComplexRequest
+): Promise<ApartmentComplex> => {
+  const { data } = await api.post<ApartmentComplex>('/api/complexes', request);
+  return data;
+};
+
+/** 시세 기록 목록 조회 */
+export const getPriceHistories = async (complexId: number): Promise<PriceHistory[]> => {
+  const { data } = await api.get<PriceHistory[]>(`/api/complexes/${complexId}/price-history`);
+  return data;
+};
+
+/** 시세 기록 추가 */
+export const addPriceHistory = async (
+  complexId: number,
+  request: PriceHistoryRequest
+): Promise<PriceHistory> => {
+  const { data } = await api.post<PriceHistory>(
+    `/api/complexes/${complexId}/price-history`,
+    request
+  );
+  return data;
+};
+
+/** 금액대 목록 조회 */
+export const getPriceRanges = async (): Promise<string[]> => {
+  const { data } = await api.get<string[]>('/api/complexes/price-ranges');
+  return data;
+};
+
+/** 단지 메모 수정 — PATCH /api/complexes/:id/memo */
+export const updateComplexMemo = async (complexId: number, memo: string): Promise<void> => {
+  await api.patch(`/api/complexes/${complexId}/memo`, { memo });
+};
+
+/** 실거래가/전세가 배치 수집 — POST /api/batch/real-estate-price */
+export const runBatchRealEstatePrice = async (): Promise<void> => {
+  // 배치 처리는 시간이 걸릴 수 있어 타임아웃을 3분으로 별도 설정
+  await api.post('/api/batch/real-estate-price', {}, { timeout: 180_000 });
+};
+
+export default api;
