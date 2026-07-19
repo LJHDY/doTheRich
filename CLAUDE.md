@@ -1,4 +1,4 @@
-아니 # CLAUDE.md — DoTheRich 프론트엔드 개발 가이드
+# CLAUDE.md — DoTheRich 프론트엔드 개발 가이드
 
 > **이 파일은 Claude가 개발·수정 전에 반드시 읽고, 작업 완료 후 반드시 업데이트해야 합니다.**
 
@@ -6,8 +6,8 @@
 
 ## 개발 규칙
 
-- **프론트엔드(doTheRichFront)만 수정.** 백엔드(doTheRichBack)는 절대 수정하지 않는다.
-- 백엔드 변경이 필요한 경우, 변경 내용을 텍스트로 설명하고 구현은 사용자에게 맡긴다.
+- **프론트엔드(doTheRichFront)만 수정.** 백엔드(doTheRichBack)는 원칙적으로 수정하지 않는다.
+- 백엔드 변경이 필요한 경우, 변경 내용을 텍스트로 설명하고 구현은 사용자에게 맡긴다. (단, 사용자가 명시적으로 요청 시 직접 수정 가능)
 - 모든 소스 파일에 **한국어 주석** 작성 (로직 설명, Why 위주).
 - TypeScript 타입 오류 없이 `npx tsc --noEmit` 통과 확인 후 완료 보고.
 - 작업 완료 후 이 파일의 해당 섹션을 업데이트한다.
@@ -22,6 +22,8 @@
 - 단지별 매매가/전세가 시세 기록 추적
 - 평형별 시세 변동 그래프 시각화
 - 네이버 검색으로 단지 등록, 지하철 도보 시간 자동 계산
+- 단지 비교 기능 (최대 3개 동시 비교)
+- 주요 지구 소요시간 기반 입지 등급 (S/A/B/C)
 
 ---
 
@@ -33,7 +35,25 @@
 | 지도 | Naver Maps API (CDN) |
 | 차트 | Recharts |
 | HTTP | Axios (`src/services/api.ts`) |
-| 백엔드 | Spring Boot (별도 레포, `http://localhost:8080`) |
+| 백엔드 | Spring Boot (로컬: `http://localhost:8080`, 운영: Railway) |
+
+---
+
+## 배포 환경
+
+| 구분 | 서비스 | URL |
+|------|--------|-----|
+| 프론트엔드 | Vercel | `https://do-the-rich-raew.vercel.app` |
+| 백엔드 | Railway | `https://dotherichback-production.up.railway.app` |
+| DB | Railway MySQL | Railway 내부 연결 |
+
+### 환경변수
+- **Vercel**: `REACT_APP_API_URL=https://dotherichback-production.up.railway.app`
+- **로컬 개발**: 환경변수 없으면 `localhost:8080` 자동 fallback (기존 개발 환경 그대로 유지)
+
+### 배포 시 주의사항
+- CRA는 환경변수를 **빌드 시점**에 주입 → Vercel에서 env var 변경 후 반드시 Redeploy 필요
+- `REACT_APP_*` prefix 필수 (CRA 규칙)
 
 ---
 
@@ -44,7 +64,7 @@ src/
 ├── App.tsx                   # 최상위 — 상태 관리, 레이아웃, 모달 제어
 ├── index.tsx
 ├── types/
-│   └── index.ts              # 전체 타입 정의 + formatPrice / toUkUnit 유틸
+│   └── index.ts              # 전체 타입 정의 + formatPrice / toUkUnit / calcCommuteGrade 유틸
 ├── services/
 │   └── api.ts                # axios 인스턴스 + API 함수
 ├── pages/
@@ -52,11 +72,17 @@ src/
 └── components/
     ├── PriceRangeFilter.tsx  # 헤더 금액대 필터 버튼
     ├── ComplexListModal.tsx  # 금액대 클릭 시 단지 목록 팝업
+    ├── CompareListModal.tsx  # 비교하기 단지 선택 패널 (헤더 하단 드롭다운)
+    ├── CompareCard.tsx       # 비교 뷰 단지 카드 (ComplexInfoPanel 간소화 버전)
+    ├── CommuteGradeBadge.tsx # 입지 등급 배지 (S/A/B/C) — 공통 컴포넌트
     ├── SearchBar.tsx         # 네이버 장소 검색
     ├── RegisterModal.tsx     # 단지 등록 폼 (가격·교통·출퇴근 입력)
     ├── ComplexInfoPanel.tsx  # 우측 단지 상세 패널
     ├── PriceChart.tsx        # 평형×매매/전세 다중 라인 차트
     └── PriceInputForm.tsx    # 시세 기록 추가 폼 (패널 내)
+public/
+├── favicon.ico               # 파비콘
+└── do_the_rich.png           # 헤더 로고 이미지
 ```
 
 ---
@@ -75,41 +101,32 @@ ApartmentComplex {
   commuteTimes: CommuteTime[],
   subwayInfos: SubwayInfo[],
   areaTypes?: string[]                          // 최신 시세 기준 평형 목록
-  areaTypePriceRanges?: Record<string, string>  // 평형 → 금액대 매핑 (예: {"전용 59": "11억대", "전용 84": "14억대"})
+  areaTypePriceRanges?: Record<string, string>  // 평형 → 금액대 매핑
   priceItems?: PriceItem[]                      // ⚠️ 백엔드가 포함 시에만 채워짐 (현재 미구현)
 }
 
-// 지하철 (subwayInfos 배열 — 복수 노선 지원)
-SubwayInfo { id, stationName, subwayLines, walkingMinutes }
+// 시세 기록 아이템 (평형별 1개) — 참고가 필드 포함
+PriceHistoryItem {
+  id, areaType, floor, price, jeonsePrice?, jeonseRate?,
+  askingPrice?,       // 호가
+  highestPrice?,      // 전고점
+  lowestPrice?,       // 전저점
+  tenYearChangeRate?,   // 10년 등락률 (%)
+  tenYearChangeAmount?, // 10년 등락 금액 (원)
+}
 
-// 시세 기록 헤더 (날짜별 1개, items 배열 포함)
+// 시세 기록 헤더
 PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistoryItem[] }
-
-// 시세 기록 아이템 (평형별 1개)
-PriceHistoryItem { id, areaType, floor, price, jeonsePrice?, jeonseRate? }
-
-// 단지 등록 요청
-ApartmentComplexRequest {
-  priceRange, complexName, ...,
-  priceItems?: [{ areaType, floor, price, jeonsePrice }],
-  subwayInfos?: [{ stationName, subwayLines, walkingMinutes }],
-  commuteTimes?: [{ destination, minutes, transportType }]
-}
-
-// 시세 기록 추가 요청
-PriceHistoryRequest {
-  recordDate, memo?, updateGoogleSheet?,
-  items: [{ areaType?, floor?, price?, jeonsePrice? }]
-}
-
-// 차트용 — 평형 × 매매/전세 다중 시리즈
-ChartDataRow  { date: string; [key: '평형-sale'|'평형-jeonse']: number }
-ChartSeries   { key, label, areaType, type: 'sale'|'jeonse', color }
 ```
 
 ### 유틸 함수
 - `formatPrice(원)` → `"7억 5천만"`
 - `toUkUnit(원)` → `7.5` (억 단위, 소수점 2자리)
+- `calcCommuteGrade(commuteTimes)` → `{ grade: 'S'|'A'|'B'|'C', color: string } | null`
+  - S(빨강): 강남 30분 이하
+  - A(노랑): 강남 60분 이하 or 시청·여의도 중 하나 30분 이하
+  - B(초록): 시청·여의도 중 하나 60분 이하
+  - C(파랑): 나머지
 
 ---
 
@@ -120,6 +137,7 @@ ChartSeries   { key, label, areaType, type: 'sale'|'jeonse', color }
 | GET | `/api/complexes` | 단지 목록 (priceRange 필터 가능) |
 | GET | `/api/complexes/:id` | 단지 상세 |
 | POST | `/api/complexes/register` | 단지 등록 |
+| DELETE | `/api/complexes/:id` | 단지 삭제 |
 | GET | `/api/complexes/price-ranges` | 금액대 목록 |
 | PATCH | `/api/complexes/:id/memo` | 단지 메모 수정 — `{ memo: string }` |
 | GET | `/api/complexes/:id/price-history` | 시세 기록 목록 |
@@ -140,84 +158,76 @@ ChartSeries   { key, label, areaType, type: 'sale'|'jeonse', color }
 - `focusLocation` → MapPage 지도 이동
 - `registerData` → RegisterModal 오픈
 - `listModalRange` → ComplexListModal 오픈 (null=닫힘, ''=전체)
-- `batchStatus` → 헤더 "시세 수집" 버튼 상태 ('idle'|'loading'|'done'|'error')
-  - `POST /api/batch/real-estate-price` 호출, 타임아웃 3분
-  - 완료 2초 / 오류 3초 후 idle 복귀
+- `compareOpen` / `compareIds` → 비교하기 상태 관리
+  - `compareIds.length > 0` 시 지도 대신 비교 카드 뷰 표시
+  - 최대 3개, 초과 시 alert
 - 검색 결과 선택 시 `fromSearch:true`로 RegisterModal 오픈
 
 ### `MapPage.tsx`
 - 네이버 지도 초기화 (서울 중심, zoom 12)
-- 단지마다 금액 말풍선 커스텀 마커
-- 마커 클릭 → InfoWindow (단지명, 가격, 지역, 지하철) + `onComplexSelect`
+- 단지마다 실제 금액 말풍선 커스텀 마커 (억 단위, 천만 반올림: 9.1억)
+  - 색상: 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=검정
+- 마커 클릭 → InfoWindow + `onComplexSelect`
 - 지도 클릭 → 역방향 지오코딩 → `onMapClick` 콜백으로 주소 전달
 - `focusLocation` 변경 시 지도 중심/줌(15) 이동
 
 ### `RegisterModal.tsx`
-- `RegisterInitialData`: complexName, address, lat, lng, fromSearch?
 - 섹션: 기본정보 / 가격정보 / 단지정보 / 교통정보 / 출퇴근시간 / 메모
-- **가격정보 행**: 평형 | 층수 | 매매가(억) | 전세가(억) | 전세율(자동) | **금액대(자동)** | ×
-  - 매매가 입력 시 금액대 자동 계산 (`calcPriceRange`)
-  - 금액대 수동 수정 가능
-- 교통정보: 역명 입력 후 [조회] → 네이버 API로 호선 목록 자동 조회 + 도보시간 계산
-- 출퇴근시간: 강남/시청/여의도/발산/마곡나루 중 선택 + 분 입력
-- `POST /api/complexes/register` 호출
-- ⚠️ 실거래가 자동조회 (`fromSearch` 시 MOLIT API 호출) — 정확도 문제로 현재 주석처리
+- **가격정보 행**: 평형 | 층수 | 매매가 | 전세가 | 전세율 | 금액대(자동) | ×
+  - **참고가 서브행**: 호가 | 전고점 | 전저점 | 10년 등락(A-B 패턴 자동계산) | 등락률
+- 교통정보: 역명 → 네이버 API 호선 자동 조회 + 도보시간 계산
+- 출퇴근시간: 강남/시청/여의도/발산/마곡나루 + 분 입력
+- ⚠️ 실거래가 자동조회 — 정확도 문제로 주석처리
 
 ### `ComplexInfoPanel.tsx`
 - 단지 선택 시 `GET /api/complexes/:id/price-history` 조회
-- **차트**: `buildChartData(histories)` → `ChartDataRow[]` + `ChartSeries[]` 변환 후 PriceChart 전달
-- 최근 기록: 최신 5건, 날짜별로 items[] 나열 (평형·층수·가격·전세율)
-- 지하철: `subwayInfos[]` 배열 순회
-- 시세 입력 버튼 클릭 → PriceInputForm 토글
+- 단지 정보: 연식·세대수·주소·확인일자 + 참고가(호가·전고점·전저점·10년등락·등락률)
+- 주요 지구 소요시간: `CommuteGradeBadge` 배지 표시
+- **차트**: 평형별 다중 라인 (매매 파란계열, 전세 빨간계열)
+- 최근 기록: 최신 5건 (참고가 chips 포함)
+- 단지 삭제: 2단계 확인 후 `DELETE /api/complexes/:id`
+- 메모 인라인 편집
+
+### `CompareListModal.tsx`
+- 헤더 "비교하기" 버튼 클릭 시 헤더 하단 드롭다운 패널
+- 금액대 필터 + 체크박스 목록 (최대 3개)
+- 선택 행 파란 배경 하이라이트
+
+### `CompareCard.tsx`
+- 비교 뷰에서 1/3 너비로 표시되는 단지 카드
+- 구성: 헤더(파랑) + 단지정보 + 지하철 + 소요시간(등급배지) + 차트 + 최근 3건
+- 닫기(×) 버튼 → 비교 목록 제거 + 체크박스 해제
+
+### `CommuteGradeBadge.tsx`
+- `commuteTimes` 받아서 S/A/B/C 배지 렌더링
+- `ComplexInfoPanel`과 `CompareCard`에서 공통 사용
+- 등급 로직은 `types/index.ts`의 `calcCommuteGrade()`로 단일 관리
 
 ### `PriceChart.tsx`
 - props: `rows: ChartDataRow[]`, `series: ChartSeries[]`
-- **매매가**: 파란 계열 실선 (`#1a73e8`, `#4285f4`, `#185abc`, `#669df6`)
-- **전세가**: 빨간 계열 점선 (`#ea4335`, `#c62828`, `#ef5350`, `#e57373`)
-- 전세 데이터 없는 평형은 전세 시리즈 미생성
-- 하단 SVG 범례 (실선/점선 아이콘 + 라벨)
-- 빈 데이터 시 안내 placeholder 표시
+- 매매가: 파란 계열 실선 / 전세가: 빨간 계열 점선
+- 하단 SVG 범례, 빈 데이터 시 placeholder
 
 ### `PriceInputForm.tsx`
 - 날짜 / 금액(한글 파싱: "7억5천") / 층수 / 메모 / 구글시트 여부
-- 제출 형식: `PriceHistoryRequest { recordDate, memo, updateGoogleSheet, items: [{price, floor?}] }`
+- 참고가 서브행: 호가·전고점·전저점·10년등락·등락률 (평형별)
 
 ### `PriceRangeFilter.tsx`
-- props: `priceRanges`, `selectedRange`, `onSelect`, `onSelectAreaType?`, `complexes?`
-- 금액대 셀렉트박스 (오름차순 정렬) + 금액대 선택 시 평형 셀렉트박스 표시
-- `appearance: none` + SVG 화살표 오버레이로 현대적 스타일 적용
-- `getAreaTypes(range)` — `c.areaTypePriceRanges`에서 해당 금액대인 평형만 추출
-  - 예: "14억대" 선택 시 전용84(14억대)는 나오고 전용59(11억대)는 제외됨
-  - fallback: `areaTypePriceRanges` 없으면 `c.areaTypes` 사용
-- 평형 선택 → `onSelectAreaType(range, areaType)` → 금액대+평형 동시 필터
+- 금액대 셀렉트박스 + 금액대 선택 시 평형 셀렉트박스 표시
+- `getAreaTypes(range)` — `areaTypePriceRanges`에서 해당 금액대 평형만 추출
 
 ### `ComplexListModal.tsx`
-- props: `range`, `areaType?`, `complexes`, `onClose`, `onSelect`
-- 금액대 필터 클릭 시 **헤더 하단 드롭다운 패널**로 표시 (전체화면 모달 아님)
-- `position: fixed, top: 56px` — 지도/사이드패널 위에 겹쳐지지 않음
-- 투명 백드롭 클릭 시 닫힘
-- 단지들을 `grid (auto-fill, minmax 280px)` 로 배치해 가로 공간 활용
-- `range` + `areaType` 동시 전달 시: `c.areaTypePriceRanges[areaType] === range` 로 정확 매핑 필터
-  - A단지 전용59=11억대, 전용84=14억대 → "14억대+전용59" 조회 시 A단지 제외됨
-- `range`만 전달 시: `Object.values(areaTypePriceRanges).includes(range)` 로 해당 금액대 포함 단지 필터
-- 타이틀에 선택한 평형 표시: "7억대 · 전용 59 단지 목록"
-- 단지 클릭 → `onSelect` → ComplexInfoPanel 열림 + 지도 이동
-
-### `SearchBar.tsx`
-- 검색어 입력 → `GET /api/search/local` → 결과 드롭다운
-- 선택 시 `SearchSelectData { title, address, roadAddress, lat, lng }` 반환
+- 헤더 하단 드롭다운 패널 (`position: fixed, top: 56px`)
+- `range` + `areaType` 동시 필터 지원
+- 단지 클릭 → `onSelect` → ComplexInfoPanel + 지도 이동
 
 ---
 
 ## 백엔드 연동 시 주의사항
 
-### `ApartmentComplexDto` (백엔드 응답)
-- `subwayInfos: List<SubwayInfoDto>` 배열로 반환됨 (단일 필드 아님)
-- `priceItems` 배열은 **현재 미포함** — 추후 포함 시 필터 평형 표시 자동 동작
-
-### `PriceHistoryDto` (백엔드 응답)
-- `items: List<PriceHistoryItemDto>` 배열 구조
-- 이전 단일 `price`/`floor` 필드 없음
+### `PriceHistoryItem` 참고가 필드
+- `askingPrice`, `highestPrice`, `lowestPrice`, `tenYearChangeRate`, `tenYearChangeAmount` 모두 **item 레벨**에 있음 (history 레벨 아님)
+- ComplexInfoPanel에서는 `latestHistory?.items[0]` 기준으로 표시
 
 ### MOLIT 실거래가 API
 - 서비스 키 `+` 문자 → `%2B` 인코딩 필요 (백엔드에서 처리)
@@ -230,21 +240,26 @@ ChartSeries   { key, label, areaType, type: 'sale'|'jeonse', color }
 | 항목 | 설명 |
 |------|------|
 | `ApartmentComplexDto`에 `priceItems` 포함 | 금액대 필터에서 평형 정보 표시 가능 |
-| MOLIT 동 단위 필터링 | `getLatestTradePrice/JeonsePrice`에 법정동 기반 포스트 필터링 추가 |
+| MOLIT 동 단위 필터링 | 법정동 기반 포스트 필터링 추가 |
 | 실거래가 정확도 개선 | 단지명 매핑 로직 개선 후 RegisterModal 주석 해제 |
 
 ---
 
 ## 완료된 기능
 
-- [x] 네이버 지도 + 단지 마커
+- [x] 네이버 지도 + 단지 마커 (실제 금액 억 단위 표시)
 - [x] 지도/검색으로 단지 등록 (가격·교통·출퇴근 입력)
 - [x] 금액대 필터 → 단지 목록 팝업
-- [x] 단지 상세 패널 (지하철 다중 노선, 소요시간)
-- [x] 시세 기록 추가 (items[] 배열 구조)
-- [x] 시세 변동 그래프 — 평형별 다중 라인 (매매 파란계열, 전세 빨간계열)
-- [x] 가격 행별 금액대 자동 계산 (수동 수정 가능)
+- [x] 단지 상세 패널 (지하철 다중 노선, 소요시간, 참고가)
+- [x] 단지 삭제 기능 (2단계 확인)
+- [x] 시세 기록 추가 (참고가 평형별 관리)
+- [x] 시세 변동 그래프 — 평형별 다중 라인
+- [x] 가격 행별 금액대 자동 계산 + 참고가 입력
 - [x] 네이버 역 조회 + 도보 시간 자동 계산
+- [x] 비교하기 기능 (최대 3개, 3등분 카드 뷰)
+- [x] 입지 등급 배지 (S/A/B/C) — 공통 컴포넌트
+- [x] favicon + 로고 이미지
+- [x] Vercel(프론트) + Railway(백엔드+MySQL) 배포
 
 ## 미완성 / TODO
 
