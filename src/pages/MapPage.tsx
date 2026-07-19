@@ -1,32 +1,18 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { ApartmentComplex, formatPrice } from '../types';
-import api from '../services/api';
-
-interface MapClickData {
-  lat: number;
-  lng: number;
-  complexName: string;
-  address: string;
-  roadAddress: string;
-}
 
 interface MapPageProps {
   complexes: ApartmentComplex[];
   selectedComplex: ApartmentComplex | null;
   onComplexSelect: (complex: ApartmentComplex) => void;
   focusLocation?: { lat: number; lng: number } | null;
-  onMapClick?: (data: MapClickData) => void;
 }
 
-const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplexSelect, focusLocation, onMapClick }) => {
+const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplexSelect, focusLocation }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const infoWindowRef = useRef<any>(null);
-  const onMapClickRef = useRef(onMapClick);
-
-  // 클로저 오래됨 문제 방지: 리렌더마다 최신 핸들러로 ref 갱신
-  useEffect(() => { onMapClickRef.current = onMapClick; });
 
   // 네이버 지도 초기화
   useEffect(() => {
@@ -46,45 +32,6 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
       anchorSkew: true,
       borderColor: '#1a73e8',
       borderWidth: 2,
-    });
-
-    // 지도 클릭 → 역지오코딩 → 로컬 검색 → 팝업
-    window.naver.maps.Event.addListener(map, 'click', (e: any) => {
-      if (!onMapClickRef.current) return;
-      const lat = e.coord.lat();
-      const lng = e.coord.lng();
-
-      window.naver.maps.Service.reverseGeocode(
-        {
-          coords: new window.naver.maps.LatLng(lat, lng),
-          orders: [
-            window.naver.maps.Service.OrderType.ADDR,
-            window.naver.maps.Service.OrderType.ROAD_ADDR,
-          ],
-        },
-        async (status: any, response: any) => {
-          const addr = response?.v2?.address ?? {};
-          const roadAddress = addr.roadAddress ?? '';
-          const address = addr.jibunAddress ?? '';
-          const query = roadAddress || address;
-
-          let complexName = '';
-          if (query) {
-            try {
-              // 역지오코딩 주소로 네이버 로컬 검색 → 첫 결과를 단지명으로 사용
-              const { data } = await api.get<{ items: { title: string }[] }>(
-                '/api/search/local', { params: { query } }
-              );
-              const first = data.items?.[0];
-              if (first) {
-                complexName = first.title.replace(/<[^>]+>/g, ''); // HTML 태그 제거
-              }
-            } catch {}
-          }
-
-          onMapClickRef.current?.({ lat, lng, complexName, address, roadAddress });
-        }
-      );
     });
 
     return () => {

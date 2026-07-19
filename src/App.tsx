@@ -240,12 +240,6 @@ const App: React.FC = () => {
               selectedComplex={selectedComplex}
               onComplexSelect={setSelectedComplex}
               focusLocation={focusLocation}
-              onMapClick={(data) => setRegisterData({
-                complexName: data.complexName,
-                address: data.roadAddress || data.address,
-                latitude: data.lat,
-                longitude: data.lng,
-              })}
             />
             {selectedComplex && (
               <ComplexInfoPanel
