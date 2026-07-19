@@ -408,7 +408,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     <div style={{
       position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-    }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    }}>
 
       <div style={{
         backgroundColor: '#fff', borderRadius: '12px', width: '640px',
