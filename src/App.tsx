@@ -5,6 +5,8 @@ import MapPage from './pages/MapPage';
 import PriceRangeFilter from './components/PriceRangeFilter';
 import ComplexInfoPanel from './components/ComplexInfoPanel';
 import ComplexListModal from './components/ComplexListModal';
+import CompareListModal from './components/CompareListModal';
+import CompareCard from './components/CompareCard';
 import SearchBar, { SearchSelectData } from './components/SearchBar';
 import RegisterModal, { RegisterInitialData } from './components/RegisterModal';
 
@@ -20,6 +22,25 @@ const App: React.FC = () => {
   const [listModalRange, setListModalRange] = useState<string | null>(null);
   // 평형 필터 — null이면 전체, '전용 59' 등 선택 시 해당 평형 단지만 표시
   const [listModalAreaType, setListModalAreaType] = useState<string | null>(null);
+
+  // 비교하기 — 최대 3개 단지 선택, 선택 시 화면 3등분 카드 뷰로 전환
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareIds, setCompareIds] = useState<number[]>([]);
+
+  // 체크박스 토글 — 3개 초과 시 alert, 이미 선택된 경우 해제
+  const handleCompareToggle = (id: number) => {
+    setCompareIds(prev => {
+      if (prev.includes(id)) return prev.filter(x => x !== id);
+      if (prev.length >= 3) { alert('최대 3개까지만 비교할 수 있습니다.'); return prev; }
+      return [...prev, id];
+    });
+  };
+
+  // 비교 모드 종료 — 선택 목록도 초기화
+  const handleCompareClose = () => {
+    setCompareOpen(false);
+    setCompareIds([]);
+  };
 
   // 앱 최초 마운트 시 금액대 목록을 서버에서 가져와 필터 버튼 생성
   useEffect(() => {
@@ -107,11 +128,7 @@ const App: React.FC = () => {
       }}>
         {/* 로고 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          <div style={{
-            width: '32px', height: '32px', backgroundColor: '#1a73e8', borderRadius: '8px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: '16px', fontWeight: 800,
-          }}>D</div>
+          <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'contain' }} />
           <span style={{ fontSize: '16px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>
             DoTheRich
           </span>
@@ -132,6 +149,22 @@ const App: React.FC = () => {
         <div style={{ marginLeft: 'auto' }}>
           <SearchBar onSelect={handleSearchSelect} />
         </div>
+
+        {/* 비교하기 버튼 — 클릭 시 단지 선택 패널 토글 */}
+        <button
+          onClick={() => setCompareOpen(prev => !prev)}
+          style={{
+            padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+            border: '1px solid',
+            borderColor: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#dadce0',
+            borderRadius: '6px',
+            backgroundColor: compareOpen || compareIds.length > 0 ? '#e8f0fe' : '#fff',
+            color: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#5f6368',
+            cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+          }}
+        >
+          {compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}
+        </button>
 
         {/* 실거래가 배치 수집 버튼 — 백엔드 202 즉시 반환, 백그라운드 처리 */}
         <button
@@ -165,32 +198,96 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 본문: 지도 + 사이드패널 */}
+      {/* 본문: 지도 + 사이드패널 (비교 모드에서는 비교 카드 뷰로 전환) */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <MapPage
-          complexes={complexes}
-          selectedComplex={selectedComplex}
-          onComplexSelect={setSelectedComplex}
-          focusLocation={focusLocation}
-          onMapClick={(data) => setRegisterData({
-            complexName: data.complexName,
-            address: data.roadAddress || data.address,
-            latitude: data.lat,
-            longitude: data.lng,
-          })}
-        />
-        {selectedComplex && (
-          <ComplexInfoPanel
-            complex={selectedComplex}
-            onClose={() => {
-              (window as any).__closeInfoWindow?.();
-              setSelectedComplex(null);
-            }}
-            onMemoUpdate={handleMemoUpdate}
-            onDelete={handleComplexDelete}
-          />
+        {compareIds.length > 0 ? (
+          /* 비교 뷰 — 선택된 단지들을 좌→우 순서로 3등분 카드 표시 */
+          <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+            {compareIds.map(id => {
+              const c = complexes.find(x => x.id === id);
+              if (!c) return null;
+              return (
+                <CompareCard
+                  key={id}
+                  complex={c}
+                  onClose={() => handleCompareToggle(id)}
+                />
+              );
+            })}
+            {/* 빈 슬롯 — 3개 미만일 때 "+ 단지 추가" 안내 */}
+            {compareIds.length < 3 && (
+              <div
+                onClick={() => setCompareOpen(true)}
+                style={{
+                  flex: 1, minWidth: 0, height: '100%',
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  gap: '10px', cursor: 'pointer',
+                  backgroundColor: '#f8f9fa', borderRight: '1px solid #e8eaed',
+                  color: '#9e9e9e',
+                }}
+              >
+                <div style={{ fontSize: '36px', color: '#dadce0' }}>+</div>
+                <span style={{ fontSize: '13px' }}>단지 추가</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* 기본 뷰 — 지도 + 선택 단지 사이드패널 */
+          <>
+            <MapPage
+              complexes={complexes}
+              selectedComplex={selectedComplex}
+              onComplexSelect={setSelectedComplex}
+              focusLocation={focusLocation}
+              onMapClick={(data) => setRegisterData({
+                complexName: data.complexName,
+                address: data.roadAddress || data.address,
+                latitude: data.lat,
+                longitude: data.lng,
+              })}
+            />
+            {selectedComplex && (
+              <ComplexInfoPanel
+                complex={selectedComplex}
+                onClose={() => {
+                  (window as any).__closeInfoWindow?.();
+                  setSelectedComplex(null);
+                }}
+                onMemoUpdate={handleMemoUpdate}
+                onDelete={handleComplexDelete}
+              />
+            )}
+          </>
         )}
       </div>
+
+      {/* 비교하기 단지 선택 패널 */}
+      {compareOpen && (
+        <CompareListModal
+          complexes={complexes}
+          priceRanges={priceRanges}
+          selectedIds={compareIds}
+          onToggle={handleCompareToggle}
+          onClose={() => setCompareOpen(false)}
+        />
+      )}
+
+      {/* 비교 모드 종료 플로팅 버튼 — 비교 카드가 보일 때 표시 */}
+      {compareIds.length > 0 && (
+        <button
+          onClick={handleCompareClose}
+          style={{
+            position: 'fixed', bottom: '24px', right: '24px', zIndex: 400,
+            padding: '10px 18px', fontSize: '13px', fontWeight: 600,
+            backgroundColor: '#c5221f', color: '#fff',
+            border: 'none', borderRadius: '20px', cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          }}
+        >
+          비교 종료
+        </button>
+      )}
 
       {/* 금액대별 단지 목록 팝업 */}
       {listModalRange !== null && (

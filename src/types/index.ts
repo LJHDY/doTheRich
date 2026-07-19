@@ -164,3 +164,25 @@ export const formatPrice = (price: number): string => {
 export const toUkUnit = (price: number): number => {
   return Math.round((price / 100000000) * 100) / 100; // 소수점 2자리까지만 유지
 };
+
+/** 주요 지구 소요시간 기반 입지 등급 계산
+ * S(빨강): 강남 30분 이하
+ * A(노랑): 강남 60분 이하 or 시청·여의도 중 하나 30분 이하
+ * B(초록): 시청·여의도 중 하나 60분 이하
+ * C(파랑): 나머지
+ */
+export const calcCommuteGrade = (
+  commuteTimes: CommuteTime[]
+): { grade: 'S' | 'A' | 'B' | 'C'; color: string } | null => {
+  if (!commuteTimes || commuteTimes.length === 0) return null;
+  const gangnam   = commuteTimes.find(ct => ct.destination === '강남');
+  const siccheong = commuteTimes.find(ct => ct.destination === '시청');
+  const yeouido   = commuteTimes.find(ct => ct.destination === '여의도');
+
+  if (gangnam && gangnam.minutes <= 30) return { grade: 'S', color: '#ea4335' };
+  const cityUnder30 = (siccheong && siccheong.minutes <= 30) || (yeouido && yeouido.minutes <= 30);
+  if (cityUnder30 || (gangnam && gangnam.minutes <= 60)) return { grade: 'A', color: '#f9ab00' };
+  const cityUnder60 = (siccheong && siccheong.minutes <= 60) || (yeouido && yeouido.minutes <= 60);
+  if (cityUnder60) return { grade: 'B', color: '#34a853' };
+  return { grade: 'C', color: '#1a73e8' };
+};

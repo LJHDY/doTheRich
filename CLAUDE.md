@@ -1,4 +1,4 @@
-# CLAUDE.md — DoTheRich 프론트엔드 개발 가이드
+아니 # CLAUDE.md — DoTheRich 프론트엔드 개발 가이드
 
 > **이 파일은 Claude가 개발·수정 전에 반드시 읽고, 작업 완료 후 반드시 업데이트해야 합니다.**
 

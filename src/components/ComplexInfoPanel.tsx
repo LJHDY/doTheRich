@@ -3,6 +3,7 @@ import { ApartmentComplex, PriceHistory, PriceHistoryRequest, ChartDataRow, Char
 import { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
+import CommuteGradeBadge from './CommuteGradeBadge';
 
 interface ComplexInfoPanelProps {
   complex: ApartmentComplex | null;
@@ -303,6 +304,16 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           <InfoRow label="세대수" value={complex.unitCount ? `${complex.unitCount}세대` : null} />
           <InfoRow label="주소" value={complex.address} />
           <InfoRow label="확인일자" value={complex.checkDate} />
+          {/* 참고가 — 최신 시세 기록 첫 번째 항목 기준으로 표시 */}
+          <InfoRow label="호가" value={latestHistory?.items[0]?.askingPrice ? formatPrice(latestHistory.items[0].askingPrice) : null} />
+          <InfoRow label="전고점" value={latestHistory?.items[0]?.highestPrice ? formatPrice(latestHistory.items[0].highestPrice) : null} />
+          <InfoRow label="전저점" value={latestHistory?.items[0]?.lowestPrice ? formatPrice(latestHistory.items[0].lowestPrice) : null} />
+          <InfoRow label="10년 등락" value={latestHistory?.items[0]?.tenYearChangeAmount != null
+            ? `${latestHistory.items[0].tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(latestHistory.items[0].tenYearChangeAmount)}억`
+            : null} />
+          <InfoRow label="등락률" value={latestHistory?.items[0]?.tenYearChangeRate != null
+            ? `${latestHistory.items[0].tenYearChangeRate >= 0 ? '+' : ''}${latestHistory.items[0].tenYearChangeRate}%`
+            : null} />
 
           {/* 메모 — 편집 버튼 클릭 시 textarea로 전환, 저장 시 즉시 반영 */}
           <div style={{ padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
@@ -397,9 +408,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {/* 상업지구 소요시간 */}
         {complex.commuteTimes && complex.commuteTimes.length > 0 && (
           <div style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>
-              주요 지구 소요시간
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>
+                주요 지구 소요시간
+              </h3>
+              <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
+            </div>
             <div
               style={{
                 display: 'grid',
