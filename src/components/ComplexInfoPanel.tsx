@@ -4,6 +4,7 @@ import { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex } 
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
+import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 
 interface ComplexInfoPanelProps {
   complex: ApartmentComplex | null;
@@ -90,6 +91,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [editingMemo, setEditingMemo] = useState(false);
   const [memoText, setMemoText] = useState('');
   const [displayMemo, setDisplayMemo] = useState('');
+  const memoHook = useNumberedTextarea(memoText, setMemoText);
   const [memoSaving, setMemoSaving] = useState(false);
   const [memoError, setMemoError] = useState<string | null>(null);
   const [showRecordTooltip, setShowRecordTooltip] = useState(false);
@@ -333,8 +335,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             {editingMemo ? (
               <div>
                 <textarea
+                  ref={memoHook.ref}
                   value={memoText}
                   onChange={e => setMemoText(e.target.value)}
+                  onFocus={memoHook.onFocus}
+                  onKeyDown={memoHook.onKeyDown}
+                  onBlur={memoHook.onBlur}
                   rows={3}
                   style={{
                     width: '100%', padding: '6px 8px', fontSize: '13px',

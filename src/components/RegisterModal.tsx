@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 
 export interface RegisterInitialData {
   complexName: string;
@@ -210,6 +211,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
 
   const set = (field: string, value: string) =>
     setForm(prev => ({ ...prev, [field]: value }));
+
+  const memoHook = useNumberedTextarea(form.memo, v => set('memo', v));
 
   // 주소 입력이 바뀔 때마다 지역구 자동 재추출
   useEffect(() => {
@@ -699,9 +702,17 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
 
           {/* 메모 */}
           <div style={sectionTitle}>메모</div>
-          <textarea placeholder="자유롭게 메모를 입력하세요." value={form.memo}
-            onChange={e => set('memo', e.target.value)} rows={3}
-            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+          <textarea
+            ref={memoHook.ref}
+            placeholder="자유롭게 메모를 입력하세요."
+            value={form.memo}
+            onChange={e => set('memo', e.target.value)}
+            onFocus={memoHook.onFocus}
+            onKeyDown={memoHook.onKeyDown}
+            onBlur={memoHook.onBlur}
+            rows={3}
+            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+          />
         </div>
 
         {/* 푸터 */}
