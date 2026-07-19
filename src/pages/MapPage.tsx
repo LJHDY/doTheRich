@@ -96,17 +96,19 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
   // 마커 아이콘 생성
   const createMarkerIcon = useCallback(
     (complex: ApartmentComplex, isSelected: boolean) => {
-      const match = complex.priceRange?.match(/^(\d+)/);
-      const rangeNum = match ? parseInt(match[1]) : null;
-      const label = rangeNum !== null ? String(rangeNum) : complex.priceRange;
+      // 실제 가격을 억 단위로 변환 (천만 자리에서 반올림) — 없으면 금액대 숫자로 fallback
+      const priceUk = complex.price
+        ? Math.round(complex.price / 10000000) / 10
+        : (() => { const m = complex.priceRange?.match(/^(\d+)/); return m ? parseInt(m[1]) : null; })();
+      const label = priceUk !== null ? String(priceUk) : complex.priceRange;
 
-      // 금액대별 색상 구분: 선택=보라, 5억 미만=파랑, 10억 미만=노랑, 15억 미만=빨강, 그 외=검정
+      // 가격 기준 색상 구분: 선택=보라, 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=검정
       const baseColor = isSelected
         ? '#6a0dad'
-        : rangeNum === null ? '#1a73e8'
-        : rangeNum < 5  ? '#1a73e8'
-        : rangeNum < 10 ? '#f9ab00'
-        : rangeNum < 15 ? '#c5221f'
+        : priceUk === null ? '#1a73e8'
+        : priceUk < 10 ? '#1a73e8'
+        : priceUk < 15 ? '#f9ab00'
+        : priceUk < 20 ? '#c5221f'
         : '#202124';
 
       const bgColor = baseColor;
