@@ -88,6 +88,11 @@ export const updateComplexMemo = async (complexId: number, memo: string): Promis
   await api.patch(`/api/complexes/${complexId}/memo`, { memo });
 };
 
+/** 단지 삭제 — DELETE /api/complexes/:id */
+export const deleteComplex = async (complexId: number): Promise<void> => {
+  await api.delete(`/api/complexes/${complexId}`);
+};
+
 /** 실거래가/전세가 배치 수집 — POST /api/batch/real-estate-price */
 export const runBatchRealEstatePrice = async (): Promise<void> => {
   // 배치 처리는 시간이 걸릴 수 있어 타임아웃을 3분으로 별도 설정

@@ -64,6 +64,11 @@ export interface PriceHistoryItem {
   price: number;         // 원 단위
   jeonsePrice?: number;  // 원 단위
   jeonseRate?: number;   // %
+  askingPrice?: number;         // 호가 (원 단위)
+  highestPrice?: number;        // 전고점 (원 단위)
+  lowestPrice?: number;         // 전저점 (원 단위)
+  tenYearChangeRate?: number;   // 10년 등락률 (%)
+  tenYearChangeAmount?: number; // 10년 등락 금액 (원 단위)
 }
 
 /** 시세 기록 — 날짜 단위 헤더 + 평형별 items 배열 */
@@ -86,6 +91,11 @@ export interface PriceHistoryRequest {
     floor?: string;
     price?: number;
     jeonsePrice?: number;
+    askingPrice?: number;
+    highestPrice?: number;
+    lowestPrice?: number;
+    tenYearChangeRate?: number;
+    tenYearChangeAmount?: number;
   }[];
 }
 
@@ -107,6 +117,11 @@ export interface ApartmentComplexRequest {
     floor?: string;
     price?: number;
     jeonsePrice?: number;
+    askingPrice?: number;
+    highestPrice?: number;
+    lowestPrice?: number;
+    tenYearChangeRate?: number;
+    tenYearChangeAmount?: number;
   }[];
   commuteTimes?: {
     destination: string;

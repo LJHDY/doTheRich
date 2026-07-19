@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit } from '../types';
-import { getPriceHistories, addPriceHistory, updateComplexMemo } from '../services/api';
+import { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 
 interface ComplexInfoPanelProps {
   complex: ApartmentComplex | null;
   onClose: () => void;
+  onMemoUpdate?: (complexId: number, memo: string) => void;
+  onDelete?: (complexId: number) => void;
 }
 
 // 값이 없으면 행 자체를 렌더링하지 않아 불필요한 빈 줄 방지
@@ -73,7 +75,7 @@ const buildChartData = (
   return { rows, series };
 };
 
-const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose }) => {
+const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, onMemoUpdate, onDelete }) => {
   const [priceHistories, setPriceHistories] = useState<PriceHistory[]>([]);
   const [chartData, setChartData] = useState<{ rows: ChartDataRow[]; series: ChartSeries[] }>(() => ({ rows: [], series: [] }));
   const [showInputForm, setShowInputForm] = useState(false);
@@ -89,6 +91,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose })
   const [displayMemo, setDisplayMemo] = useState('');
   const [memoSaving, setMemoSaving] = useState(false);
   const [memoError, setMemoError] = useState<string | null>(null);
+  const [showRecordTooltip, setShowRecordTooltip] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // 시세 기록 로드 후 차트용 억 단위 데이터 포인트로 변환
   const loadPriceHistories = useCallback(async (complexId: number) => {
@@ -131,10 +136,25 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose })
       await updateComplexMemo(complex.id, memoText);
       setDisplayMemo(memoText);
       setEditingMemo(false);
+      // 부모 상태(complexes, selectedComplex)에도 즉시 반영 — 다른 단지 갔다 와도 유지됨
+      onMemoUpdate?.(complex.id, memoText);
     } catch {
       setMemoError('저장에 실패했습니다.');
     } finally {
       setMemoSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!complex) return;
+    setDeleting(true);
+    try {
+      await deleteComplex(complex.id);
+      onDelete?.(complex.id);
+      onClose();
+    } catch {
+      setDeleting(false);
+      setDeleteConfirm(false);
     }
   };
 
@@ -500,9 +520,45 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose })
         {/* 최근 시세 기록 목록 */}
         {priceHistories.length > 0 && (
           <div style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>
-              최근 기록
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', margin: 0 }}>
+                최근 기록
+              </h3>
+              {/* 물음표 아이콘 — 호버 시 tooltip 표시 */}
+              <div
+                style={{ position: 'relative', display: 'inline-flex' }}
+                onMouseEnter={() => setShowRecordTooltip(true)}
+                onMouseLeave={() => setShowRecordTooltip(false)}
+              >
+                <div style={{
+                  width: '15px', height: '15px', borderRadius: '50%',
+                  backgroundColor: '#dadce0', color: '#5f6368',
+                  fontSize: '10px', fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'default', flexShrink: 0, lineHeight: 1,
+                }}>
+                  ?
+                </div>
+                {showRecordTooltip && (
+                  <div style={{
+                    position: 'absolute', bottom: '120%', left: 0,
+                    backgroundColor: '#3c4043', color: '#fff',
+                    fontSize: '11px', lineHeight: 1.6,
+                    padding: '7px 10px', borderRadius: '6px',
+                    width: '200px', zIndex: 10,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    pointerEvents: 'none',
+                  }}>
+                    전세가율 : 낮으면 호황/급등기, 높으면 불황
+                    <div style={{
+                      position: 'absolute', top: '100%', left: '7px',
+                      borderWidth: '5px', borderStyle: 'solid',
+                      borderColor: '#3c4043 transparent transparent transparent',
+                    }} />
+                  </div>
+                )}
+              </div>
+            </div>
             {/* 최신순으로 뒤집어 최대 5건만 표시 — 날짜별로 items 배열을 나열 */}
             {[...priceHistories].reverse().slice(0, 5).map((h) => (
               <div
@@ -519,23 +575,37 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose })
                   {h.memo && <span style={{ marginLeft: '6px' }}>{h.memo}</span>}
                 </div>
                 {h.items.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      fontSize: '13px',
-                      padding: '2px 0',
-                    }}
-                  >
-                    <span style={{ color: '#5f6368' }}>
-                      {item.areaType || '-'}
-                      {item.floor ? ` · ${item.floor}층` : ''}
-                    </span>
-                    <span style={{ fontWeight: 600, color: '#202124' }}>{formatPrice(item.price)}</span>
-                    {item.jeonseRate != null && (
-                      <span style={{ fontSize: '11px', color: '#1a73e8' }}>전세율 {item.jeonseRate.toFixed(0)}%</span>
+                  <div key={item.id} style={{ padding: '3px 0', borderBottom: '1px solid #f0f0f0' }}>
+                    {/* 기본 가격 행 */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                      <span style={{ color: '#5f6368' }}>
+                        {item.areaType || '-'}
+                        {item.floor ? ` · ${item.floor}층` : ''}
+                      </span>
+                      <span style={{ fontWeight: 600, color: '#202124' }}>{formatPrice(item.price)}</span>
+                      {item.jeonseRate != null && (
+                        <span style={{ fontSize: '11px', color: '#1a73e8' }}>전세율 {item.jeonseRate.toFixed(0)}%</span>
+                      )}
+                    </div>
+                    {/* 참고가 — 값이 있는 항목만 표시 */}
+                    {(item.askingPrice || item.highestPrice || item.lowestPrice || item.tenYearChangeAmount || item.tenYearChangeRate) && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '3px' }}>
+                        {item.askingPrice && (
+                          <span style={{ fontSize: '10px', color: '#80868b' }}>호가 {formatPrice(item.askingPrice)}</span>
+                        )}
+                        {item.highestPrice && (
+                          <span style={{ fontSize: '10px', color: '#80868b' }}>전고점 {formatPrice(item.highestPrice)}</span>
+                        )}
+                        {item.lowestPrice && (
+                          <span style={{ fontSize: '10px', color: '#80868b' }}>전저점 {formatPrice(item.lowestPrice)}</span>
+                        )}
+                        {(item.tenYearChangeAmount || item.tenYearChangeRate != null) && (
+                          <span style={{ fontSize: '10px', color: '#80868b' }}>
+                            10년{item.tenYearChangeAmount ? ` ${formatPrice(item.tenYearChangeAmount)}` : ''}
+                            {item.tenYearChangeRate != null ? ` (${item.tenYearChangeRate}%)` : ''}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -571,6 +641,56 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose })
             + 시세 입력하기
           </button>
         )}
+
+        {/* 단지 삭제 — 실수 방지를 위해 2단계 확인 */}
+        <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px', marginBottom: '16px' }}>
+          {deleteConfirm ? (
+            <div style={{ backgroundColor: '#fce8e6', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '13px', color: '#c5221f', fontWeight: 600, marginBottom: '8px' }}>
+                정말 삭제하시겠습니까?
+              </div>
+              <div style={{ fontSize: '12px', color: '#80868b', marginBottom: '10px' }}>
+                {complex.complexName}의 모든 시세 기록도 함께 삭제됩니다.
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  style={{
+                    flex: 1, padding: '8px', fontSize: '13px', fontWeight: 600,
+                    backgroundColor: deleting ? '#9e9e9e' : '#c5221f',
+                    color: '#fff', border: 'none', borderRadius: '6px',
+                    cursor: deleting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {deleting ? '삭제 중...' : '삭제 확인'}
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm(false)}
+                  disabled={deleting}
+                  style={{
+                    flex: 1, padding: '8px', fontSize: '13px',
+                    backgroundColor: '#fff', color: '#5f6368',
+                    border: '1px solid #dadce0', borderRadius: '6px', cursor: 'pointer',
+                  }}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              style={{
+                width: '100%', padding: '10px', fontSize: '13px',
+                backgroundColor: '#fff', color: '#c5221f',
+                border: '1px solid #c5221f', borderRadius: '8px', cursor: 'pointer',
+              }}
+            >
+              단지 삭제
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

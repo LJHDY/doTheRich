@@ -86,6 +86,17 @@ const App: React.FC = () => {
     }
   };
 
+  // 메모 저장 성공 시 complexes 배열과 selectedComplex를 즉시 갱신 — 재조회 없이 반영
+  const handleMemoUpdate = (complexId: number, memo: string) => {
+    setComplexes(prev => prev.map(c => c.id === complexId ? { ...c, memo } : c));
+    setSelectedComplex(prev => prev && prev.id === complexId ? { ...prev, memo } : prev);
+  };
+
+  // 단지 삭제 성공 시 목록에서 즉시 제거
+  const handleComplexDelete = (complexId: number) => {
+    setComplexes(prev => prev.filter(c => c.id !== complexId));
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {/* 헤더 */}
@@ -175,6 +186,8 @@ const App: React.FC = () => {
               (window as any).__closeInfoWindow?.();
               setSelectedComplex(null);
             }}
+            onMemoUpdate={handleMemoUpdate}
+            onDelete={handleComplexDelete}
           />
         )}
       </div>

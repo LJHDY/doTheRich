@@ -23,7 +23,12 @@ interface PriceInfoRow {
   floorInfo: string;
   priceUk: string;
   jeonseUk: string;
-  priceRange: string; // 매매가에서 자동 계산, 수동 수정 가능
+  priceRange: string;       // 매매가에서 자동 계산, 수동 수정 가능
+  askingPriceUk: string;    // 호가 (억)
+  highestPriceUk: string;   // 전고점 (억)
+  lowestPriceUk: string;    // 전저점 (억)
+  tenYearAmountStr: string;  // 10년 등락 수식 (예: "8.5-4.3")
+  tenYearRateStr: string;    // 10년 등락률 (%)
 }
 
 interface SubwayRow {
@@ -70,6 +75,38 @@ const extractRegion = (address: string): string => {
     if (result.length >= 3) break;
   }
   return result.join(' ');
+};
+
+// 사칙연산 문자열을 계산해 결과값 문자열로 반환 — "8.5-4.3" → "4.2"
+// 숫자·소수점·연산자(+,-,*,/)만 허용해 eval 없이 안전하게 처리
+const evalExpr = (expr: string): string => {
+  const cleaned = expr.replace(/\s/g, '');
+  if (!cleaned) return '';
+  if (!/^[0-9+\-*/.]+$/.test(cleaned)) return expr;
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = new Function(`return ${cleaned}`)() as number;
+    if (typeof result === 'number' && isFinite(result)) {
+      return String(Math.round(result * 100) / 100);
+    }
+  } catch {}
+  return expr;
+};
+
+// "A-B" 패턴에서 등락 금액과 등락률(%) 동시 계산
+// "8.5-4.3" → { amount: "4.2", rate: "97.67" }
+// 복합 수식이면 amount만 계산, rate는 ''
+const calcTenYear = (expr: string): { amount: string; rate: string } => {
+  const cleaned = expr.replace(/\s/g, '');
+  const match = cleaned.match(/^(\d+\.?\d*)-(\d+\.?\d*)$/);
+  if (match) {
+    const cur = parseFloat(match[1]);
+    const base = parseFloat(match[2]);
+    const amount = Math.round((cur - base) * 100) / 100;
+    const rate = base > 0 ? Math.round((cur - base) / base * 10000) / 100 : 0;
+    return { amount: String(amount), rate: String(rate) };
+  }
+  return { amount: evalExpr(expr), rate: '' };
 };
 
 // 억 단위 입력값 → "7억대" 형태의 금액대 문자열 생성
@@ -160,7 +197,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   });
 
   const [priceInfos, setPriceInfos] = useState<PriceInfoRow[]>([
-    { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '' },
+    { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' },
   ]);
   const [fetchingPrices, setFetchingPrices] = useState(false);
   const [pricesFetchMsg, setPricesFetchMsg] = useState('');
@@ -236,7 +273,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   // ── 가격 정보 행 ────────────────────────────────────────────────
   // priceInfos 배열 관리: 추가·삭제·부분 업데이트를 불변 방식으로 처리
   const addPriceRow = () =>
-    setPriceInfos(prev => [...prev, { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '' }]);
+    setPriceInfos(prev => [...prev, { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' }]);
 
   const removePriceRow = (i: number) =>
     setPriceInfos(prev => prev.filter((_, idx) => idx !== i));
@@ -342,6 +379,11 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             floor: r.floorInfo || undefined,
             price: r.priceUk ? Math.round(parseFloat(r.priceUk) * 100_000_000) : undefined,
             jeonsePrice: r.jeonseUk ? Math.round(parseFloat(r.jeonseUk) * 100_000_000) : undefined,
+            askingPrice: r.askingPriceUk ? Math.round(parseFloat(r.askingPriceUk) * 100_000_000) : undefined,
+            highestPrice: r.highestPriceUk ? Math.round(parseFloat(r.highestPriceUk) * 100_000_000) : undefined,
+            lowestPrice: r.lowestPriceUk ? Math.round(parseFloat(r.lowestPriceUk) * 100_000_000) : undefined,
+            tenYearChangeAmount: r.tenYearAmountStr ? Math.round(parseFloat(r.tenYearAmountStr) * 100_000_000) : undefined,
+            tenYearChangeRate: r.tenYearRateStr ? parseFloat(r.tenYearRateStr) : undefined,
           })),
         // 역명이 입력된 교통 정보만 포함
         subwayInfos: subwayInfos.filter(r => r.stationName.trim()).map(r => ({
@@ -354,7 +396,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           destination: r.destination,
           minutes: parseInt(r.minutes),
           transportType: r.transportType,
-          transferCount: r.transferCount !== '' ? parseInt(r.transferCount) : undefined,
+          transferCount: r.transferCount !== '' ? parseInt(r.transferCount) : 0,
         })),
       });
       onSuccess();
@@ -429,67 +471,114 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           </div>
 
           {priceInfos.map((row, i) => (
-            <div key={i} style={{
-              display: 'grid',
-              gridTemplateColumns: '1.8fr 1.2fr 1.6fr 1.6fr 52px 60px 28px',
-              gap: '6px', marginBottom: '8px', alignItems: 'center',
-            }}>
-              <input
-                style={inputStyle}
-                placeholder="예) 전용 59"
-                value={row.areaType}
-                onChange={e => updatePriceRow(i, { areaType: e.target.value })}
-                onBlur={() => {
-                  // 숫자만 입력하면 "전용 59" 형식으로 자동 보완
-                  const v = row.areaType.trim();
-                  if (/^\d+(\.\d+)?$/.test(v)) updatePriceRow(i, { areaType: `전용 ${v}` });
-                }}
-              />
-              <input
-                style={inputStyle}
-                placeholder="예) 3/15"
-                value={row.floorInfo}
-                onChange={e => updatePriceRow(i, { floorInfo: e.target.value })}
-              />
-              <input
-                type="number" step="0.01"
-                style={inputStyle}
-                placeholder="예) 7.5"
-                value={row.priceUk}
-                onChange={e => {
-                  const newUk = e.target.value;
-                  // 매매가 입력 시 금액대 자동 계산 (수동 수정 우선)
-                  updatePriceRow(i, { priceUk: newUk, priceRange: calcPriceRange(newUk) });
-                }}
-              />
-              <input
-                type="number" step="0.01"
-                style={inputStyle}
-                placeholder="예) 5.5"
-                value={row.jeonseUk}
-                onChange={e => updatePriceRow(i, { jeonseUk: e.target.value })}
-              />
+            <div key={i} style={{ marginBottom: '10px', border: '1px solid #e8eaed', borderRadius: '6px', overflow: 'hidden' }}>
+              {/* 기본 가격 행 */}
               <div style={{
-                ...readonlyStyle,
-                padding: '8px 6px', textAlign: 'center', fontSize: '12px',
+                display: 'grid',
+                gridTemplateColumns: '1.8fr 1.2fr 1.6fr 1.6fr 52px 60px 28px',
+                gap: '6px', padding: '8px', alignItems: 'center',
               }}>
-                {calcJeonseRate(row.priceUk, row.jeonseUk)}
+                <input
+                  style={inputStyle}
+                  placeholder="예) 전용 59"
+                  value={row.areaType}
+                  onChange={e => updatePriceRow(i, { areaType: e.target.value })}
+                  onBlur={() => {
+                    // 숫자만 입력하면 "전용 59" 형식으로 자동 보완
+                    const v = row.areaType.trim();
+                    if (/^\d+(\.\d+)?$/.test(v)) updatePriceRow(i, { areaType: `전용 ${v}` });
+                  }}
+                />
+                <input
+                  style={inputStyle}
+                  placeholder="예) 3/15"
+                  value={row.floorInfo}
+                  onChange={e => updatePriceRow(i, { floorInfo: e.target.value })}
+                />
+                <input
+                  type="number" step="0.01"
+                  style={inputStyle}
+                  placeholder="예) 7.5"
+                  value={row.priceUk}
+                  onChange={e => {
+                    const newUk = e.target.value;
+                    // 매매가 입력 시 금액대 자동 계산 (수동 수정 우선)
+                    updatePriceRow(i, { priceUk: newUk, priceRange: calcPriceRange(newUk) });
+                  }}
+                />
+                <input
+                  type="number" step="0.01"
+                  style={inputStyle}
+                  placeholder="예) 5.5"
+                  value={row.jeonseUk}
+                  onChange={e => updatePriceRow(i, { jeonseUk: e.target.value })}
+                />
+                <div style={{ ...readonlyStyle, padding: '8px 6px', textAlign: 'center', fontSize: '12px' }}>
+                  {calcJeonseRate(row.priceUk, row.jeonseUk)}
+                </div>
+                <input
+                  style={{ ...inputStyle, fontSize: '12px', padding: '8px 6px', textAlign: 'center' }}
+                  placeholder="예) 7억대"
+                  value={row.priceRange}
+                  onChange={e => updatePriceRow(i, { priceRange: e.target.value })}
+                />
+                {priceInfos.length > 1 ? (
+                  <button onClick={() => removePriceRow(i)} style={iconBtn('#c5221f')}>×</button>
+                ) : (
+                  <span />
+                )}
               </div>
-              <input
-                style={{ ...inputStyle, fontSize: '12px', padding: '8px 6px', textAlign: 'center' }}
-                placeholder="예) 7억대"
-                value={row.priceRange}
-                onChange={e => updatePriceRow(i, { priceRange: e.target.value })}
-              />
-              {priceInfos.length > 1 ? (
-                <button onClick={() => removePriceRow(i)} style={iconBtn('#c5221f')}>×</button>
-              ) : (
-                <span />
-              )}
+              {/* 참고가 서브 행 — 평형별로 개별 입력 */}
+              <div style={{ backgroundColor: '#f8f9fa', borderTop: '1px dashed #e8eaed', padding: '8px' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: '#80868b', marginBottom: '5px' }}>참고가</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '6px' }}>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '10px' }}>호가(억)</label>
+                    <input type="number" step="0.01" style={{ ...inputStyle, fontSize: '11px', padding: '5px 6px' }}
+                      placeholder="8.5"
+                      value={row.askingPriceUk}
+                      onChange={e => updatePriceRow(i, { askingPriceUk: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '10px' }}>전고점(억)</label>
+                    <input type="number" step="0.01" style={{ ...inputStyle, fontSize: '11px', padding: '5px 6px' }}
+                      placeholder="12"
+                      value={row.highestPriceUk}
+                      onChange={e => updatePriceRow(i, { highestPriceUk: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '10px' }}>전저점(억)</label>
+                    <input type="number" step="0.01" style={{ ...inputStyle, fontSize: '11px', padding: '5px 6px' }}
+                      placeholder="6"
+                      value={row.lowestPriceUk}
+                      onChange={e => updatePriceRow(i, { lowestPriceUk: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '10px' }}>10년 등락(억)</label>
+                    {/* "A-B" 입력 시 등락 금액과 등락률 자동 계산 */}
+                    <input type="text" style={{ ...inputStyle, fontSize: '11px', padding: '5px 6px' }}
+                      placeholder="8.5-4.3"
+                      value={row.tenYearAmountStr}
+                      onChange={e => updatePriceRow(i, { tenYearAmountStr: e.target.value })}
+                      onBlur={() => {
+                        const { amount, rate } = calcTenYear(row.tenYearAmountStr);
+                        updatePriceRow(i, { tenYearAmountStr: amount, ...(rate ? { tenYearRateStr: rate } : {}) });
+                      }} />
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '10px' }}>등락률(%)</label>
+                    <input type="text" style={{ ...inputStyle, fontSize: '11px', padding: '5px 6px' }}
+                      placeholder="자동 계산"
+                      value={row.tenYearRateStr}
+                      onChange={e => updatePriceRow(i, { tenYearRateStr: e.target.value })}
+                      onBlur={() => updatePriceRow(i, { tenYearRateStr: evalExpr(row.tenYearRateStr) })} />
+                  </div>
+                </div>
+              </div>
             </div>
           ))}
 
-          <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '20px' }}>
             <button onClick={addPriceRow} style={{
               border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
               borderRadius: '6px', padding: '6px 14px', fontSize: '12px', color: '#1a73e8',
