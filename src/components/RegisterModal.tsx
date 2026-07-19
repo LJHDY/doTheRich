@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 
 export interface RegisterInitialData {
@@ -56,13 +56,14 @@ interface Props {
 
 const DESTINATIONS = ['강남', '시청', '여의도', '발산', '마곡나루'];
 
-// 네이버 지도 경로 URL 생성 시 도착지 좌표가 필요 — 역 기준 좌표 고정값
+// 네이버 지도 경로 URL 생성 시 도착지 좌표가 필요 — 역 출입구 기준 좌표 (Naver 검색 API 기준)
+// 마곡나루역은 9호선/공항철도 (5호선 마곡역과 혼동 주의: 마곡역 lng≈126.8338, 마곡나루역 lng≈126.8271)
 const DESTINATION_COORDS: Record<string, { lng: number; lat: number; label: string }> = {
-  '강남':    { lng: 127.0276167, lat: 37.4979462, label: '강남역' },
-  '시청':    { lng: 126.9769896, lat: 37.5663174, label: '시청역' },
+  '강남':    { lng: 127.0276368, lat: 37.4979462, label: '강남역' },
+  '시청':    { lng: 126.9769157, lat: 37.5663174, label: '시청역' },
   '여의도':  { lng: 126.9244095, lat: 37.5216839, label: '여의도역' },
-  '발산':    { lng: 126.8484922, lat: 37.5587537, label: '발산역' },
-  '마곡나루': { lng: 126.8272553, lat: 37.5592087, label: '마곡나루역' },
+  '발산':    { lng: 126.8373108, lat: 37.5590293, label: '발산역' },
+  '마곡나루': { lng: 126.8275182, lat: 37.5667930, label: '마곡나루역' },
 };
 
 // 주소에서 "서울 구로구" 형태의 지역구 추출 — '구'/'군'으로 끝나는 토큰까지만 사용
@@ -199,11 +200,6 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const [priceInfos, setPriceInfos] = useState<PriceInfoRow[]>([
     { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' },
   ]);
-  const [fetchingPrices, setFetchingPrices] = useState(false);
-  const [pricesFetchMsg, setPricesFetchMsg] = useState('');
-  // Strict Mode 개발 환경에서 useEffect가 두 번 실행될 때 실거래가 API 중복 호출 방지
-  const priceFetchedRef = useRef(false);
-
   const [subwayInfos, setSubwayInfos] = useState<SubwayRow[]>([]);
   // 기본 목적지 5개를 빈 값으로 미리 채워둠 — 사용자가 분만 입력하면 됨
   const [commuteTimes, setCommuteTimes] = useState<CommuteRow[]>(
@@ -667,6 +663,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                 onClick={() => {
                   const dest = DESTINATION_COORDS[row.destination];
                   if (!dest) return;
+                  // Naver Maps /p/directions/ URL은 lng,lat 순서 사용 (WGS84 decimal degrees)
                   const start = `${initialData.longitude},${initialData.latitude},${encodeURIComponent(form.complexName || '출발지')}`;
                   const goal = `${dest.lng},${dest.lat},${encodeURIComponent(dest.label)}`;
                   window.open(
