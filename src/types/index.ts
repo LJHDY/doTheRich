@@ -22,6 +22,26 @@ export interface SubwayInfo {
   walkingMinutes: number;
 }
 
+/** 학군 정보 — 백엔드 SchoolInfoDto와 1:1 매핑 */
+export interface SchoolInfo {
+  id: number;
+  schoolName: string;
+  schoolType: string;          // 'ELEMENTARY' | 'MIDDLE'
+  walkingMinutes?: number;
+  achievementScore?: number;   // 중학교만 해당
+  schoolAddress?: string;
+  totalStudents?: number;
+}
+
+/** 주변 인프라 정보 — 백엔드 InfraInfoDto와 1:1 매핑 */
+export interface InfraInfo {
+  id: number;
+  infraName: string;
+  infraType: string;           // 'DEPARTMENT_STORE' | 'MART' | 'HOSPITAL' | 'ETC'
+  distance?: number;           // 도보 분 단위
+  infraAddress?: string;
+}
+
 /** 단지 등록 시 입력한 평형별 가격 항목 (백엔드가 반환하면 필터에서 평형 표시에 사용) */
 export interface PriceItem {
   id?: number;
@@ -47,13 +67,21 @@ export interface ApartmentComplex {
   region: string;          // "서울 구로구"
   address: string;
   memo?: string;
+  redevelopType?: string;   // 'REDEVELOPMENT' | 'RECONSTRUCTION' | 'REMODELING' | null
+  redevelopStage?: string;  // 'INITIAL' | 'COMMITTEE' | 'ASSOCIATION' | 'APPROVAL' | 'MGMT_APPROVAL' | 'RELOCATION' | 'COMPLETION'
+  visitType?: string;       // 'ATMOSPHERE' | 'COMPLEX' | 'LISTING' | 'NONE' | null
   latitude: number;
   longitude: number;
   commuteTimes: CommuteTime[];
   subwayInfos: SubwayInfo[];
+  schoolInfos?: SchoolInfo[];
+  infraInfos?: InfraInfo[];
   areaTypes?: string[];                        // 최신 시세 기록 기준 평형 목록
   areaTypePriceRanges?: Record<string, string>; // 평형 → 금액대 매핑 (예: {"전용 59": "11억대", "전용 84": "14억대"})
   priceItems?: PriceItem[]; // 백엔드가 포함 시 금액대 필터에서 평형 정보 표시 가능
+  grade?: string;       // 지역 직장 밀도 등급 (S/A/B/C) — RegionWorkplaceConst 기준, DB 미저장
+  employees?: number;   // 지역 종사자수
+  businesses?: number;  // 지역 사업체수
 }
 
 /** 평형별 시세 항목 — 백엔드 PriceHistoryItemDto와 1:1 매핑 */
@@ -111,6 +139,9 @@ export interface ApartmentComplexRequest {
   latitude?: number;
   longitude?: number;
   memo?: string;
+  redevelopType?: string;   // 'REDEVELOPMENT' | 'RECONSTRUCTION' | 'REMODELING'
+  redevelopStage?: string;  // 'INITIAL' | 'COMMITTEE' | 'ASSOCIATION' | 'APPROVAL' | 'MGMT_APPROVAL' | 'RELOCATION' | 'COMPLETION'
+  visitType?: string;       // 'ATMOSPHERE' | 'COMPLEX' | 'LISTING' | 'NONE'
   // 평형별 가격 배열 — 첫 번째 항목이 단지 대표 가격으로 사용됨
   priceItems?: {
     areaType?: string;
@@ -132,6 +163,20 @@ export interface ApartmentComplexRequest {
     stationName: string;
     subwayLines?: string;
     walkingMinutes?: number;
+  }[];
+  schoolInfos?: {
+    schoolName: string;
+    schoolAddress?: string;
+    schoolType?: string;       // 'ELEMENTARY' | 'MIDDLE'
+    walkingMinutes?: number;
+    achievementScore?: number; // Double — 중학교만 해당
+    totalStudents?: number;
+  }[];
+  infraInfos?: {
+    infraType: string;         // 'DEPARTMENT_STORE' | 'MART' | 'HOSPITAL' | 'ETC'
+    infraName: string;
+    infraAddress?: string;
+    distance?: number;         // 도보 분 단위
   }[];
 }
 

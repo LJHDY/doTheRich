@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ApartmentComplex, PriceHistory, ChartDataRow, ChartSeries, formatPrice, toUkUnit } from '../types';
+import { ApartmentComplex, PriceHistory, ChartDataRow, ChartSeries, SchoolInfo, InfraInfo, formatPrice, toUkUnit, calcCommuteGrade } from '../types';
 import { getPriceHistories } from '../services/api';
 import PriceChart from './PriceChart';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -18,6 +18,67 @@ const InfoRow: React.FC<{ label: string; value?: string | number | null }> = ({ 
     </div>
   );
 };
+
+// ComplexInfoPanel과 동일한 레이블 맵
+const REDEVELOP_TYPE_LABELS: Record<string, string> = {
+  REDEVELOPMENT: '재개발', RECONSTRUCTION: '재건축', REMODELING: '리모델링',
+};
+const REDEVELOP_STAGE_LABELS: Record<string, string> = {
+  INITIAL: '정비구역 지정', COMMITTEE: '추진위원회 구성 및 승인',
+  ASSOCIATION: '조합 설립 인가', APPROVAL: '사업시행인가',
+  MGMT_APPROVAL: '관리처분인가', RELOCATION: '이주·철거 및 착공', COMPLETION: '준공 및 입주',
+};
+const VISIT_TYPE_LABELS: Record<string, string> = {
+  ATMOSPHERE: '분위기 임장', COMPLEX: '단지 임장', LISTING: '매물 임장', NONE: '임장X',
+};
+const SCHOOL_TYPE_LABELS: Record<string, string> = {
+  ELEMENTARY: '초등', MIDDLE: '중학',
+};
+const INFRA_TYPE_LABELS: Record<string, string> = {
+  DEPARTMENT_STORE: '백화점', MART: '마트', HOSPITAL: '병원', ETC: '기타',
+};
+const GRADE_COLORS: Record<string, string> = {
+  S: '#ea4335', A: '#f9ab00', B: '#34a853', C: '#1a73e8',
+};
+
+const formatCount = (n: number): string =>
+  n >= 10000 ? `${Math.round(n / 10000)}만` : n.toLocaleString();
+
+// 중학교 학업성취도 기준 학군 등급
+const calcSchoolGrade = (
+  schoolInfos: SchoolInfo[]
+): { grade: 'S' | 'A' | 'B' | 'C'; color: string } | null => {
+  const scores = schoolInfos
+    .filter(s => s.schoolType === 'MIDDLE' && s.achievementScore != null)
+    .map(s => s.achievementScore!);
+  if (scores.length === 0) return null;
+  const best = Math.max(...scores);
+  if (best >= 95) return { grade: 'S', color: '#ea4335' };
+  if (best >= 90) return { grade: 'A', color: '#f9ab00' };
+  if (best >= 85) return { grade: 'B', color: '#34a853' };
+  return { grade: 'C', color: '#1a73e8' };
+};
+
+// 인프라 등급 — 인프라 없어도 항상 반환
+const calcInfraGrade = (
+  infraInfos: InfraInfo[]
+): { grade: 'S' | 'A' | 'B' | 'C'; color: string } => {
+  const deptCount = infraInfos.filter(i => i.infraType === 'DEPARTMENT_STORE').length;
+  const martCount = infraInfos.filter(i => i.infraType === 'MART').length;
+  if (deptCount >= 2) return { grade: 'S', color: '#ea4335' };
+  if (deptCount >= 1) return { grade: 'A', color: '#f9ab00' };
+  if (martCount >= 1) return { grade: 'B', color: '#34a853' };
+  return { grade: 'C', color: '#1a73e8' };
+};
+
+// 인라인 뱃지 — 학교유형·인프라유형 등 짧은 분류 태그
+const Tag: React.FC<{ label: string; color?: string }> = ({ label, color = '#5f6368' }) => (
+  <span style={{
+    fontSize: '9px', fontWeight: 700, color: '#fff',
+    backgroundColor: color, padding: '1px 5px', borderRadius: '7px',
+    whiteSpace: 'nowrap', flexShrink: 0,
+  }}>{label}</span>
+);
 
 const SALE_COLORS = ['#1a73e8', '#4285f4', '#185abc', '#669df6'];
 const JEONSE_COLORS = ['#ea4335', '#c62828', '#ef5350', '#e57373'];
@@ -149,6 +210,37 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           )}
         </div>
 
+        {/* 종합평가 */}
+        <div style={{ marginBottom: '12px' }}>
+          <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>종합평가</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+            {([
+              { label: '직장', grade: complex.grade ? { grade: complex.grade, color: GRADE_COLORS[complex.grade] ?? '#9e9e9e' } : null },
+              { label: '교통', grade: calcCommuteGrade(complex.commuteTimes) },
+              { label: '학군', grade: calcSchoolGrade(complex.schoolInfos ?? []) },
+              { label: '환경', grade: calcInfraGrade(complex.infraInfos ?? []) },
+            ] as { label: string; grade: { grade: string; color: string } | null }[]).map(({ label, grade }) => (
+              <div key={label} style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px',
+                padding: '8px 4px', backgroundColor: '#f8f9fa',
+                borderRadius: '7px', border: '1px solid #e8eaed',
+              }}>
+                <span style={{ fontSize: '11px', color: '#80868b', fontWeight: 500 }}>{label}</span>
+                {grade ? (
+                  <span style={{
+                    fontSize: '13px', fontWeight: 800, color: '#fff',
+                    backgroundColor: grade.color, padding: '1px 8px', borderRadius: '10px',
+                  }}>
+                    {grade.grade}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '12px', color: '#bdbdbd', fontWeight: 600 }}>-</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* 지하철 */}
         {complex.subwayInfos && complex.subwayInfos.length > 0 && (
           <div style={{ marginBottom: '12px' }}>
@@ -164,13 +256,134 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           </div>
         )}
 
+        {/* 지역 직장 밀도 */}
+        {complex.grade && (
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>직장 밀도</h4>
+              <span style={{
+                fontSize: '11px', fontWeight: 800, color: '#fff',
+                backgroundColor: GRADE_COLORS[complex.grade] ?? '#9e9e9e',
+                padding: '1px 7px', borderRadius: '10px',
+              }}>
+                {complex.grade}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '14px', padding: '4px 0' }}>
+              {complex.employees != null && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '10px', color: '#80868b' }}>종사자수</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124' }}>{formatCount(complex.employees)}명</span>
+                </div>
+              )}
+              {complex.businesses != null && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '10px', color: '#80868b' }}>사업체수</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124' }}>{formatCount(complex.businesses)}개</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 학군 정보 */}
+        {complex.schoolInfos && complex.schoolInfos.length > 0 && (
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>학군 정보</h4>
+              {(() => {
+                const g = calcSchoolGrade(complex.schoolInfos ?? []);
+                return g ? (
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#fff', backgroundColor: g.color, padding: '1px 7px', borderRadius: '10px' }}>
+                    {g.grade}
+                  </span>
+                ) : null;
+              })()}
+            </div>
+            {complex.schoolInfos.map((s: SchoolInfo) => (
+              <div key={s.id} style={{ padding: '5px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Tag
+                    label={SCHOOL_TYPE_LABELS[s.schoolType] ?? s.schoolType}
+                    color={s.schoolType === 'MIDDLE' ? '#1a73e8' : '#34a853'}
+                  />
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124', flex: 1 }}>{s.schoolName}</span>
+                  {s.walkingMinutes != null && (
+                    <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>도보 {s.walkingMinutes}분</span>
+                  )}
+                </div>
+                {(s.achievementScore != null || s.totalStudents != null) && (
+                  <div style={{ display: 'flex', gap: '10px', paddingLeft: '2px' }}>
+                    {s.achievementScore != null && (
+                      <span style={{ fontSize: '10px', color: '#5f6368' }}>학업성취도 {s.achievementScore}%</span>
+                    )}
+                    {s.totalStudents != null && (
+                      <span style={{ fontSize: '10px', color: '#5f6368' }}>전교생 {s.totalStudents.toLocaleString()}명</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 주변 인프라 */}
+        {complex.infraInfos && complex.infraInfos.length > 0 && (
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>주변 인프라</h4>
+              {(() => {
+                const g = calcInfraGrade(complex.infraInfos ?? []);
+                return (
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#fff', backgroundColor: g.color, padding: '1px 7px', borderRadius: '10px' }}>
+                    {g.grade}
+                  </span>
+                );
+              })()}
+            </div>
+            {complex.infraInfos.map((inf: InfraInfo) => (
+              <div key={inf.id} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>
+                <Tag label={INFRA_TYPE_LABELS[inf.infraType] ?? inf.infraType} color='#f9ab00' />
+                <span style={{ fontSize: '12px', color: '#202124', flex: 1 }}>{inf.infraName}</span>
+                {inf.distance != null && (
+                  <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>도보 {inf.distance}분</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 재개발 정보 */}
+        {complex.redevelopType && (
+          <div style={{ marginBottom: '12px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>재개발 정보</h4>
+            <InfoRow label="유형" value={REDEVELOP_TYPE_LABELS[complex.redevelopType]} />
+            {complex.redevelopStage && (
+              <InfoRow label="진행단계" value={REDEVELOP_STAGE_LABELS[complex.redevelopStage]} />
+            )}
+          </div>
+        )}
+
+        {/* 임장 유형 */}
+        {complex.visitType && (
+          <div style={{ marginBottom: '12px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>임장 유형</h4>
+            <div style={{
+              display: 'inline-block', padding: '3px 10px', borderRadius: '10px',
+              backgroundColor: '#e8f0fe', color: '#1a73e8', fontSize: '12px', fontWeight: 600,
+            }}>
+              {VISIT_TYPE_LABELS[complex.visitType] ?? complex.visitType}
+            </div>
+          </div>
+        )}
+
         {/* 주요 지구 소요시간 */}
         {complex.commuteTimes && complex.commuteTimes.length > 0 && (
           <div style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>주요 지구 소요시간</h4>
-            <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
-          </div>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>주요 지구 소요시간</h4>
+              <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px' }}>
               {complex.commuteTimes.map(ct => (
                 <div key={ct.id} style={{

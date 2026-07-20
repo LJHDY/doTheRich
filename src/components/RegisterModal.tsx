@@ -49,6 +49,62 @@ interface CommuteRow {
   transferCount: string; // 환승 횟수 (빈 문자열 = 미입력)
 }
 
+interface SchoolRow {
+  schoolName: string;
+  schoolAddress: string;       // 화면에 표시 + 도보거리 계산용 (백엔드 필드명과 일치)
+  schoolType: 'ELEMENTARY' | 'MIDDLE'; // 백엔드 enum key: ELEMENTARY=초등학교, MIDDLE=중학교
+  walkingMinutes: string;
+  achievementScore: string;    // 중학교만 표시, % 미포함, blur 시 자동 포맷 → Double로 전송
+  totalStudents: string;
+  fetching: boolean;
+  searchResults: SearchLocalItem[];
+  showDropdown: boolean;
+}
+
+interface InfraRow {
+  infraType: string;       // 서버로 보내는 key (DEPARTMENT_STORE 등)
+  infraName: string;       // 화면에 표시
+  infraAddress: string;    // 도보거리 계산용, 화면에 미표시 (백엔드 필드명과 일치)
+  distance: string;        // 백엔드 distance 필드 (분 단위로 입력, 필드명은 distance)
+  fetching: boolean;
+  searchResults: SearchLocalItem[];
+  showDropdown: boolean;
+}
+
+const INFRA_TYPES = [
+  { key: 'DEPARTMENT_STORE', label: '백화점' },
+  { key: 'MART',             label: '마트' },
+  { key: 'HOSPITAL',         label: '병원' },
+  { key: 'ETC',              label: '기타' },
+];
+
+const REDEVELOP_TYPES = [
+  { key: 'REDEVELOPMENT',  label: '재개발' },
+  { key: 'RECONSTRUCTION', label: '재건축' },
+  { key: 'REMODELING',     label: '리모델링' },
+];
+
+// 백엔드 entity 주석 기준 + 추진위원회 단계(COMMITTEE) 추가
+const REDEVELOP_STAGES = [
+  { key: 'INITIAL',        label: '정비구역 지정' },
+  { key: 'COMMITTEE',      label: '추진위원회 구성 및 승인' },
+  { key: 'ASSOCIATION',    label: '조합 설립 인가' },
+  { key: 'APPROVAL',       label: '사업시행인가' },
+  { key: 'MGMT_APPROVAL',  label: '관리처분인가' },
+  { key: 'RELOCATION',     label: '이주·철거 및 착공' },
+  { key: 'COMPLETION',     label: '준공 및 입주' },
+];
+
+const VISIT_TYPES = [
+  { key: 'ATMOSPHERE', label: '분위기 임장' },
+  { key: 'COMPLEX',    label: '단지 임장' },
+  { key: 'LISTING',    label: '매물 임장' },
+  { key: 'NONE',       label: '임장X' },
+];
+
+// 네이버 검색 API 응답에 포함된 HTML 태그 제거
+const stripHtml = (html: string): string => html.replace(/<[^>]*>/g, '');
+
 interface Props {
   initialData: RegisterInitialData;
   onClose: () => void;
@@ -196,6 +252,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     builtYear: '',
     unitCount: '',
     memo: '',
+    redevelopType: '',   // '' = 해당없음, 'REDEVELOPMENT' | 'RECONSTRUCTION' | 'REMODELING'
+    redevelopStage: '',  // 체크 시 표시되는 진행단계
+    visitType: '',       // '' = null(미입력), 'ATMOSPHERE' | 'COMPLEX' | 'LISTING' | 'NONE'
   });
 
   const [priceInfos, setPriceInfos] = useState<PriceInfoRow[]>([
@@ -206,6 +265,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const [commuteTimes, setCommuteTimes] = useState<CommuteRow[]>(
     DESTINATIONS.map(d => ({ destination: d, minutes: '', transportType: '지하철', transferCount: '' }))
   );
+  const [schoolInfos, setSchoolInfos] = useState<SchoolRow[]>([]);
+  const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -349,6 +410,81 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const updateCommute = (i: number, update: Partial<CommuteRow>) =>
     setCommuteTimes(prev => prev.map((r, idx) => idx === i ? { ...r, ...update } : r));
 
+  // ── 학군 정보 ─────────────────────────────────────────────────────
+  const addSchool = () => setSchoolInfos(prev => [...prev, {
+    schoolName: '', schoolAddress: '', schoolType: 'ELEMENTARY',
+    walkingMinutes: '', achievementScore: '', totalStudents: '',
+    fetching: false, searchResults: [], showDropdown: false,
+  }]);
+  const removeSchool = (i: number) => setSchoolInfos(prev => prev.filter((_, idx) => idx !== i));
+  const updateSchool = (i: number, update: Partial<SchoolRow>) =>
+    setSchoolInfos(prev => prev.map((r, idx) => idx === i ? { ...r, ...update } : r));
+
+  const handleSchoolSearch = async (i: number) => {
+    const query = schoolInfos[i].schoolName.trim();
+    if (!query) return;
+    updateSchool(i, { fetching: true, showDropdown: false });
+    try {
+      const { data } = await api.get<{ items: SearchLocalItem[] }>('/api/search/local', { params: { query } });
+      updateSchool(i, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
+    } catch {
+      updateSchool(i, { fetching: false });
+    }
+  };
+
+  const handleSchoolSelect = async (i: number, item: SearchLocalItem) => {
+    const schoolAddress = item.roadAddress || item.address;
+    const lat = parseInt(item.mapy) / 10000000;
+    const lng = parseInt(item.mapx) / 10000000;
+    updateSchool(i, { schoolName: stripHtml(item.title), schoolAddress, showDropdown: false, searchResults: [], fetching: true });
+    try {
+      const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
+        params: { startLat: initialData.latitude, startLng: initialData.longitude, goalLat: lat, goalLng: lng },
+      });
+      updateSchool(i, { walkingMinutes: String(dir.minutes), fetching: false });
+    } catch {
+      const km = haversineKm(initialData.latitude, initialData.longitude, lat, lng);
+      updateSchool(i, { walkingMinutes: String(Math.max(1, Math.round(km * 1.3 / 4 * 60))), fetching: false });
+    }
+  };
+
+  // ── 주변 인프라 ───────────────────────────────────────────────────
+  const addInfra = () => setInfraInfos(prev => [...prev, {
+    infraType: 'DEPARTMENT_STORE', infraName: '', infraAddress: '',
+    distance: '', fetching: false, searchResults: [], showDropdown: false,
+  }]);
+  const removeInfra = (i: number) => setInfraInfos(prev => prev.filter((_, idx) => idx !== i));
+  const updateInfra = (i: number, update: Partial<InfraRow>) =>
+    setInfraInfos(prev => prev.map((r, idx) => idx === i ? { ...r, ...update } : r));
+
+  const handleInfraSearch = async (i: number) => {
+    const query = infraInfos[i].infraName.trim();
+    if (!query) return;
+    updateInfra(i, { fetching: true, showDropdown: false });
+    try {
+      const { data } = await api.get<{ items: SearchLocalItem[] }>('/api/search/local', { params: { query } });
+      updateInfra(i, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
+    } catch {
+      updateInfra(i, { fetching: false });
+    }
+  };
+
+  const handleInfraSelect = async (i: number, item: SearchLocalItem) => {
+    const infraAddress = item.roadAddress || item.address;
+    const lat = parseInt(item.mapy) / 10000000;
+    const lng = parseInt(item.mapx) / 10000000;
+    updateInfra(i, { infraName: stripHtml(item.title), infraAddress, showDropdown: false, searchResults: [], fetching: true });
+    try {
+      const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
+        params: { startLat: initialData.latitude, startLng: initialData.longitude, goalLat: lat, goalLng: lng },
+      });
+      updateInfra(i, { distance: String(dir.minutes), fetching: false });
+    } catch {
+      const km = haversineKm(initialData.latitude, initialData.longitude, lat, lng);
+      updateInfra(i, { distance: String(Math.max(1, Math.round(km * 1.3 / 4 * 60))), fetching: false });
+    }
+  };
+
   // ── 제출 ──────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!form.complexName.trim()) { setError('단지명을 입력해주세요.'); return; }
@@ -368,6 +504,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
         builtYear: form.builtYear || undefined,
         unitCount: form.unitCount ? parseInt(form.unitCount) : undefined,
         memo: form.memo || undefined,
+        redevelopType: form.redevelopType || undefined,
+        redevelopStage: form.redevelopStage || undefined,
+        visitType: form.visitType || undefined,
         latitude: initialData.latitude,
         longitude: initialData.longitude,
         // 매매가 또는 전세가가 입력된 행만 포함, 억 단위 → 원 단위 변환
@@ -396,6 +535,23 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           minutes: parseInt(r.minutes),
           transportType: r.transportType,
           transferCount: r.transferCount !== '' ? parseInt(r.transferCount) : 0,
+        })),
+        // 학교명이 입력된 학군 정보만 포함 — schoolType은 ELEMENTARY/MIDDLE enum key로 전송
+        schoolInfos: schoolInfos.filter(r => r.schoolName.trim()).map(r => ({
+          schoolName: r.schoolName,
+          schoolAddress: r.schoolAddress || undefined,
+          schoolType: r.schoolType,
+          walkingMinutes: r.walkingMinutes ? parseInt(r.walkingMinutes) : undefined,
+          // achievementScore: % 제거 후 Double로 전송 (중학교만 해당)
+          achievementScore: r.achievementScore ? parseFloat(r.achievementScore.replace('%', '')) : undefined,
+          totalStudents: r.totalStudents ? parseInt(r.totalStudents) : undefined,
+        })),
+        // 인프라명이 입력된 항목만 포함 — infraType은 key 값으로, distance는 도보 분 단위로 전송
+        infraInfos: infraInfos.filter(r => r.infraName.trim()).map(r => ({
+          infraType: r.infraType,
+          infraName: r.infraName,
+          infraAddress: r.infraAddress || undefined,
+          distance: r.distance ? parseInt(r.distance) : undefined,
         })),
       });
       onSuccess();
@@ -699,6 +855,243 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
             color: '#1a73e8', marginBottom: '20px',
           }}>+ 항목 추가</button>
+
+          {/* 학군 정보 */}
+          <div style={sectionTitle}>학군 정보</div>
+          {schoolInfos.map((row, i) => (
+            <div key={i} style={{ marginBottom: '12px', border: '1px solid #e8eaed', borderRadius: '8px' }}>
+              {/* 학교명 검색 행 */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '10px 10px 6px' }}>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <input
+                      placeholder="예) 영등포초등학교"
+                      value={row.schoolName}
+                      onChange={e => updateSchool(i, { schoolName: e.target.value, showDropdown: false })}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSchoolSearch(i); }}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => handleSchoolSearch(i)}
+                      disabled={row.fetching || !row.schoolName.trim()}
+                      style={actionBtn('#1a73e8', row.fetching || !row.schoolName.trim())}
+                    >{row.fetching ? '...' : '조회'}</button>
+                  </div>
+                  {/* 검색 결과 드롭다운 */}
+                  {row.showDropdown && row.searchResults.length > 0 && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                      backgroundColor: '#fff', border: '1px solid #dadce0', borderRadius: '6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)', maxHeight: '180px', overflowY: 'auto',
+                    }}>
+                      {row.searchResults.map((item, j) => (
+                        <div
+                          key={j}
+                          onClick={() => handleSchoolSelect(i, item)}
+                          style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = '#f8f9fa'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = ''; }}
+                        >
+                          <div style={{ fontWeight: 600, color: '#202124' }}>{stripHtml(item.title)}</div>
+                          <div style={{ fontSize: '11px', color: '#80868b', marginTop: '2px' }}>{item.roadAddress || item.address}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* 학교 유형 — ELEMENTARY/MIDDLE을 백엔드 enum key로 관리 */}
+                <select
+                  value={row.schoolType}
+                  onChange={e => updateSchool(i, { schoolType: e.target.value as 'ELEMENTARY' | 'MIDDLE' })}
+                  style={{ ...inputStyle, width: '100px', flexShrink: 0 }}
+                >
+                  <option value="ELEMENTARY">초등학교</option>
+                  <option value="MIDDLE">중학교</option>
+                </select>
+                <button onClick={() => removeSchool(i)} style={iconBtn('#c5221f')}>×</button>
+              </div>
+
+              {/* 선택된 학교 주소 표시 */}
+              {row.schoolAddress && (
+                <div style={{ padding: '0 10px 6px', fontSize: '11px', color: '#80868b' }}>{row.schoolAddress}</div>
+              )}
+
+              {/* 도보거리 / 학업성취도(중학교만) / 전교생수 */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: row.schoolType === 'MIDDLE' ? '1fr 1fr 1fr' : '1fr 1fr',
+                gap: '8px', padding: '0 10px 10px',
+              }}>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '11px' }}>도보거리(분)</label>
+                  <input type="number" placeholder="자동 계산"
+                    value={row.walkingMinutes}
+                    onChange={e => updateSchool(i, { walkingMinutes: e.target.value })}
+                    style={{ ...inputStyle, fontSize: '12px', padding: '6px 8px' }} />
+                </div>
+                {/* 학업성취도는 중학교 선택 시에만 표시 */}
+                {row.schoolType === 'MIDDLE' && (
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '11px' }}>학업성취도</label>
+                    <input type="text" placeholder="예) 85%"
+                      value={row.achievementScore}
+                      onChange={e => updateSchool(i, { achievementScore: e.target.value.replace('%', '') })}
+                      onBlur={() => {
+                        const v = row.achievementScore.replace('%', '').trim();
+                        if (v) updateSchool(i, { achievementScore: `${v}%` });
+                      }}
+                      style={{ ...inputStyle, fontSize: '12px', padding: '6px 8px' }} />
+                  </div>
+                )}
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '11px' }}>전교생수</label>
+                  <input type="number" placeholder="명"
+                    value={row.totalStudents}
+                    onChange={e => updateSchool(i, { totalStudents: e.target.value })}
+                    style={{ ...inputStyle, fontSize: '12px', padding: '6px 8px' }} />
+                </div>
+              </div>
+            </div>
+          ))}
+          <button onClick={addSchool} style={{
+            border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
+            borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
+            color: '#1a73e8', marginBottom: '20px',
+          }}>+ 학교 추가</button>
+
+          {/* 주변 인프라 */}
+          <div style={sectionTitle}>주변 인프라</div>
+          {infraInfos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 28px', gap: '6px', marginBottom: '4px' }}>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>유형</span>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>인프라명</span>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>도보(분)</span>
+              <span />
+            </div>
+          )}
+          {infraInfos.map((row, i) => (
+            <div key={i} style={{ marginBottom: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 28px', gap: '6px', alignItems: 'flex-start' }}>
+                <select
+                  value={row.infraType}
+                  onChange={e => updateInfra(i, { infraType: e.target.value })}
+                  style={{ ...inputStyle, fontSize: '12px', padding: '8px 4px' }}
+                >
+                  {INFRA_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </select>
+
+                {/* 인프라명 검색 */}
+                <div style={{ position: 'relative' }}>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <input
+                      placeholder="예) 현대백화점"
+                      value={row.infraName}
+                      onChange={e => updateInfra(i, { infraName: e.target.value, showDropdown: false })}
+                      onKeyDown={e => { if (e.key === 'Enter') handleInfraSearch(i); }}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => handleInfraSearch(i)}
+                      disabled={row.fetching || !row.infraName.trim()}
+                      style={actionBtn('#1a73e8', row.fetching || !row.infraName.trim())}
+                    >{row.fetching ? '...' : '조회'}</button>
+                  </div>
+                  {/* 검색 결과 드롭다운 */}
+                  {row.showDropdown && row.searchResults.length > 0 && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                      backgroundColor: '#fff', border: '1px solid #dadce0', borderRadius: '6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)', maxHeight: '180px', overflowY: 'auto',
+                    }}>
+                      {row.searchResults.map((item, j) => (
+                        <div
+                          key={j}
+                          onClick={() => handleInfraSelect(i, item)}
+                          style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = '#f8f9fa'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = ''; }}
+                        >
+                          <div style={{ fontWeight: 600 }}>{stripHtml(item.title)}</div>
+                          <div style={{ fontSize: '11px', color: '#80868b', marginTop: '2px' }}>{item.roadAddress || item.address}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <input type="number" placeholder="분"
+                  value={row.distance}
+                  onChange={e => updateInfra(i, { distance: e.target.value })}
+                  style={inputStyle} />
+                <button onClick={() => removeInfra(i)} style={{ ...iconBtn('#c5221f'), marginTop: '8px' }}>×</button>
+              </div>
+            </div>
+          ))}
+          <button onClick={addInfra} style={{
+            border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
+            borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
+            color: '#1a73e8', marginBottom: '20px',
+          }}>+ 인프라 추가</button>
+
+          {/* 재개발/재건축/리모델링 여부 */}
+          <div style={sectionTitle}>재개발·재건축·리모델링</div>
+          <div style={{ marginBottom: '20px' }}>
+            {/* 체크박스 — 체크 시 유형·단계 셀렉트 표시, 해제 시 두 값 초기화 */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '12px' }}>
+              <input
+                type="checkbox"
+                checked={form.redevelopType !== ''}
+                onChange={e => set('redevelopType', e.target.checked ? 'REDEVELOPMENT' : '')}
+                style={{ width: '16px', height: '16px', accentColor: '#1a73e8', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '13px', color: '#202124' }}>재개발/재건축/리모델링 해당</span>
+            </label>
+
+            {form.redevelopType !== '' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle}>유형</label>
+                  <select
+                    value={form.redevelopType}
+                    onChange={e => set('redevelopType', e.target.value)}
+                    style={inputStyle}
+                  >
+                    {REDEVELOP_TYPES.map(t => (
+                      <option key={t.key} value={t.key}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>진행 단계</label>
+                  <select
+                    value={form.redevelopStage}
+                    onChange={e => set('redevelopStage', e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="">단계 선택</option>
+                    {REDEVELOP_STAGES.map(s => (
+                      <option key={s.key} value={s.key}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 임장 유형 */}
+          <div style={sectionTitle}>임장 유형</div>
+          <div style={{ marginBottom: '20px' }}>
+            <select
+              value={form.visitType}
+              onChange={e => set('visitType', e.target.value)}
+              style={{ ...inputStyle, width: '200px' }}
+            >
+              <option value="">미입력</option>
+              {VISIT_TYPES.map(t => (
+                <option key={t.key} value={t.key}>{t.label}</option>
+              ))}
+            </select>
+          </div>
 
           {/* 메모 */}
           <div style={sectionTitle}>메모</div>

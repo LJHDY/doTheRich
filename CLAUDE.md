@@ -98,11 +98,17 @@ ApartmentComplex {
   price, jeonsePrice?, jeonseRate?,
   unitCount, region, address, memo?,
   latitude, longitude,
+  redevelopType?, redevelopStage?, visitType?,  // 재개발 유형·단계, 임장 유형
   commuteTimes: CommuteTime[],
   subwayInfos: SubwayInfo[],
+  schoolInfos?: SchoolInfo[],   // 학군 정보
+  infraInfos?: InfraInfo[],     // 주변 인프라
   areaTypes?: string[]                          // 최신 시세 기준 평형 목록
   areaTypePriceRanges?: Record<string, string>  // 평형 → 금액대 매핑
   priceItems?: PriceItem[]                      // ⚠️ 백엔드가 포함 시에만 채워짐 (현재 미구현)
+  grade?: string;       // 지역 직장 밀도 등급 (S/A/B/C) — RegionWorkplaceConst 기준, DB 미저장
+  employees?: number;   // 지역 종사자수
+  businesses?: number;  // 지역 사업체수
 }
 
 // 시세 기록 아이템 (평형별 1개) — 참고가 필드 포함
@@ -181,12 +187,18 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 
 ### `ComplexInfoPanel.tsx`
 - 단지 선택 시 `GET /api/complexes/:id/price-history` 조회
-- 단지 정보: 연식·세대수·주소·확인일자 + 참고가(호가·전고점·전저점·10년등락·등락률)
-- 주요 지구 소요시간: `CommuteGradeBadge` 배지 표시
+- **섹션 순서**: 단지정보(참고가·메모) → 종합평가 → 지하철 → 직장밀도 → 학군정보 → 주변인프라 → 재개발정보 → 임장유형 → 주요지구소요시간 → 시세변동 → 최근기록
+- **종합평가**: 직장·교통·학군·환경 4칸 그리드, 각 S/A/B/C 배지 (데이터 없으면 `-`)
+- **직장 밀도**: `complex.grade` 기반 배지 + 종사자수·사업체수 (`RegionWorkplaceConst`, DB 미저장)
+- **학군 정보**: 중학교 `achievementScore` 기준 등급 배지 (S≥95/A≥90/B≥85/C) — 중학교 없으면 배지 미표시
+- **주변 인프라**: 항상 등급 배지 표시 (백화점 2개↑=S / 1개=A / 마트 1개↑=B / 나머지=C)
+- **재개발 정보**: 유형 + 진행단계, 단계 레이블 `?` 아이콘 호버 시 ①~⑦ 설명 tooltip
+- **주요 지구 소요시간**: `CommuteGradeBadge` 배지 표시
 - **차트**: 평형별 다중 라인 (매매 파란계열, 전세 빨간계열)
 - 최근 기록: 최신 5건 (참고가 chips 포함)
 - 단지 삭제: 2단계 확인 후 `DELETE /api/complexes/:id`
 - 메모 인라인 편집
+- 내부 헬퍼: `calcSchoolGrade`, `calcInfraGrade`, `GRADE_COLORS`, `formatCount`, `Tag`
 
 ### `CompareListModal.tsx`
 - 헤더 "비교하기" 버튼 클릭 시 헤더 하단 드롭다운 패널
@@ -195,7 +207,8 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 
 ### `CompareCard.tsx`
 - 비교 뷰에서 1/3 너비로 표시되는 단지 카드
-- 구성: 헤더(파랑) + 단지정보 + 지하철 + 소요시간(등급배지) + 차트 + 최근 3건
+- **섹션 순서**: 헤더(파랑) → 단지정보 → 종합평가 → 지하철 → 직장밀도 → 학군정보 → 주변인프라 → 재개발정보 → 임장유형 → 주요지구소요시간 → 시세변동 → 최근 3건
+- ComplexInfoPanel과 동일한 등급 로직·레이블 맵 내장 (`calcSchoolGrade`, `calcInfraGrade`, `GRADE_COLORS`, `Tag` 등)
 - 닫기(×) 버튼 → 비교 목록 제거 + 체크박스 해제
 
 ### `CommuteGradeBadge.tsx`
@@ -260,6 +273,16 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] 입지 등급 배지 (S/A/B/C) — 공통 컴포넌트
 - [x] favicon + 로고 이미지
 - [x] Vercel(프론트) + Railway(백엔드+MySQL) 배포
+- [x] 메모 textarea 번호 목록 자동 서식 (`useNumberedTextarea` 훅, RegisterModal·ComplexInfoPanel 공통 적용)
+- [x] RegisterModal 학군 정보 섹션 (네이버 검색 + 도보거리 자동 계산, 학교유형·학업성취도·전교생수)
+- [x] RegisterModal 주변 인프라 섹션 (유형 셀렉트 key 전송, 네이버 검색 + 도보거리 자동 계산)
+- [x] RegisterModal 재개발·재건축·리모델링 섹션 (유형 체크박스 + 진행단계 셀렉트)
+- [x] RegisterModal 임장 유형 섹션 (분위기/단지/매물/임장X)
+- [x] ComplexInfoPanel 학군·인프라·재개발·임장·직장밀도 섹션 표시
+- [x] ComplexInfoPanel / CompareCard 종합평가 섹션 (직장·교통·학군·환경 S/A/B/C 4칸 그리드)
+- [x] 지역 직장 밀도 등급 표시 (`RegionWorkplaceConst` 기반, `grade`/`employees`/`businesses`)
+- [x] 학군 등급 배지 (중학교 achievementScore 기준) / 인프라 등급 배지 (백화점·마트 기준)
+- [x] CompareCard를 ComplexInfoPanel 기준으로 전 섹션 동기화
 
 ## 미완성 / TODO
 
