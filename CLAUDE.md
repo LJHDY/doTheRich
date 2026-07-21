@@ -187,13 +187,13 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 
 ### `ComplexInfoPanel.tsx`
 - 단지 선택 시 `GET /api/complexes/:id/price-history` 조회
-- **섹션 순서**: 단지정보(참고가·메모) → 종합평가 → 지하철 → 직장밀도 → 학군정보 → 주변인프라 → 재개발정보 → 임장유형 → 주요지구소요시간 → 시세변동 → 최근기록
-- **종합평가**: 직장·교통·학군·환경 4칸 그리드, 각 S/A/B/C 배지 (데이터 없으면 `-`)
-- **직장 밀도**: `complex.grade` 기반 배지 + 종사자수·사업체수 (`RegionWorkplaceConst`, DB 미저장)
-- **학군 정보**: 중학교 `achievementScore` 기준 등급 배지 (S≥95/A≥90/B≥85/C) — 중학교 없으면 배지 미표시
-- **주변 인프라**: 항상 등급 배지 표시 (백화점 2개↑=S / 1개=A / 마트 1개↑=B / 나머지=C)
+- **섹션 순서**: 단지정보(참고가·메모) → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 재개발정보 → 임장유형 → 시세변동 → 최근기록
+- **종합평가**: 직장·교통·학군·환경 4칸 그리드, 각 S/A/B/C 배지 (데이터 없으면 `-`) — 클릭 시 해당 섹션으로 스크롤 (섹션 없으면 무동작)
+- **직장**: `complex.grade` 기반 배지 + 종사자수·사업체수 (`RegionWorkplaceConst`, DB 미저장)
+- **교통**: 주요 지구 소요시간, `CommuteGradeBadge` 배지 표시
+- **학군**: 중학교 `achievementScore` 기준 등급 배지 (S≥95/A≥90/B≥85/C) — 중학교 없으면 배지 미표시
+- **환경**: 주변 인프라, 항상 등급 배지 표시 (백화점 2개↑=S / 1개=A / 마트 1개↑=B / 나머지=C)
 - **재개발 정보**: 유형 + 진행단계, 단계 레이블 `?` 아이콘 호버 시 ①~⑦ 설명 tooltip
-- **주요 지구 소요시간**: `CommuteGradeBadge` 배지 표시
 - **차트**: 평형별 다중 라인 (매매 파란계열, 전세 빨간계열)
 - 최근 기록: 최신 5건 (참고가 chips 포함)
 - 단지 삭제: 2단계 확인 후 `DELETE /api/complexes/:id`
@@ -207,7 +207,8 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 
 ### `CompareCard.tsx`
 - 비교 뷰에서 1/3 너비로 표시되는 단지 카드
-- **섹션 순서**: 헤더(파랑) → 단지정보 → 종합평가 → 지하철 → 직장밀도 → 학군정보 → 주변인프라 → 재개발정보 → 임장유형 → 주요지구소요시간 → 시세변동 → 최근 3건
+- **섹션 순서**: 헤더(파랑) → 단지정보 → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 재개발정보 → 임장유형 → 시세변동 → 최근 3건
+- **종합평가 동기화 스크롤**: 어느 카드에서든 직장·교통·학군·환경 클릭 시 `window` 커스텀 이벤트(`compare-section-scroll`) 발행 → 마운트된 모든 카드가 각자의 해당 섹션으로 동시 스크롤 (섹션 없는 카드는 무동작)
 - ComplexInfoPanel과 동일한 등급 로직·레이블 맵 내장 (`calcSchoolGrade`, `calcInfraGrade`, `GRADE_COLORS`, `Tag` 등)
 - 닫기(×) 버튼 → 비교 목록 제거 + 체크박스 해제
 
@@ -283,6 +284,8 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] 지역 직장 밀도 등급 표시 (`RegionWorkplaceConst` 기반, `grade`/`employees`/`businesses`)
 - [x] 학군 등급 배지 (중학교 achievementScore 기준) / 인프라 등급 배지 (백화점·마트 기준)
 - [x] CompareCard를 ComplexInfoPanel 기준으로 전 섹션 동기화
+- [x] ComplexInfoPanel / CompareCard 섹션 순서 재정렬 (직장→교통→학군→환경) 및 제목 변경
+- [x] 종합평가 카드 클릭 시 해당 섹션 스크롤 (ComplexInfoPanel: 개별 스크롤 / CompareCard: window 이벤트로 전체 카드 동기화)
 
 ## 미완성 / TODO
 

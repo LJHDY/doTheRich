@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, ChartDataRow, ChartSeries, SchoolInfo, InfraInfo, formatPrice, toUkUnit, calcCommuteGrade } from '../types';
 import { getPriceHistories } from '../services/api';
 import PriceChart from './PriceChart';
@@ -135,6 +135,31 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
 
   const latestHistory = priceHistories.length > 0 ? priceHistories[priceHistories.length - 1] : null;
 
+  const workSectionRef = useRef<HTMLDivElement>(null);
+  const commuteSectionRef = useRef<HTMLDivElement>(null);
+  const schoolSectionRef = useRef<HTMLDivElement>(null);
+  const infraSectionRef = useRef<HTMLDivElement>(null);
+
+  // window 커스텀 이벤트로 발행 → 모든 카드가 동시에 수신해 각자 스크롤
+  const scrollToSection = (sectionKey: string) => {
+    window.dispatchEvent(new CustomEvent('compare-section-scroll', { detail: sectionKey }));
+  };
+
+  useEffect(() => {
+    const refMap: Record<string, React.RefObject<HTMLDivElement>> = {
+      work: workSectionRef,
+      commute: commuteSectionRef,
+      school: schoolSectionRef,
+      infra: infraSectionRef,
+    };
+    const handler = (e: Event) => {
+      const section = (e as CustomEvent<string>).detail;
+      refMap[section]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    window.addEventListener('compare-section-scroll', handler);
+    return () => window.removeEventListener('compare-section-scroll', handler);
+  }, []); // refs는 컴포넌트 생명주기 동안 동일 객체 유지
+
   return (
     <div style={{
       flex: 1,
@@ -215,15 +240,16 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>종합평가</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
             {([
-              { label: '직장', grade: complex.grade ? { grade: complex.grade, color: GRADE_COLORS[complex.grade] ?? '#9e9e9e' } : null },
-              { label: '교통', grade: calcCommuteGrade(complex.commuteTimes) },
-              { label: '학군', grade: calcSchoolGrade(complex.schoolInfos ?? []) },
-              { label: '환경', grade: calcInfraGrade(complex.infraInfos ?? []) },
-            ] as { label: string; grade: { grade: string; color: string } | null }[]).map(({ label, grade }) => (
-              <div key={label} style={{
+              { label: '직장', grade: complex.grade ? { grade: complex.grade, color: GRADE_COLORS[complex.grade] ?? '#9e9e9e' } : null, sectionKey: 'work' },
+              { label: '교통', grade: calcCommuteGrade(complex.commuteTimes), sectionKey: 'commute' },
+              { label: '학군', grade: calcSchoolGrade(complex.schoolInfos ?? []), sectionKey: 'school' },
+              { label: '환경', grade: calcInfraGrade(complex.infraInfos ?? []), sectionKey: 'infra' },
+            ] as { label: string; grade: { grade: string; color: string } | null; sectionKey: string }[]).map(({ label, grade, sectionKey }) => (
+              <div key={label} onClick={() => scrollToSection(sectionKey)} style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px',
                 padding: '8px 4px', backgroundColor: '#f8f9fa',
                 borderRadius: '7px', border: '1px solid #e8eaed',
+                cursor: 'pointer',
               }}>
                 <span style={{ fontSize: '11px', color: '#80868b', fontWeight: 500 }}>{label}</span>
                 {grade ? (
@@ -256,11 +282,11 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           </div>
         )}
 
-        {/* 지역 직장 밀도 */}
+        {/* 직장 밀도 */}
         {complex.grade && (
-          <div style={{ marginBottom: '12px' }}>
+          <div ref={workSectionRef} style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>직장 밀도</h4>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>직장</h4>
               <span style={{
                 fontSize: '11px', fontWeight: 800, color: '#fff',
                 backgroundColor: GRADE_COLORS[complex.grade] ?? '#9e9e9e',
@@ -286,11 +312,37 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           </div>
         )}
 
-        {/* 학군 정보 */}
+        {/* 교통 (주요 지구 소요시간) */}
+        {complex.commuteTimes && complex.commuteTimes.length > 0 && (
+          <div ref={commuteSectionRef} style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>교통</h4>
+              <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px' }}>
+              {complex.commuteTimes.map(ct => (
+                <div key={ct.id} style={{
+                  textAlign: 'center', padding: '7px 4px',
+                  backgroundColor: '#f8f9fa', borderRadius: '7px', border: '1px solid #e8eaed',
+                }}>
+                  <div style={{ fontSize: '10px', color: '#80868b', marginBottom: '2px' }}>{ct.destination}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a73e8' }}>{ct.minutes}분</div>
+                  {ct.transferCount != null && (
+                    <div style={{ fontSize: '9px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', marginTop: '2px' }}>
+                      {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 학군 */}
         {complex.schoolInfos && complex.schoolInfos.length > 0 && (
-          <div style={{ marginBottom: '12px' }}>
+          <div ref={schoolSectionRef} style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>학군 정보</h4>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>학군</h4>
               {(() => {
                 const g = calcSchoolGrade(complex.schoolInfos ?? []);
                 return g ? (
@@ -327,11 +379,11 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           </div>
         )}
 
-        {/* 주변 인프라 */}
+        {/* 환경 (주변 인프라) */}
         {complex.infraInfos && complex.infraInfos.length > 0 && (
-          <div style={{ marginBottom: '12px' }}>
+          <div ref={infraSectionRef} style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>주변 인프라</h4>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>환경</h4>
               {(() => {
                 const g = calcInfraGrade(complex.infraInfos ?? []);
                 return (
@@ -373,32 +425,6 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
               backgroundColor: '#e8f0fe', color: '#1a73e8', fontSize: '12px', fontWeight: 600,
             }}>
               {VISIT_TYPE_LABELS[complex.visitType] ?? complex.visitType}
-            </div>
-          </div>
-        )}
-
-        {/* 주요 지구 소요시간 */}
-        {complex.commuteTimes && complex.commuteTimes.length > 0 && (
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>주요 지구 소요시간</h4>
-              <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px' }}>
-              {complex.commuteTimes.map(ct => (
-                <div key={ct.id} style={{
-                  textAlign: 'center', padding: '7px 4px',
-                  backgroundColor: '#f8f9fa', borderRadius: '7px', border: '1px solid #e8eaed',
-                }}>
-                  <div style={{ fontSize: '10px', color: '#80868b', marginBottom: '2px' }}>{ct.destination}</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a73e8' }}>{ct.minutes}분</div>
-                  {ct.transferCount != null && (
-                    <div style={{ fontSize: '9px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', marginTop: '2px' }}>
-                      {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
         )}

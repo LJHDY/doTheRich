@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, calcCommuteGrade } from '../types';
 import { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex } from '../services/api';
 import PriceChart from './PriceChart';
@@ -161,6 +161,16 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [showStageTooltip, setShowStageTooltip] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // 종합평가 카드 클릭 시 해당 섹션으로 스크롤
+  const workSectionRef = useRef<HTMLDivElement>(null);
+  const commuteSectionRef = useRef<HTMLDivElement>(null);
+  const schoolSectionRef = useRef<HTMLDivElement>(null);
+  const infraSectionRef = useRef<HTMLDivElement>(null);
+
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // 시세 기록 로드 후 차트용 억 단위 데이터 포인트로 변환
   const loadPriceHistories = useCallback(async (complexId: number) => {
@@ -454,15 +464,16 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>종합평가</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
             {([
-              { label: '직장', grade: complex.grade ? { grade: complex.grade, color: GRADE_COLORS[complex.grade] ?? '#9e9e9e' } : null },
-              { label: '교통', grade: calcCommuteGrade(complex.commuteTimes) },
-              { label: '학군', grade: calcSchoolGrade(complex.schoolInfos ?? []) },
-              { label: '환경', grade: calcInfraGrade(complex.infraInfos ?? []) },
-            ] as { label: string; grade: { grade: string; color: string } | null }[]).map(({ label, grade }) => (
-              <div key={label} style={{
+              { label: '직장', grade: complex.grade ? { grade: complex.grade, color: GRADE_COLORS[complex.grade] ?? '#9e9e9e' } : null, sectionRef: workSectionRef },
+              { label: '교통', grade: calcCommuteGrade(complex.commuteTimes), sectionRef: commuteSectionRef },
+              { label: '학군', grade: calcSchoolGrade(complex.schoolInfos ?? []), sectionRef: schoolSectionRef },
+              { label: '환경', grade: calcInfraGrade(complex.infraInfos ?? []), sectionRef: infraSectionRef },
+            ] as { label: string; grade: { grade: string; color: string } | null; sectionRef: React.RefObject<HTMLDivElement> }[]).map(({ label, grade, sectionRef }) => (
+              <div key={label} onClick={() => scrollToSection(sectionRef)} style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
                 padding: '10px 6px', backgroundColor: '#f8f9fa',
                 borderRadius: '8px', border: '1px solid #e8eaed',
+                cursor: 'pointer',
               }}>
                 <span style={{ fontSize: '12px', color: '#80868b', fontWeight: 500 }}>{label}</span>
                 {grade ? (
@@ -505,11 +516,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
         )}
 
-        {/* 지역 직장 밀도 — region 기반으로 백엔드가 상수 테이블에서 조회해 반환 */}
+        {/* 직장 밀도 */}
         {complex.grade && (
-          <div style={{ marginBottom: '16px' }}>
+          <div ref={workSectionRef} style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>직장 밀도</h3>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>직장</h3>
               <span style={{
                 fontSize: '12px', fontWeight: 800, color: '#fff',
                 backgroundColor: GRADE_COLORS[complex.grade] ?? '#9e9e9e',
@@ -535,11 +546,55 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
         )}
 
-        {/* 학군 정보 */}
-        {complex.schoolInfos && complex.schoolInfos.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
+        {/* 교통 (주요 지구 소요시간) */}
+        {complex.commuteTimes && complex.commuteTimes.length > 0 && (
+          <div ref={commuteSectionRef} style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>학군 정보</h3>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>
+                교통
+              </h3>
+              <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '6px',
+              }}
+            >
+              {complex.commuteTimes.map((ct) => (
+                <div
+                  key={ct.id}
+                  style={{
+                    textAlign: 'center',
+                    padding: '8px 4px',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '8px',
+                    border: '1px solid #e8eaed',
+                  }}
+                >
+                  <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '2px' }}>
+                    {ct.destination}
+                  </div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a73e8' }}>
+                    {ct.minutes}분
+                  </div>
+                  {ct.transferCount != null && (
+                    <div style={{ fontSize: '10px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', marginTop: '2px' }}>
+                      {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 학군 */}
+        {complex.schoolInfos && complex.schoolInfos.length > 0 && (
+          <div ref={schoolSectionRef} style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>학군</h3>
               {(() => {
                 const g = calcSchoolGrade(complex.schoolInfos ?? []);
                 return g ? (
@@ -578,11 +633,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
         )}
 
-        {/* 주변 인프라 — 인프라 없어도 항상 등급 표시 */}
+        {/* 환경 (주변 인프라) */}
         {complex.infraInfos && complex.infraInfos.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
+          <div ref={infraSectionRef} style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>주변 인프라</h3>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>환경</h3>
               {(() => {
                 const g = calcInfraGrade(complex.infraInfos ?? []);
                 return (
@@ -676,50 +731,6 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               backgroundColor: '#e8f0fe', color: '#1a73e8', fontSize: '13px', fontWeight: 600,
             }}>
               {VISIT_TYPE_LABELS[complex.visitType] ?? complex.visitType}
-            </div>
-          </div>
-        )}
-
-        {/* 상업지구 소요시간 */}
-        {complex.commuteTimes && complex.commuteTimes.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>
-                주요 지구 소요시간
-              </h3>
-              <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '6px',
-              }}
-            >
-              {complex.commuteTimes.map((ct) => (
-                <div
-                  key={ct.id}
-                  style={{
-                    textAlign: 'center',
-                    padding: '8px 4px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '8px',
-                    border: '1px solid #e8eaed',
-                  }}
-                >
-                  <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '2px' }}>
-                    {ct.destination}
-                  </div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a73e8' }}>
-                    {ct.minutes}분
-                  </div>
-                  {ct.transferCount != null && (
-                    <div style={{ fontSize: '10px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', marginTop: '2px' }}>
-                      {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -873,7 +884,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                       </span>
                       <span style={{ fontWeight: 600, color: '#202124' }}>{formatPrice(item.price)}</span>
                       {item.jeonseRate != null && (
-                        <span style={{ fontSize: '11px', color: '#1a73e8' }}>전세율 {item.jeonseRate.toFixed(0)}%</span>
+                        <span style={{ fontSize: '11px', color: '#1a73e8' }}>전세가율 {item.jeonseRate.toFixed(0)}%</span>
                       )}
                     </div>
                     {/* 참고가 — 값이 있는 항목만 표시 */}
