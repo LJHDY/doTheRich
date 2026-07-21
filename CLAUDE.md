@@ -35,7 +35,7 @@
 | 지도 | Naver Maps API (CDN) |
 | 차트 | Recharts |
 | HTTP | Axios (`src/services/api.ts`) |
-| 백엔드 | Spring Boot (로컬: `http://localhost:8080`, 운영: Railway) |
+| 백엔드 | Python + FastAPI (로컬: `http://localhost:8000`, 운영: Railway) |
 
 ---
 
@@ -49,7 +49,7 @@
 
 ### 환경변수
 - **Vercel**: `REACT_APP_API_URL=https://dotherichback-production.up.railway.app`
-- **로컬 개발**: 환경변수 없으면 `localhost:8080` 자동 fallback (기존 개발 환경 그대로 유지)
+- **로컬 개발**: 환경변수 없으면 `localhost:8000` 자동 fallback
 
 ### 배포 시 주의사항
 - CRA는 환경변수를 **빌드 시점**에 주입 → Vercel에서 env var 변경 후 반드시 Redeploy 필요
@@ -259,9 +259,12 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 
 ## 백엔드 추가 작업 필요 항목
 
+> 백엔드: **Python + FastAPI** (SQLAlchemy ORM 또는 직접 SQL)
+
 | 항목 | 설명 |
 |------|------|
-| `ApartmentComplexDto`에 `priceItems` 포함 | 금액대 필터에서 평형 정보 표시 가능 |
+| `SchoolInfo` / `InfraInfo` 모델에 `latitude`, `longitude` (Float) 추가 | 단지 선택 시 지도 오버레이 마커 표시에 사용 |
+| `ApartmentComplex` 응답에 `priceItems` 포함 | 금액대 필터에서 평형 정보 표시 가능 |
 | MOLIT 동 단위 필터링 | 법정동 기반 포스트 필터링 추가 |
 | 실거래가 정확도 개선 | 단지명 매핑 로직 개선 후 RegisterModal 주석 해제 |
 

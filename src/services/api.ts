@@ -8,7 +8,7 @@ import {
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8080',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
   headers: {
     'Content-Type': 'application/json',
   },
