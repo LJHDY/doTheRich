@@ -28,15 +28,19 @@ export function useNumberedTextarea(
 
       if (e.key === 'Enter') {
         e.preventDefault();
-        const cursor = el.selectionStart;
-        // 커서 앞 줄 수로 다음 번호 결정
-        const linesBeforeCursor = value.substring(0, cursor).split('\n');
+        // IME 조합 중 selectionStart는 조합 문자의 시작을 가리키지만
+        // selectionEnd는 조합 문자 이후를 가리키므로, selectionEnd 기준으로 분할해야
+        // 조합 중인 글자가 다음 줄로 넘어가는 버그를 막을 수 있음
+        const splitAt = el.selectionEnd;
+        // el.value 사용: cursor position(DOM 기준)과 문자열 인덱스의 일관성 보장
+        const text = el.value;
+        const linesBeforeCursor = text.substring(0, splitAt).split('\n');
         const nextNum = linesBeforeCursor.length + 1;
         const insertion = `\n${nextNum}. `;
-        const newVal = value.substring(0, cursor) + insertion + value.substring(el.selectionEnd);
+        const newVal = text.substring(0, splitAt) + insertion + text.substring(splitAt);
         onChange(newVal);
         setTimeout(() => {
-          if (el) el.selectionStart = el.selectionEnd = cursor + insertion.length;
+          if (el) el.selectionStart = el.selectionEnd = splitAt + insertion.length;
         }, 0);
         return;
       }

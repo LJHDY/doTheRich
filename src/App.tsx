@@ -121,6 +121,12 @@ const App: React.FC = () => {
     setComplexes(prev => prev.filter(c => c.id !== complexId));
   };
 
+  // 학군/인프라 추가·편집 후 단지 정보 전체 갱신 — complexes 배열과 selectedComplex 동시 업데이트
+  const handleComplexUpdate = (updated: ApartmentComplex) => {
+    setComplexes(prev => prev.map(c => c.id === updated.id ? updated : c));
+    setSelectedComplex(updated);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {/* 헤더 */}
@@ -256,6 +262,7 @@ const App: React.FC = () => {
                 onMemoUpdate={handleMemoUpdate}
                 onDelete={handleComplexDelete}
                 onOverlayMarkersChange={setOverlayMarkers}
+                onComplexUpdate={handleComplexUpdate}
               />
             )}
           </>

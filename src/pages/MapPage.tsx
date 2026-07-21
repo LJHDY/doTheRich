@@ -16,7 +16,9 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
   const infoWindowRef = useRef<any>(null);
   const overlayMarkersRef = useRef<any[]>([]);
 
-  // 네이버 지도 초기화
+  // 네이버 지도 초기화 + body 직속 tooltip div 생성
+  // position:fixed를 지도 DOM 안에 두면 Naver Maps의 CSS transform 컨텍스트에 갇혀
+  // 다른 마커에 가려지므로, document.body에 직접 append해서 stacking context를 완전히 탈출
   useEffect(() => {
     if (!mapRef.current || !window.naver) return;
 
@@ -36,13 +38,38 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
       borderWidth: 2,
     });
 
+    // body 직속 tooltip — 지도 DOM 바깥이므로 어떤 stacking context도 영향 없음
+    const tip = document.createElement('div');
+    tip.id = '__mk_tooltip';
+    tip.style.cssText = [
+      'display:none', 'position:fixed', 'pointer-events:none',
+      'z-index:2147483647',  // 최대값
+      'background:rgba(33,33,33,0.85)', 'color:#fff',
+      'padding:3px 9px', 'border-radius:4px',
+      'font-size:11px', 'font-family:-apple-system,BlinkMacSystemFont,sans-serif',
+      'white-space:nowrap', 'box-shadow:0 1px 4px rgba(0,0,0,0.3)',
+      'transform:translate(-50%,calc(-100% - 6px))',
+    ].join(';');
+    document.body.appendChild(tip);
+
+    (window as any).__mkTipShow = (name: string, cx: number, cy: number) => {
+      tip.textContent = name;
+      tip.style.left = cx + 'px';
+      tip.style.top = cy + 'px';
+      tip.style.display = 'block';
+    };
+    (window as any).__mkTipHide = () => { tip.style.display = 'none'; };
+
     return () => {
       markersRef.current.forEach((m) => m.setMap(null));
       markersRef.current = [];
+      document.body.removeChild(tip);
+      delete (window as any).__mkTipShow;
+      delete (window as any).__mkTipHide;
     };
   }, []);
 
-  // 마커 아이콘 생성
+  // 마커 아이콘 생성 — 회전 정사각형(border-radius+rotate) 핀 스타일, 호버 시 단지명 tooltip
   const createMarkerIcon = useCallback(
     (complex: ApartmentComplex, isSelected: boolean) => {
       // 실제 가격을 억 단위로 변환 (천만 자리에서 반올림) — 없으면 금액대 숫자로 fallback
@@ -52,7 +79,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
       const label = priceUk !== null ? String(priceUk) : complex.priceRange;
 
       // 가격 기준 색상 구분: 선택=보라, 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=검정
-      const baseColor = isSelected
+      const bgColor = isSelected
         ? '#6a0dad'
         : priceUk === null ? '#1a73e8'
         : priceUk < 10 ? '#1a73e8'
@@ -60,41 +87,26 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
         : priceUk < 20 ? '#c5221f'
         : '#202124';
 
-      const bgColor = baseColor;
+      // 글자 수에 따라 폰트 크기 조정
+      const fontSize = !label || label.length <= 2 ? 9 : label.length <= 4 ? 8 : 7;
+
+      // XSS 방지: 단지명의 HTML 특수문자 이스케이프
+      const safeName = complex.complexName
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
       return {
         content: `
-          <div style="
-            position: relative;
-            display: inline-block;
-            text-align: center;
-          ">
-            <div style="
-              background-color: ${bgColor};
-              color: white;
-              padding: 5px 10px;
-              border-radius: 20px;
-              font-size: 12px;
-              font-weight: 700;
-              white-space: nowrap;
-              box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-              border: 2px solid white;
-              cursor: pointer;
-            ">
-              ${label}
+          <div style="position:relative;display:inline-block;cursor:pointer;"
+               onmouseover="var r=this.getBoundingClientRect();window.__mkTipShow('${safeName}',r.left+r.width/2,r.top);"
+               onmouseout="window.__mkTipHide();">
+            <div style="position:relative;width:30px;height:30px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.22));">
+              <div style="position:absolute;inset:0;background:${bgColor};border:2px solid #fff;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);box-shadow:inset 0 1px 0 rgba(255,255,255,0.35);"></div>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:${fontSize}px;letter-spacing:-0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.15);">${label}</div>
             </div>
-            <div style="
-              width: 0;
-              height: 0;
-              border-left: 6px solid transparent;
-              border-right: 6px solid transparent;
-              border-top: 8px solid ${bgColor};
-              margin: 0 auto;
-              margin-top: -1px;
-            "></div>
           </div>
         `,
-        anchor: new window.naver.maps.Point(0, 0),
+        // rotate(-45deg) 후 bottom-left 꼭짓점 위치: N*(1+√2)/2 = 30*1.207 ≈ 36
+        anchor: new window.naver.maps.Point(15, 36),
       };
     },
     []

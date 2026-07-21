@@ -4,11 +4,13 @@ import {
   ApartmentComplexRequest,
   PriceHistory,
   PriceHistoryRequest,
+  SchoolInfo,
+  InfraInfo,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8080',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -91,6 +93,84 @@ export const updateComplexMemo = async (complexId: number, memo: string): Promis
 /** 단지 삭제 — DELETE /api/complexes/:id */
 export const deleteComplex = async (complexId: number): Promise<void> => {
   await api.delete(`/api/complexes/${complexId}`);
+};
+
+/** 학군 정보 단건 추가 — 하위 호환성 유지용, 내부적으로 배열 함수 호출 */
+export const addSchoolInfo = async (
+  complexId: number,
+  data: Omit<SchoolInfo, 'id'>
+): Promise<SchoolInfo> => {
+  const results = await addSchoolInfos(complexId, [data]);
+  return results[0];
+};
+
+/** 학군 정보 배열 추가 — POST /api/complexes/:id/school-infos (여러 항목 한 번에 저장) */
+export const addSchoolInfos = async (
+  complexId: number,
+  items: Omit<SchoolInfo, 'id'>[]
+): Promise<SchoolInfo[]> => {
+  const { data } = await api.post<SchoolInfo[]>(
+    `/api/complexes/${complexId}/school-infos`,
+    items
+  );
+  return data;
+};
+
+/** 학군 정보 단건 수정 — PATCH /api/complexes/:id/school-infos/:sid */
+export const updateSchoolInfo = async (
+  complexId: number,
+  schoolId: number,
+  data: Omit<SchoolInfo, 'id'>
+): Promise<SchoolInfo> => {
+  const { data: result } = await api.patch<SchoolInfo>(
+    `/api/complexes/${complexId}/school-infos/${schoolId}`,
+    data
+  );
+  return result;
+};
+
+/** 학군 정보 단건 삭제 — DELETE /api/complexes/:id/school-infos/:sid */
+export const deleteSchoolInfo = async (complexId: number, schoolId: number): Promise<void> => {
+  await api.delete(`/api/complexes/${complexId}/school-infos/${schoolId}`);
+};
+
+/** 인프라 정보 단건 추가 — 하위 호환성 유지용, 내부적으로 배열 함수 호출 */
+export const addInfraInfo = async (
+  complexId: number,
+  data: Omit<InfraInfo, 'id'>
+): Promise<InfraInfo> => {
+  const results = await addInfraInfos(complexId, [data]);
+  return results[0];
+};
+
+/** 인프라 정보 배열 추가 — POST /api/complexes/:id/infra-infos (여러 항목 한 번에 저장) */
+export const addInfraInfos = async (
+  complexId: number,
+  items: Omit<InfraInfo, 'id'>[]
+): Promise<InfraInfo[]> => {
+  const { data } = await api.post<InfraInfo[]>(
+    `/api/complexes/${complexId}/infra-infos`,
+    items
+  );
+  return data;
+};
+
+/** 인프라 정보 단건 수정 — PATCH /api/complexes/:id/infra-infos/:iid */
+export const updateInfraInfo = async (
+  complexId: number,
+  infraId: number,
+  data: Omit<InfraInfo, 'id'>
+): Promise<InfraInfo> => {
+  const { data: result } = await api.patch<InfraInfo>(
+    `/api/complexes/${complexId}/infra-infos/${infraId}`,
+    data
+  );
+  return result;
+};
+
+/** 인프라 정보 단건 삭제 — DELETE /api/complexes/:id/infra-infos/:iid */
+export const deleteInfraInfo = async (complexId: number, infraId: number): Promise<void> => {
+  await api.delete(`/api/complexes/${complexId}/infra-infos/${infraId}`);
 };
 
 /** 실거래가/전세가 배치 수집 — POST /api/batch/real-estate-price */

@@ -153,6 +153,10 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 | DELETE | `/api/complexes/:id` | 단지 삭제 |
 | GET | `/api/complexes/price-ranges` | 금액대 목록 |
 | PATCH | `/api/complexes/:id/memo` | 단지 메모 수정 — `{ memo: string }` |
+| POST | `/api/complexes/:id/school-infos` | 학군 정보 단건 추가 (201) |
+| PATCH | `/api/complexes/:id/school-infos/:sid` | 학군 정보 단건 수정 |
+| POST | `/api/complexes/:id/infra-infos` | 인프라 정보 단건 추가 (201) |
+| PATCH | `/api/complexes/:id/infra-infos/:iid` | 인프라 정보 단건 수정 |
 | GET | `/api/complexes/:id/price-history` | 시세 기록 목록 |
 | POST | `/api/complexes/:id/price-history` | 시세 기록 추가 |
 | GET | `/api/search/local?query=` | 네이버 장소 검색 (지도 역 조회 등) |
@@ -178,8 +182,10 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 
 ### `MapPage.tsx`
 - 네이버 지도 초기화 (서울 중심, zoom 12)
-- 단지마다 실제 금액 말풍선 커스텀 마커 (억 단위, 천만 반올림: 9.1억)
+- 단지마다 CSS 회전 핀 마커 (30×30px, `border-radius:50% 50% 50% 4px` + `rotate(-45deg)`)
   - 색상: 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=검정
+  - 마커 hover 시 단지명 tooltip 표시 — tooltip은 `document.body` 직속 div (`z-index:2147483647`)로 생성해 Naver Maps의 CSS transform stacking context를 탈출, 항상 최상위 렌더링
+  - `window.__mkTipShow / __mkTipHide` 전역 함수로 마커 인라인 이벤트에서 제어
 - 마커 클릭 → InfoWindow + `onComplexSelect`
 - 지도 클릭 → 역방향 지오코딩 → `onMapClick` 콜백으로 주소 전달
 - `focusLocation` 변경 시 지도 중심/줌(15) 이동
@@ -206,7 +212,10 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - 최근 기록: 최신 5건 (참고가 chips 포함)
 - 단지 삭제: 2단계 확인 후 `DELETE /api/complexes/:id`
 - 메모 인라인 편집
-- 내부 헬퍼: `calcSchoolGrade`, `calcInfraGrade`, `GRADE_COLORS`, `formatCount`, `Tag`
+- **학군 인라인 추가·편집**: 연필(✏) 버튼 → 편집 폼 / 섹션 하단 "+ 학교 추가" / 삭제버튼 위 "+ 학군 추가" (데이터 없을 때만)
+- **인프라 인라인 추가·편집**: 동일 패턴, 유형 셀렉트 + 이름 검색 + 도보거리 자동계산
+- 저장 후 `getComplexById` 재조회 → `onComplexUpdate` 콜백으로 부모 상태 갱신 + 오버레이 마커 갱신
+- 내부 헬퍼: `calcSchoolGrade`, `calcInfraGrade`, `GRADE_COLORS`, `formatCount`, `Tag`, `stripHtml`, `haversineKm`, `INFRA_TYPES_LIST`, `editInputStyle`
 
 ### `CompareListModal.tsx`
 - 헤더 "비교하기" 버튼 클릭 시 헤더 하단 드롭다운 패널
@@ -299,6 +308,9 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] 종합평가 카드 클릭 시 해당 섹션 스크롤 (ComplexInfoPanel: 개별 스크롤 / CompareCard: window 이벤트로 전체 카드 동기화)
 - [x] 학교·인프라 좌표 DB 저장 (RegisterModal 검색 선택 시 mapx/mapy → latitude/longitude 저장 후 백엔드 전송)
 - [x] 단지 선택 시 학교·인프라 오버레이 마커 지도 표시 (좌표 있는 항목만, 패널 닫으면 제거)
+- [x] ComplexInfoPanel 학군/인프라 인라인 추가·편집 (연필 버튼, 네이버 검색, 도보거리 자동계산, 저장 후 재조회)
+- [x] 백엔드 학군/인프라 단건 추가(POST)·수정(PATCH) 엔드포인트 추가 (`complex_service`, `complexes.py`)
+- [x] 지도 마커 CSS 핀 스타일 변경 (회전 정사각형, `border-radius+rotate`) + hover 단지명 tooltip (body 직속 div로 stacking context 탈출)
 
 ## 미완성 / TODO
 

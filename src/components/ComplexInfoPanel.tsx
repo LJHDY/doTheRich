@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex } from '../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -12,7 +12,106 @@ interface ComplexInfoPanelProps {
   onMemoUpdate?: (complexId: number, memo: string) => void;
   onDelete?: (complexId: number) => void;
   onOverlayMarkersChange?: (markers: OverlayMarker[]) => void;
+  onComplexUpdate?: (complex: ApartmentComplex) => void; // 학군/인프라 저장 후 부모 상태 갱신
 }
+
+// 네이버 검색 결과 단건 — 학교·인프라 검색에서 공통 사용
+interface SearchItem {
+  title: string;
+  category: string;
+  address: string;
+  roadAddress: string;
+  mapx: string;
+  mapy: string;
+}
+
+// 학군 기존 항목 수정 전용 상태 (mode 필드 제거, schoolId 필수)
+interface SchoolEditState {
+  schoolId: number;
+  schoolName: string;
+  schoolAddress: string;
+  schoolType: 'ELEMENTARY' | 'MIDDLE';
+  walkingMinutes: string;
+  achievementScore: string;
+  totalStudents: string;
+  latitude: number | null;
+  longitude: number | null;
+  fetching: boolean;        // 검색 or 도보거리 계산 중
+  searchResults: SearchItem[];
+  showDropdown: boolean;
+  saving: boolean;
+}
+
+// 학군 신규 추가 행 — 배열로 관리하여 여러 행을 쌓아두고 한 번에 저장
+interface SchoolAddRow {
+  localId: number;          // React key용 고유 번호 (useRef 카운터로 증가)
+  schoolName: string;
+  schoolAddress: string;
+  schoolType: 'ELEMENTARY' | 'MIDDLE';
+  walkingMinutes: string;
+  achievementScore: string;
+  totalStudents: string;
+  latitude: number | null;
+  longitude: number | null;
+  fetching: boolean;
+  searchResults: SearchItem[];
+  showDropdown: boolean;
+}
+
+// 인프라 기존 항목 수정 전용 상태 (mode 필드 제거, infraId 필수)
+interface InfraEditState {
+  infraId: number;
+  infraType: string;
+  infraName: string;
+  infraAddress: string;
+  distance: string;
+  latitude: number | null;
+  longitude: number | null;
+  fetching: boolean;
+  searchResults: SearchItem[];
+  showDropdown: boolean;
+  saving: boolean;
+}
+
+// 인프라 신규 추가 행 — 배열로 관리
+interface InfraAddRow {
+  localId: number;          // React key용 고유 번호
+  infraType: string;
+  infraName: string;
+  infraAddress: string;
+  distance: string;
+  latitude: number | null;
+  longitude: number | null;
+  fetching: boolean;
+  searchResults: SearchItem[];
+  showDropdown: boolean;
+}
+
+// HTML 태그 제거 (네이버 검색 결과 title에 <b> 태그가 포함되어 있어 제거)
+const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '');
+
+// 두 좌표 사이의 직선 거리(km) 계산 — 도보 API 실패 시 fallback으로 사용
+const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+// 인프라 유형 목록 — 셀렉트박스 옵션 생성에 사용
+const INFRA_TYPES_LIST = [
+  { key: 'DEPARTMENT_STORE', label: '백화점' },
+  { key: 'MART', label: '마트' },
+  { key: 'HOSPITAL', label: '병원' },
+  { key: 'ETC', label: '기타' },
+];
+
+// 인라인 편집 폼 인풋 공통 스타일
+const editInputStyle: React.CSSProperties = {
+  border: '1px solid #dadce0', borderRadius: '6px', padding: '6px 8px',
+  fontSize: '12px', outline: 'none', width: '100%', boxSizing: 'border-box',
+};
 
 // 값이 없으면 행 자체를 렌더링하지 않아 불필요한 빈 줄 방지
 const InfoRow: React.FC<{ label: string; value?: string | number | null }> = ({ label, value }) => {
@@ -141,7 +240,7 @@ const buildChartData = (
   return { rows, series };
 };
 
-const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, onMemoUpdate, onDelete, onOverlayMarkersChange }) => {
+const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, onMemoUpdate, onDelete, onOverlayMarkersChange, onComplexUpdate }) => {
   const [priceHistories, setPriceHistories] = useState<PriceHistory[]>([]);
   const [chartData, setChartData] = useState<{ rows: ChartDataRow[]; series: ChartSeries[] }>(() => ({ rows: [], series: [] }));
   const [showInputForm, setShowInputForm] = useState(false);
@@ -162,6 +261,18 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [showStageTooltip, setShowStageTooltip] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // 학군 편집 상태 — editingSchool: 기존 항목 수정 폼, newSchoolRows: 신규 추가 행 배열
+  const [editingSchool, setEditingSchool] = useState<SchoolEditState | null>(null);
+  const [newSchoolRows, setNewSchoolRows] = useState<SchoolAddRow[]>([]);
+  const [savingNewSchools, setSavingNewSchools] = useState(false);
+  // 인프라 편집 상태 — editingInfra: 기존 항목 수정 폼, newInfraRows: 신규 추가 행 배열
+  const [editingInfra, setEditingInfra] = useState<InfraEditState | null>(null);
+  const [newInfraRows, setNewInfraRows] = useState<InfraAddRow[]>([]);
+  const [savingNewInfras, setSavingNewInfras] = useState(false);
+  // 추가 행 localId 생성용 카운터 — useRef로 관리해 리렌더 시 초기화 방지
+  const schoolRowCounter = useRef(0);
+  const infraRowCounter = useRef(0);
 
   // 종합평가 카드 클릭 시 해당 섹션으로 스크롤
   const workSectionRef = useRef<HTMLDivElement>(null);
@@ -218,6 +329,13 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setMemoText(complex.memo || '');
       setDisplayMemo(complex.memo || '');
       setMemoError(null);
+      // 학군/인프라 편집·추가 상태도 초기화 — 다른 단지 선택 시 이전 폼 닫기
+      setEditingSchool(null);
+      setNewSchoolRows([]);
+      setSavingNewSchools(false);
+      setEditingInfra(null);
+      setNewInfraRows([]);
+      setSavingNewInfras(false);
       loadPriceHistories(complex.id);
     }
   }, [complex, loadPriceHistories]);
@@ -260,6 +378,359 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     setSuccessMsg('시세가 저장되었습니다!');
     await loadPriceHistories(complex.id);
     setTimeout(() => setSuccessMsg(null), 3000);
+  };
+
+  // 저장 후 단지 전체 재조회 → 부모·오버레이 마커 동시 갱신
+  const refreshComplex = useCallback(async () => {
+    if (!complex) return;
+    try {
+      const fresh = await getComplexById(complex.id);
+      onComplexUpdate?.(fresh);
+      // 갱신된 단지의 학교·인프라 오버레이 마커도 함께 갱신
+      const markers: OverlayMarker[] = [];
+      (fresh.schoolInfos ?? []).forEach(s => {
+        if (s.latitude != null && s.longitude != null)
+          markers.push({ id: `school-${s.id}`, name: s.schoolName, lat: s.latitude, lng: s.longitude, markerType: 'school', subType: s.schoolType });
+      });
+      (fresh.infraInfos ?? []).forEach(inf => {
+        if (inf.latitude != null && inf.longitude != null)
+          markers.push({ id: `infra-${inf.id}`, name: inf.infraName, lat: inf.latitude, lng: inf.longitude, markerType: 'infra', subType: inf.infraType });
+      });
+      onOverlayMarkersChange?.(markers);
+    } catch { /* 재조회 실패는 무시 — 이미 저장은 완료된 상태 */ }
+  }, [complex, onComplexUpdate, onOverlayMarkersChange]);
+
+  // 신규 추가 행 하나 추가 — 빈 상태로 생성 후 배열 끝에 삽입
+  const startAddSchool = () => {
+    const localId = ++schoolRowCounter.current;
+    setNewSchoolRows(prev => [...prev, {
+      localId,
+      schoolName: '', schoolAddress: '',
+      schoolType: 'ELEMENTARY',
+      walkingMinutes: '', achievementScore: '', totalStudents: '',
+      latitude: null, longitude: null,
+      fetching: false, searchResults: [], showDropdown: false,
+    }]);
+    // 학군 섹션으로 스크롤 — DOM 렌더 후 실행되도록 딜레이
+    setTimeout(() => schoolSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  };
+
+  // 추가 행 제거 — localId로 해당 행만 필터링 제거
+  const removeNewSchoolRow = (localId: number) => {
+    setNewSchoolRows(prev => prev.filter(r => r.localId !== localId));
+  };
+
+  // 추가 행 필드 업데이트 — localId로 해당 행만 찾아서 부분 갱신
+  const updateNewSchoolRow = (localId: number, update: Partial<SchoolAddRow>) => {
+    setNewSchoolRows(prev => prev.map(r => r.localId === localId ? { ...r, ...update } : r));
+  };
+
+  // 추가 행 학교 검색 — 네이버 장소 검색 API 호출
+  const handleNewSchoolSearch = async (localId: number) => {
+    const row = newSchoolRows.find(r => r.localId === localId);
+    if (!row || !row.schoolName.trim()) return;
+    updateNewSchoolRow(localId, { fetching: true, showDropdown: false });
+    try {
+      const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query: row.schoolName.trim() } });
+      updateNewSchoolRow(localId, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
+    } catch {
+      updateNewSchoolRow(localId, { fetching: false });
+    }
+  };
+
+  // 추가 행 검색 결과 선택 — 주소·좌표 자동 입력 후 도보 거리 계산
+  const handleNewSchoolSelect = async (localId: number, item: SearchItem) => {
+    if (!complex) return;
+    const addr = item.roadAddress || item.address;
+    const lat = parseInt(item.mapy) / 10000000;
+    const lng = parseInt(item.mapx) / 10000000;
+    updateNewSchoolRow(localId, {
+      schoolName: stripHtml(item.title), schoolAddress: addr,
+      latitude: lat, longitude: lng, showDropdown: false, searchResults: [], fetching: true,
+    });
+    try {
+      const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
+        params: { startLat: complex.latitude, startLng: complex.longitude, goalLat: lat, goalLng: lng },
+      });
+      updateNewSchoolRow(localId, { walkingMinutes: String(dir.minutes), fetching: false });
+    } catch {
+      // 도보 API 실패 시 직선 거리로 추정 (1.3 배율, 시속 4km 기준)
+      const km = haversineKm(complex.latitude!, complex.longitude!, lat, lng);
+      updateNewSchoolRow(localId, { walkingMinutes: String(Math.max(1, Math.round(km * 1.3 / 4 * 60))), fetching: false });
+    }
+  };
+
+  // 신규 추가 행 전체 일괄 저장 — 이름이 있는 행만 필터링 후 POST
+  const saveNewSchools = async () => {
+    if (!complex || newSchoolRows.length === 0) return;
+    setSavingNewSchools(true);
+    const items = newSchoolRows
+      .filter(r => r.schoolName.trim())
+      .map(r => ({
+        schoolName: r.schoolName || undefined,
+        schoolType: r.schoolType,
+        walkingMinutes: r.walkingMinutes ? parseInt(r.walkingMinutes) : undefined,
+        achievementScore: r.achievementScore ? parseFloat(r.achievementScore) : undefined,
+        schoolAddress: r.schoolAddress || undefined,
+        totalStudents: r.totalStudents ? parseInt(r.totalStudents) : undefined,
+        latitude: r.latitude ?? undefined,
+        longitude: r.longitude ?? undefined,
+      }));
+    try {
+      await addSchoolInfos(complex.id, items as any);
+      setNewSchoolRows([]);
+      await refreshComplex();
+    } catch {
+      /* 저장 실패해도 입력 폼 유지 */
+    } finally {
+      setSavingNewSchools(false);
+    }
+  };
+
+  // 기존 항목 수정 폼 열기 — 해당 학교 데이터로 편집 상태 초기화
+  const startEditSchool = (s: SchoolInfo) => {
+    setEditingSchool({
+      schoolId: s.id,
+      schoolName: s.schoolName ?? '',
+      schoolAddress: s.schoolAddress ?? '',
+      schoolType: (s.schoolType as 'ELEMENTARY' | 'MIDDLE') ?? 'ELEMENTARY',
+      walkingMinutes: s.walkingMinutes != null ? String(s.walkingMinutes) : '',
+      achievementScore: s.achievementScore != null ? String(s.achievementScore) : '',
+      totalStudents: s.totalStudents != null ? String(s.totalStudents) : '',
+      latitude: s.latitude ?? null,
+      longitude: s.longitude ?? null,
+      fetching: false, searchResults: [], showDropdown: false, saving: false,
+    });
+  };
+
+  // 수정 폼 학교명 검색
+  const handleSchoolSearch = async () => {
+    if (!editingSchool) return;
+    const query = editingSchool.schoolName.trim();
+    if (!query) return;
+    setEditingSchool(prev => prev ? { ...prev, fetching: true, showDropdown: false } : null);
+    try {
+      const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query } });
+      setEditingSchool(prev => prev ? { ...prev, fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 } : null);
+    } catch {
+      setEditingSchool(prev => prev ? { ...prev, fetching: false } : null);
+    }
+  };
+
+  // 수정 폼 드롭다운 항목 선택 — 주소·좌표 자동 입력 + 도보거리 계산
+  const handleSchoolSelect = async (item: SearchItem) => {
+    if (!editingSchool || !complex) return;
+    const addr = item.roadAddress || item.address;
+    const lat = parseInt(item.mapy) / 10000000;
+    const lng = parseInt(item.mapx) / 10000000;
+    setEditingSchool(prev => prev ? {
+      ...prev, schoolName: stripHtml(item.title), schoolAddress: addr,
+      latitude: lat, longitude: lng, showDropdown: false, searchResults: [], fetching: true,
+    } : null);
+    try {
+      const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
+        params: { startLat: complex.latitude, startLng: complex.longitude, goalLat: lat, goalLng: lng },
+      });
+      setEditingSchool(prev => prev ? { ...prev, walkingMinutes: String(dir.minutes), fetching: false } : null);
+    } catch {
+      const km = haversineKm(complex.latitude!, complex.longitude!, lat, lng);
+      setEditingSchool(prev => prev ? { ...prev, walkingMinutes: String(Math.max(1, Math.round(km * 1.3 / 4 * 60))), fetching: false } : null);
+    }
+  };
+
+  // 기존 항목 수정 저장 — PATCH 후 refreshComplex 호출
+  const saveEditingSchool = async () => {
+    if (!editingSchool || !complex) return;
+    setEditingSchool(prev => prev ? { ...prev, saving: true } : null);
+    const payload = {
+      schoolName: editingSchool.schoolName || undefined,
+      schoolType: editingSchool.schoolType,
+      walkingMinutes: editingSchool.walkingMinutes ? parseInt(editingSchool.walkingMinutes) : undefined,
+      achievementScore: editingSchool.achievementScore ? parseFloat(editingSchool.achievementScore) : undefined,
+      schoolAddress: editingSchool.schoolAddress || undefined,
+      totalStudents: editingSchool.totalStudents ? parseInt(editingSchool.totalStudents) : undefined,
+      latitude: editingSchool.latitude ?? undefined,
+      longitude: editingSchool.longitude ?? undefined,
+    };
+    try {
+      await updateSchoolInfo(complex.id, editingSchool.schoolId, payload as any);
+      setEditingSchool(null);
+      await refreshComplex();
+    } catch {
+      setEditingSchool(prev => prev ? { ...prev, saving: false } : null);
+    }
+  };
+
+  // 학교 삭제 — DELETE 후 refreshComplex 호출
+  const handleDeleteSchool = async (schoolId: number) => {
+    if (!complex) return;
+    try {
+      await deleteSchoolInfo(complex.id, schoolId);
+      await refreshComplex();
+    } catch { /* 삭제 실패 시 UI 변화 없음 */ }
+  };
+
+  // 신규 추가 행 하나 추가 — 빈 상태로 생성 후 배열 끝에 삽입
+  const startAddInfra = () => {
+    const localId = ++infraRowCounter.current;
+    setNewInfraRows(prev => [...prev, {
+      localId,
+      infraType: 'DEPARTMENT_STORE',
+      infraName: '', infraAddress: '',
+      distance: '',
+      latitude: null, longitude: null,
+      fetching: false, searchResults: [], showDropdown: false,
+    }]);
+    // 환경 섹션으로 스크롤 — DOM 렌더 후 실행되도록 딜레이
+    setTimeout(() => infraSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  };
+
+  // 추가 행 제거
+  const removeNewInfraRow = (localId: number) => {
+    setNewInfraRows(prev => prev.filter(r => r.localId !== localId));
+  };
+
+  // 추가 행 필드 업데이트
+  const updateNewInfraRow = (localId: number, update: Partial<InfraAddRow>) => {
+    setNewInfraRows(prev => prev.map(r => r.localId === localId ? { ...r, ...update } : r));
+  };
+
+  // 추가 행 인프라 검색
+  const handleNewInfraSearch = async (localId: number) => {
+    const row = newInfraRows.find(r => r.localId === localId);
+    if (!row || !row.infraName.trim()) return;
+    updateNewInfraRow(localId, { fetching: true, showDropdown: false });
+    try {
+      const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query: row.infraName.trim() } });
+      updateNewInfraRow(localId, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
+    } catch {
+      updateNewInfraRow(localId, { fetching: false });
+    }
+  };
+
+  // 추가 행 검색 결과 선택 — 주소·좌표 자동 입력 후 도보 거리 계산
+  const handleNewInfraSelect = async (localId: number, item: SearchItem) => {
+    if (!complex) return;
+    const addr = item.roadAddress || item.address;
+    const lat = parseInt(item.mapy) / 10000000;
+    const lng = parseInt(item.mapx) / 10000000;
+    updateNewInfraRow(localId, {
+      infraName: stripHtml(item.title), infraAddress: addr,
+      latitude: lat, longitude: lng, showDropdown: false, searchResults: [], fetching: true,
+    });
+    try {
+      const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
+        params: { startLat: complex.latitude, startLng: complex.longitude, goalLat: lat, goalLng: lng },
+      });
+      updateNewInfraRow(localId, { distance: String(dir.minutes), fetching: false });
+    } catch {
+      const km = haversineKm(complex.latitude!, complex.longitude!, lat, lng);
+      updateNewInfraRow(localId, { distance: String(Math.max(1, Math.round(km * 1.3 / 4 * 60))), fetching: false });
+    }
+  };
+
+  // 신규 추가 행 전체 일괄 저장
+  const saveNewInfras = async () => {
+    if (!complex || newInfraRows.length === 0) return;
+    setSavingNewInfras(true);
+    const items = newInfraRows
+      .filter(r => r.infraName.trim())
+      .map(r => ({
+        infraName: r.infraName || undefined,
+        infraType: r.infraType,
+        distance: r.distance ? parseInt(r.distance) : undefined,
+        infraAddress: r.infraAddress || undefined,
+        latitude: r.latitude ?? undefined,
+        longitude: r.longitude ?? undefined,
+      }));
+    try {
+      await addInfraInfos(complex.id, items as any);
+      setNewInfraRows([]);
+      await refreshComplex();
+    } catch {
+      /* 저장 실패해도 입력 폼 유지 */
+    } finally {
+      setSavingNewInfras(false);
+    }
+  };
+
+  // 기존 항목 수정 폼 열기
+  const startEditInfra = (inf: InfraInfo) => {
+    setEditingInfra({
+      infraId: inf.id,
+      infraType: inf.infraType ?? 'DEPARTMENT_STORE',
+      infraName: inf.infraName ?? '',
+      infraAddress: inf.infraAddress ?? '',
+      distance: inf.distance != null ? String(inf.distance) : '',
+      latitude: inf.latitude ?? null,
+      longitude: inf.longitude ?? null,
+      fetching: false, searchResults: [], showDropdown: false, saving: false,
+    });
+  };
+
+  // 수정 폼 인프라명 검색
+  const handleInfraSearch = async () => {
+    if (!editingInfra) return;
+    const query = editingInfra.infraName.trim();
+    if (!query) return;
+    setEditingInfra(prev => prev ? { ...prev, fetching: true, showDropdown: false } : null);
+    try {
+      const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query } });
+      setEditingInfra(prev => prev ? { ...prev, fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 } : null);
+    } catch {
+      setEditingInfra(prev => prev ? { ...prev, fetching: false } : null);
+    }
+  };
+
+  // 수정 폼 드롭다운 항목 선택
+  const handleInfraSelect = async (item: SearchItem) => {
+    if (!editingInfra || !complex) return;
+    const addr = item.roadAddress || item.address;
+    const lat = parseInt(item.mapy) / 10000000;
+    const lng = parseInt(item.mapx) / 10000000;
+    setEditingInfra(prev => prev ? {
+      ...prev, infraName: stripHtml(item.title), infraAddress: addr,
+      latitude: lat, longitude: lng, showDropdown: false, searchResults: [], fetching: true,
+    } : null);
+    try {
+      const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
+        params: { startLat: complex.latitude, startLng: complex.longitude, goalLat: lat, goalLng: lng },
+      });
+      setEditingInfra(prev => prev ? { ...prev, distance: String(dir.minutes), fetching: false } : null);
+    } catch {
+      const km = haversineKm(complex.latitude!, complex.longitude!, lat, lng);
+      setEditingInfra(prev => prev ? { ...prev, distance: String(Math.max(1, Math.round(km * 1.3 / 4 * 60))), fetching: false } : null);
+    }
+  };
+
+  // 기존 항목 수정 저장
+  const saveEditingInfra = async () => {
+    if (!editingInfra || !complex) return;
+    setEditingInfra(prev => prev ? { ...prev, saving: true } : null);
+    const payload = {
+      infraName: editingInfra.infraName || undefined,
+      infraType: editingInfra.infraType,
+      distance: editingInfra.distance ? parseInt(editingInfra.distance) : undefined,
+      infraAddress: editingInfra.infraAddress || undefined,
+      latitude: editingInfra.latitude ?? undefined,
+      longitude: editingInfra.longitude ?? undefined,
+    };
+    try {
+      await updateInfraInfo(complex.id, editingInfra.infraId, payload as any);
+      setEditingInfra(null);
+      await refreshComplex();
+    } catch {
+      setEditingInfra(prev => prev ? { ...prev, saving: false } : null);
+    }
+  };
+
+  // 인프라 삭제
+  const handleDeleteInfra = async (infraId: number) => {
+    if (!complex) return;
+    try {
+      await deleteInfraInfo(complex.id, infraId);
+      await refreshComplex();
+    } catch { /* 삭제 실패 시 UI 변화 없음 */ }
   };
 
   if (!complex) {
@@ -608,8 +1079,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
         )}
 
-        {/* 학군 */}
-        {complex.schoolInfos && complex.schoolInfos.length > 0 && (
+        {/* 학군 — 기존 데이터나 추가 행이 있을 때 섹션 표시 */}
+        {((complex.schoolInfos && complex.schoolInfos.length > 0) || newSchoolRows.length > 0) && (
           <div ref={schoolSectionRef} style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>학군</h3>
@@ -622,37 +1093,225 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 ) : null;
               })()}
             </div>
-            {complex.schoolInfos.map((s: SchoolInfo) => (
-              <div key={s.id} style={{ padding: '7px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                {/* 학교명 + 유형 뱃지 + 도보 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Tag
-                    label={SCHOOL_TYPE_LABELS[s.schoolType] ?? s.schoolType}
-                    color={s.schoolType === 'MIDDLE' ? '#1a73e8' : '#34a853'}
-                  />
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#202124', flex: 1 }}>{s.schoolName}</span>
-                  {s.walkingMinutes != null && (
-                    <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0 }}>도보 {s.walkingMinutes}분</span>
-                  )}
-                </div>
-                {/* 학업성취도(중학교) + 전교생수 */}
-                {(s.achievementScore != null || s.totalStudents != null) && (
-                  <div style={{ display: 'flex', gap: '12px', paddingLeft: '2px' }}>
-                    {s.achievementScore != null && (
-                      <span style={{ fontSize: '11px', color: '#5f6368' }}>학업성취도 {s.achievementScore}%</span>
+
+            {/* 기존 학교 항목 목록 */}
+            {(complex.schoolInfos ?? []).map((s: SchoolInfo) => (
+              <div key={s.id}>
+                {/* 수정 중인 항목 — 인라인 편집 폼 표시 */}
+                {editingSchool?.schoolId === s.id ? (
+                  <div style={{ border: '1px solid #1a73e8', borderRadius: '8px', padding: '10px', marginBottom: '8px', backgroundColor: '#f8fbff' }}>
+                    {/* 학교명 검색 행 */}
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                      <input
+                        placeholder="예) 영등포초등학교"
+                        value={editingSchool.schoolName}
+                        onChange={e => setEditingSchool(prev => prev ? { ...prev, schoolName: e.target.value, showDropdown: false } : null)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSchoolSearch(); }}
+                        style={{ ...editInputStyle, flex: 1 }}
+                      />
+                      <button
+                        onClick={handleSchoolSearch}
+                        disabled={editingSchool.fetching}
+                        style={{ padding: '6px 10px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        {editingSchool.fetching ? '...' : '조회'}
+                      </button>
+                      <select
+                        value={editingSchool.schoolType}
+                        onChange={e => setEditingSchool(prev => prev ? { ...prev, schoolType: e.target.value as 'ELEMENTARY' | 'MIDDLE' } : null)}
+                        style={{ ...editInputStyle, width: '72px' }}
+                      >
+                        <option value="ELEMENTARY">초등</option>
+                        <option value="MIDDLE">중학교</option>
+                      </select>
+                    </div>
+                    {/* 검색 결과 드롭다운 */}
+                    {editingSchool.showDropdown && (
+                      <div style={{ border: '1px solid #e8eaed', borderRadius: '6px', backgroundColor: '#fff', maxHeight: '160px', overflowY: 'auto', marginBottom: '4px' }}>
+                        {editingSchool.searchResults.map((item, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => handleSchoolSelect(item)}
+                            style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                          >
+                            <div style={{ fontWeight: 600 }}>{stripHtml(item.title)}</div>
+                            <div style={{ color: '#80868b', fontSize: '11px' }}>{item.roadAddress || item.address}</div>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                    {s.totalStudents != null && (
-                      <span style={{ fontSize: '11px', color: '#5f6368' }}>전교생 {s.totalStudents.toLocaleString()}명</span>
+                    {editingSchool.schoolAddress && (
+                      <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '4px', padding: '2px 4px', backgroundColor: '#f0f4ff', borderRadius: '4px' }}>
+                        {editingSchool.schoolAddress}
+                      </div>
+                    )}
+                    {/* 도보거리 / 성취도(중학교만) / 전교생 */}
+                    <div style={{ display: 'grid', gridTemplateColumns: editingSchool.schoolType === 'MIDDLE' ? '1fr 1fr 1fr' : '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>도보(분)</div>
+                        <input type="number" value={editingSchool.walkingMinutes}
+                          onChange={e => setEditingSchool(prev => prev ? { ...prev, walkingMinutes: e.target.value } : null)}
+                          style={editInputStyle} />
+                      </div>
+                      {editingSchool.schoolType === 'MIDDLE' && (
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>학업성취도(%)</div>
+                          <input type="number" value={editingSchool.achievementScore}
+                            onChange={e => setEditingSchool(prev => prev ? { ...prev, achievementScore: e.target.value } : null)}
+                            style={editInputStyle} />
+                        </div>
+                      )}
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>전교생수</div>
+                        <input type="number" value={editingSchool.totalStudents}
+                          onChange={e => setEditingSchool(prev => prev ? { ...prev, totalStudents: e.target.value } : null)}
+                          style={editInputStyle} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button onClick={saveEditingSchool} disabled={editingSchool.saving}
+                        style={{ flex: 1, padding: '7px', fontSize: '12px', fontWeight: 600, backgroundColor: editingSchool.saving ? '#9e9e9e' : '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                        {editingSchool.saving ? '저장 중...' : '저장'}
+                      </button>
+                      <button onClick={() => setEditingSchool(null)}
+                        style={{ flex: 1, padding: '7px', fontSize: '12px', backgroundColor: '#fff', color: '#5f6368', border: '1px solid #dadce0', borderRadius: '6px', cursor: 'pointer' }}>
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 일반 표시 행 — 수정(✏)·삭제(🗑) 버튼 표시 */
+                  <div style={{ padding: '7px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Tag
+                        label={SCHOOL_TYPE_LABELS[s.schoolType] ?? s.schoolType}
+                        color={s.schoolType === 'MIDDLE' ? '#1a73e8' : '#34a853'}
+                      />
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#202124', flex: 1 }}>{s.schoolName}</span>
+                      {s.walkingMinutes != null && (
+                        <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0 }}>도보 {s.walkingMinutes}분</span>
+                      )}
+                      {/* 수정 버튼 */}
+                      <button onClick={() => startEditSchool(s)}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#80868b', padding: '0 2px', flexShrink: 0 }}
+                        title="수정">✏</button>
+                      {/* 삭제 버튼 */}
+                      <button onClick={() => handleDeleteSchool(s.id)}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#c5221f', padding: '0 2px', flexShrink: 0 }}
+                        title="삭제">🗑</button>
+                    </div>
+                    {(s.achievementScore != null || s.totalStudents != null) && (
+                      <div style={{ display: 'flex', gap: '12px', paddingLeft: '2px' }}>
+                        {s.achievementScore != null && (
+                          <span style={{ fontSize: '11px', color: '#5f6368' }}>학업성취도 {s.achievementScore}%</span>
+                        )}
+                        {s.totalStudents != null && (
+                          <span style={{ fontSize: '11px', color: '#5f6368' }}>전교생 {s.totalStudents.toLocaleString()}명</span>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
               </div>
             ))}
+
+            {/* 신규 추가 행 배열 — 여러 행을 쌓아두고 일괄 저장 */}
+            {newSchoolRows.map((row, idx) => (
+              <div key={row.localId} style={{ border: '1px dashed #1a73e8', borderRadius: '8px', padding: '10px', marginTop: '6px', backgroundColor: '#f8fbff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#1a73e8' }}>추가 {idx + 1}</span>
+                  <button onClick={() => removeNewSchoolRow(row.localId)}
+                    style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '16px' }}>×</button>
+                </div>
+                {/* 검색 행 */}
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                  <input
+                    placeholder="예) 영등포초등학교"
+                    value={row.schoolName}
+                    onChange={e => updateNewSchoolRow(row.localId, { schoolName: e.target.value, showDropdown: false })}
+                    onKeyDown={e => { if (e.key === 'Enter') handleNewSchoolSearch(row.localId); }}
+                    style={{ ...editInputStyle, flex: 1 }}
+                  />
+                  <button onClick={() => handleNewSchoolSearch(row.localId)} disabled={row.fetching}
+                    style={{ padding: '6px 10px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {row.fetching ? '...' : '조회'}
+                  </button>
+                  <select value={row.schoolType}
+                    onChange={e => updateNewSchoolRow(row.localId, { schoolType: e.target.value as 'ELEMENTARY' | 'MIDDLE' })}
+                    style={{ ...editInputStyle, width: '72px' }}>
+                    <option value="ELEMENTARY">초등</option>
+                    <option value="MIDDLE">중학교</option>
+                  </select>
+                </div>
+                {/* 검색 결과 드롭다운 */}
+                {row.showDropdown && (
+                  <div style={{ border: '1px solid #e8eaed', borderRadius: '6px', backgroundColor: '#fff', maxHeight: '160px', overflowY: 'auto', marginBottom: '4px' }}>
+                    {row.searchResults.map((item, j) => (
+                      <div key={j} onClick={() => handleNewSchoolSelect(row.localId, item)}
+                        style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}>
+                        <div style={{ fontWeight: 600 }}>{stripHtml(item.title)}</div>
+                        <div style={{ color: '#80868b', fontSize: '11px' }}>{item.roadAddress || item.address}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {row.schoolAddress && (
+                  <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '4px', padding: '2px 4px', backgroundColor: '#f0f4ff', borderRadius: '4px' }}>
+                    {row.schoolAddress}
+                  </div>
+                )}
+                {/* 도보 / 성취도(중학교만) / 전교생 입력 */}
+                <div style={{ display: 'grid', gridTemplateColumns: row.schoolType === 'MIDDLE' ? '1fr 1fr 1fr' : '1fr 1fr', gap: '6px' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>도보(분)</div>
+                    <input type="number" value={row.walkingMinutes}
+                      onChange={e => updateNewSchoolRow(row.localId, { walkingMinutes: e.target.value })}
+                      style={editInputStyle} />
+                  </div>
+                  {row.schoolType === 'MIDDLE' && (
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>학업성취도(%)</div>
+                      <input type="number" value={row.achievementScore}
+                        onChange={e => updateNewSchoolRow(row.localId, { achievementScore: e.target.value })}
+                        style={editInputStyle} />
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>전교생수</div>
+                    <input type="number" value={row.totalStudents}
+                      onChange={e => updateNewSchoolRow(row.localId, { totalStudents: e.target.value })}
+                      style={editInputStyle} />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* 하단 버튼 행 — 행 추가 + 일괄 저장 */}
+            <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+              {/* 수정 폼이 열려 있지 않을 때만 추가 버튼 표시 */}
+              {!editingSchool && (
+                <button onClick={startAddSchool}
+                  style={{ flex: 1, padding: '6px', fontSize: '12px', border: '1px dashed #1a73e8', borderRadius: '6px', backgroundColor: 'transparent', color: '#1a73e8', cursor: 'pointer' }}>
+                  + 학교 추가
+                </button>
+              )}
+              {/* 추가 행이 1개 이상일 때 일괄 저장 버튼 표시 */}
+              {newSchoolRows.length > 0 && (
+                <button onClick={saveNewSchools} disabled={savingNewSchools}
+                  style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewSchools ? '#9e9e9e' : '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                  {savingNewSchools ? '저장 중...' : `${newSchoolRows.length}건 저장`}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
-        {/* 환경 (주변 인프라) */}
-        {complex.infraInfos && complex.infraInfos.length > 0 && (
+        {/* 환경 (주변 인프라) — 기존 데이터나 추가 행이 있을 때 섹션 표시 */}
+        {((complex.infraInfos && complex.infraInfos.length > 0) || newInfraRows.length > 0) && (
           <div ref={infraSectionRef} style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>환경</h3>
@@ -665,15 +1324,160 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 );
               })()}
             </div>
-            {complex.infraInfos.map((inf: InfraInfo) => (
-              <div key={inf.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <Tag label={INFRA_TYPE_LABELS[inf.infraType] ?? inf.infraType} color='#f9ab00' />
-                <span style={{ fontSize: '13px', color: '#202124', flex: 1 }}>{inf.infraName}</span>
-                {inf.distance != null && (
-                  <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0 }}>도보 {inf.distance}분</span>
+
+            {/* 기존 인프라 항목 목록 */}
+            {(complex.infraInfos ?? []).map((inf: InfraInfo) => (
+              <div key={inf.id}>
+                {/* 수정 중인 항목 — 인라인 편집 폼 표시 */}
+                {editingInfra?.infraId === inf.id ? (
+                  <div style={{ border: '1px solid #f9ab00', borderRadius: '8px', padding: '10px', marginBottom: '8px', backgroundColor: '#fffbf0' }}>
+                    {/* 유형 + 이름 검색 행 */}
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                      <select value={editingInfra.infraType}
+                        onChange={e => setEditingInfra(prev => prev ? { ...prev, infraType: e.target.value } : null)}
+                        style={{ ...editInputStyle, width: '80px' }}>
+                        {INFRA_TYPES_LIST.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                      </select>
+                      <input
+                        placeholder="시설명 입력 후 조회"
+                        value={editingInfra.infraName}
+                        onChange={e => setEditingInfra(prev => prev ? { ...prev, infraName: e.target.value, showDropdown: false } : null)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleInfraSearch(); }}
+                        style={{ ...editInputStyle, flex: 1 }}
+                      />
+                      <button onClick={handleInfraSearch} disabled={editingInfra.fetching}
+                        style={{ padding: '6px 10px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        {editingInfra.fetching ? '...' : '조회'}
+                      </button>
+                    </div>
+                    {editingInfra.showDropdown && (
+                      <div style={{ border: '1px solid #e8eaed', borderRadius: '6px', backgroundColor: '#fff', maxHeight: '160px', overflowY: 'auto', marginBottom: '4px' }}>
+                        {editingInfra.searchResults.map((item, idx) => (
+                          <div key={idx} onClick={() => handleInfraSelect(item)}
+                            style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}>
+                            <div style={{ fontWeight: 600 }}>{stripHtml(item.title)}</div>
+                            <div style={{ color: '#80868b', fontSize: '11px' }}>{item.roadAddress || item.address}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {editingInfra.infraAddress && (
+                      <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '4px', padding: '2px 4px', backgroundColor: '#fffbe6', borderRadius: '4px' }}>
+                        {editingInfra.infraAddress}
+                      </div>
+                    )}
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>도보(분)</div>
+                      <input type="number" value={editingInfra.distance}
+                        onChange={e => setEditingInfra(prev => prev ? { ...prev, distance: e.target.value } : null)}
+                        style={editInputStyle} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button onClick={saveEditingInfra} disabled={editingInfra.saving}
+                        style={{ flex: 1, padding: '7px', fontSize: '12px', fontWeight: 600, backgroundColor: editingInfra.saving ? '#9e9e9e' : '#e37400', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                        {editingInfra.saving ? '저장 중...' : '저장'}
+                      </button>
+                      <button onClick={() => setEditingInfra(null)}
+                        style={{ flex: 1, padding: '7px', fontSize: '12px', backgroundColor: '#fff', color: '#5f6368', border: '1px solid #dadce0', borderRadius: '6px', cursor: 'pointer' }}>
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 일반 표시 행 — 수정(✏)·삭제(🗑) 버튼 표시 */
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                    <Tag label={INFRA_TYPE_LABELS[inf.infraType] ?? inf.infraType} color='#f9ab00' />
+                    <span style={{ fontSize: '13px', color: '#202124', flex: 1 }}>{inf.infraName}</span>
+                    {inf.distance != null && (
+                      <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0 }}>도보 {inf.distance}분</span>
+                    )}
+                    {/* 수정 버튼 */}
+                    <button onClick={() => startEditInfra(inf)}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#80868b', padding: '0 2px', flexShrink: 0 }}
+                      title="수정">✏</button>
+                    {/* 삭제 버튼 */}
+                    <button onClick={() => handleDeleteInfra(inf.id)}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#c5221f', padding: '0 2px', flexShrink: 0 }}
+                      title="삭제">🗑</button>
+                  </div>
                 )}
               </div>
             ))}
+
+            {/* 신규 추가 행 배열 */}
+            {newInfraRows.map((row, idx) => (
+              <div key={row.localId} style={{ border: '1px dashed #f9ab00', borderRadius: '8px', padding: '10px', marginTop: '6px', backgroundColor: '#fffbf0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#e37400' }}>추가 {idx + 1}</span>
+                  <button onClick={() => removeNewInfraRow(row.localId)}
+                    style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '16px' }}>×</button>
+                </div>
+                {/* 유형 + 이름 검색 행 */}
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                  <select value={row.infraType}
+                    onChange={e => updateNewInfraRow(row.localId, { infraType: e.target.value })}
+                    style={{ ...editInputStyle, width: '80px' }}>
+                    {INFRA_TYPES_LIST.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                  </select>
+                  <input
+                    placeholder="시설명 입력 후 조회"
+                    value={row.infraName}
+                    onChange={e => updateNewInfraRow(row.localId, { infraName: e.target.value, showDropdown: false })}
+                    onKeyDown={e => { if (e.key === 'Enter') handleNewInfraSearch(row.localId); }}
+                    style={{ ...editInputStyle, flex: 1 }}
+                  />
+                  <button onClick={() => handleNewInfraSearch(row.localId)} disabled={row.fetching}
+                    style={{ padding: '6px 10px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {row.fetching ? '...' : '조회'}
+                  </button>
+                </div>
+                {/* 검색 결과 드롭다운 */}
+                {row.showDropdown && (
+                  <div style={{ border: '1px solid #e8eaed', borderRadius: '6px', backgroundColor: '#fff', maxHeight: '160px', overflowY: 'auto', marginBottom: '4px' }}>
+                    {row.searchResults.map((item, j) => (
+                      <div key={j} onClick={() => handleNewInfraSelect(row.localId, item)}
+                        style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}>
+                        <div style={{ fontWeight: 600 }}>{stripHtml(item.title)}</div>
+                        <div style={{ color: '#80868b', fontSize: '11px' }}>{item.roadAddress || item.address}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {row.infraAddress && (
+                  <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '4px', padding: '2px 4px', backgroundColor: '#fffbe6', borderRadius: '4px' }}>
+                    {row.infraAddress}
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>도보(분)</div>
+                  <input type="number" value={row.distance}
+                    onChange={e => updateNewInfraRow(row.localId, { distance: e.target.value })}
+                    style={editInputStyle} />
+                </div>
+              </div>
+            ))}
+
+            {/* 하단 버튼 행 — 행 추가 + 일괄 저장 */}
+            <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+              {/* 수정 폼이 열려 있지 않을 때만 추가 버튼 표시 */}
+              {!editingInfra && (
+                <button onClick={startAddInfra}
+                  style={{ flex: 1, padding: '6px', fontSize: '12px', border: '1px dashed #f9ab00', borderRadius: '6px', backgroundColor: 'transparent', color: '#e37400', cursor: 'pointer' }}>
+                  + 인프라 추가
+                </button>
+              )}
+              {/* 추가 행이 1개 이상일 때 일괄 저장 버튼 표시 */}
+              {newInfraRows.length > 0 && (
+                <button onClick={saveNewInfras} disabled={savingNewInfras}
+                  style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewInfras ? '#9e9e9e' : '#e37400', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                  {savingNewInfras ? '저장 중...' : `${newInfraRows.length}건 저장`}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -959,6 +1763,36 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             + 시세 입력하기
           </button>
         )}
+
+        {/* 학군/인프라 데이터가 없고 추가 행도 없을 때만 추가 버튼 표시 — 삭제 버튼 바로 위 */}
+        {(() => {
+          const noSchool = !complex.schoolInfos || complex.schoolInfos.length === 0;
+          const noInfra = !complex.infraInfos || complex.infraInfos.length === 0;
+          // 둘 다 이미 있거나 삭제 확인 중이면 버튼 숨김
+          if ((!noSchool && !noInfra) || deleteConfirm) return null;
+          return (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              {/* 학군 데이터 없고 추가 행도 없고 수정 폼도 닫혀 있을 때 */}
+              {noSchool && newSchoolRows.length === 0 && !editingSchool && (
+                <button
+                  onClick={startAddSchool}
+                  style={{ flex: 1, padding: '8px', border: '1px dashed #1a73e8', background: 'none', borderRadius: '8px', color: '#1a73e8', fontSize: '13px', cursor: 'pointer' }}
+                >
+                  + 학군 추가
+                </button>
+              )}
+              {/* 인프라 데이터 없고 추가 행도 없고 수정 폼도 닫혀 있을 때 */}
+              {noInfra && newInfraRows.length === 0 && !editingInfra && (
+                <button
+                  onClick={startAddInfra}
+                  style={{ flex: 1, padding: '8px', border: '1px dashed #f9ab00', background: 'none', borderRadius: '8px', color: '#e37400', fontSize: '13px', cursor: 'pointer' }}
+                >
+                  + 환경 추가
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         {/* 단지 삭제 — 실수 방지를 위해 2단계 확인 */}
         <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px', marginBottom: '16px' }}>
