@@ -92,6 +92,9 @@ public/
 ### 핵심 인터페이스
 
 ```typescript
+// 지도 오버레이 마커 (학교·인프라 위치 표시)
+OverlayMarker { id, name, lat, lng, markerType: 'school'|'infra', subType? }
+
 // 단지 대표 정보 (백엔드 ApartmentComplexDto 1:1)
 ApartmentComplex {
   id, priceRange, complexName, checkDate, builtYear,
@@ -110,6 +113,10 @@ ApartmentComplex {
   employees?: number;   // 지역 종사자수
   businesses?: number;  // 지역 사업체수
 }
+
+// 학군·인프라 좌표 포함 (Naver 검색 결과 선택 시 mapx/mapy 저장)
+SchoolInfo { ..., latitude?, longitude? }
+InfraInfo  { ..., latitude?, longitude? }
 
 // 시세 기록 아이템 (평형별 1개) — 참고가 필드 포함
 PriceHistoryItem {
@@ -176,6 +183,7 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - 마커 클릭 → InfoWindow + `onComplexSelect`
 - 지도 클릭 → 역방향 지오코딩 → `onMapClick` 콜백으로 주소 전달
 - `focusLocation` 변경 시 지도 중심/줌(15) 이동
+- `overlayMarkers` 변경 시 학교·인프라 오버레이 마커 렌더링 (중=파랑/초=초록, 백화점=보라/마트=주황/병원=빨강/기타=회색)
 
 ### `RegisterModal.tsx`
 - 섹션: 기본정보 / 가격정보 / 단지정보 / 교통정보 / 출퇴근시간 / 메모
@@ -286,6 +294,8 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] CompareCard를 ComplexInfoPanel 기준으로 전 섹션 동기화
 - [x] ComplexInfoPanel / CompareCard 섹션 순서 재정렬 (직장→교통→학군→환경) 및 제목 변경
 - [x] 종합평가 카드 클릭 시 해당 섹션 스크롤 (ComplexInfoPanel: 개별 스크롤 / CompareCard: window 이벤트로 전체 카드 동기화)
+- [x] 학교·인프라 좌표 DB 저장 (RegisterModal 검색 선택 시 mapx/mapy → latitude/longitude 저장 후 백엔드 전송)
+- [x] 단지 선택 시 학교·인프라 오버레이 마커 지도 표시 (좌표 있는 항목만, 패널 닫으면 제거)
 
 ## 미완성 / TODO
 

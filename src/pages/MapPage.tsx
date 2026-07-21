@@ -1,18 +1,20 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { ApartmentComplex, formatPrice } from '../types';
+import { ApartmentComplex, OverlayMarker, formatPrice } from '../types';
 
 interface MapPageProps {
   complexes: ApartmentComplex[];
   selectedComplex: ApartmentComplex | null;
   onComplexSelect: (complex: ApartmentComplex) => void;
   focusLocation?: { lat: number; lng: number } | null;
+  overlayMarkers?: OverlayMarker[];
 }
 
-const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplexSelect, focusLocation }) => {
+const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const infoWindowRef = useRef<any>(null);
+  const overlayMarkersRef = useRef<any[]>([]);
 
   // 네이버 지도 초기화
   useEffect(() => {
@@ -216,6 +218,53 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
     );
     mapInstanceRef.current.setZoom(16);
   }, [focusLocation]);
+
+  // 학교·인프라 오버레이 마커 렌더링 — complex 변경 시 갱신
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.naver) return;
+    overlayMarkersRef.current.forEach(m => m.setMap(null));
+    overlayMarkersRef.current = [];
+
+    const SCHOOL_COLORS: Record<string, string> = { MIDDLE: '#1a73e8', ELEMENTARY: '#34a853' };
+    const SCHOOL_LABELS: Record<string, string> = { MIDDLE: '중', ELEMENTARY: '초' };
+    const INFRA_COLORS: Record<string, string> = {
+      DEPARTMENT_STORE: '#9c27b0', MART: '#ff9800', HOSPITAL: '#f44336', ETC: '#607d8b',
+    };
+    const INFRA_LABELS: Record<string, string> = {
+      DEPARTMENT_STORE: '백', MART: '마트', HOSPITAL: '병원', ETC: '기타',
+    };
+
+    (overlayMarkers ?? []).forEach(om => {
+      const isSchool = om.markerType === 'school';
+      const bgColor = isSchool
+        ? (SCHOOL_COLORS[om.subType ?? ''] ?? '#34a853')
+        : (INFRA_COLORS[om.subType ?? ''] ?? '#607d8b');
+      const label = isSchool
+        ? (SCHOOL_LABELS[om.subType ?? ''] ?? '학')
+        : (INFRA_LABELS[om.subType ?? ''] ?? om.name.slice(0, 2));
+
+      const icon = {
+        content: `
+          <div style="
+            background:${bgColor}; color:#fff;
+            padding:3px 7px; border-radius:12px;
+            font-size:11px; font-weight:700;
+            white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,0.3);
+            border:2px solid #fff; cursor:default;
+          ">${label}</div>`,
+        anchor: new window.naver.maps.Point(0, 0),
+      };
+
+      const m = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(om.lat, om.lng),
+        map: mapInstanceRef.current,
+        icon,
+        zIndex: 15,
+        title: om.name,
+      });
+      overlayMarkersRef.current.push(m);
+    });
+  }, [overlayMarkers]);
 
   return (
     <div

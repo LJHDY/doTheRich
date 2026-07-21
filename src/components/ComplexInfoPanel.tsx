@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, PriceHistory, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, calcCommuteGrade } from '../types';
+import { ApartmentComplex, PriceHistory, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, calcCommuteGrade, OverlayMarker } from '../types';
 import { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
@@ -11,6 +11,7 @@ interface ComplexInfoPanelProps {
   onClose: () => void;
   onMemoUpdate?: (complexId: number, memo: string) => void;
   onDelete?: (complexId: number) => void;
+  onOverlayMarkersChange?: (markers: OverlayMarker[]) => void;
 }
 
 // 값이 없으면 행 자체를 렌더링하지 않아 불필요한 빈 줄 방지
@@ -140,7 +141,7 @@ const buildChartData = (
   return { rows, series };
 };
 
-const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, onMemoUpdate, onDelete }) => {
+const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, onMemoUpdate, onDelete, onOverlayMarkersChange }) => {
   const [priceHistories, setPriceHistories] = useState<PriceHistory[]>([]);
   const [chartData, setChartData] = useState<{ rows: ChartDataRow[]; series: ChartSeries[] }>(() => ({ rows: [], series: [] }));
   const [showInputForm, setShowInputForm] = useState(false);
@@ -186,6 +187,23 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setLoading(false);
     }
   }, []);
+
+  // 단지 변경 시 좌표가 저장된 학교·인프라를 오버레이 마커로 지도에 전달
+  useEffect(() => {
+    if (!onOverlayMarkersChange) return;
+    const markers: OverlayMarker[] = [];
+    (complex?.schoolInfos ?? []).forEach(s => {
+      if (s.latitude != null && s.longitude != null) {
+        markers.push({ id: `school-${s.id}`, name: s.schoolName, lat: s.latitude, lng: s.longitude, markerType: 'school', subType: s.schoolType });
+      }
+    });
+    (complex?.infraInfos ?? []).forEach(inf => {
+      if (inf.latitude != null && inf.longitude != null) {
+        markers.push({ id: `infra-${inf.id}`, name: inf.infraName, lat: inf.latitude, lng: inf.longitude, markerType: 'infra', subType: inf.infraType });
+      }
+    });
+    onOverlayMarkersChange(markers);
+  }, [complex, onOverlayMarkersChange]);
 
   // 선택 단지가 바뀌면 이전 데이터·상태를 초기화하고 새로 조회
   useEffect(() => {

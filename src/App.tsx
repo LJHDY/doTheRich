@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ApartmentComplex } from './types';
+import { ApartmentComplex, OverlayMarker } from './types';
 import { getComplexes, getPriceRanges, runBatchRealEstatePrice } from './services/api';
 import MapPage from './pages/MapPage';
 import PriceRangeFilter from './components/PriceRangeFilter';
@@ -22,6 +22,9 @@ const App: React.FC = () => {
   const [listModalRange, setListModalRange] = useState<string | null>(null);
   // 평형 필터 — null이면 전체, '전용 59' 등 선택 시 해당 평형 단지만 표시
   const [listModalAreaType, setListModalAreaType] = useState<string | null>(null);
+
+  // 학교·인프라 위치 오버레이 마커 — ComplexInfoPanel이 단지 선택 시 채워줌
+  const [overlayMarkers, setOverlayMarkers] = useState<OverlayMarker[]>([]);
 
   // 비교하기 — 최대 3개 단지 선택, 선택 시 화면 3등분 카드 뷰로 전환
   const [compareOpen, setCompareOpen] = useState(false);
@@ -240,6 +243,7 @@ const App: React.FC = () => {
               selectedComplex={selectedComplex}
               onComplexSelect={setSelectedComplex}
               focusLocation={focusLocation}
+              overlayMarkers={overlayMarkers}
             />
             {selectedComplex && (
               <ComplexInfoPanel
@@ -247,9 +251,11 @@ const App: React.FC = () => {
                 onClose={() => {
                   (window as any).__closeInfoWindow?.();
                   setSelectedComplex(null);
+                  setOverlayMarkers([]);
                 }}
                 onMemoUpdate={handleMemoUpdate}
                 onDelete={handleComplexDelete}
+                onOverlayMarkersChange={setOverlayMarkers}
               />
             )}
           </>

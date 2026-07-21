@@ -56,6 +56,8 @@ interface SchoolRow {
   walkingMinutes: string;
   achievementScore: string;    // 중학교만 표시, % 미포함, blur 시 자동 포맷 → Double로 전송
   totalStudents: string;
+  latitude: number | null;
+  longitude: number | null;
   fetching: boolean;
   searchResults: SearchLocalItem[];
   showDropdown: boolean;
@@ -66,6 +68,8 @@ interface InfraRow {
   infraName: string;       // 화면에 표시
   infraAddress: string;    // 도보거리 계산용, 화면에 미표시 (백엔드 필드명과 일치)
   distance: string;        // 백엔드 distance 필드 (분 단위로 입력, 필드명은 distance)
+  latitude: number | null;
+  longitude: number | null;
   fetching: boolean;
   searchResults: SearchLocalItem[];
   showDropdown: boolean;
@@ -414,6 +418,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const addSchool = () => setSchoolInfos(prev => [...prev, {
     schoolName: '', schoolAddress: '', schoolType: 'ELEMENTARY',
     walkingMinutes: '', achievementScore: '', totalStudents: '',
+    latitude: null, longitude: null,
     fetching: false, searchResults: [], showDropdown: false,
   }]);
   const removeSchool = (i: number) => setSchoolInfos(prev => prev.filter((_, idx) => idx !== i));
@@ -436,7 +441,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     const schoolAddress = item.roadAddress || item.address;
     const lat = parseInt(item.mapy) / 10000000;
     const lng = parseInt(item.mapx) / 10000000;
-    updateSchool(i, { schoolName: stripHtml(item.title), schoolAddress, showDropdown: false, searchResults: [], fetching: true });
+    updateSchool(i, { schoolName: stripHtml(item.title), schoolAddress, latitude: lat, longitude: lng, showDropdown: false, searchResults: [], fetching: true });
     try {
       const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
         params: { startLat: initialData.latitude, startLng: initialData.longitude, goalLat: lat, goalLng: lng },
@@ -451,7 +456,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   // ── 주변 인프라 ───────────────────────────────────────────────────
   const addInfra = () => setInfraInfos(prev => [...prev, {
     infraType: 'DEPARTMENT_STORE', infraName: '', infraAddress: '',
-    distance: '', fetching: false, searchResults: [], showDropdown: false,
+    distance: '', latitude: null, longitude: null,
+    fetching: false, searchResults: [], showDropdown: false,
   }]);
   const removeInfra = (i: number) => setInfraInfos(prev => prev.filter((_, idx) => idx !== i));
   const updateInfra = (i: number, update: Partial<InfraRow>) =>
@@ -473,7 +479,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     const infraAddress = item.roadAddress || item.address;
     const lat = parseInt(item.mapy) / 10000000;
     const lng = parseInt(item.mapx) / 10000000;
-    updateInfra(i, { infraName: stripHtml(item.title), infraAddress, showDropdown: false, searchResults: [], fetching: true });
+    updateInfra(i, { infraName: stripHtml(item.title), infraAddress, latitude: lat, longitude: lng, showDropdown: false, searchResults: [], fetching: true });
     try {
       const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
         params: { startLat: initialData.latitude, startLng: initialData.longitude, goalLat: lat, goalLng: lng },
@@ -545,6 +551,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           // achievementScore: % 제거 후 Double로 전송 (중학교만 해당)
           achievementScore: r.achievementScore ? parseFloat(r.achievementScore.replace('%', '')) : undefined,
           totalStudents: r.totalStudents ? parseInt(r.totalStudents) : undefined,
+          latitude: r.latitude ?? undefined,
+          longitude: r.longitude ?? undefined,
         })),
         // 인프라명이 입력된 항목만 포함 — infraType은 key 값으로, distance는 도보 분 단위로 전송
         infraInfos: infraInfos.filter(r => r.infraName.trim()).map(r => ({
@@ -552,6 +560,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           infraName: r.infraName,
           infraAddress: r.infraAddress || undefined,
           distance: r.distance ? parseInt(r.distance) : undefined,
+          latitude: r.latitude ?? undefined,
+          longitude: r.longitude ?? undefined,
         })),
       });
       onSuccess();

@@ -31,6 +31,8 @@ export interface SchoolInfo {
   achievementScore?: number;   // 중학교만 해당
   schoolAddress?: string;
   totalStudents?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 /** 주변 인프라 정보 — 백엔드 InfraInfoDto와 1:1 매핑 */
@@ -40,6 +42,18 @@ export interface InfraInfo {
   infraType: string;           // 'DEPARTMENT_STORE' | 'MART' | 'HOSPITAL' | 'ETC'
   distance?: number;           // 도보 분 단위
   infraAddress?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+/** 지도 오버레이 마커 — 학교·인프라 위치 표시용 */
+export interface OverlayMarker {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  markerType: 'school' | 'infra';
+  subType?: string;            // schoolType 또는 infraType
 }
 
 /** 단지 등록 시 입력한 평형별 가격 항목 (백엔드가 반환하면 필터에서 평형 표시에 사용) */
