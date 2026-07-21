@@ -149,6 +149,9 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
           infoWindowRef.current.close();
         }
 
+        // 클릭 시 mouseout이 발생하지 않아 tooltip이 남으므로 명시적으로 숨김
+        (window as any).__mkTipHide?.();
+
         // 닫기 버튼 onclick에서 호출할 전역 함수 등록
         (window as any).__closeInfoWindow = () => infoWindowRef.current?.close();
 
