@@ -5,6 +5,14 @@ declare global {
   }
 }
 
+/** 단지 사진 — 백엔드 ComplexPhotoDto와 1:1 매핑 */
+export interface ComplexPhoto {
+  id: number;
+  url: string;
+  fileName?: string;
+  createdAt?: string;
+}
+
 /** 주요 상업지구 소요시간 */
 export interface CommuteTime {
   id: number;

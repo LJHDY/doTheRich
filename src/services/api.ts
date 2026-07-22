@@ -6,6 +6,7 @@ import {
   PriceHistoryRequest,
   SchoolInfo,
   InfraInfo,
+  ComplexPhoto,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -176,6 +177,47 @@ export const deleteInfraInfo = async (complexId: number, infraId: number): Promi
 /** 즐겨찾기 토글 — PATCH /api/complexes/:id/favorite */
 export const toggleFavorite = async (complexId: number, isFavorite: boolean): Promise<void> => {
   await api.patch(`/api/complexes/${complexId}/favorite`, { isFavorite });
+};
+
+/** 임장 유형 수정 — PATCH /api/complexes/:id/visit-type */
+export const updateVisitType = async (complexId: number, visitType: string): Promise<void> => {
+  await api.patch(`/api/complexes/${complexId}/visit-type`, { visitType });
+};
+
+/** 단지 사진 목록 조회 — GET /api/complexes/:id/photos */
+export const getComplexPhotos = async (complexId: number): Promise<ComplexPhoto[]> => {
+  const { data } = await api.get<ComplexPhoto[]>(`/api/complexes/${complexId}/photos`);
+  return data;
+};
+
+/** 단지 사진 업로드 — POST /api/complexes/:id/photos (multipart/form-data, files 필드 복수) */
+export const uploadComplexPhotos = async (complexId: number, files: File[]): Promise<ComplexPhoto[]> => {
+  const formData = new FormData();
+  files.forEach(f => formData.append('files', f));
+  const { data } = await api.post<ComplexPhoto[]>(`/api/complexes/${complexId}/photos`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+/** 단지 사진 삭제 — DELETE /api/complexes/:id/photos/:photoId */
+export const deleteComplexPhoto = async (complexId: number, photoId: number): Promise<void> => {
+  await api.delete(`/api/complexes/${complexId}/photos/${photoId}`);
+};
+
+/** 참고가 수정 — PATCH /api/complexes/:id/price-history-items/:itemId */
+export const updatePriceHistoryItem = async (
+  complexId: number,
+  itemId: number,
+  data: {
+    askingPrice?: number;
+    highestPrice?: number;
+    lowestPrice?: number;
+    tenYearChangeRate?: number;
+    tenYearChangeAmount?: number;
+  }
+): Promise<void> => {
+  await api.patch(`/api/complexes/${complexId}/price-history-items/${itemId}`, data);
 };
 
 /** 실거래가/전세가 배치 수집 — POST /api/batch/real-estate-price */

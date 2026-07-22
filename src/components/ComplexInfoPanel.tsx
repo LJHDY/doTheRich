@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, toggleFavorite } from '../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
+import PhotoSlideModal from './PhotoSlideModal';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 
 interface ComplexInfoPanelProps {
@@ -189,6 +190,32 @@ const formatCount = (n: number): string =>
 
 // 매매가: 파란 계열 / 전세가: 빨간 계열 — 평형 수만큼 순환 사용
 const SALE_COLORS = ['#1a73e8', '#4285f4', '#185abc', '#669df6'];
+
+// RegisterModal과 동일한 참고가 자동계산 헬퍼
+const evalExpr = (expr: string): string => {
+  const cleaned = expr.replace(/\s/g, '');
+  if (!cleaned) return '';
+  if (!/^[0-9+\-*/.]+$/.test(cleaned)) return expr;
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = new Function(`return ${cleaned}`)() as number;
+    if (typeof result === 'number' && isFinite(result)) return String(Math.round(result * 100) / 100);
+  } catch {}
+  return expr;
+};
+// "A-B" 패턴 → 등락금액·등락률 자동 계산
+const calcTenYear = (expr: string): { amount: string; rate: string } => {
+  const cleaned = expr.replace(/\s/g, '');
+  const match = cleaned.match(/^(\d+\.?\d*)-(\d+\.?\d*)$/);
+  if (match) {
+    const cur = parseFloat(match[1]);
+    const base = parseFloat(match[2]);
+    const amount = Math.round((cur - base) * 100) / 100;
+    const rate = base > 0 ? Math.round((cur - base) / base * 10000) / 100 : 0;
+    return { amount: String(amount), rate: String(rate) };
+  }
+  return { amount: evalExpr(expr), rate: '' };
+};
 const JEONSE_COLORS = ['#ea4335', '#c62828', '#ef5350', '#e57373'];
 
 // PriceHistory 배열을 recharts용 다중 시리즈 데이터로 변환
@@ -263,6 +290,22 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [showRecordTooltip, setShowRecordTooltip] = useState(false);
   const [showStageTooltip, setShowStageTooltip] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  // 사진 슬라이드 모달 표시 여부
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+
+  // 임장 유형 인라인 편집 상태 — 값 없으면 NONE으로 초기화
+  const [editingVisitType, setEditingVisitType] = useState(false);
+  const [localVisitType, setLocalVisitType] = useState(complex?.visitType || 'NONE');
+  const [visitTypeSaving, setVisitTypeSaving] = useState(false);
+
+  // 참고가 인라인 편집 상태
+  const [editingRefPrice, setEditingRefPrice] = useState(false);
+  const [refPriceForm, setRefPriceForm] = useState({
+    askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '',
+    tenYearAmountStr: '', tenYearRateStr: '',
+  });
+  const [refPriceSaving, setRefPriceSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // 학군 편집 상태 — editingSchool: 기존 항목 수정 폼, newSchoolRows: 신규 추가 행 배열
@@ -343,6 +386,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setMemoError(null);
       // 즐겨찾기 상태를 새 단지 값으로 동기화
       setIsFavorite(complex.isFavorite ?? false);
+      // 사진 모달·임장 유형 편집 상태도 초기화 — 다른 단지 선택 시 닫기
+      setShowPhotoModal(false);
+      setEditingVisitType(false);
+      setLocalVisitType(complex.visitType || 'NONE');
+      // 참고가 편집 상태도 초기화 — 다른 단지 선택 시 폼 닫기
+      setEditingRefPrice(false);
       // 학군/인프라 편집·추가 상태도 초기화 — 다른 단지 선택 시 이전 폼 닫기
       setEditingSchool(null);
       setNewSchoolRows([]);
@@ -405,6 +454,41 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     setSuccessMsg('시세가 저장되었습니다!');
     await loadPriceHistories(complex.id);
     setTimeout(() => setSuccessMsg(null), 3000);
+  };
+
+  // 참고가 편집 시작 — 최신 시세 기록 첫 항목의 기존 값으로 폼 초기화
+  const startEditRefPrice = () => {
+    const item = latestHistory?.items[0];
+    setRefPriceForm({
+      askingPriceUk: item?.askingPrice ? String(item.askingPrice / 100_000_000) : '',
+      highestPriceUk: item?.highestPrice ? String(item.highestPrice / 100_000_000) : '',
+      lowestPriceUk: item?.lowestPrice ? String(item.lowestPrice / 100_000_000) : '',
+      tenYearAmountStr: item?.tenYearChangeAmount != null ? String(item.tenYearChangeAmount / 100_000_000) : '',
+      tenYearRateStr: item?.tenYearChangeRate != null ? String(item.tenYearChangeRate) : '',
+    });
+    setEditingRefPrice(true);
+  };
+
+  // 참고가 저장 — PATCH /api/complexes/:id/price-history-items/:itemId
+  const saveRefPrice = async () => {
+    if (!complex || !latestHistory?.items[0]?.id) return;
+    setRefPriceSaving(true);
+    try {
+      const f = refPriceForm;
+      await updatePriceHistoryItem(complex.id, latestHistory.items[0].id, {
+        askingPrice: f.askingPriceUk ? Math.round(parseFloat(f.askingPriceUk) * 100_000_000) : undefined,
+        highestPrice: f.highestPriceUk ? Math.round(parseFloat(f.highestPriceUk) * 100_000_000) : undefined,
+        lowestPrice: f.lowestPriceUk ? Math.round(parseFloat(f.lowestPriceUk) * 100_000_000) : undefined,
+        tenYearChangeAmount: f.tenYearAmountStr ? Math.round(parseFloat(f.tenYearAmountStr) * 100_000_000) : undefined,
+        tenYearChangeRate: f.tenYearRateStr ? parseFloat(f.tenYearRateStr) : undefined,
+      });
+      await loadPriceHistories(complex.id);
+      setEditingRefPrice(false);
+    } catch {
+      // 에러는 콘솔에만 — 인터셉터가 이미 출력
+    } finally {
+      setRefPriceSaving(false);
+    }
   };
 
   // 저장 후 단지 전체 재조회 → 부모·오버레이 마커 동시 갱신
@@ -869,6 +953,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               onClick={handleToggleFavorite}
               style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, color: isFavorite ? '#f9ab00' : 'rgba(255,255,255,0.4)' }}
             >★</button>
+            {/* 사진 보기 버튼 — flex에서 marginLeft:auto로 오른쪽 끝 고정 */}
+            <button
+              onClick={() => setShowPhotoModal(true)}
+              title="사진 보기"
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: 0, color: 'rgba(255,255,255,0.7)', marginLeft: 'auto' }}
+            >📷</button>
           </div>
         )}
       </div>
@@ -894,23 +984,116 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
         {/* 기본 정보 */}
         <div style={{ marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>
-            단지 정보
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', margin: 0 }}>
+              단지 정보
+            </h3>
+            {/* 참고가 수정 버튼 — 최신 시세 기록이 있을 때만 표시 */}
+            {latestHistory?.items[0] && !editingRefPrice && (
+              <button
+                onClick={startEditRefPrice}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px' }}
+                title="참고가 수정"
+              >✏</button>
+            )}
+          </div>
           <InfoRow label="연식" value={complex.builtYear} />
           <InfoRow label="세대수" value={complex.unitCount ? `${complex.unitCount}세대` : null} />
           <InfoRow label="주소" value={complex.address} />
           <InfoRow label="확인일자" value={complex.checkDate} />
-          {/* 참고가 — 최신 시세 기록 첫 번째 항목 기준으로 표시 */}
-          <InfoRow label="호가" value={latestHistory?.items[0]?.askingPrice ? formatPrice(latestHistory.items[0].askingPrice) : null} />
-          <InfoRow label="전고점" value={latestHistory?.items[0]?.highestPrice ? formatPrice(latestHistory.items[0].highestPrice) : null} />
-          <InfoRow label="전저점" value={latestHistory?.items[0]?.lowestPrice ? formatPrice(latestHistory.items[0].lowestPrice) : null} />
-          <InfoRow label="10년 등락" value={latestHistory?.items[0]?.tenYearChangeAmount != null
-            ? `${latestHistory.items[0].tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(latestHistory.items[0].tenYearChangeAmount)}억`
-            : null} />
-          <InfoRow label="등락률" value={latestHistory?.items[0]?.tenYearChangeRate != null
-            ? `${latestHistory.items[0].tenYearChangeRate >= 0 ? '+' : ''}${latestHistory.items[0].tenYearChangeRate}%`
-            : null} />
+          {/* 참고가 — 편집 모드일 때는 인라인 폼, 아닐 때는 읽기 전용 표시 */}
+          {editingRefPrice ? (
+            <div style={{ paddingTop: '8px' }}>
+              {/* 호가 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>호가</span>
+                <input
+                  type="text"
+                  placeholder="억 단위"
+                  value={refPriceForm.askingPriceUk}
+                  onChange={e => setRefPriceForm(f => ({ ...f, askingPriceUk: e.target.value }))}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+              </div>
+              {/* 전고점 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>전고점</span>
+                <input
+                  type="text"
+                  placeholder="억 단위"
+                  value={refPriceForm.highestPriceUk}
+                  onChange={e => setRefPriceForm(f => ({ ...f, highestPriceUk: e.target.value }))}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+              </div>
+              {/* 전저점 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>전저점</span>
+                <input
+                  type="text"
+                  placeholder="억 단위"
+                  value={refPriceForm.lowestPriceUk}
+                  onChange={e => setRefPriceForm(f => ({ ...f, lowestPriceUk: e.target.value }))}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+              </div>
+              {/* 10년 등락 — "전고점-전저점" 패턴 입력 시 onBlur에서 자동 계산 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>10년 등락</span>
+                <input
+                  type="text"
+                  placeholder="A-B 또는 억 단위"
+                  value={refPriceForm.tenYearAmountStr}
+                  onChange={e => setRefPriceForm(f => ({ ...f, tenYearAmountStr: e.target.value }))}
+                  onBlur={() => {
+                    const { amount, rate } = calcTenYear(refPriceForm.tenYearAmountStr);
+                    setRefPriceForm(f => ({ ...f, tenYearAmountStr: amount, tenYearRateStr: rate || f.tenYearRateStr }));
+                  }}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+              </div>
+              {/* 등락률 — 자동 계산 결과로만 채워지며 직접 수정 불가 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>등락률</span>
+                <input
+                  type="text"
+                  placeholder="자동 계산"
+                  value={refPriceForm.tenYearRateStr}
+                  readOnly
+                  style={{ ...editInputStyle, flex: 1, backgroundColor: '#f8f9fa', color: '#80868b', cursor: 'not-allowed' }}
+                />
+              </div>
+              {/* 저장/취소 버튼 */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={saveRefPrice}
+                  disabled={refPriceSaving}
+                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: refPriceSaving ? 'not-allowed' : 'pointer', opacity: refPriceSaving ? 0.7 : 1 }}
+                >
+                  {refPriceSaving ? '저장 중...' : '저장'}
+                </button>
+                <button
+                  onClick={() => setEditingRefPrice(false)}
+                  disabled={refPriceSaving}
+                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#f1f3f4', color: '#5f6368', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <InfoRow label="호가" value={latestHistory?.items[0]?.askingPrice ? formatPrice(latestHistory.items[0].askingPrice) : null} />
+              <InfoRow label="전고점" value={latestHistory?.items[0]?.highestPrice ? formatPrice(latestHistory.items[0].highestPrice) : null} />
+              <InfoRow label="전저점" value={latestHistory?.items[0]?.lowestPrice ? formatPrice(latestHistory.items[0].lowestPrice) : null} />
+              <InfoRow label="10년 등락" value={latestHistory?.items[0]?.tenYearChangeAmount != null
+                ? `${latestHistory.items[0].tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(latestHistory.items[0].tenYearChangeAmount)}억`
+                : null} />
+              <InfoRow label="등락률" value={latestHistory?.items[0]?.tenYearChangeRate != null
+                ? `${latestHistory.items[0].tenYearChangeRate >= 0 ? '+' : ''}${latestHistory.items[0].tenYearChangeRate}%`
+                : null} />
+            </>
+          )}
           {/* 메모 — 편집 버튼 클릭 시 textarea로 전환, 저장 시 즉시 반영 */}
           <div style={{ padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editingMemo ? '6px' : 0 }}>
@@ -1576,18 +1759,62 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
         )}
 
-        {/* 임장 유형 */}
-        {complex.visitType && (
-          <div style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>임장 유형</h3>
+        {/* 임장 유형 — 값 없으면 NONE(임장X)으로 표시, 항상 렌더링 */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', margin: 0 }}>임장 유형</h3>
+            {!editingVisitType && (
+              <button
+                onClick={() => setEditingVisitType(true)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px' }}
+                title="임장 유형 수정"
+              >✏</button>
+            )}
+          </div>
+          {editingVisitType ? (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select
+                value={localVisitType}
+                onChange={e => setLocalVisitType(e.target.value)}
+                style={{ ...editInputStyle, flex: 1 }}
+              >
+                <option value="NONE">임장X</option>
+                <option value="ATMOSPHERE">분위기 임장</option>
+                <option value="COMPLEX">단지 임장</option>
+                <option value="LISTING">매물 임장</option>
+              </select>
+              <button
+                onClick={async () => {
+                  if (!complex) return;
+                  setVisitTypeSaving(true);
+                  try {
+                    await updateVisitType(complex.id, localVisitType);
+                    onComplexUpdate?.({ ...complex, visitType: localVisitType });
+                    setEditingVisitType(false);
+                  } catch { /* 인터셉터가 콘솔 출력 */ } finally {
+                    setVisitTypeSaving(false);
+                  }
+                }}
+                disabled={visitTypeSaving}
+                style={{ padding: '6px 12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: visitTypeSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', opacity: visitTypeSaving ? 0.7 : 1 }}
+              >
+                {visitTypeSaving ? '저장 중...' : '저장'}
+              </button>
+              <button
+                onClick={() => { setLocalVisitType(complex.visitType || 'NONE'); setEditingVisitType(false); }}
+                disabled={visitTypeSaving}
+                style={{ padding: '6px 12px', backgroundColor: '#f1f3f4', color: '#5f6368', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >취소</button>
+            </div>
+          ) : (
             <div style={{
               display: 'inline-block', padding: '4px 12px', borderRadius: '12px',
               backgroundColor: '#e8f0fe', color: '#1a73e8', fontSize: '13px', fontWeight: 600,
             }}>
-              {VISIT_TYPE_LABELS[complex.visitType] ?? complex.visitType}
+              {VISIT_TYPE_LABELS[localVisitType] ?? localVisitType}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* 시세 변동 그래프 */}
         <div style={{ marginBottom: '16px' }}>
@@ -1876,6 +2103,15 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           )}
         </div>
       </div>
+
+      {/* 사진 슬라이드 모달 */}
+      {showPhotoModal && (
+        <PhotoSlideModal
+          complexId={complex.id}
+          complexName={complex.complexName}
+          onClose={() => setShowPhotoModal(false)}
+        />
+      )}
     </div>
   );
 };

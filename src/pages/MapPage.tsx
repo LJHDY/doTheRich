@@ -97,6 +97,12 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
 
       const isFav = complex.isFavorite ?? false;
 
+      // 임장 유형별 테두리 색상 — NONE(미입력 포함)은 흰색
+      const VISIT_BORDER: Record<string, string> = {
+        ATMOSPHERE: '#97C459', COMPLEX: '#639922', LISTING: '#3B6D11',
+      };
+      const visitBorder = VISIT_BORDER[complex.visitType ?? ''] ?? '#ffffff';
+
       // 즐겨찾기 단지 — 6각별(헥사그램)+꼬리 핀 마커 (CSS .star-pin 참조, inline 스타일로 변환)
       // 6각별 12꼭짓점 중 하단 외부점을 꼬리 끝(30,76)으로 대체 → 육망성 핀 완성
       // 별 중심 (30,28), 외부반경 24, 내부반경 12
@@ -109,7 +115,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
                  onmouseout="window.__mkTipHide();">
               <div style="position:relative;width:43px;height:56px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.22));">
                 <svg xmlns="http://www.w3.org/2000/svg" width="43" height="56" viewBox="0 0 60 80" style="display:block;">
-                  <polygon points="${starPath}" fill="${bgColor}" stroke="white" stroke-width="3.5" stroke-linejoin="round"/>
+                  <polygon points="${starPath}" fill="${bgColor}" stroke="${visitBorder}" stroke-width="3.5" stroke-linejoin="round"/>
                 </svg>
                 <div style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);
                             color:#fff;font-weight:800;font-size:${fontSize}px;letter-spacing:-0.3px;
@@ -129,7 +135,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
                onmouseover="var r=this.getBoundingClientRect();window.__mkTipShow('${safeName}',r.left+r.width/2,r.top);"
                onmouseout="window.__mkTipHide();">
             <div style="position:relative;width:30px;height:30px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.22));">
-              <div style="position:absolute;inset:0;background:${bgColor};border:2px solid #fff;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);box-shadow:inset 0 1px 0 rgba(255,255,255,0.35);"></div>
+              <div style="position:absolute;inset:0;background:${bgColor};border:2px solid ${visitBorder};border-radius:50% 50% 50% 4px;transform:rotate(-45deg);box-shadow:inset 0 1px 0 rgba(255,255,255,0.35);"></div>
               <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:${fontSize}px;letter-spacing:-0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.15);">${label}</div>
             </div>
           </div>

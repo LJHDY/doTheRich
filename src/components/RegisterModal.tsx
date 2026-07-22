@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import { uploadComplexPhotos } from '../services/api';
+import { ApartmentComplex } from '../types';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 
 export interface RegisterInitialData {
@@ -273,6 +275,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
   // 즐겨찾기 — form state와 분리해 boolean 타입 오염 방지
   const [isFavorite, setIsFavorite] = useState(false);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -502,7 +505,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
 
     try {
       // payload 구성: 빈 문자열은 undefined로 변환해 서버에 전송하지 않음
-      await api.post('/api/complexes/register', {
+      const { data: created } = await api.post<ApartmentComplex>('/api/complexes/register', {
         complexName: form.complexName,
         address: form.address || undefined,
         region: form.region || undefined,
@@ -567,6 +570,10 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           longitude: r.longitude ?? undefined,
         })),
       });
+      // 선택된 사진을 한 번에 업로드 — 실패해도 단지 등록은 완료 상태로 처리
+      if (photoFiles.length > 0 && created?.id) {
+        try { await uploadComplexPhotos(created.id, photoFiles); } catch { /* 업로드 실패 무시 */ }
+      }
       onSuccess();
       onClose();
     } catch {
@@ -1127,6 +1134,53 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             rows={3}
             style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
           />
+
+          {/* 사진 */}
+          <div style={sectionTitle}>사진</div>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'inline-block', padding: '7px 16px', borderRadius: '6px',
+              border: '1px solid #dadce0', backgroundColor: '#f8f9fa', cursor: 'pointer',
+              fontSize: '13px', color: '#3c4043', marginBottom: '10px',
+            }}>
+              📷 사진 선택
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={e => {
+                  const files = Array.from(e.target.files ?? []);
+                  setPhotoFiles(prev => [...prev, ...files]);
+                  e.target.value = ''; // 같은 파일 재선택 허용
+                }}
+              />
+            </label>
+            {/* 선택된 사진 썸네일 미리보기 */}
+            {photoFiles.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {photoFiles.map((file, idx) => (
+                  <div key={idx} style={{ position: 'relative', width: '72px', height: '72px' }}>
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={file.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e8eaed' }}
+                    />
+                    <button
+                      onClick={() => setPhotoFiles(prev => prev.filter((_, i) => i !== idx))}
+                      style={{
+                        position: 'absolute', top: '-6px', right: '-6px',
+                        width: '18px', height: '18px', borderRadius: '50%',
+                        backgroundColor: '#c5221f', color: '#fff', border: 'none',
+                        cursor: 'pointer', fontSize: '10px', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                      }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 푸터 */}
