@@ -308,7 +308,16 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     const markers: OverlayMarker[] = [];
     (complex?.schoolInfos ?? []).forEach(s => {
       if (s.latitude != null && s.longitude != null) {
-        markers.push({ id: `school-${s.id}`, name: s.schoolName, lat: s.latitude, lng: s.longitude, markerType: 'school', subType: s.schoolType });
+        markers.push({
+          id: `school-${s.id}`,
+          name: s.schoolName,
+          lat: s.latitude,
+          lng: s.longitude,
+          markerType: 'school',
+          subType: s.schoolType,
+          achievementScore: s.achievementScore ?? undefined,
+          walkingMinutes: s.walkingMinutes ?? undefined,
+        });
       }
     });
     (complex?.infraInfos ?? []).forEach(inf => {

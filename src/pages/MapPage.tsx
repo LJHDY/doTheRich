@@ -269,32 +269,53 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
     overlayMarkersRef.current = [];
 
     const SCHOOL_COLORS: Record<string, string> = { MIDDLE: '#1a73e8', ELEMENTARY: '#34a853' };
-    const SCHOOL_LABELS: Record<string, string> = { MIDDLE: '중', ELEMENTARY: '초' };
     const INFRA_COLORS: Record<string, string> = {
       DEPARTMENT_STORE: '#9c27b0', MART: '#ff9800', HOSPITAL: '#f44336', ETC: '#607d8b',
     };
     const INFRA_LABELS: Record<string, string> = {
-      DEPARTMENT_STORE: '백', MART: '마트', HOSPITAL: '병원', ETC: '기타',
+      DEPARTMENT_STORE: '백화점', MART: '마트', HOSPITAL: '병원', ETC: '기타',
     };
+
+    // "XX중학교" → "XX중", "XX초등학교" → "XX초" (등학교/학교 suffix 제거)
+    const truncateSchoolName = (name?: string) =>
+      (name ?? '').replace(/등학교$/, '').replace(/학교$/, '') || '학교';
 
     (overlayMarkers ?? []).forEach(om => {
       const isSchool = om.markerType === 'school';
       const bgColor = isSchool
         ? (SCHOOL_COLORS[om.subType ?? ''] ?? '#34a853')
         : (INFRA_COLORS[om.subType ?? ''] ?? '#607d8b');
-      const label = isSchool
-        ? (SCHOOL_LABELS[om.subType ?? ''] ?? '학')
-        : (INFRA_LABELS[om.subType ?? ''] ?? om.name.slice(0, 2));
 
-      const icon = {
-        content: `
+      let content: string;
+      if (isSchool) {
+        const shortName = truncateSchoolName(om.name);
+        const isMiddle = om.subType === 'MIDDLE';
+        // 중학교: 학업성취도(작은 글씨) + 이름 / 초등학교: 도보시간(작은 글씨) + 이름
+        const topLine = isMiddle
+          ? (om.achievementScore != null ? `<div style="font-size:9px;font-weight:600;opacity:0.9;line-height:1.2;">${om.achievementScore}%</div>` : '')
+          : (om.walkingMinutes != null ? `<div style="font-size:9px;font-weight:600;opacity:0.9;line-height:1.2;">${om.walkingMinutes}분</div>` : '');
+        content = `
           <div style="
             background:${bgColor}; color:#fff;
-            padding:3px 7px; border-radius:12px;
+            padding:3px 6px; border-radius:3px;
+            font-size:11px; font-weight:700;
+            white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,0.3);
+            border:2px solid #fff; cursor:default; text-align:center; line-height:1.3;
+          ">${topLine}${shortName}</div>`;
+      } else {
+        const label = INFRA_LABELS[om.subType ?? ''] ?? (om.name ?? '').slice(0, 3);
+        content = `
+          <div style="
+            background:${bgColor}; color:#fff;
+            padding:3px 6px; border-radius:3px;
             font-size:11px; font-weight:700;
             white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,0.3);
             border:2px solid #fff; cursor:default;
-          ">${label}</div>`,
+          ">${label}</div>`;
+      }
+
+      const icon = {
+        content,
         anchor: new window.naver.maps.Point(0, 0),
       };
 

@@ -54,6 +54,8 @@ export interface OverlayMarker {
   lng: number;
   markerType: 'school' | 'infra';
   subType?: string;            // schoolType 또는 infraType
+  achievementScore?: number;   // 중학교 학업성취도 (마커 위에 표시)
+  walkingMinutes?: number;     // 도보시간 (초등학교 마커 위에 표시)
 }
 
 /** 단지 등록 시 입력한 평형별 가격 항목 (백엔드가 반환하면 필터에서 평형 표시에 사용) */
