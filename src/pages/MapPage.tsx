@@ -96,21 +96,31 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
 
       const isFav = complex.isFavorite ?? false;
 
-      // 즐겨찾기 단지는 5각별 SVG 마커로 표시 — anchor를 별 중심(15,15)으로 설정
+      // 즐겨찾기 단지 — 별+꼬리 핀 마커 (CSS .star-pin 참조, inline 스타일로 변환)
+      // 5각별 10꼭짓점 중 하단 중앙 내부점을 꼬리 끝(30,76)으로 대체 → 별 모양 핀 완성
+      // 별 중심 (30,28), 외부반경 24, 내부반경 10
       if (isFav) {
-        const starPoints = '15,2 18.5,11 28,11 20.5,17 23,27 15,21 7,27 9.5,17 2,11 11.5,11';
+        const starPath = '30,4 35.9,19.9 52.8,20.6 39.5,31.1 44.1,47.4 30,76 15.9,47.4 20.5,31.1 7.2,20.6 24.1,19.9';
+        const starFontSize = !label || label.length <= 2 ? 13 : label.length <= 4 ? 11 : 9;
         return {
           content: `
             <div style="position:relative;display:inline-block;cursor:pointer;"
                  onmouseover="var r=this.getBoundingClientRect();window.__mkTipShow('${safeName}',r.left+r.width/2,r.top);"
                  onmouseout="window.__mkTipHide();">
-              <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"
-                   style="filter:drop-shadow(0 2px 3px rgba(0,0,0,0.22))">
-                <polygon points="${starPoints}" fill="${bgColor}" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
-              </svg>
+              <div style="position:relative;width:60px;height:80px;filter:drop-shadow(0 3px 4px rgba(0,0,0,0.22));">
+                <svg xmlns="http://www.w3.org/2000/svg" width="60" height="80" viewBox="0 0 60 80" style="display:block;">
+                  <polygon points="${starPath}" fill="${bgColor}" stroke="white" stroke-width="3.5" stroke-linejoin="round"/>
+                </svg>
+                <div style="position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);
+                            color:#fff;font-weight:800;font-size:${starFontSize}px;letter-spacing:-0.3px;
+                            text-shadow:0 1px 1px rgba(0,0,0,0.15);white-space:nowrap;pointer-events:none;">
+                  ${label}
+                </div>
+              </div>
             </div>
           `,
-          anchor: new window.naver.maps.Point(15, 15),
+          // 꼬리 끝점 (30,76) + stroke 1.75px 확장 고려
+          anchor: new window.naver.maps.Point(30, 78),
         };
       }
 
