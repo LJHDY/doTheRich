@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo } from '../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, toggleFavorite } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -247,6 +247,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // 즐겨찾기 로컬 상태 — 낙관적 업데이트(즉시 UI 반영) 후 API 실패 시 롤백
+  const [isFavorite, setIsFavorite] = useState(false);
+
   // 차트 평형 필터 — '' = 전체, '전용 59' 등 선택 시 해당 타입의 매매/전세 세트만 표시
   const [selectedAreaType, setSelectedAreaType] = useState('');
 
@@ -329,6 +332,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setMemoText(complex.memo || '');
       setDisplayMemo(complex.memo || '');
       setMemoError(null);
+      // 즐겨찾기 상태를 새 단지 값으로 동기화
+      setIsFavorite(complex.isFavorite ?? false);
       // 학군/인프라 편집·추가 상태도 초기화 — 다른 단지 선택 시 이전 폼 닫기
       setEditingSchool(null);
       setNewSchoolRows([]);
@@ -339,6 +344,19 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       loadPriceHistories(complex.id);
     }
   }, [complex, loadPriceHistories]);
+
+  // 즐겨찾기 토글 — 낙관적 업데이트 후 API 실패 시 롤백
+  const handleToggleFavorite = async () => {
+    if (!complex) return;
+    const next = !isFavorite;
+    setIsFavorite(next); // UI 즉시 반영
+    try {
+      await toggleFavorite(complex.id, next);
+      onComplexUpdate?.({ ...complex, isFavorite: next }); // 부모 상태 갱신
+    } catch {
+      setIsFavorite(!next); // API 실패 시 원래 값으로 롤백
+    }
+  };
 
   // 메모 저장 — PATCH 성공 시 로컬 displayMemo를 즉시 갱신 (재조회 불필요)
   const handleMemoSave = async () => {
@@ -835,8 +853,13 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </button>
         </div>
         {complex.price && (
-          <div style={{ marginTop: '8px', fontSize: '20px', fontWeight: 700 }}>
+          <div style={{ marginTop: '8px', fontSize: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
             {formatPrice(complex.price)}
+            {/* 즐겨찾기 버튼 — 노란별(활성)/회색별(비활성), 낙관적 업데이트 */}
+            <button
+              onClick={handleToggleFavorite}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, color: isFavorite ? '#f9ab00' : 'rgba(255,255,255,0.4)' }}
+            >★</button>
           </div>
         )}
       </div>

@@ -271,6 +271,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   );
   const [schoolInfos, setSchoolInfos] = useState<SchoolRow[]>([]);
   const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
+  // 즐겨찾기 — form state와 분리해 boolean 타입 오염 방지
+  const [isFavorite, setIsFavorite] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -513,6 +515,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
         redevelopType: form.redevelopType || undefined,
         redevelopStage: form.redevelopStage || undefined,
         visitType: form.visitType || undefined,
+        isFavorite: isFavorite,
         latitude: initialData.latitude,
         longitude: initialData.longitude,
         // 매매가 또는 전세가가 입력된 행만 포함, 억 단위 → 원 단위 변환
@@ -589,7 +592,15 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '18px 24px', borderBottom: '1px solid #e8eaed', flexShrink: 0,
         }}>
-          <span style={{ fontSize: '16px', fontWeight: 700, color: '#202124' }}>단지 등록</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px', fontWeight: 700, color: '#202124' }}>단지 등록</span>
+            {/* 즐겨찾기 별 버튼 — 노란별(활성)/회색별(비활성) 토글 */}
+            <button
+              type="button"
+              onClick={() => setIsFavorite(prev => !prev)}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, color: isFavorite ? '#f9ab00' : '#dadce0' }}
+            >★</button>
+          </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#80868b', padding: 0 }}>×</button>
         </div>
 

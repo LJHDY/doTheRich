@@ -96,6 +96,7 @@ export interface ApartmentComplex {
   grade?: string;       // 지역 직장 밀도 등급 (S/A/B/C) — RegionWorkplaceConst 기준, DB 미저장
   employees?: number;   // 지역 종사자수
   businesses?: number;  // 지역 사업체수
+  isFavorite?: boolean; // 즐겨찾기 여부
 }
 
 /** 평형별 시세 항목 — 백엔드 PriceHistoryItemDto와 1:1 매핑 */
@@ -192,6 +193,7 @@ export interface ApartmentComplexRequest {
     infraAddress?: string;
     distance?: number;         // 도보 분 단위
   }[];
+  isFavorite?: boolean;        // 즐겨찾기 여부
 }
 
 /** 다중 시리즈 차트 — 날짜별 행. 키는 '평형-타입' 형식 (e.g. '전용59-sale') */

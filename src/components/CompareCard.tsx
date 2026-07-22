@@ -201,8 +201,10 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           </button>
         </div>
         {complex.price && (
-          <div style={{ marginTop: '6px', fontSize: '18px', fontWeight: 700 }}>
+          <div style={{ marginTop: '6px', fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
             {formatPrice(complex.price)}
+            {/* 즐겨찾기 표시 — 읽기 전용(CompareCard에서는 수정 불가) */}
+            {complex.isFavorite && <span style={{ fontSize: '18px', color: '#f9ab00', lineHeight: 1 }}>★</span>}
           </div>
         )}
       </div>

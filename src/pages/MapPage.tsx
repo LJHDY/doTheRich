@@ -94,6 +94,26 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
       const safeName = complex.complexName
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+      const isFav = complex.isFavorite ?? false;
+
+      // 즐겨찾기 단지는 5각별 SVG 마커로 표시 — anchor를 별 중심(15,15)으로 설정
+      if (isFav) {
+        const starPoints = '15,2 18.5,11 28,11 20.5,17 23,27 15,21 7,27 9.5,17 2,11 11.5,11';
+        return {
+          content: `
+            <div style="position:relative;display:inline-block;cursor:pointer;"
+                 onmouseover="var r=this.getBoundingClientRect();window.__mkTipShow('${safeName}',r.left+r.width/2,r.top);"
+                 onmouseout="window.__mkTipHide();">
+              <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"
+                   style="filter:drop-shadow(0 2px 3px rgba(0,0,0,0.22))">
+                <polygon points="${starPoints}" fill="${bgColor}" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          `,
+          anchor: new window.naver.maps.Point(15, 15),
+        };
+      }
+
       return {
         content: `
           <div style="position:relative;display:inline-block;cursor:pointer;"

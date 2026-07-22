@@ -173,6 +173,11 @@ export const deleteInfraInfo = async (complexId: number, infraId: number): Promi
   await api.delete(`/api/complexes/${complexId}/infra-infos/${infraId}`);
 };
 
+/** 즐겨찾기 토글 — PATCH /api/complexes/:id/favorite */
+export const toggleFavorite = async (complexId: number, isFavorite: boolean): Promise<void> => {
+  await api.patch(`/api/complexes/${complexId}/favorite`, { isFavorite });
+};
+
 /** 실거래가/전세가 배치 수집 — POST /api/batch/real-estate-price */
 export const runBatchRealEstatePrice = async (): Promise<void> => {
   // 배치 처리는 시간이 걸릴 수 있어 타임아웃을 3분으로 별도 설정

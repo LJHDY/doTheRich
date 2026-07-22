@@ -112,6 +112,7 @@ ApartmentComplex {
   grade?: string;       // 지역 직장 밀도 등급 (S/A/B/C) — RegionWorkplaceConst 기준, DB 미저장
   employees?: number;   // 지역 종사자수
   businesses?: number;  // 지역 사업체수
+  isFavorite?: boolean; // 즐겨찾기 여부
 }
 
 // 학군·인프라 좌표 포함 (Naver 검색 결과 선택 시 mapx/mapy 저장)
@@ -153,6 +154,7 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 | DELETE | `/api/complexes/:id` | 단지 삭제 |
 | GET | `/api/complexes/price-ranges` | 금액대 목록 |
 | PATCH | `/api/complexes/:id/memo` | 단지 메모 수정 — `{ memo: string }` |
+| PATCH | `/api/complexes/:id/favorite` | 즐겨찾기 토글 — `{ isFavorite: boolean }` |
 | POST | `/api/complexes/:id/school-infos` | 학군 정보 단건 추가 (201) |
 | PATCH | `/api/complexes/:id/school-infos/:sid` | 학군 정보 단건 수정 |
 | POST | `/api/complexes/:id/infra-infos` | 인프라 정보 단건 추가 (201) |
@@ -311,6 +313,7 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] ComplexInfoPanel 학군/인프라 인라인 추가·편집 (연필 버튼, 네이버 검색, 도보거리 자동계산, 저장 후 재조회)
 - [x] 백엔드 학군/인프라 단건 추가(POST)·수정(PATCH) 엔드포인트 추가 (`complex_service`, `complexes.py`)
 - [x] 지도 마커 CSS 핀 스타일 변경 (회전 정사각형, `border-radius+rotate`) + hover 단지명 tooltip (body 직속 div로 stacking context 탈출)
+- [x] 즐겨찾기 기능 (`isFavorite` 필드, `PATCH /api/complexes/:id/favorite`, RegisterModal 별 버튼, ComplexInfoPanel 낙관적 토글, CompareCard 읽기전용 표시, 지도 즐겨찾기 단지 별 모양 SVG 마커)
 
 ## 미완성 / TODO
 
