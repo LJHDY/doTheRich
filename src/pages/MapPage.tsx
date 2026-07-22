@@ -15,6 +15,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
   const markersRef = useRef<any[]>([]);
   const infoWindowRef = useRef<any>(null);
   const overlayMarkersRef = useRef<any[]>([]);
+  const boundsInitializedRef = useRef(false); // fitBounds 최초 1회만 실행
 
   // 네이버 지도 초기화 + body 직속 tooltip div 생성
   // position:fixed를 지도 DOM 안에 두면 Naver Maps의 CSS transform 컨텍스트에 갇혀
@@ -236,9 +237,10 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
       markersRef.current.push(marker);
     });
 
-    // 단지 선택 중이 아닐 때만 fitBounds 적용 — 선택 중 실행하면 포커스가 튀어나감
-    if (validComplexes.length > 0 && !selectedComplex) {
+    // 최초 로드 시 1회만 fitBounds — 패널 닫기 등으로 재실행돼도 줌 변경 없음
+    if (validComplexes.length > 0 && !boundsInitializedRef.current) {
       mapInstanceRef.current.fitBounds(bounds, { padding: 60 });
+      boundsInitializedRef.current = true;
     }
   }, [complexes, selectedComplex, createMarkerIcon, onComplexSelect]);
 
