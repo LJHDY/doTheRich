@@ -96,11 +96,11 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
 
       const isFav = complex.isFavorite ?? false;
 
-      // 즐겨찾기 단지 — 별+꼬리 핀 마커 (CSS .star-pin 참조, inline 스타일로 변환)
-      // 5각별 10꼭짓점 중 하단 중앙 내부점을 꼬리 끝(30,76)으로 대체 → 별 모양 핀 완성
-      // 별 중심 (30,28), 외부반경 24, 내부반경 10
+      // 즐겨찾기 단지 — 6각별(헥사그램)+꼬리 핀 마커 (CSS .star-pin 참조, inline 스타일로 변환)
+      // 6각별 12꼭짓점 중 하단 외부점을 꼬리 끝(30,76)으로 대체 → 육망성 핀 완성
+      // 별 중심 (30,28), 외부반경 24, 내부반경 12
       if (isFav) {
-        const starPath = '30,4 35.9,19.9 52.8,20.6 39.5,31.1 44.1,47.4 30,76 15.9,47.4 20.5,31.1 7.2,20.6 24.1,19.9';
+        const starPath = '30,4 36,17.6 50.8,16 42,28 50.8,40 36,38.4 30,76 24,38.4 9.2,40 18,28 9.2,16 24,17.6';
         const starFontSize = !label || label.length <= 2 ? 13 : label.length <= 4 ? 11 : 9;
         return {
           content: `
