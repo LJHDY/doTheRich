@@ -100,7 +100,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
       // 6각별 12꼭짓점 중 하단 외부점을 꼬리 끝(30,76)으로 대체 → 육망성 핀 완성
       // 별 중심 (30,28), 외부반경 24, 내부반경 12
       if (isFav) {
-        const starPath = '30,4 36,17.6 50.8,16 42,28 50.8,40 36,38.4 30,76 24,38.4 9.2,40 18,28 9.2,16 24,17.6';
+        const starPath = '30,4 36,17.6 50.8,16 42,28 50.8,40 36,38.4 30,63 24,38.4 9.2,40 18,28 9.2,16 24,17.6';
         const starFontSize = !label || label.length <= 2 ? 13 : label.length <= 4 ? 11 : 9;
         return {
           content: `
@@ -111,7 +111,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
                 <svg xmlns="http://www.w3.org/2000/svg" width="60" height="80" viewBox="0 0 60 80" style="display:block;">
                   <polygon points="${starPath}" fill="${bgColor}" stroke="white" stroke-width="3.5" stroke-linejoin="round"/>
                 </svg>
-                <div style="position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);
+                <div style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);
                             color:#fff;font-weight:800;font-size:${starFontSize}px;letter-spacing:-0.3px;
                             text-shadow:0 1px 1px rgba(0,0,0,0.15);white-space:nowrap;pointer-events:none;">
                   ${label}
@@ -119,8 +119,8 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
               </div>
             </div>
           `,
-          // 꼬리 끝점 (30,76) + stroke 1.75px 확장 고려
-          anchor: new window.naver.maps.Point(30, 78),
+          // 꼬리 끝점 (30,63) + stroke 1.75px 확장 고려
+          anchor: new window.naver.maps.Point(30, 65),
         };
       }
 
