@@ -13,11 +13,21 @@ interface MapPageProps {
 const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
   const infoWindowRef = useRef<any>(null);
   const overlayMarkersRef = useRef<any[]>([]);
-  const circleRef = useRef<any>(null); // 도보 반경 원
-  const boundsInitializedRef = useRef(false); // fitBounds 최초 1회만 실행
+  const circleRef = useRef<any>(null);
+  const boundsInitializedRef = useRef(false);
+
+  // 마커 diff를 위한 Map — 단지 id → { marker, listenerHandle }
+  const markerMapRef = useRef<Map<number, { marker: any; listener: any }>>(new Map());
+  // 마커 아이콘 재생성 여부를 결정하는 fingerprint — 단지 id → 문자열
+  const fingerprintMapRef = useRef<Map<number, string>>(new Map());
+
+  // 콜백·데이터를 ref로 유지 → 클릭 핸들러가 항상 최신값을 참조 (마커 재생성 불필요)
+  const complexesRef = useRef<ApartmentComplex[]>(complexes);
+  const onComplexSelectRef = useRef(onComplexSelect);
+  useEffect(() => { complexesRef.current = complexes; }, [complexes]);
+  useEffect(() => { onComplexSelectRef.current = onComplexSelect; }, [onComplexSelect]);
 
   // 네이버 지도 초기화 + body 직속 tooltip div 생성
   // position:fixed를 지도 DOM 안에 두면 Naver Maps의 CSS transform 컨텍스트에 갇혀
@@ -46,7 +56,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
     tip.id = '__mk_tooltip';
     tip.style.cssText = [
       'display:none', 'position:fixed', 'pointer-events:none',
-      'z-index:2147483647',  // 최대값
+      'z-index:2147483647',
       'background:rgba(33,33,33,0.85)', 'color:#fff',
       'padding:3px 9px', 'border-radius:4px',
       'font-size:11px', 'font-family:-apple-system,BlinkMacSystemFont,sans-serif',
@@ -64,8 +74,13 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
     (window as any).__mkTipHide = () => { tip.style.display = 'none'; };
 
     return () => {
-      markersRef.current.forEach((m) => m.setMap(null));
-      markersRef.current = [];
+      // 모든 마커 제거
+      markerMapRef.current.forEach(({ marker, listener }) => {
+        marker.setMap(null);
+        if (listener) window.naver.maps.Event.removeListener(listener);
+      });
+      markerMapRef.current.clear();
+      fingerprintMapRef.current.clear();
       document.body.removeChild(tip);
       delete (window as any).__mkTipShow;
       delete (window as any).__mkTipHide;
@@ -105,9 +120,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
       };
       const visitBorder = VISIT_BORDER[complex.visitType ?? ''] ?? '#ffffff';
 
-      // 즐겨찾기 단지 — 6각별(헥사그램)+꼬리 핀 마커 (CSS .star-pin 참조, inline 스타일로 변환)
-      // 6각별 12꼭짓점 중 하단 외부점을 꼬리 끝(30,76)으로 대체 → 육망성 핀 완성
-      // 별 중심 (30,28), 외부반경 24, 내부반경 12
+      // 즐겨찾기 단지 — 6각별(헥사그램)+꼬리 핀 마커
       if (isFav) {
         const starPath = '30,4 36,17.6 50.8,16 42,28 50.8,40 36,38.4 30,63 24,38.4 9.2,40 18,28 9.2,16 24,17.6';
         return {
@@ -149,108 +162,129 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
     []
   );
 
-  // 마커 생성 및 업데이트
+  // 마커 diff 업데이트 — 추가/제거/변경된 것만 처리 (전체 재생성 X)
   useEffect(() => {
     if (!mapInstanceRef.current || !window.naver) return;
 
-    // 기존 마커 제거
-    markersRef.current.forEach((m) => m.setMap(null));
-    markersRef.current = [];
-
-    // 한반도 좌표 범위(위도33~38, 경도124~132)를 벗어난 잘못된 좌표 제외
+    // 좌표 유효성 검사
     const validComplexes = complexes.filter(
       (c) => c.latitude && c.longitude &&
         c.latitude >= 33 && c.latitude <= 38 &&
         c.longitude >= 124 && c.longitude <= 132
     );
 
-    if (validComplexes.length === 0) return;
+    // 마커 아이콘 외관을 결정하는 필드만 포함한 fingerprint
+    // selectedId·price·priceRange·isFavorite·visitType 중 하나라도 바뀌면 아이콘 재생성
+    const makeFingerprint = (c: ApartmentComplex, isSelected: boolean) =>
+      `${isSelected}-${c.price}-${c.priceRange}-${c.isFavorite}-${c.visitType}`;
+
+    const newIdSet = new Set(validComplexes.map((c) => c.id));
+
+    // 1) 삭제된 단지 마커 제거
+    Array.from(markerMapRef.current.keys()).forEach((id) => {
+      if (!newIdSet.has(id)) {
+        const { marker, listener } = markerMapRef.current.get(id)!;
+        marker.setMap(null);
+        if (listener) window.naver.maps.Event.removeListener(listener);
+        markerMapRef.current.delete(id);
+        fingerprintMapRef.current.delete(id);
+      }
+    });
 
     const bounds = new window.naver.maps.LatLngBounds();
 
     validComplexes.forEach((complex) => {
+      const isSelected = selectedComplex?.id === complex.id;
+      const fp = makeFingerprint(complex, isSelected);
       const position = new window.naver.maps.LatLng(complex.latitude, complex.longitude);
       bounds.extend(position);
 
-      const isSelected = selectedComplex?.id === complex.id;
-      const marker = new window.naver.maps.Marker({
-        position,
-        map: mapInstanceRef.current,
-        icon: createMarkerIcon(complex, isSelected),
-        zIndex: isSelected ? 100 : 10,
-      });
+      if (!markerMapRef.current.has(complex.id)) {
+        // 2) 신규 단지 — 마커 + 클릭 리스너 생성
+        const marker = new window.naver.maps.Marker({
+          position,
+          map: mapInstanceRef.current,
+          icon: createMarkerIcon(complex, isSelected),
+          zIndex: isSelected ? 100 : 10,
+        });
 
-      // 마커 클릭 이벤트
-      window.naver.maps.Event.addListener(marker, 'click', () => {
-        if (infoWindowRef.current) {
-          infoWindowRef.current.close();
-        }
+        // 클릭 핸들러는 ref를 통해 최신 데이터를 읽으므로 재생성 불필요
+        const listener = window.naver.maps.Event.addListener(marker, 'click', () => {
+          if (infoWindowRef.current) infoWindowRef.current.close();
+          (window as any).__mkTipHide?.();
+          (window as any).__closeInfoWindow = () => infoWindowRef.current?.close();
 
-        // 클릭 시 mouseout이 발생하지 않아 tooltip이 남으므로 명시적으로 숨김
-        (window as any).__mkTipHide?.();
+          // 클릭 시점의 최신 단지 데이터 참조 (메모·즐겨찾기 등 업데이트 반영)
+          const fresh = complexesRef.current.find((c) => c.id === complex.id) ?? complex;
 
-        // 닫기 버튼 onclick에서 호출할 전역 함수 등록
-        (window as any).__closeInfoWindow = () => infoWindowRef.current?.close();
+          const commuteHtml = fresh.commuteTimes?.length > 0
+            ? fresh.commuteTimes
+                .map((ct) => `<span style="margin-right:8px">${ct.destination} <b>${ct.minutes}분</b></span>`)
+                .join('')
+            : '정보 없음';
 
-        // 정보 창 내용
-        const commuteHtml = complex.commuteTimes?.length > 0
-          ? complex.commuteTimes
-              .map((ct) => `<span style="margin-right:8px">${ct.destination} <b>${ct.minutes}분</b></span>`)
-              .join('')
-          : '정보 없음';
-
-        const content = `
-          <div style="
-            position: relative;
-            padding: 14px 16px;
-            min-width: 220px;
-            max-width: 280px;
-            font-family: -apple-system, sans-serif;
-            font-size: 13px;
-          ">
-            <button
-              onclick="window.__closeInfoWindow()"
-              style="
-                position: absolute; top: 6px; right: 6px;
-                border: none; background: none; cursor: pointer;
-                font-size: 16px; color: #9e9e9e; line-height: 1;
-                padding: 2px 4px; border-radius: 4px;
-              "
-              onmouseover="this.style.backgroundColor='#f0f0f0';this.style.color='#5f6368'"
-              onmouseout="this.style.backgroundColor='transparent';this.style.color='#9e9e9e'"
-            >×</button>
-            <div style="font-weight:700; font-size:15px; color:#202124; margin-bottom:6px; padding-right:20px">
-              ${complex.complexName}
+          const content = `
+            <div style="
+              position: relative;
+              padding: 14px 16px;
+              min-width: 220px;
+              max-width: 280px;
+              font-family: -apple-system, sans-serif;
+              font-size: 13px;
+            ">
+              <button
+                onclick="window.__closeInfoWindow()"
+                style="
+                  position: absolute; top: 6px; right: 6px;
+                  border: none; background: none; cursor: pointer;
+                  font-size: 16px; color: #9e9e9e; line-height: 1;
+                  padding: 2px 4px; border-radius: 4px;
+                "
+                onmouseover="this.style.backgroundColor='#f0f0f0';this.style.color='#5f6368'"
+                onmouseout="this.style.backgroundColor='transparent';this.style.color='#9e9e9e'"
+              >×</button>
+              <div style="font-weight:700; font-size:15px; color:#202124; margin-bottom:6px; padding-right:20px">
+                ${fresh.complexName}
+              </div>
+              <div style="color:#1a73e8; font-size:16px; font-weight:700; margin-bottom:8px">
+                ${fresh.price ? formatPrice(fresh.price) : fresh.priceRange}
+              </div>
+              <div style="color:#5f6368; margin-bottom:4px">
+                ${fresh.region || ''} | ${fresh.builtYear || ''}
+              </div>
+              <div style="color:#5f6368; margin-bottom:6px">
+                ${fresh.subwayInfos?.map(s => `${s.stationName} ${s.walkingMinutes ? `(도보 ${s.walkingMinutes}분)` : ''}`).join(', ') || ''}
+              </div>
+              <div style="font-size:12px; color:#80868b; padding-top:6px; border-top:1px solid #f0f0f0">
+                ${commuteHtml}
+              </div>
             </div>
-            <div style="color:#1a73e8; font-size:16px; font-weight:700; margin-bottom:8px">
-              ${complex.price ? formatPrice(complex.price) : complex.priceRange}
-            </div>
-            <div style="color:#5f6368; margin-bottom:4px">
-              ${complex.region || ''} | ${complex.builtYear || ''}
-            </div>
-            <div style="color:#5f6368; margin-bottom:6px">
-              ${complex.subwayInfos?.map(s => `${s.stationName} ${s.walkingMinutes ? `(도보 ${s.walkingMinutes}분)` : ''}`).join(', ') || ''}
-            </div>
-            <div style="font-size:12px; color:#80868b; padding-top:6px; border-top:1px solid #f0f0f0">
-              ${commuteHtml}
-            </div>
-          </div>
-        `;
+          `;
 
-        infoWindowRef.current.setContent(content);
-        infoWindowRef.current.open(mapInstanceRef.current, marker);
-        onComplexSelect(complex);
-      });
+          infoWindowRef.current.setContent(content);
+          infoWindowRef.current.open(mapInstanceRef.current, marker);
+          onComplexSelectRef.current(fresh);
+        });
 
-      markersRef.current.push(marker);
+        markerMapRef.current.set(complex.id, { marker, listener });
+        fingerprintMapRef.current.set(complex.id, fp);
+
+      } else if (fingerprintMapRef.current.get(complex.id) !== fp) {
+        // 3) 외관 변경 — setIcon/setZIndex만 호출 (리스너·위치 유지)
+        const { marker } = markerMapRef.current.get(complex.id)!;
+        marker.setIcon(createMarkerIcon(complex, isSelected));
+        marker.setZIndex(isSelected ? 100 : 10);
+        fingerprintMapRef.current.set(complex.id, fp);
+      }
+      // 4) 변경 없음 — 아무 작업 안 함
     });
 
-    // 최초 로드 시 1회만 fitBounds — 패널 닫기 등으로 재실행돼도 줌 변경 없음
+    // fitBounds 최초 로드 시 1회만
     if (validComplexes.length > 0 && !boundsInitializedRef.current) {
       mapInstanceRef.current.fitBounds(bounds, { padding: 60 });
       boundsInitializedRef.current = true;
     }
-  }, [complexes, selectedComplex, createMarkerIcon, onComplexSelect]);
+  }, [complexes, selectedComplex, createMarkerIcon]);
 
   // 선택된 단지로 지도 이동
   useEffect(() => {
@@ -300,7 +334,6 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
       if (isSchool) {
         const shortName = truncateSchoolName(om.name);
         const isMiddle = om.subType === 'MIDDLE';
-        // 중학교: 학업성취도(작은 글씨) + 이름 / 초등학교: 도보시간(작은 글씨) + 이름
         const topLine = isMiddle
           ? (om.achievementScore != null ? `<div style="font-size:9px;font-weight:600;opacity:0.9;line-height:1.2;">${om.achievementScore}%</div>` : '')
           : (om.walkingMinutes != null ? `<div style="font-size:9px;font-weight:600;opacity:0.9;line-height:1.2;">${om.walkingMinutes}분</div>` : '');
