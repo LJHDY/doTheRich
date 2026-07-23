@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ComplexPhoto } from '../types';
 import { getComplexPhotos, uploadComplexPhotos, deleteComplexPhoto } from '../services/api';
+import { compressImages } from '../utils/imageUtils';
 
 interface PhotoSlideModalProps {
   complexId: number;
@@ -59,7 +60,8 @@ const PhotoSlideModal: React.FC<PhotoSlideModalProps> = ({ complexId, complexNam
     e.target.value = '';
     setUploading(true);
     try {
-      const added = await uploadComplexPhotos(complexId, files);
+      const compressed = await compressImages(files);
+      const added = await uploadComplexPhotos(complexId, compressed);
       setPhotos(prev => {
         const updated = [...prev, ...added];
         // 업로드 후 마지막 새 사진으로 이동

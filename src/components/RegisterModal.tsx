@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { uploadComplexPhotos } from '../services/api';
+import { compressImages } from '../utils/imageUtils';
 import { ApartmentComplex } from '../types';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 
@@ -570,9 +571,12 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           longitude: r.longitude ?? undefined,
         })),
       });
-      // 선택된 사진을 한 번에 업로드 — 실패해도 단지 등록은 완료 상태로 처리
+      // 선택된 사진을 압축 후 한 번에 업로드 — 실패해도 단지 등록은 완료 상태로 처리
       if (photoFiles.length > 0 && created?.id) {
-        try { await uploadComplexPhotos(created.id, photoFiles); } catch { /* 업로드 실패 무시 */ }
+        try {
+          const compressed = await compressImages(photoFiles);
+          await uploadComplexPhotos(created.id, compressed);
+        } catch { /* 업로드 실패 무시 */ }
       }
       onSuccess();
       onClose();
