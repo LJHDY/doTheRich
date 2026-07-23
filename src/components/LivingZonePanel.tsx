@@ -52,8 +52,11 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
 
   useEffect(() => { load(); }, [load]);
 
-  // 기존 생활권에서 지역구 목록 추출 — 셀렉트 옵션으로 사용
+  // 기존 생활권에서 지역구 목록 추출 — 필터 셀렉트 옵션으로 사용
   const districts = Array.from(new Set(zones.map(z => z.district))).sort((a, b) => a.localeCompare(b, 'ko'));
+
+  // 등록된 단지의 region을 distinct 추출 — 생활권 추가 시 지역구 셀렉트 옵션으로 사용
+  const complexRegions = Array.from(new Set(complexes.map(c => c.region).filter((r): r is string => !!r))).sort((a, b) => a.localeCompare(b, 'ko'));
 
   // 필터 적용
   const displayed = selectedDistrict
@@ -204,22 +207,28 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
               padding: '6px 8px', fontSize: '12px', outline: 'none',
             }}
           />
-          <input
-            placeholder="지역구 (예: 서울 관악구)"
-            value={newDistrict}
-            onChange={e => setNewDistrict(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleCreate()}
-            list="district-suggestions"
-            style={{
-              width: '100%', boxSizing: 'border-box', marginBottom: '8px',
-              border: '1px solid #dadce0', borderRadius: '6px',
-              padding: '6px 8px', fontSize: '12px', outline: 'none',
-            }}
-          />
-          {/* 기존 지역구 자동완성 */}
-          <datalist id="district-suggestions">
-            {districts.map(d => <option key={d} value={d} />)}
-          </datalist>
+          <div style={{ position: 'relative', marginBottom: '8px' }}>
+            <select
+              value={newDistrict}
+              onChange={e => setNewDistrict(e.target.value)}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                border: '1px solid #dadce0', borderRadius: '6px',
+                padding: '6px 24px 6px 8px', fontSize: '12px', outline: 'none',
+                appearance: 'none', WebkitAppearance: 'none',
+                backgroundColor: '#fff', cursor: 'pointer',
+                color: newDistrict ? '#202124' : '#9e9e9e',
+              }}
+            >
+              <option value="">지역구 선택</option>
+              {complexRegions.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#9e9e9e" strokeWidth={2.5}
+              strokeLinecap="round" strokeLinejoin="round"
+              style={{ position: 'absolute', right: '7px', top: '50%', transform: 'translateY(-50%)', width: '10px', height: '10px', pointerEvents: 'none' }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
           <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
             <button
               onClick={() => { setShowCreateForm(false); setNewName(''); setNewDistrict(''); }}
