@@ -31,15 +31,13 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
   const [memoText, setMemoText] = useState('');
   const [memoSaving, setMemoSaving] = useState(false);
 
-  // 단지 추가 UI — zoneId 단위로 펼침
-  const [addingComplexZoneId, setAddingComplexZoneId] = useState<number | null>(null);
-  const [selectedComplexId, setSelectedComplexId] = useState('');
-  const [addingSaving, setAddingSaving] = useState(false);
+  // 단지 체크박스 패널 — zoneId 단위로 열림, pendingIds는 현재 체크 상태
+  const [checkboxZoneId, setCheckboxZoneId] = useState<number | null>(null);
+  const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
+  const [checkboxSaving, setCheckboxSaving] = useState(false);
 
-  // 삭제 확인 — 생활권 삭제
+  // 생활권 삭제 확인
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
-  // 단지 제거 확인
-  const [removeConfirm, setRemoveConfirm] = useState<{ zoneId: number; complexId: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,7 +54,9 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
   const districts = Array.from(new Set(zones.map(z => z.district))).sort((a, b) => a.localeCompare(b, 'ko'));
 
   // 등록된 단지의 region을 distinct 추출 — 생활권 추가 시 지역구 셀렉트 옵션으로 사용
-  const complexRegions = Array.from(new Set(complexes.map(c => c.region).filter((r): r is string => !!r))).sort((a, b) => a.localeCompare(b, 'ko'));
+  const complexRegions = Array.from(
+    new Set(complexes.map(c => c.region).filter((r): r is string => !!r))
+  ).sort((a, b) => a.localeCompare(b, 'ko'));
 
   // 필터 적용
   const displayed = selectedDistrict
@@ -95,33 +95,39 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
     setMemoSaving(false);
   };
 
-  const handleAddComplex = async (zoneId: number) => {
-    if (!selectedComplexId) return;
-    setAddingSaving(true);
-    try {
-      await addComplexToZone(zoneId, parseInt(selectedComplexId));
-      // 로컬 상태 즉시 갱신 — 서버 재조회 없이 반영
-      const added = complexes.find(c => c.id === parseInt(selectedComplexId));
-      if (added) {
-        setZones(prev => prev.map(z => z.id === zoneId ? {
-          ...z,
-          complexes: [...z.complexes, { id: added.id, complexName: added.complexName, priceRange: added.priceRange, region: added.region }],
-        } : z));
-      }
-      setAddingComplexZoneId(null);
-      setSelectedComplexId('');
-    } catch {}
-    setAddingSaving(false);
+  // 체크박스 패널 열기 — 현재 추가된 단지를 초기 체크 상태로 설정
+  const openCheckbox = (zone: LivingZone) => {
+    setPendingIds(new Set(zone.complexes.map(c => c.id)));
+    setCheckboxZoneId(zone.id);
   };
 
-  const handleRemoveComplex = async (zoneId: number, complexId: number) => {
+  const togglePending = (complexId: number) => {
+    setPendingIds(prev => {
+      const next = new Set(Array.from(prev));
+      next.has(complexId) ? next.delete(complexId) : next.add(complexId);
+      return next;
+    });
+  };
+
+  // 저장 — 추가/제거 API를 병렬 호출 후 로컬 상태 갱신
+  const handleSaveComplexes = async (zone: LivingZone) => {
+    setCheckboxSaving(true);
+    const existingIds = new Set(zone.complexes.map(c => c.id));
+    const toAdd = Array.from(pendingIds).filter(id => !existingIds.has(id));
+    const toRemove = Array.from(existingIds).filter(id => !pendingIds.has(id));
     try {
-      await removeComplexFromZone(zoneId, complexId);
-      setZones(prev => prev.map(z =>
-        z.id === zoneId ? { ...z, complexes: z.complexes.filter(c => c.id !== complexId) } : z
-      ));
+      await Promise.all([
+        ...toAdd.map(id => addComplexToZone(zone.id, id)),
+        ...toRemove.map(id => removeComplexFromZone(zone.id, id)),
+      ]);
+      // 체크된 단지 정보만 남겨 로컬 상태 갱신
+      const newComplexes = complexes
+        .filter(c => pendingIds.has(c.id))
+        .map(c => ({ id: c.id, complexName: c.complexName, priceRange: c.priceRange, region: c.region }));
+      setZones(prev => prev.map(z => z.id === zone.id ? { ...z, complexes: newComplexes } : z));
+      setCheckboxZoneId(null);
     } catch {}
-    setRemoveConfirm(null);
+    setCheckboxSaving(false);
   };
 
   const handleDeleteZone = async (zoneId: number) => {
@@ -261,20 +267,20 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
         )}
         {!loading && displayed.length === 0 && (
           <div style={{ padding: '40px 24px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px', lineHeight: 1.8 }}>
-            생활권이 없습니다.<br />
-            위에서 추가해보세요.
+            생활권이 없습니다.<br />위에서 추가해보세요.
           </div>
         )}
 
         {displayed.map(zone => {
           const isExpanded = expandedIds.has(zone.id);
           const isEditingMemo = editingMemoId === zone.id;
-          const isAddingComplex = addingComplexZoneId === zone.id;
+          const isCheckboxOpen = checkboxZoneId === zone.id;
           const isDeletingZone = deleteConfirmId === zone.id;
 
-          // 이미 추가된 단지 제외한 선택 가능 목록
-          const addedIds = new Set(zone.complexes.map(c => c.id));
-          const available = complexes.filter(c => !addedIds.has(c.id));
+          // 해당 생활권 지역구와 일치하는 단지만 체크박스 목록으로 표시
+          const filteredComplexes = complexes
+            .filter(c => c.region === zone.district)
+            .sort((a, b) => a.complexName.localeCompare(b.complexName, 'ko'));
 
           return (
             <div key={zone.id} style={{ borderBottom: '1px solid #e8eaed' }}>
@@ -389,114 +395,135 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
                     )}
                   </div>
 
-                  {/* 포함 단지 목록 */}
+                  {/* 포함 단지 섹션 */}
                   <div>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#5f6368' }}>포함 단지</span>
-
-                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {zone.complexes.length === 0 && !isAddingComplex && (
-                        <div style={{ fontSize: '12px', color: '#9e9e9e', padding: '4px 0' }}>단지가 없습니다.</div>
-                      )}
-
-                      {zone.complexes.map(c => {
-                        const isRemoving = removeConfirm?.zoneId === zone.id && removeConfirm?.complexId === c.id;
-                        return (
-                          <div
-                            key={c.id}
-                            style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              padding: '6px 10px',
-                              backgroundColor: '#fff', borderRadius: '6px',
-                              border: '1px solid #e8eaed',
-                            }}
-                          >
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124' }}>{c.complexName}</span>
-                              {c.priceRange && (
-                                <span style={{
-                                  marginLeft: '6px', fontSize: '10px', fontWeight: 700,
-                                  color: '#1a73e8', backgroundColor: '#e8f0fe',
-                                  borderRadius: '8px', padding: '1px 5px',
-                                }}>{c.priceRange}</span>
-                              )}
-                              {c.region && (
-                                <div style={{ fontSize: '10px', color: '#9e9e9e', marginTop: '1px' }}>{c.region}</div>
-                              )}
-                            </div>
-
-                            {isRemoving ? (
-                              <div style={{ display: 'flex', gap: '3px', flexShrink: 0, marginLeft: '8px' }}>
-                                <button
-                                  onClick={() => handleRemoveComplex(zone.id, c.id)}
-                                  style={{ fontSize: '10px', color: '#fff', backgroundColor: '#c5221f', border: 'none', borderRadius: '3px', padding: '2px 6px', cursor: 'pointer' }}
-                                >제거</button>
-                                <button
-                                  onClick={() => setRemoveConfirm(null)}
-                                  style={{ fontSize: '10px', color: '#5f6368', backgroundColor: '#f1f3f4', border: 'none', borderRadius: '3px', padding: '2px 6px', cursor: 'pointer' }}
-                                >취소</button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => setRemoveConfirm({ zoneId: zone.id, complexId: c.id })}
-                                title="단지 제거"
-                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#bdbdbd', fontSize: '16px', padding: 0, lineHeight: 1, flexShrink: 0, marginLeft: '8px' }}
-                              >×</button>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {/* 단지 추가 UI */}
-                      {isAddingComplex ? (
-                        <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
-                          <select
-                            value={selectedComplexId}
-                            onChange={e => setSelectedComplexId(e.target.value)}
-                            autoFocus
-                            style={{
-                              flex: 1, border: '1px solid #1a73e8', borderRadius: '6px',
-                              padding: '5px 7px', fontSize: '11px', outline: 'none',
-                              backgroundColor: '#fff',
-                            }}
-                          >
-                            <option value="">단지 선택...</option>
-                            {available.sort((a, b) => (a.region || '').localeCompare(b.region || '', 'ko') || a.complexName.localeCompare(b.complexName, 'ko')).map(c => (
-                              <option key={c.id} value={c.id}>
-                                {c.complexName}{c.region ? ` (${c.region})` : ''}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => handleAddComplex(zone.id)}
-                            disabled={!selectedComplexId || addingSaving}
-                            style={{
-                              padding: '5px 9px', fontSize: '11px', fontWeight: 600,
-                              backgroundColor: '#1a73e8', color: '#fff',
-                              border: 'none', borderRadius: '6px', cursor: 'pointer',
-                              opacity: selectedComplexId && !addingSaving ? 1 : 0.5,
-                            }}
-                          >{addingSaving ? '...' : '추가'}</button>
-                          <button
-                            onClick={() => { setAddingComplexZoneId(null); setSelectedComplexId(''); }}
-                            style={{
-                              padding: '5px 7px', fontSize: '11px',
-                              border: '1px solid #dadce0', borderRadius: '6px',
-                              cursor: 'pointer', background: '#fff', color: '#5f6368',
-                            }}
-                          >취소</button>
-                        </div>
-                      ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#5f6368' }}>포함 단지</span>
+                      {/* 단지 추가/수정 토글 버튼 */}
+                      {!isCheckboxOpen && (
                         <button
-                          onClick={() => { setAddingComplexZoneId(zone.id); setSelectedComplexId(''); }}
+                          onClick={() => openCheckbox(zone)}
                           style={{
-                            marginTop: '2px', width: '100%', padding: '6px',
-                            fontSize: '11px', fontWeight: 600, color: '#1a73e8',
-                            backgroundColor: '#e8f0fe', border: '1px dashed #a8c7fa',
-                            borderRadius: '6px', cursor: 'pointer',
+                            border: 'none', background: 'none', cursor: 'pointer',
+                            fontSize: '11px', fontWeight: 600, color: '#1a73e8', padding: 0,
                           }}
-                        >+ 단지 추가</button>
+                        >{zone.complexes.length > 0 ? '단지 수정' : '+ 단지 추가'}</button>
                       )}
                     </div>
+
+                    {/* 추가된 단지 목록 (읽기 전용) */}
+                    {!isCheckboxOpen && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {zone.complexes.length === 0 ? (
+                          <div style={{ fontSize: '12px', color: '#9e9e9e', padding: '4px 0' }}>단지가 없습니다.</div>
+                        ) : (
+                          zone.complexes.map(c => (
+                            <div
+                              key={c.id}
+                              style={{
+                                display: 'flex', alignItems: 'center',
+                                padding: '6px 10px',
+                                backgroundColor: '#fff', borderRadius: '6px',
+                                border: '1px solid #e8eaed',
+                              }}
+                            >
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124' }}>{c.complexName}</span>
+                                {c.priceRange && (
+                                  <span style={{
+                                    marginLeft: '6px', fontSize: '10px', fontWeight: 700,
+                                    color: '#1a73e8', backgroundColor: '#e8f0fe',
+                                    borderRadius: '8px', padding: '1px 5px',
+                                  }}>{c.priceRange}</span>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+
+                    {/* 체크박스 선택 패널 */}
+                    {isCheckboxOpen && (
+                      <div style={{
+                        border: '1px solid #1a73e8', borderRadius: '8px',
+                        overflow: 'hidden', backgroundColor: '#fff',
+                      }}>
+                        {/* 체크박스 목록 */}
+                        <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                          {filteredComplexes.length === 0 ? (
+                            <div style={{ padding: '16px', fontSize: '12px', color: '#9e9e9e', textAlign: 'center' }}>
+                              '{zone.district}' 단지가 없습니다.
+                            </div>
+                          ) : (
+                            filteredComplexes.map(c => {
+                              const checked = pendingIds.has(c.id);
+                              return (
+                                <label
+                                  key={c.id}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: '9px',
+                                    padding: '8px 12px', cursor: 'pointer',
+                                    borderBottom: '1px solid #f0f0f0',
+                                    backgroundColor: checked ? '#f0f6ff' : '#fff',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => togglePending(c.id)}
+                                    style={{ width: '15px', height: '15px', accentColor: '#1a73e8', flexShrink: 0, cursor: 'pointer' }}
+                                  />
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '12px', fontWeight: checked ? 700 : 600, color: '#202124' }}>
+                                      {c.complexName}
+                                    </div>
+                                    {c.priceRange && (
+                                      <span style={{
+                                        fontSize: '10px', fontWeight: 700,
+                                        color: '#1a73e8', backgroundColor: '#e8f0fe',
+                                        borderRadius: '8px', padding: '1px 5px',
+                                      }}>{c.priceRange}</span>
+                                    )}
+                                  </div>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* 선택 개수 + 하단 버튼 */}
+                        <div style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '8px 12px', borderTop: '1px solid #e8eaed',
+                          backgroundColor: '#f8f9fa',
+                        }}>
+                          <span style={{ fontSize: '11px', color: '#5f6368' }}>
+                            {pendingIds.size}개 선택됨
+                          </span>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              onClick={() => setCheckboxZoneId(null)}
+                              style={{
+                                padding: '4px 10px', fontSize: '11px',
+                                border: '1px solid #dadce0', borderRadius: '5px',
+                                cursor: 'pointer', background: '#fff', color: '#5f6368',
+                              }}
+                            >취소</button>
+                            <button
+                              onClick={() => handleSaveComplexes(zone)}
+                              disabled={checkboxSaving}
+                              style={{
+                                padding: '4px 10px', fontSize: '11px', fontWeight: 600,
+                                backgroundColor: '#1a73e8', color: '#fff',
+                                border: 'none', borderRadius: '5px', cursor: 'pointer',
+                                opacity: checkboxSaving ? 0.6 : 1,
+                              }}
+                            >{checkboxSaving ? '저장 중...' : '저장'}</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

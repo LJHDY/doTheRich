@@ -195,11 +195,15 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 ### `LivingZonePanel.tsx`
 - 헤더 "생활권" 버튼 클릭 시 우측 사이드패널로 표시
 - 지역구 셀렉트 필터 (기존 생활권에서 추출) + "+ 생활권 추가" 버튼
-- 생활권 생성 폼: 이름 + 지역구 입력 (기존 지역구 datalist 자동완성), Enter/저장
+- 생활권 생성 폼: 이름 + 지역구 셀렉트 (`complexes`의 `region` distinct 목록), Enter/저장
 - 생활권 카드: 클릭 펼침/닫힘, 지역구 배지 + 단지 수 + 메모 미리보기
 - 메모 인라인 편집 (✏ 버튼 or 텍스트 클릭)
-- 단지 목록: 이름·금액대·지역, × 제거(2단계 확인)
-- "+ 단지 추가": 드롭다운 셀렉트 (지역·이름 정렬, 이미 추가된 단지 제외)
+- 단지 목록: 이름·금액대·지역 읽기전용 표시 (× 버튼 없음)
+- **단지 선택 체크박스 패널**: "단지 수정" / "+ 단지 추가" 버튼 클릭 시 펼침
+  - `zone.district === c.region` 일치 단지만 표시 (같은 지역구)
+  - 기존 포함된 단지 미리 체크 (`pendingIds` Set 초기화)
+  - 체크/해제로 추가·제거 예약, 저장 시 `Promise.all`로 일괄 반영
+  - 하단 "X개 선택됨" + 취소/저장 버튼
 - 생활권 삭제: 카드 우측 × → 2단계 확인
 - 신규 생활권 생성 후 자동 펼침
 
@@ -354,6 +358,8 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] 도보 30분 반경 원 토글 (ComplexInfoPanel 헤더 지역구명 옆 `반경` 버튼 → Naver Maps Circle 2km, 패널 닫기·단지 변경 시 자동 제거)
 - [x] 생활권 관리 사이드패널 (헤더 "생활권" 버튼 → LivingZonePanel, ComplexInfoPanel과 상호 배타)
   - 생활권 CRUD (생성·메모편집·단지추가·단지제거·삭제), 지역구 필터, 카드 펼침/닫힘
+  - 생활권 생성 지역구: 기존 단지 region distinct 셀렉트 박스로 선택
+  - 단지 선택: 체크박스 패널 (지역구 일치 단지만, 기존 체크 유지, 일괄 저장)
 
 ## 미완성 / TODO
 
