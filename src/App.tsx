@@ -28,6 +28,9 @@ const App: React.FC = () => {
   // 학교·인프라 위치 오버레이 마커 — ComplexInfoPanel이 단지 선택 시 채워줌
   const [overlayMarkers, setOverlayMarkers] = useState<OverlayMarker[]>([]);
 
+  // 도보 30분 반경 원 중심 좌표 — ComplexInfoPanel 토글 버튼으로 켜고 끔
+  const [radiusCenter, setRadiusCenter] = useState<{ lat: number; lng: number } | null>(null);
+
   // 비교하기 — 최대 3개 단지 선택, 선택 시 화면 3등분 카드 뷰로 전환
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareIds, setCompareIds] = useState<number[]>([]);
@@ -253,6 +256,7 @@ const App: React.FC = () => {
               onComplexSelect={setSelectedComplex}
               focusLocation={focusLocation}
               overlayMarkers={overlayMarkers}
+              radiusCenter={radiusCenter}
             />
             {selectedComplex && (
               <ComplexInfoPanel
@@ -261,11 +265,13 @@ const App: React.FC = () => {
                   (window as any).__closeInfoWindow?.();
                   setSelectedComplex(null);
                   setOverlayMarkers([]);
+                  setRadiusCenter(null);
                 }}
                 onMemoUpdate={handleMemoUpdate}
                 onDelete={handleComplexDelete}
                 onOverlayMarkersChange={setOverlayMarkers}
                 onComplexUpdate={handleComplexUpdate}
+                onRadiusToggle={setRadiusCenter}
               />
             )}
           </>

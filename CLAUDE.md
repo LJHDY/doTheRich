@@ -192,6 +192,7 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - 지도 클릭 → 역방향 지오코딩 → `onMapClick` 콜백으로 주소 전달
 - `focusLocation` 변경 시 지도 중심/줌(15) 이동
 - `overlayMarkers` 변경 시 학교·인프라 오버레이 마커 렌더링 (중=파랑/초=초록, 백화점=보라/마트=주황/병원=빨강/기타=회색)
+- `radiusCenter` prop 변경 시 도보 30분 반경 원(2km, 파란 점선) 그리기/제거 (`circleRef`로 단일 인스턴스 관리)
 
 ### `RegisterModal.tsx`
 - 섹션: 기본정보 / 가격정보 / 단지정보 / 교통정보 / 출퇴근시간 / 메모
@@ -328,6 +329,8 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] ComplexListModal·CompareListModal 금액대 매칭 평형 배지 + 평형별 가격 표시
 - [x] ComplexListModal 2단계 그룹핑 (지역 → 평형 서브그룹, 숫자 오름차순, `전용 XX` 형식)
 - [x] CompareCard 메모 내용 label 아래 줄에 표시
+- [x] 최근 기록 시세 변동률 표시 (직전 기록 동일 areaType 대비 ▲/▼ 억+%, 상승=빨강/하락=파랑)
+- [x] 도보 30분 반경 원 토글 (ComplexInfoPanel 헤더 지역구명 옆 `반경` 버튼 → Naver Maps Circle 2km, 패널 닫기·단지 변경 시 자동 제거)
 
 ## 미완성 / TODO
 

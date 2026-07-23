@@ -7,14 +7,16 @@ interface MapPageProps {
   onComplexSelect: (complex: ApartmentComplex) => void;
   focusLocation?: { lat: number; lng: number } | null;
   overlayMarkers?: OverlayMarker[];
+  radiusCenter?: { lat: number; lng: number } | null;
 }
 
-const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers }) => {
+const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const infoWindowRef = useRef<any>(null);
   const overlayMarkersRef = useRef<any[]>([]);
+  const circleRef = useRef<any>(null); // 도보 반경 원
   const boundsInitializedRef = useRef(false); // fitBounds 최초 1회만 실행
 
   // 네이버 지도 초기화 + body 직속 tooltip div 생성
@@ -337,6 +339,28 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
       overlayMarkersRef.current.push(m);
     });
   }, [overlayMarkers]);
+
+  // 도보 30분 반경 원 — radiusCenter 변경 시 이전 원 제거 후 새로 그리기
+  // 도보 속도 4km/h × 0.5h = 2km 반경
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.naver) return;
+    if (circleRef.current) {
+      circleRef.current.setMap(null);
+      circleRef.current = null;
+    }
+    if (!radiusCenter) return;
+    circleRef.current = new window.naver.maps.Circle({
+      map: mapInstanceRef.current,
+      center: new window.naver.maps.LatLng(radiusCenter.lat, radiusCenter.lng),
+      radius: 2000,
+      fillColor: '#1a73e8',
+      fillOpacity: 0.07,
+      strokeColor: '#1a73e8',
+      strokeOpacity: 0.5,
+      strokeWeight: 2,
+      strokeStyle: 'shortdash',
+    });
+  }, [radiusCenter]);
 
   return (
     <div

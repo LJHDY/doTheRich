@@ -14,6 +14,7 @@ interface ComplexInfoPanelProps {
   onDelete?: (complexId: number) => void;
   onOverlayMarkersChange?: (markers: OverlayMarker[]) => void;
   onComplexUpdate?: (complex: ApartmentComplex) => void; // 학군/인프라 저장 후 부모 상태 갱신
+  onRadiusToggle?: (center: { lat: number; lng: number } | null) => void; // 도보 반경 원 토글
 }
 
 // 네이버 검색 결과 단건 — 학교·인프라 검색에서 공통 사용
@@ -267,7 +268,7 @@ const buildChartData = (
   return { rows, series };
 };
 
-const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, onMemoUpdate, onDelete, onOverlayMarkersChange, onComplexUpdate }) => {
+const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, onMemoUpdate, onDelete, onOverlayMarkersChange, onComplexUpdate, onRadiusToggle }) => {
   const [priceHistories, setPriceHistories] = useState<PriceHistory[]>([]);
   const [chartData, setChartData] = useState<{ rows: ChartDataRow[]; series: ChartSeries[] }>(() => ({ rows: [], series: [] }));
   const [showInputForm, setShowInputForm] = useState(false);
@@ -293,6 +294,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
   // 사진 슬라이드 모달 표시 여부
   const [showPhotoModal, setShowPhotoModal] = useState(false);
+
+  // 도보 30분 반경 원 표시 여부
+  const [showRadius, setShowRadius] = useState(false);
 
   // 임장 유형 인라인 편집 상태 — 값 없으면 NONE으로 초기화
   const [editingVisitType, setEditingVisitType] = useState(false);
@@ -399,6 +403,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setIsFavorite(complex.isFavorite ?? false);
       // 사진 모달·임장 유형 편집 상태도 초기화 — 다른 단지 선택 시 닫기
       setShowPhotoModal(false);
+      setShowRadius(false);
+      onRadiusToggle?.(null);
       setEditingVisitType(false);
       setLocalVisitType(complex.visitType || 'NONE');
       // 참고가 탭·편집 상태도 초기화 — 다른 단지 선택 시 폼 닫기
@@ -954,8 +960,30 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '4px' }}>
-              {topPriceRange} | {complex.region}
+            <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>{topPriceRange} | {complex.region}</span>
+              {/* 도보 30분 반경 원 토글 버튼 */}
+              <button
+                onClick={() => {
+                  const next = !showRadius;
+                  setShowRadius(next);
+                  if (next && complex?.latitude && complex?.longitude) {
+                    onRadiusToggle?.({ lat: complex.latitude, lng: complex.longitude });
+                  } else {
+                    onRadiusToggle?.(null);
+                  }
+                }}
+                title="도보 30분 반경 표시"
+                style={{
+                  border: '1px solid',
+                  borderColor: showRadius ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)',
+                  background: showRadius ? 'rgba(255,255,255,0.25)' : 'transparent',
+                  cursor: 'pointer', lineHeight: 1,
+                  padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: 700,
+                  color: showRadius ? '#fff' : 'rgba(255,255,255,0.6)',
+                  flexShrink: 0, whiteSpace: 'nowrap',
+                }}
+              >반경</button>
             </div>
             <h2 style={{ fontSize: '18px', fontWeight: 700, lineHeight: 1.3 }}>
               {complex.complexName}
@@ -2010,57 +2038,83 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               </div>
             </div>
             {/* 최신순으로 뒤집어 최대 5건만 표시 — 날짜별로 items 배열을 나열 */}
-            {[...priceHistories].reverse().slice(0, 5).map((h) => (
-              <div
-                key={h.id}
-                style={{
-                  marginBottom: '8px',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '6px',
-                  padding: '8px 10px',
-                }}
-              >
-                <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '4px' }}>
-                  {h.recordDate}
-                  {h.memo && <span style={{ marginLeft: '6px' }}>{h.memo}</span>}
-                </div>
-                {h.items.map((item) => (
-                  <div key={item.id} style={{ padding: '3px 0', borderBottom: '1px solid #f0f0f0' }}>
-                    {/* 기본 가격 행 */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                      <span style={{ color: '#5f6368' }}>
-                        {item.areaType || '-'}
-                        {item.floor ? ` · ${item.floor}층` : ''}
-                      </span>
-                      <span style={{ fontWeight: 600, color: '#202124' }}>{formatPrice(item.price)}</span>
-                      {item.jeonseRate != null && (
-                        <span style={{ fontSize: '11px', color: '#1a73e8' }}>전세가율 {item.jeonseRate.toFixed(0)}%</span>
-                      )}
+            {(() => {
+              const reversed = [...priceHistories].reverse();
+              return reversed.slice(0, 5).map((h, idx) => {
+                // 직전 기록 — 동일 areaType 간 가격 변동 계산에 사용
+                const prevH = reversed[idx + 1];
+                return (
+                  <div
+                    key={h.id}
+                    style={{
+                      marginBottom: '8px',
+                      backgroundColor: '#f8f9fa',
+                      borderRadius: '6px',
+                      padding: '8px 10px',
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '4px' }}>
+                      {h.recordDate}
+                      {h.memo && <span style={{ marginLeft: '6px' }}>{h.memo}</span>}
                     </div>
-                    {/* 참고가 — 값이 있는 항목만 표시 */}
-                    {(item.askingPrice || item.highestPrice || item.lowestPrice || item.tenYearChangeAmount || item.tenYearChangeRate) && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '3px' }}>
-                        {item.askingPrice && (
-                          <span style={{ fontSize: '10px', color: '#80868b' }}>호가 {formatPrice(item.askingPrice)}</span>
-                        )}
-                        {item.highestPrice && (
-                          <span style={{ fontSize: '10px', color: '#80868b' }}>전고점 {formatPrice(item.highestPrice)}</span>
-                        )}
-                        {item.lowestPrice && (
-                          <span style={{ fontSize: '10px', color: '#80868b' }}>전저점 {formatPrice(item.lowestPrice)}</span>
-                        )}
-                        {(item.tenYearChangeAmount || item.tenYearChangeRate != null) && (
-                          <span style={{ fontSize: '10px', color: '#80868b' }}>
-                            10년{item.tenYearChangeAmount ? ` ${formatPrice(item.tenYearChangeAmount)}` : ''}
-                            {item.tenYearChangeRate != null ? ` (${item.tenYearChangeRate}%)` : ''}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    {h.items.map((item) => {
+                      // 직전 기록에서 동일 areaType 항목 탐색 → 변동액·변동률 계산
+                      const prevItem = prevH?.items.find(p => p.areaType === item.areaType);
+                      const delta = prevItem ? item.price - prevItem.price : null;
+                      const rate = delta !== null && prevItem && prevItem.price > 0
+                        ? (delta / prevItem.price) * 100 : null;
+
+                      return (
+                        <div key={item.id} style={{ padding: '3px 0', borderBottom: '1px solid #f0f0f0' }}>
+                          {/* 기본 가격 행 */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                            <span style={{ color: '#5f6368' }}>
+                              {item.areaType || '-'}
+                              {item.floor ? ` · ${item.floor}층` : ''}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontWeight: 600, color: '#202124' }}>{formatPrice(item.price)}</span>
+                              {/* 직전 기록 대비 변동액·변동률 */}
+                              {delta !== null && delta !== 0 && rate !== null && (
+                                <span style={{
+                                  fontSize: '10px', fontWeight: 700,
+                                  color: delta > 0 ? '#c5221f' : '#1a73e8',
+                                }}>
+                                  {delta > 0 ? '▲' : '▼'} {formatPrice(Math.abs(delta))} ({delta > 0 ? '+' : ''}{rate.toFixed(1)}%)
+                                </span>
+                              )}
+                            </div>
+                            {item.jeonseRate != null && (
+                              <span style={{ fontSize: '11px', color: '#1a73e8' }}>전세가율 {item.jeonseRate.toFixed(0)}%</span>
+                            )}
+                          </div>
+                          {/* 참고가 — 값이 있는 항목만 표시 */}
+                          {(item.askingPrice || item.highestPrice || item.lowestPrice || item.tenYearChangeAmount || item.tenYearChangeRate) && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '3px' }}>
+                              {item.askingPrice && (
+                                <span style={{ fontSize: '10px', color: '#80868b' }}>호가 {formatPrice(item.askingPrice)}</span>
+                              )}
+                              {item.highestPrice && (
+                                <span style={{ fontSize: '10px', color: '#80868b' }}>전고점 {formatPrice(item.highestPrice)}</span>
+                              )}
+                              {item.lowestPrice && (
+                                <span style={{ fontSize: '10px', color: '#80868b' }}>전저점 {formatPrice(item.lowestPrice)}</span>
+                              )}
+                              {(item.tenYearChangeAmount || item.tenYearChangeRate != null) && (
+                                <span style={{ fontSize: '10px', color: '#80868b' }}>
+                                  10년{item.tenYearChangeAmount ? ` ${formatPrice(item.tenYearChangeAmount)}` : ''}
+                                  {item.tenYearChangeRate != null ? ` (${item.tenYearChangeRate}%)` : ''}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-            ))}
+                );
+              });
+            })()}
           </div>
         )}
 
