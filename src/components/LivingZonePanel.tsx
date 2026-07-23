@@ -2,8 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ApartmentComplex, LivingZone } from '../types';
 import {
   getLivingZones, createLivingZone, updateLivingZoneMemo,
-  addComplexToZone, removeComplexFromZone, deleteLivingZone,
+  addComplexesToZone, removeComplexFromZone, deleteLivingZone,
 } from '../services/api';
+import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
+import ZonePhotoModal from './ZonePhotoModal';
 
 interface Props {
   complexes: ApartmentComplex[];
@@ -38,6 +40,12 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
 
   // 생활권 삭제 확인
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
+  // 사진 모달 — 열린 생활권 id 저장
+  const [photoZone, setPhotoZone] = useState<{ id: number; name: string } | null>(null);
+
+  // 메모 자동번호 훅 — 메모 textarea에 적용
+  const numberedMemo = useNumberedTextarea(memoText, setMemoText);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,9 +103,9 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
     setMemoSaving(false);
   };
 
-  // 체크박스 패널 열기 — 현재 추가된 단지를 초기 체크 상태로 설정
+  // 체크박스 패널 열기 — 기존 단지의 complexId로 초기 체크 상태 설정
   const openCheckbox = (zone: LivingZone) => {
-    setPendingIds(new Set(zone.complexes.map(c => c.id)));
+    setPendingIds(new Set(zone.complexes.map(c => c.complexId)));
     setCheckboxZoneId(zone.id);
   };
 
@@ -109,22 +117,20 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
     });
   };
 
-  // 저장 — 추가/제거 API를 병렬 호출 후 로컬 상태 갱신
+  // 저장 — 추가는 bulk API 한 번, 제거는 단건 병렬 호출 후 서버 재조회
   const handleSaveComplexes = async (zone: LivingZone) => {
     setCheckboxSaving(true);
-    const existingIds = new Set(zone.complexes.map(c => c.id));
-    const toAdd = Array.from(pendingIds).filter(id => !existingIds.has(id));
-    const toRemove = Array.from(existingIds).filter(id => !pendingIds.has(id));
+    // 기존 단지는 complexId 기준으로 비교 (id는 join 레코드 ID라 단지 식별에 부적합)
+    const existingComplexIds = new Set(zone.complexes.map(c => c.complexId));
+    const toAdd = Array.from(pendingIds).filter(id => !existingComplexIds.has(id));
+    const toRemove = Array.from(existingComplexIds).filter(id => !pendingIds.has(id));
     try {
-      await Promise.all([
-        ...toAdd.map(id => addComplexToZone(zone.id, id)),
-        ...toRemove.map(id => removeComplexFromZone(zone.id, id)),
-      ]);
-      // 체크된 단지 정보만 남겨 로컬 상태 갱신
-      const newComplexes = complexes
-        .filter(c => pendingIds.has(c.id))
-        .map(c => ({ id: c.id, complexName: c.complexName, priceRange: c.priceRange, region: c.region }));
-      setZones(prev => prev.map(z => z.id === zone.id ? { ...z, complexes: newComplexes } : z));
+      const calls: Promise<any>[] = [];
+      if (toAdd.length > 0) calls.push(addComplexesToZone(zone.id, toAdd));
+      toRemove.forEach(id => calls.push(removeComplexFromZone(zone.id, id)));
+      await Promise.all(calls);
+      // 서버에서 최신 상태 재조회하여 id/complexId 불일치 방지
+      await load();
       setCheckboxZoneId(null);
     } catch {}
     setCheckboxSaving(false);
@@ -258,6 +264,15 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
         </div>
       )}
 
+      {/* 사진 모달 */}
+      {photoZone && (
+        <ZonePhotoModal
+          zoneId={photoZone.id}
+          zoneName={photoZone.name}
+          onClose={() => setPhotoZone(null)}
+        />
+      )}
+
       {/* 생활권 목록 */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading && (
@@ -314,26 +329,37 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
                   </div>
                 </div>
 
-                {/* 삭제 확인 or 삭제 버튼 */}
-                {isDeletingZone ? (
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                    <span style={{ fontSize: '11px', color: '#c5221f', whiteSpace: 'nowrap' }}>삭제?</span>
+                {/* 사진·삭제 버튼 영역 */}
+                <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                  {/* 사진 버튼 — 항상 표시 */}
+                  {!isDeletingZone && (
                     <button
-                      onClick={() => handleDeleteZone(zone.id)}
-                      style={{ fontSize: '11px', fontWeight: 700, color: '#fff', backgroundColor: '#c5221f', border: 'none', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}
-                    >확인</button>
+                      onClick={() => setPhotoZone({ id: zone.id, name: zone.name })}
+                      title="생활권 사진"
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '15px', padding: '0 2px', lineHeight: 1, color: '#9e9e9e' }}
+                    >📷</button>
+                  )}
+                  {/* 삭제 확인 or 삭제 버튼 */}
+                  {isDeletingZone ? (
+                    <>
+                      <span style={{ fontSize: '11px', color: '#c5221f', whiteSpace: 'nowrap' }}>삭제?</span>
+                      <button
+                        onClick={() => handleDeleteZone(zone.id)}
+                        style={{ fontSize: '11px', fontWeight: 700, color: '#fff', backgroundColor: '#c5221f', border: 'none', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}
+                      >확인</button>
+                      <button
+                        onClick={() => setDeleteConfirmId(null)}
+                        style={{ fontSize: '11px', color: '#5f6368', backgroundColor: '#f1f3f4', border: 'none', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}
+                      >취소</button>
+                    </>
+                  ) : (
                     <button
-                      onClick={() => setDeleteConfirmId(null)}
-                      style={{ fontSize: '11px', color: '#5f6368', backgroundColor: '#f1f3f4', border: 'none', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}
-                    >취소</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={e => { e.stopPropagation(); setDeleteConfirmId(zone.id); }}
-                    title="생활권 삭제"
-                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dadce0', fontSize: '18px', padding: 0, lineHeight: 1, flexShrink: 0 }}
-                  >×</button>
-                )}
+                      onClick={() => setDeleteConfirmId(zone.id)}
+                      title="생활권 삭제"
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dadce0', fontSize: '18px', padding: 0, lineHeight: 1 }}
+                    >×</button>
+                  )}
+                </div>
               </div>
 
               {/* 카드 본문 — 펼쳐진 경우만 */}
@@ -354,8 +380,12 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
                     {isEditingMemo ? (
                       <div>
                         <textarea
+                          ref={numberedMemo.ref}
                           value={memoText}
                           onChange={e => setMemoText(e.target.value)}
+                          onFocus={numberedMemo.onFocus}
+                          onKeyDown={numberedMemo.onKeyDown}
+                          onBlur={numberedMemo.onBlur}
                           rows={4}
                           autoFocus
                           style={{
@@ -417,28 +447,32 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
                         {zone.complexes.length === 0 ? (
                           <div style={{ fontSize: '12px', color: '#9e9e9e', padding: '4px 0' }}>단지가 없습니다.</div>
                         ) : (
-                          zone.complexes.map(c => (
-                            <div
-                              key={c.id}
-                              style={{
-                                display: 'flex', alignItems: 'center',
-                                padding: '6px 10px',
-                                backgroundColor: '#fff', borderRadius: '6px',
-                                border: '1px solid #e8eaed',
-                              }}
-                            >
-                              <div style={{ minWidth: 0, flex: 1 }}>
-                                <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124' }}>{c.complexName}</span>
-                                {c.priceRange && (
-                                  <span style={{
-                                    marginLeft: '6px', fontSize: '10px', fontWeight: 700,
-                                    color: '#1a73e8', backgroundColor: '#e8f0fe',
-                                    borderRadius: '8px', padding: '1px 5px',
-                                  }}>{c.priceRange}</span>
-                                )}
+                          zone.complexes.map(c => {
+                            // 백엔드 DTO에 priceRange 없으므로 complexes prop에서 complexId로 보강
+                            const full = complexes.find(fc => fc.id === c.complexId);
+                            return (
+                              <div
+                                key={c.id}
+                                style={{
+                                  display: 'flex', alignItems: 'center',
+                                  padding: '6px 10px',
+                                  backgroundColor: '#fff', borderRadius: '6px',
+                                  border: '1px solid #e8eaed',
+                                }}
+                              >
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124' }}>{c.complexName}</span>
+                                  {full?.priceRange && (
+                                    <span style={{
+                                      marginLeft: '6px', fontSize: '10px', fontWeight: 700,
+                                      color: '#1a73e8', backgroundColor: '#e8f0fe',
+                                      borderRadius: '8px', padding: '1px 5px',
+                                    }}>{full.priceRange}</span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                     )}

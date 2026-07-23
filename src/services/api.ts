@@ -8,6 +8,7 @@ import {
   InfraInfo,
   ComplexPhoto,
   LivingZone,
+  LivingZonePhoto,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -239,9 +240,11 @@ export const updateLivingZoneMemo = async (id: number, memo: string): Promise<vo
   await api.patch(`/api/living-zones/${id}/memo`, { memo });
 };
 
-/** 생활권에 단지 추가 — POST /api/living-zones/:id/complexes */
-export const addComplexToZone = async (zoneId: number, complexId: number): Promise<void> => {
-  await api.post(`/api/living-zones/${zoneId}/complexes`, { complexId });
+/** 생활권에 단지 일괄 추가 — POST /api/living-zones/:id/complexes
+ *  백엔드가 { complexIds: number[] } 배열을 받고 갱신된 LivingZoneDto를 반환 */
+export const addComplexesToZone = async (zoneId: number, complexIds: number[]): Promise<LivingZone> => {
+  const { data } = await api.post<LivingZone>(`/api/living-zones/${zoneId}/complexes`, { complexIds });
+  return data;
 };
 
 /** 생활권에서 단지 제거 — DELETE /api/living-zones/:id/complexes/:complexId */
@@ -252,6 +255,27 @@ export const removeComplexFromZone = async (zoneId: number, complexId: number): 
 /** 생활권 삭제 — DELETE /api/living-zones/:id */
 export const deleteLivingZone = async (id: number): Promise<void> => {
   await api.delete(`/api/living-zones/${id}`);
+};
+
+/** 생활권 사진 목록 조회 — GET /api/living-zones/:id/photos */
+export const getLivingZonePhotos = async (zoneId: number): Promise<LivingZonePhoto[]> => {
+  const { data } = await api.get<LivingZonePhoto[]>(`/api/living-zones/${zoneId}/photos`);
+  return data;
+};
+
+/** 생활권 사진 업로드 — POST /api/living-zones/:id/photos (multipart/form-data) */
+export const uploadLivingZonePhotos = async (zoneId: number, files: File[]): Promise<LivingZonePhoto[]> => {
+  const formData = new FormData();
+  files.forEach(f => formData.append('files', f));
+  const { data } = await api.post<LivingZonePhoto[]>(`/api/living-zones/${zoneId}/photos`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+/** 생활권 사진 삭제 — DELETE /api/living-zones/:id/photos/:photoId */
+export const deleteLivingZonePhoto = async (zoneId: number, photoId: number): Promise<void> => {
+  await api.delete(`/api/living-zones/${zoneId}/photos/${photoId}`);
 };
 
 /** 실거래가/전세가 배치 수집 — POST /api/batch/real-estate-price */

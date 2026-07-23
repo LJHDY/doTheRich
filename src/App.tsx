@@ -10,6 +10,7 @@ import CompareCard from './components/CompareCard';
 import SearchBar, { SearchSelectData } from './components/SearchBar';
 import RegisterModal, { RegisterInitialData } from './components/RegisterModal';
 import LivingZonePanel from './components/LivingZonePanel';
+import AffordabilityPanel from './components/AffordabilityPanel';
 
 const App: React.FC = () => {
   const [complexes, setComplexes] = useState<ApartmentComplex[]>([]);
@@ -34,6 +35,9 @@ const App: React.FC = () => {
 
   // 생활권 패널 — ComplexInfoPanel과 동일 슬롯, 동시에 열리지 않음
   const [livingZoneOpen, setLivingZoneOpen] = useState(false);
+
+  // 구매 가능 분석 패널 — 생활권·단지패널과 상호 배타
+  const [affordOpen, setAffordOpen] = useState(false);
 
   // 비교하기 — 최대 3개 단지 선택, 선택 시 화면 3등분 카드 뷰로 전환
   const [compareOpen, setCompareOpen] = useState(false);
@@ -111,10 +115,11 @@ const App: React.FC = () => {
     });
   };
 
-  // 지도 마커 또는 목록에서 단지 선택 — 생활권 패널은 닫고 단지 패널 오픈
+  // 지도 마커 또는 목록에서 단지 선택 — 생활권·분석 패널은 닫고 단지 패널 오픈
   const handleComplexSelect = (complex: ApartmentComplex) => {
     setSelectedComplex(complex);
     setLivingZoneOpen(false);
+    setAffordOpen(false);
   };
 
   // 목록에서 단지 선택 시 사이드패널 표시 + 좌표가 있으면 지도도 이동
@@ -180,7 +185,7 @@ const App: React.FC = () => {
           onClick={() => {
             const next = !livingZoneOpen;
             setLivingZoneOpen(next);
-            if (next) { setSelectedComplex(null); setRadiusCenter(null); }
+            if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
           }}
           style={{
             padding: '5px 11px', fontSize: '12px', fontWeight: 600,
@@ -192,6 +197,24 @@ const App: React.FC = () => {
             cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
           }}
         >생활권</button>
+
+        {/* 대출 분석 버튼 — LTV/DSR 기준 구매 가능 단지 분석 패널 토글 */}
+        <button
+          onClick={() => {
+            const next = !affordOpen;
+            setAffordOpen(next);
+            if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
+          }}
+          style={{
+            padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+            border: '1px solid',
+            borderColor: affordOpen ? '#0b8043' : '#dadce0',
+            borderRadius: '6px',
+            backgroundColor: affordOpen ? '#e6f4ea' : '#fff',
+            color: affordOpen ? '#0b8043' : '#5f6368',
+            cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+          }}
+        >대출분석</button>
 
         {/* 비교하기 버튼 — 클릭 시 단지 선택 패널 토글 */}
         <button
@@ -306,6 +329,12 @@ const App: React.FC = () => {
               <LivingZonePanel
                 complexes={complexes}
                 onClose={() => setLivingZoneOpen(false)}
+              />
+            )}
+            {affordOpen && (
+              <AffordabilityPanel
+                complexes={complexes}
+                onClose={() => setAffordOpen(false)}
               />
             )}
           </>

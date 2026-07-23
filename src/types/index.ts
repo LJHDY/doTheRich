@@ -54,12 +54,21 @@ export interface InfraInfo {
   longitude?: number;
 }
 
-/** 생활권에 포함된 단지 요약 정보 */
-export interface LivingZoneComplex {
+/** 생활권 사진 — 백엔드 LivingZonePhotoDto와 1:1 매핑 */
+export interface LivingZonePhoto {
   id: number;
+  livingZoneId: number;
+  url: string;
+  fileName?: string;
+  createdAt?: string;
+}
+
+/** 생활권에 포함된 단지 요약 정보 — 백엔드 LivingZoneComplexDto와 1:1 매핑
+ *  id = join 레코드(LivingZoneComplex) ID, complexId = ApartmentComplex ID */
+export interface LivingZoneComplex {
+  id: number;          // join 레코드 ID
+  complexId: number;   // 실제 단지 ID (DELETE 경로 등에 사용)
   complexName: string;
-  priceRange?: string;
-  region?: string;
 }
 
 /** 생활권 — 지역구(district) 단위로 단지를 묶고 메모를 관리 */
