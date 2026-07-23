@@ -9,6 +9,22 @@ interface CompareListModalProps {
   onClose: () => void;
 }
 
+// 필터 기준 매칭 평형 목록 반환
+const getMatchingAreaTypes = (complex: ApartmentComplex, range: string): string[] => {
+  if (!range) return [];
+  const atMap = complex.areaTypePriceRanges;
+  if (atMap) {
+    return Object.entries(atMap).filter(([, r]) => r === range).map(([at]) => at);
+  }
+  return complex.areaTypes ?? [];
+};
+
+// 특정 평형의 가격 반환 — priceItems 없으면 대표가 fallback
+const getPriceForAreaType = (complex: ApartmentComplex, at: string | null): number | undefined => {
+  if (!at) return complex.price;
+  return complex.priceItems?.find(p => p.areaType === at)?.price ?? complex.price;
+};
+
 const CompareListModal: React.FC<CompareListModalProps> = ({
   complexes, priceRanges, selectedIds, onToggle, onClose,
 }) => {
@@ -89,6 +105,11 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {filtered.map(c => {
             const isSelected = selectedIds.includes(c.id);
+            const matchingAts = getMatchingAreaTypes(c, selectedRange);
+            const singleAt = matchingAts.length === 1 ? matchingAts[0] : null;
+            const displayPrice = getPriceForAreaType(c, singleAt);
+            const displayRange = selectedRange || c.priceRange;
+
             return (
               <div
                 key={c.id}
@@ -101,19 +122,32 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#202124', marginBottom: '2px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#202124', marginBottom: '3px' }}>
                     {c.complexName}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#80868b' }}>
-                    {c.priceRange} · {c.region}
-                    {c.price ? ` · ${formatPrice(c.price)}` : ''}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                    {/* 금액대 배지 */}
+                    <span style={{
+                      fontSize: '10px', fontWeight: 700, color: '#fff',
+                      backgroundColor: '#1a73e8', borderRadius: '10px', padding: '1px 6px',
+                    }}>{displayRange}</span>
+                    {/* 매칭 평형 배지 */}
+                    {matchingAts.map(at => (
+                      <span key={at} style={{
+                        fontSize: '10px', fontWeight: 600, color: '#1a73e8',
+                        backgroundColor: '#e8f0fe', borderRadius: '10px', padding: '1px 6px',
+                      }}>{at.replace(/^전용\s*/, '')}</span>
+                    ))}
+                    <span style={{ fontSize: '11px', color: '#80868b' }}>
+                      {c.region}{displayPrice ? ` · ${formatPrice(displayPrice)}` : ''}
+                    </span>
                   </div>
                 </div>
                 <input
                   type="checkbox"
                   checked={isSelected}
                   onChange={() => onToggle(c.id)}
-                  onClick={e => e.stopPropagation()} // 부모 div onClick과 중복 방지
+                  onClick={e => e.stopPropagation()}
                   style={{ width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0, marginLeft: '12px', accentColor: '#1a73e8' }}
                 />
               </div>

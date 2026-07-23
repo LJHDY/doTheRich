@@ -299,6 +299,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [localVisitType, setLocalVisitType] = useState(complex?.visitType || 'NONE');
   const [visitTypeSaving, setVisitTypeSaving] = useState(false);
 
+  // 참고가 평형 탭 선택 상태 — priceHistories 로드 후 첫 번째 areaType으로 초기화
+  const [selectedRefTab, setSelectedRefTab] = useState<string>('');
+
   // 참고가 인라인 편집 상태
   const [editingRefPrice, setEditingRefPrice] = useState(false);
   const [refPriceForm, setRefPriceForm] = useState({
@@ -345,6 +348,14 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     }
   }, []);
 
+  // priceHistories 최초 로드 시 참고가 탭을 첫 번째 areaType으로 초기화
+  useEffect(() => {
+    if (priceHistories.length > 0 && !selectedRefTab) {
+      const first = priceHistories[priceHistories.length - 1].items[0]?.areaType || '';
+      setSelectedRefTab(first);
+    }
+  }, [priceHistories, selectedRefTab]);
+
   // 단지 변경 시 좌표가 저장된 학교·인프라를 오버레이 마커로 지도에 전달
   useEffect(() => {
     if (!onOverlayMarkersChange) return;
@@ -390,7 +401,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setShowPhotoModal(false);
       setEditingVisitType(false);
       setLocalVisitType(complex.visitType || 'NONE');
-      // 참고가 편집 상태도 초기화 — 다른 단지 선택 시 폼 닫기
+      // 참고가 탭·편집 상태도 초기화 — 다른 단지 선택 시 폼 닫기
+      setSelectedRefTab('');
       setEditingRefPrice(false);
       // 학군/인프라 편집·추가 상태도 초기화 — 다른 단지 선택 시 이전 폼 닫기
       setEditingSchool(null);
@@ -456,9 +468,15 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     setTimeout(() => setSuccessMsg(null), 3000);
   };
 
-  // 참고가 편집 시작 — 최신 시세 기록 첫 항목의 기존 값으로 폼 초기화
+  // 현재 선택된 탭에 해당하는 최신 시세 아이템 반환 헬퍼
+  const getSelectedRefItem = () => {
+    const latest = priceHistories.length > 0 ? priceHistories[priceHistories.length - 1] : null;
+    return latest?.items.find(i => i.areaType === selectedRefTab) ?? latest?.items[0] ?? null;
+  };
+
+  // 참고가 편집 시작 — 선택된 탭 areaType의 기존 값으로 폼 초기화
   const startEditRefPrice = () => {
-    const item = latestHistory?.items[0];
+    const item = getSelectedRefItem();
     setRefPriceForm({
       askingPriceUk: item?.askingPrice ? String(item.askingPrice / 100_000_000) : '',
       highestPriceUk: item?.highestPrice ? String(item.highestPrice / 100_000_000) : '',
@@ -471,11 +489,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
   // 참고가 저장 — PATCH /api/complexes/:id/price-history-items/:itemId
   const saveRefPrice = async () => {
-    if (!complex || !latestHistory?.items[0]?.id) return;
+    const item = getSelectedRefItem();
+    if (!complex || !item?.id) return;
     setRefPriceSaving(true);
     try {
       const f = refPriceForm;
-      await updatePriceHistoryItem(complex.id, latestHistory.items[0].id, {
+      await updatePriceHistoryItem(complex.id, item.id, {
         askingPrice: f.askingPriceUk ? Math.round(parseFloat(f.askingPriceUk) * 100_000_000) : undefined,
         highestPrice: f.highestPriceUk ? Math.round(parseFloat(f.highestPriceUk) * 100_000_000) : undefined,
         lowestPrice: f.lowestPriceUk ? Math.round(parseFloat(f.lowestPriceUk) * 100_000_000) : undefined,
@@ -872,6 +891,23 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const latestHistory = priceHistories.length > 0 ? priceHistories[priceHistories.length - 1] : null;
   const firstHistory = priceHistories.length > 1 ? priceHistories[0] : null;
 
+  // areaType 문자열에서 숫자 추출 ("전용 84" → 84)
+  const areaTypeNum = (at: string) => parseFloat(at.replace(/[^0-9.]/g, '')) || 0;
+
+  // 가장 큰 areaType 번호에 해당하는 priceRange 선택 (헤더 금액대 표시용)
+  const topPriceRange = (() => {
+    const entries = Object.entries(complex.areaTypePriceRanges ?? {});
+    if (entries.length === 0) return complex.priceRange;
+    return entries.sort((a, b) => areaTypeNum(b[0]) - areaTypeNum(a[0]))[0][1];
+  })();
+
+  // 현재 선택된 탭의 최신 시세 아이템
+  const selectedRefItem = latestHistory?.items.find(i => i.areaType === selectedRefTab)
+    ?? latestHistory?.items[0] ?? null;
+
+  // latestHistory에서 areaType 별 탭 목록
+  const refTabList = latestHistory?.items.map(i => i.areaType ?? '').filter(Boolean) ?? [];
+
   // 차트에 표시되는 평형 목록 (선택박스 옵션 생성용, 중복 제거)
   const seen = new Set<string>();
   const areaTypes: string[] = [];
@@ -919,7 +955,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '4px' }}>
-              {complex.priceRange} | {complex.region}
+              {topPriceRange} | {complex.region}
             </div>
             <h2 style={{ fontSize: '18px', fontWeight: 700, lineHeight: 1.3 }}>
               {complex.complexName}
@@ -945,19 +981,35 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             ×
           </button>
         </div>
-        {complex.price && (
-          <div style={{ marginTop: '8px', fontSize: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {formatPrice(complex.price)}
+        {(latestHistory?.items.some(i => i.price) || complex.price) && (
+          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {/* 평형별 가격 표시 — latestHistory 있으면 areaType별, 없으면 단일 대표가 */}
+            <div style={{ fontSize: '15px', fontWeight: 700, display: 'flex', flexWrap: 'wrap', gap: '2px', flex: 1 }}>
+              {latestHistory?.items.filter(i => i.price).length
+                ? latestHistory!.items.filter(i => i.price).map((item, idx) => (
+                    <span key={item.areaType ?? idx} style={{ whiteSpace: 'nowrap' }}>
+                      {idx > 0 && <span style={{ opacity: 0.5, margin: '0 3px' }}>|</span>}
+                      {formatPrice(item.price!)}
+                      {item.areaType && (
+                        <span style={{ fontSize: '11px', fontWeight: 400, opacity: 0.8, marginLeft: '2px' }}>
+                          ({item.areaType})
+                        </span>
+                      )}
+                    </span>
+                  ))
+                : <span style={{ fontSize: '20px' }}>{formatPrice(complex.price)}</span>
+              }
+            </div>
             {/* 즐겨찾기 버튼 — 노란별(활성)/회색별(비활성), 낙관적 업데이트 */}
             <button
               onClick={handleToggleFavorite}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, color: isFavorite ? '#f9ab00' : 'rgba(255,255,255,0.4)' }}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: 0, color: isFavorite ? '#f9ab00' : 'rgba(255,255,255,0.4)', flexShrink: 0 }}
             >★</button>
-            {/* 사진 보기 버튼 — flex에서 marginLeft:auto로 오른쪽 끝 고정 */}
+            {/* 사진 보기 버튼 */}
             <button
               onClick={() => setShowPhotoModal(true)}
               title="사진 보기"
-              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: 0, color: 'rgba(255,255,255,0.7)', marginLeft: 'auto' }}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0, color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}
             >📷</button>
           </div>
         )}
@@ -984,24 +1036,41 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
         {/* 기본 정보 */}
         <div style={{ marginBottom: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', margin: 0 }}>
-              단지 정보
-            </h3>
-            {/* 참고가 수정 버튼 — 최신 시세 기록이 있을 때만 표시 */}
-            {latestHistory?.items[0] && !editingRefPrice && (
-              <button
-                onClick={startEditRefPrice}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px' }}
-                title="참고가 수정"
-              >✏</button>
-            )}
-          </div>
+          <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>
+            단지 정보
+          </h3>
           <InfoRow label="연식" value={complex.builtYear} />
           <InfoRow label="세대수" value={complex.unitCount ? `${complex.unitCount}세대` : null} />
           <InfoRow label="주소" value={complex.address} />
           <InfoRow label="확인일자" value={complex.checkDate} />
-          {/* 참고가 — 편집 모드일 때는 인라인 폼, 아닐 때는 읽기 전용 표시 */}
+          {/* 평형 탭 + 수정 버튼 — latestHistory에 areaType이 있을 때 표시 */}
+          {refTabList.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 0 4px', borderBottom: '1px solid #f0f0f0', flexWrap: 'wrap' }}>
+              {refTabList.length > 1 && refTabList.map(at => (
+                <button
+                  key={at}
+                  onClick={() => { setSelectedRefTab(at); setEditingRefPrice(false); }}
+                  style={{
+                    padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                    cursor: 'pointer', border: 'none',
+                    backgroundColor: selectedRefTab === at ? '#1a73e8' : '#f1f3f4',
+                    color: selectedRefTab === at ? '#fff' : '#5f6368',
+                  }}
+                >
+                  {at}
+                </button>
+              ))}
+              {/* 수정 버튼 — 탭 행 오른쪽 끝 */}
+              {!editingRefPrice && (
+                <button
+                  onClick={startEditRefPrice}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px', marginLeft: 'auto' }}
+                  title="참고가 수정"
+                >✏</button>
+              )}
+            </div>
+          )}
+          {/* 참고가 — 편집 모드일 때는 인라인 폼, 아닐 때는 선택 탭 기준 읽기 전용 표시 */}
           {editingRefPrice ? (
             <div style={{ paddingTop: '8px' }}>
               {/* 호가 */}
@@ -1083,14 +1152,14 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             </div>
           ) : (
             <>
-              <InfoRow label="호가" value={latestHistory?.items[0]?.askingPrice ? formatPrice(latestHistory.items[0].askingPrice) : null} />
-              <InfoRow label="전고점" value={latestHistory?.items[0]?.highestPrice ? formatPrice(latestHistory.items[0].highestPrice) : null} />
-              <InfoRow label="전저점" value={latestHistory?.items[0]?.lowestPrice ? formatPrice(latestHistory.items[0].lowestPrice) : null} />
-              <InfoRow label="10년 등락" value={latestHistory?.items[0]?.tenYearChangeAmount != null
-                ? `${latestHistory.items[0].tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(latestHistory.items[0].tenYearChangeAmount)}억`
+              <InfoRow label="호가" value={selectedRefItem?.askingPrice ? formatPrice(selectedRefItem.askingPrice) : null} />
+              <InfoRow label="전고점" value={selectedRefItem?.highestPrice ? formatPrice(selectedRefItem.highestPrice) : null} />
+              <InfoRow label="전저점" value={selectedRefItem?.lowestPrice ? formatPrice(selectedRefItem.lowestPrice) : null} />
+              <InfoRow label="10년 등락" value={selectedRefItem?.tenYearChangeAmount != null
+                ? `${selectedRefItem.tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(selectedRefItem.tenYearChangeAmount)}억`
                 : null} />
-              <InfoRow label="등락률" value={latestHistory?.items[0]?.tenYearChangeRate != null
-                ? `${latestHistory.items[0].tenYearChangeRate >= 0 ? '+' : ''}${latestHistory.items[0].tenYearChangeRate}%`
+              <InfoRow label="등락률" value={selectedRefItem?.tenYearChangeRate != null
+                ? `${selectedRefItem.tenYearChangeRate >= 0 ? '+' : ''}${selectedRefItem.tenYearChangeRate}%`
                 : null} />
             </>
           )}

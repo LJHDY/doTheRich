@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ApartmentComplex } from '../types';
 
 interface PriceRangeFilterProps {
@@ -64,9 +64,9 @@ const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
 
   // 금액대 선택 상태 — '' = 전체
   const [localRange, setLocalRange] = useState('');
+  const [localAreaType, setLocalAreaType] = useState('');
 
-  // 선택된 금액대에 해당하는 평형 목록
-  // areaTypePriceRanges(평형→금액대 맵)가 있으면 해당 금액대인 평형만 추출, 없으면 대표 priceRange로 fallback
+  // 특정 금액대에 속하는 평형 목록 추출
   const getAreaTypes = (range: string): string[] => {
     if (!complexes || !range) return [];
     const seen = new Set<string>();
@@ -77,7 +77,6 @@ const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
         : c.priceRange === range)
       .forEach(c => {
         if (c.areaTypePriceRanges) {
-          // 해당 금액대인 평형만 추출 (다른 금액대 평형 제외)
           Object.entries(c.areaTypePriceRanges)
             .filter(([, r]) => r === range)
             .forEach(([at]) => { if (!seen.has(at)) { seen.add(at); types.push(at); } });
@@ -90,15 +89,30 @@ const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
           });
         }
       });
-    return types;
+    // areaType 숫자 기준 오름차순 정렬
+    return types.sort((a, b) => {
+      const na = parseFloat(a.replace(/[^0-9.]/g, '')) || 0;
+      const nb = parseFloat(b.replace(/[^0-9.]/g, '')) || 0;
+      return na - nb;
+    });
   };
+
+  // 금액대별 평형 목록 사전 계산 — 금액대 옵션 라벨에 표시
+  const areaTypesByRange = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    sorted.forEach(r => { map[r] = getAreaTypes(r); });
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complexes, sorted.join(',')]);
 
   const areaTypes = getAreaTypes(localRange);
   const rangeActive = localRange !== '';
+  const areaTypeActive = localAreaType !== '';
 
   const handleRangeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setLocalRange(val);
+    setLocalAreaType('');
     onSelect(val === '' ? null : val);
   };
 
@@ -119,9 +133,13 @@ const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
           style={selectStyle(rangeActive)}
         >
           <option value="">전체</option>
-          {sorted.map(r => (
-            <option key={r} value={r}>{r}</option>
-          ))}
+          {sorted.map(r => {
+            const ats = areaTypesByRange[r] ?? [];
+            const atLabel = ats.length > 0
+              ? ` (${ats.map(at => at.replace(/^전용\s*/, '')).join('/')})`
+              : '';
+            return <option key={r} value={r}>{r}{atLabel}</option>;
+          })}
         </select>
         <DropdownArrow active={rangeActive} />
       </div>
@@ -132,13 +150,14 @@ const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
           <span style={{ fontSize: '12px', color: '#d2d5da', fontWeight: 400 }}>›</span>
           <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
             <select
-              defaultValue=""
+              value={localAreaType}
               onChange={(e) => {
                 const val = e.target.value;
+                setLocalAreaType(val);
                 if (val) onSelectAreaType?.(localRange, val);
                 else onSelect(localRange);
               }}
-              style={selectStyle(false)}
+              style={selectStyle(areaTypeActive)}
             >
               <option value="">전체 평형</option>
               {areaTypes.map(at => (
@@ -147,7 +166,7 @@ const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
                 </option>
               ))}
             </select>
-            <DropdownArrow active={false} />
+            <DropdownArrow active={areaTypeActive} />
           </div>
         </>
       )}

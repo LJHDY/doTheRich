@@ -231,8 +231,8 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
             : null} />
           {complex.memo && (
             <div style={{ padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>
-              <span style={{ fontSize: '11px', color: '#80868b' }}>메모  </span>
-              <span style={{ fontSize: '11px', color: '#5f6368', whiteSpace: 'pre-wrap' }}>{complex.memo}</span>
+              <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>메모</div>
+              <div style={{ fontSize: '11px', color: '#5f6368', whiteSpace: 'pre-wrap' }}>{complex.memo}</div>
             </div>
           )}
         </div>

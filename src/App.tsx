@@ -22,6 +22,8 @@ const App: React.FC = () => {
   const [listModalRange, setListModalRange] = useState<string | null>(null);
   // 평형 필터 — null이면 전체, '전용 59' 등 선택 시 해당 평형 단지만 표시
   const [listModalAreaType, setListModalAreaType] = useState<string | null>(null);
+  // 모달 닫기 시 PriceRangeFilter 내부 상태 초기화용 key — 증가할 때마다 컴포넌트 재마운트
+  const [filterResetKey, setFilterResetKey] = useState(0);
 
   // 학교·인프라 위치 오버레이 마커 — ComplexInfoPanel이 단지 선택 시 채워줌
   const [overlayMarkers, setOverlayMarkers] = useState<OverlayMarker[]>([]);
@@ -147,6 +149,7 @@ const App: React.FC = () => {
 
         {/* 금액대 버튼 → 팝업 오픈 */}
         <PriceRangeFilter
+          key={filterResetKey}
           priceRanges={priceRanges}
           selectedRange={null}
           onSelect={handlePriceRangeSelect}
@@ -302,7 +305,7 @@ const App: React.FC = () => {
           range={listModalRange}
           areaType={listModalAreaType ?? undefined}
           complexes={complexes}
-          onClose={() => { setListModalRange(null); setListModalAreaType(null); }}
+          onClose={() => { setListModalRange(null); setListModalAreaType(null); setFilterResetKey(k => k + 1); }}
           onSelect={handleListSelect}
         />
       )}

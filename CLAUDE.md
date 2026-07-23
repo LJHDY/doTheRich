@@ -253,6 +253,10 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - 헤더 하단 드롭다운 패널 (`position: fixed, top: 56px`)
 - `range` + `areaType` 동시 필터 지원
 - 단지 클릭 → `onSelect` → ComplexInfoPanel + 지도 이동
+- **2단계 그룹핑**: 지역구 sticky 헤더 → 평형 서브헤더(`전용 59` 형식, 숫자 오름차순) → 단지 그리드
+  - 평형 정보 없는 경우 서브헤더 없이 표시
+  - 한 단지가 여러 평형에 해당하면 각 평형 서브그룹에 각각 노출
+  - 각 단지 카드: 금액대 배지(해당 평형 금액대) + 단지명 + 평형별 가격
 
 ---
 
@@ -314,6 +318,16 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] 백엔드 학군/인프라 단건 추가(POST)·수정(PATCH) 엔드포인트 추가 (`complex_service`, `complexes.py`)
 - [x] 지도 마커 CSS 핀 스타일 변경 (회전 정사각형, `border-radius+rotate`) + hover 단지명 tooltip (body 직속 div로 stacking context 탈출)
 - [x] 즐겨찾기 기능 (`isFavorite` 필드, `PATCH /api/complexes/:id/favorite`, RegisterModal 별 버튼, ComplexInfoPanel 낙관적 토글, CompareCard 읽기전용 표시, 지도 즐겨찾기 단지 별 모양 SVG 마커)
+- [x] 사진 등록·조회·삭제·슬라이드 (RegisterModal 업로드, ComplexInfoPanel 📷 버튼, PhotoSlideModal 무한슬라이드, 이미지 압축 절반 JPEG 0.85)
+- [x] ComplexInfoPanel 참고가 평형별 탭 + 인라인 편집 (✏ 버튼, PATCH price-history-items)
+- [x] ComplexInfoPanel 임장유형 항상 표시 + 인라인 셀렉트 편집 (PATCH /api/complexes/:id/visit-type)
+- [x] ComplexInfoPanel 헤더 금액대 = areaType 숫자 최대값 기준, 평형별 가격 `|` 구분 표시
+- [x] 지도 마커 임장유형 테두리 색상 (ATMOSPHERE=연초록/COMPLEX=초록/LISTING=진초록/NONE=흰색)
+- [x] PriceRangeFilter 금액대 옵션에 해당 평형 목록 표시, 평형 셀렉트 controlled 상태, 닫기 시 초기화 (filterResetKey)
+- [x] ComplexListModal 백드롭 클릭 닫힘 제거 (닫기 버튼만 닫힘)
+- [x] ComplexListModal·CompareListModal 금액대 매칭 평형 배지 + 평형별 가격 표시
+- [x] ComplexListModal 2단계 그룹핑 (지역 → 평형 서브그룹, 숫자 오름차순, `전용 XX` 형식)
+- [x] CompareCard 메모 내용 label 아래 줄에 표시
 
 ## 미완성 / TODO
 
