@@ -54,6 +54,23 @@ export interface InfraInfo {
   longitude?: number;
 }
 
+/** 생활권에 포함된 단지 요약 정보 */
+export interface LivingZoneComplex {
+  id: number;
+  complexName: string;
+  priceRange?: string;
+  region?: string;
+}
+
+/** 생활권 — 지역구(district) 단위로 단지를 묶고 메모를 관리 */
+export interface LivingZone {
+  id: number;
+  district: string;     // "서울 관악구"
+  name: string;         // "봉천역 생활권"
+  memo?: string;
+  complexes: LivingZoneComplex[];
+}
+
 /** 지도 오버레이 마커 — 학교·인프라 위치 표시용 */
 export interface OverlayMarker {
   id: string;

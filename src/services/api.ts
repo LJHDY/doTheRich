@@ -7,6 +7,7 @@ import {
   SchoolInfo,
   InfraInfo,
   ComplexPhoto,
+  LivingZone,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -218,6 +219,39 @@ export const updatePriceHistoryItem = async (
   }
 ): Promise<void> => {
   await api.patch(`/api/complexes/${complexId}/price-history-items/${itemId}`, data);
+};
+
+/** 생활권 목록 조회 — GET /api/living-zones?district=서울 관악구 */
+export const getLivingZones = async (district?: string): Promise<LivingZone[]> => {
+  const params = district ? { district } : {};
+  const { data } = await api.get<LivingZone[]>('/api/living-zones', { params });
+  return data;
+};
+
+/** 생활권 등록 — POST /api/living-zones */
+export const createLivingZone = async (body: { district: string; name: string; memo?: string }): Promise<LivingZone> => {
+  const { data } = await api.post<LivingZone>('/api/living-zones', body);
+  return data;
+};
+
+/** 생활권 메모 수정 — PATCH /api/living-zones/:id/memo */
+export const updateLivingZoneMemo = async (id: number, memo: string): Promise<void> => {
+  await api.patch(`/api/living-zones/${id}/memo`, { memo });
+};
+
+/** 생활권에 단지 추가 — POST /api/living-zones/:id/complexes */
+export const addComplexToZone = async (zoneId: number, complexId: number): Promise<void> => {
+  await api.post(`/api/living-zones/${zoneId}/complexes`, { complexId });
+};
+
+/** 생활권에서 단지 제거 — DELETE /api/living-zones/:id/complexes/:complexId */
+export const removeComplexFromZone = async (zoneId: number, complexId: number): Promise<void> => {
+  await api.delete(`/api/living-zones/${zoneId}/complexes/${complexId}`);
+};
+
+/** 생활권 삭제 — DELETE /api/living-zones/:id */
+export const deleteLivingZone = async (id: number): Promise<void> => {
+  await api.delete(`/api/living-zones/${id}`);
 };
 
 /** 실거래가/전세가 배치 수집 — POST /api/batch/real-estate-price */

@@ -78,6 +78,7 @@ src/
     ├── SearchBar.tsx         # 네이버 장소 검색
     ├── RegisterModal.tsx     # 단지 등록 폼 (가격·교통·출퇴근 입력)
     ├── ComplexInfoPanel.tsx  # 우측 단지 상세 패널
+    ├── LivingZonePanel.tsx   # 우측 생활권 관리 패널 (ComplexInfoPanel과 상호 배타)
     ├── PriceChart.tsx        # 평형×매매/전세 다중 라인 차트
     └── PriceInputForm.tsx    # 시세 기록 추가 폼 (패널 내)
 public/
@@ -153,6 +154,12 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 | POST | `/api/complexes/register` | 단지 등록 |
 | DELETE | `/api/complexes/:id` | 단지 삭제 |
 | GET | `/api/complexes/price-ranges` | 금액대 목록 |
+| GET | `/api/living-zones` | 생활권 목록 (district 쿼리 파라미터로 필터) |
+| POST | `/api/living-zones` | 생활권 등록 |
+| PATCH | `/api/living-zones/:id/memo` | 생활권 메모 수정 |
+| POST | `/api/living-zones/:id/complexes` | 생활권에 단지 추가 |
+| DELETE | `/api/living-zones/:id/complexes/:complexId` | 생활권에서 단지 제거 |
+| DELETE | `/api/living-zones/:id` | 생활권 삭제 |
 | PATCH | `/api/complexes/:id/memo` | 단지 메모 수정 — `{ memo: string }` |
 | PATCH | `/api/complexes/:id/favorite` | 즐겨찾기 토글 — `{ isFavorite: boolean }` |
 | POST | `/api/complexes/:id/school-infos` | 학군 정보 단건 추가 (201) |
@@ -180,7 +187,21 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - `compareOpen` / `compareIds` → 비교하기 상태 관리
   - `compareIds.length > 0` 시 지도 대신 비교 카드 뷰 표시
   - 최대 3개, 초과 시 alert
+- `livingZoneOpen` → LivingZonePanel 표시 (ComplexInfoPanel과 상호 배타)
+  - 생활권 버튼 클릭 시 selectedComplex 초기화 → ComplexInfoPanel 닫힘
+  - 마커 클릭 시 `handleComplexSelect` → livingZoneOpen 닫힘
 - 검색 결과 선택 시 `fromSearch:true`로 RegisterModal 오픈
+
+### `LivingZonePanel.tsx`
+- 헤더 "생활권" 버튼 클릭 시 우측 사이드패널로 표시
+- 지역구 셀렉트 필터 (기존 생활권에서 추출) + "+ 생활권 추가" 버튼
+- 생활권 생성 폼: 이름 + 지역구 입력 (기존 지역구 datalist 자동완성), Enter/저장
+- 생활권 카드: 클릭 펼침/닫힘, 지역구 배지 + 단지 수 + 메모 미리보기
+- 메모 인라인 편집 (✏ 버튼 or 텍스트 클릭)
+- 단지 목록: 이름·금액대·지역, × 제거(2단계 확인)
+- "+ 단지 추가": 드롭다운 셀렉트 (지역·이름 정렬, 이미 추가된 단지 제외)
+- 생활권 삭제: 카드 우측 × → 2단계 확인
+- 신규 생활권 생성 후 자동 펼침
 
 ### `MapPage.tsx`
 - 네이버 지도 초기화 (서울 중심, zoom 12)
@@ -331,6 +352,8 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] CompareCard 메모 내용 label 아래 줄에 표시
 - [x] 최근 기록 시세 변동률 표시 (직전 기록 동일 areaType 대비 ▲/▼ 억+%, 상승=빨강/하락=파랑)
 - [x] 도보 30분 반경 원 토글 (ComplexInfoPanel 헤더 지역구명 옆 `반경` 버튼 → Naver Maps Circle 2km, 패널 닫기·단지 변경 시 자동 제거)
+- [x] 생활권 관리 사이드패널 (헤더 "생활권" 버튼 → LivingZonePanel, ComplexInfoPanel과 상호 배타)
+  - 생활권 CRUD (생성·메모편집·단지추가·단지제거·삭제), 지역구 필터, 카드 펼침/닫힘
 
 ## 미완성 / TODO
 

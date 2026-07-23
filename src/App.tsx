@@ -9,6 +9,7 @@ import CompareListModal from './components/CompareListModal';
 import CompareCard from './components/CompareCard';
 import SearchBar, { SearchSelectData } from './components/SearchBar';
 import RegisterModal, { RegisterInitialData } from './components/RegisterModal';
+import LivingZonePanel from './components/LivingZonePanel';
 
 const App: React.FC = () => {
   const [complexes, setComplexes] = useState<ApartmentComplex[]>([]);
@@ -30,6 +31,9 @@ const App: React.FC = () => {
 
   // 도보 30분 반경 원 중심 좌표 — ComplexInfoPanel 토글 버튼으로 켜고 끔
   const [radiusCenter, setRadiusCenter] = useState<{ lat: number; lng: number } | null>(null);
+
+  // 생활권 패널 — ComplexInfoPanel과 동일 슬롯, 동시에 열리지 않음
+  const [livingZoneOpen, setLivingZoneOpen] = useState(false);
 
   // 비교하기 — 최대 3개 단지 선택, 선택 시 화면 3등분 카드 뷰로 전환
   const [compareOpen, setCompareOpen] = useState(false);
@@ -107,9 +111,15 @@ const App: React.FC = () => {
     });
   };
 
+  // 지도 마커 또는 목록에서 단지 선택 — 생활권 패널은 닫고 단지 패널 오픈
+  const handleComplexSelect = (complex: ApartmentComplex) => {
+    setSelectedComplex(complex);
+    setLivingZoneOpen(false);
+  };
+
   // 목록에서 단지 선택 시 사이드패널 표시 + 좌표가 있으면 지도도 이동
   const handleListSelect = (complex: ApartmentComplex) => {
-    setSelectedComplex(complex);
+    handleComplexSelect(complex);
     if (complex.latitude && complex.longitude) {
       setFocusLocation({ lat: complex.latitude, lng: complex.longitude });
     }
@@ -164,6 +174,24 @@ const App: React.FC = () => {
         <div style={{ marginLeft: 'auto' }}>
           <SearchBar onSelect={handleSearchSelect} />
         </div>
+
+        {/* 생활권 버튼 — 클릭 시 생활권 사이드패널 토글, ComplexInfoPanel과 상호 배타 */}
+        <button
+          onClick={() => {
+            const next = !livingZoneOpen;
+            setLivingZoneOpen(next);
+            if (next) { setSelectedComplex(null); setRadiusCenter(null); }
+          }}
+          style={{
+            padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+            border: '1px solid',
+            borderColor: livingZoneOpen ? '#1a73e8' : '#dadce0',
+            borderRadius: '6px',
+            backgroundColor: livingZoneOpen ? '#e8f0fe' : '#fff',
+            color: livingZoneOpen ? '#1a73e8' : '#5f6368',
+            cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+          }}
+        >생활권</button>
 
         {/* 비교하기 버튼 — 클릭 시 단지 선택 패널 토글 */}
         <button
@@ -248,17 +276,17 @@ const App: React.FC = () => {
             )}
           </div>
         ) : (
-          /* 기본 뷰 — 지도 + 선택 단지 사이드패널 */
+          /* 기본 뷰 — 지도 + 우측 사이드패널 (단지 상세 or 생활권) */
           <>
             <MapPage
               complexes={complexes}
               selectedComplex={selectedComplex}
-              onComplexSelect={setSelectedComplex}
+              onComplexSelect={handleComplexSelect}
               focusLocation={focusLocation}
               overlayMarkers={overlayMarkers}
               radiusCenter={radiusCenter}
             />
-            {selectedComplex && (
+            {selectedComplex && !livingZoneOpen && (
               <ComplexInfoPanel
                 complex={selectedComplex}
                 onClose={() => {
@@ -272,6 +300,12 @@ const App: React.FC = () => {
                 onOverlayMarkersChange={setOverlayMarkers}
                 onComplexUpdate={handleComplexUpdate}
                 onRadiusToggle={setRadiusCenter}
+              />
+            )}
+            {livingZoneOpen && (
+              <LivingZonePanel
+                complexes={complexes}
+                onClose={() => setLivingZoneOpen(false)}
               />
             )}
           </>
