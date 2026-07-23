@@ -73,14 +73,17 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
     };
     (window as any).__mkTipHide = () => { tip.style.display = 'none'; };
 
+    // cleanup에서 ref.current를 직접 읽으면 effect 종료 후 값이 달라질 수 있어 미리 캡처
+    const markerMap = markerMapRef.current;
+    const fingerprintMap = fingerprintMapRef.current;
     return () => {
       // 모든 마커 제거
-      markerMapRef.current.forEach(({ marker, listener }) => {
+      markerMap.forEach(({ marker, listener }) => {
         marker.setMap(null);
         if (listener) window.naver.maps.Event.removeListener(listener);
       });
-      markerMapRef.current.clear();
-      fingerprintMapRef.current.clear();
+      markerMap.clear();
+      fingerprintMap.clear();
       document.body.removeChild(tip);
       delete (window as any).__mkTipShow;
       delete (window as any).__mkTipHide;

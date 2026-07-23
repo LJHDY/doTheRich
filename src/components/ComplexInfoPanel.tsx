@@ -419,7 +419,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setSavingNewInfras(false);
       loadPriceHistories(complex.id);
     }
-  }, [complex, loadPriceHistories]);
+  }, [complex, loadPriceHistories, onRadiusToggle]);
 
   // 즐겨찾기 토글 — 낙관적 업데이트 후 API 실패 시 롤백
   const handleToggleFavorite = async () => {
