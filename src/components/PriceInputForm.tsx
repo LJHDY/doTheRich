@@ -15,6 +15,7 @@ interface PriceInfoRow {
   priceUk: string;
   jeonseUk: string;
   priceRange: string;       // 매매가에서 자동 계산, 수동 수정 가능
+  kbPriceUk: string;        // KB시세 (억)
   askingPriceUk: string;    // 호가 (억)
   highestPriceUk: string;   // 전고점 (억)
   lowestPriceUk: string;    // 전저점 (억)
@@ -102,11 +103,11 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
 
   // 평형별 가격 행 — RegisterModal과 동일한 구조
   const [priceInfos, setPriceInfos] = useState<PriceInfoRow[]>([
-    { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' },
+    { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '', kbPriceUk: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' },
   ]);
 
   const addPriceRow = () =>
-    setPriceInfos(prev => [...prev, { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' }]);
+    setPriceInfos(prev => [...prev, { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '', kbPriceUk: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' }]);
 
   const removePriceRow = (i: number) =>
     setPriceInfos(prev => prev.filter((_, idx) => idx !== i));
@@ -140,6 +141,7 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
           floor: r.floorInfo || undefined,
           price: Math.round(parseFloat(r.priceUk) * 100_000_000),
           jeonsePrice: r.jeonseUk ? Math.round(parseFloat(r.jeonseUk) * 100_000_000) : undefined,
+          kbPrice: r.kbPriceUk ? Math.round(parseFloat(r.kbPriceUk) * 100_000_000) : undefined,
           askingPrice: r.askingPriceUk ? Math.round(parseFloat(r.askingPriceUk) * 100_000_000) : undefined,
           highestPrice: r.highestPriceUk ? Math.round(parseFloat(r.highestPriceUk) * 100_000_000) : undefined,
           lowestPrice: r.lowestPriceUk ? Math.round(parseFloat(r.lowestPriceUk) * 100_000_000) : undefined,
@@ -263,7 +265,13 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
               {/* 참고가 서브 행 — 평형별로 개별 입력 */}
               <div style={{ backgroundColor: '#f8f9fa', borderTop: '1px dashed #e8eaed', padding: '6px' }}>
                 <div style={{ fontSize: '9px', fontWeight: 700, color: '#80868b', marginBottom: '4px' }}>참고가</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px', marginBottom: '4px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '4px', marginBottom: '4px' }}>
+                  <div>
+                    <span style={{ ...labelStyle, fontSize: '9px' }}>KB시세(억)</span>
+                    <input type="number" step="0.01" style={{ ...rowInputStyle, fontSize: '11px' }} placeholder="13.8"
+                      value={row.kbPriceUk}
+                      onChange={e => updatePriceRow(i, { kbPriceUk: e.target.value })} />
+                  </div>
                   <div>
                     <span style={{ ...labelStyle, fontSize: '9px' }}>호가(억)</span>
                     <input type="number" step="0.01" style={{ ...rowInputStyle, fontSize: '11px' }} placeholder="8.5"

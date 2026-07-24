@@ -143,6 +143,7 @@ export interface PriceHistoryItem {
   price: number;         // 원 단위
   jeonsePrice?: number;  // 원 단위
   jeonseRate?: number;   // %
+  kbPrice?: number;             // KB시세 (원 단위)
   askingPrice?: number;         // 호가 (원 단위)
   highestPrice?: number;        // 전고점 (원 단위)
   lowestPrice?: number;         // 전저점 (원 단위)
@@ -170,6 +171,7 @@ export interface PriceHistoryRequest {
     floor?: string;
     price?: number;
     jeonsePrice?: number;
+    kbPrice?: number;
     askingPrice?: number;
     highestPrice?: number;
     lowestPrice?: number;
@@ -199,6 +201,7 @@ export interface ApartmentComplexRequest {
     floor?: string;
     price?: number;
     jeonsePrice?: number;
+    kbPrice?: number;
     askingPrice?: number;
     highestPrice?: number;
     lowestPrice?: number;

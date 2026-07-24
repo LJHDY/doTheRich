@@ -212,6 +212,7 @@ export const updatePriceHistoryItem = async (
   complexId: number,
   itemId: number,
   data: {
+    kbPrice?: number;
     askingPrice?: number;
     highestPrice?: number;
     lowestPrice?: number;

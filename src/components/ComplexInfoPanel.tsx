@@ -310,7 +310,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   // 참고가 인라인 편집 상태
   const [editingRefPrice, setEditingRefPrice] = useState(false);
   const [refPriceForm, setRefPriceForm] = useState({
-    askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '',
+    kbPriceUk: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '',
     tenYearAmountStr: '', tenYearRateStr: '',
   });
   const [refPriceSaving, setRefPriceSaving] = useState(false);
@@ -485,6 +485,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const startEditRefPrice = () => {
     const item = getSelectedRefItem();
     setRefPriceForm({
+      kbPriceUk: item?.kbPrice ? String(item.kbPrice / 100_000_000) : '',
       askingPriceUk: item?.askingPrice ? String(item.askingPrice / 100_000_000) : '',
       highestPriceUk: item?.highestPrice ? String(item.highestPrice / 100_000_000) : '',
       lowestPriceUk: item?.lowestPrice ? String(item.lowestPrice / 100_000_000) : '',
@@ -502,6 +503,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     try {
       const f = refPriceForm;
       await updatePriceHistoryItem(complex.id, item.id, {
+        kbPrice: f.kbPriceUk ? Math.round(parseFloat(f.kbPriceUk) * 100_000_000) : undefined,
         askingPrice: f.askingPriceUk ? Math.round(parseFloat(f.askingPriceUk) * 100_000_000) : undefined,
         highestPrice: f.highestPriceUk ? Math.round(parseFloat(f.highestPriceUk) * 100_000_000) : undefined,
         lowestPrice: f.lowestPriceUk ? Math.round(parseFloat(f.lowestPriceUk) * 100_000_000) : undefined,
@@ -1102,6 +1104,17 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           {/* 참고가 — 편집 모드일 때는 인라인 폼, 아닐 때는 선택 탭 기준 읽기 전용 표시 */}
           {editingRefPrice ? (
             <div style={{ paddingTop: '8px' }}>
+              {/* KB시세 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>KB시세</span>
+                <input
+                  type="text"
+                  placeholder="억 단위"
+                  value={refPriceForm.kbPriceUk}
+                  onChange={e => setRefPriceForm(f => ({ ...f, kbPriceUk: e.target.value }))}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+              </div>
               {/* 호가 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>호가</span>
@@ -1181,6 +1194,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             </div>
           ) : (
             <>
+              <InfoRow label="KB시세" value={selectedRefItem?.kbPrice ? formatPrice(selectedRefItem.kbPrice) : null} />
               <InfoRow label="호가" value={selectedRefItem?.askingPrice ? formatPrice(selectedRefItem.askingPrice) : null} />
               <InfoRow label="전고점" value={selectedRefItem?.highestPrice ? formatPrice(selectedRefItem.highestPrice) : null} />
               <InfoRow label="전저점" value={selectedRefItem?.lowestPrice ? formatPrice(selectedRefItem.lowestPrice) : null} />
@@ -2090,8 +2104,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                             )}
                           </div>
                           {/* 참고가 — 값이 있는 항목만 표시 */}
-                          {(item.askingPrice || item.highestPrice || item.lowestPrice || item.tenYearChangeAmount || item.tenYearChangeRate) && (
+                          {(item.kbPrice || item.askingPrice || item.highestPrice || item.lowestPrice || item.tenYearChangeAmount || item.tenYearChangeRate) && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '3px' }}>
+                              {item.kbPrice && (
+                                <span style={{ fontSize: '10px', color: '#80868b' }}>KB {formatPrice(item.kbPrice)}</span>
+                              )}
                               {item.askingPrice && (
                                 <span style={{ fontSize: '10px', color: '#80868b' }}>호가 {formatPrice(item.askingPrice)}</span>
                               )}
