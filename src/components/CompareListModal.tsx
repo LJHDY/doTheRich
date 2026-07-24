@@ -7,6 +7,7 @@ interface CompareListModalProps {
   selectedIds: number[];
   onToggle: (id: number) => void;
   onClose: () => void;
+  top?: number; // 헤더 높이(px) — 기본값 56
 }
 
 // 필터 기준 매칭 평형 목록 반환
@@ -26,7 +27,7 @@ const getPriceForAreaType = (complex: ApartmentComplex, at: string | null): numb
 };
 
 const CompareListModal: React.FC<CompareListModalProps> = ({
-  complexes, priceRanges, selectedIds, onToggle, onClose,
+  complexes, priceRanges, selectedIds, onToggle, onClose, top = 56,
 }) => {
   const [selectedRange, setSelectedRange] = useState('');
 
@@ -54,8 +55,8 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
 
       {/* 패널 본체 */}
       <div style={{
-        position: 'fixed', top: '56px', left: '50%', transform: 'translateX(-50%)',
-        width: '480px', maxHeight: '65vh',
+        position: 'fixed', top: `${top}px`, left: '50%', transform: 'translateX(-50%)',
+        width: '480px', maxWidth: 'calc(100vw - 16px)', maxHeight: '65vh',
         backgroundColor: '#fff', borderRadius: '0 0 12px 12px',
         boxShadow: '0 6px 24px rgba(0,0,0,0.15)',
         zIndex: 301, display: 'flex', flexDirection: 'column',

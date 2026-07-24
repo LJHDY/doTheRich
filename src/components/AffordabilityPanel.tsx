@@ -5,6 +5,7 @@ import { getPriceHistories } from '../services/api';
 interface Props {
   complexes: ApartmentComplex[];
   onClose: () => void;
+  isMobile?: boolean; // 모바일 풀스크린 오버레이 모드
 }
 
 const HEADER_COLOR = '#0b8043';
@@ -84,7 +85,7 @@ const AnalysisBlock: React.FC<{ label: string; a: Analysis }> = ({ label, a }) =
 );
 
 // ─── 메인 패널 ──────────────────────────────────────────────────────────────
-const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose }) => {
+const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
   const [income, setIncome] = useState(() => localStorage.getItem('afford_income') || '');
   const [cash, setCash] = useState(() => localStorage.getItem('afford_cash') || '');
   const [rate, setRate] = useState(() => localStorage.getItem('afford_rate') || '3.5');
@@ -222,8 +223,8 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose }) => {
 
   return (
     <div style={{
-      width: '380px', height: '100%', display: 'flex', flexDirection: 'column',
-      backgroundColor: '#fff', borderLeft: '1px solid #e8eaed', flexShrink: 0,
+      width: isMobile ? '100%' : '380px', height: '100%', display: 'flex', flexDirection: 'column',
+      backgroundColor: '#fff', borderLeft: isMobile ? 'none' : '1px solid #e8eaed', flexShrink: 0,
     }}>
       {/* 헤더 */}
       <div style={{

@@ -163,7 +163,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
   return (
     <div style={{
       flex: 1,
-      minWidth: 0,
+      minWidth: '280px', // 모바일에서 카드가 찌그러지지 않도록 최소 너비 확보
       height: '100%',
       backgroundColor: '#fff',
       borderRight: '1px solid #e8eaed',

@@ -7,6 +7,7 @@ interface Props {
   complexes: ApartmentComplex[];
   onClose: () => void;
   onSelect: (complex: ApartmentComplex) => void;
+  top?: number;            // 헤더 높이(px) — 기본값 56
 }
 
 // 현재 필터(range/areaType)에 매칭되는 평형 목록 반환
@@ -28,7 +29,7 @@ const getPriceForAreaType = (complex: ApartmentComplex, at: string | null): numb
   return complex.priceItems?.find(p => p.areaType === at)?.price ?? complex.price;
 };
 
-const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose, onSelect }) => {
+const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose, onSelect, top = 56 }) => {
   // 금액대 + 평형 필터 적용 후 지역 가나다 → 동일 지역 내 최신 확인일 순으로 정렬
   const sorted = useMemo(() => {
     const filtered = complexes.filter(c => {
@@ -99,7 +100,7 @@ const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose
       <div
         style={{
           position: 'fixed',
-          top: '56px',
+          top: `${top}px`,
           left: 0,
           right: 0,
           zIndex: 1000,

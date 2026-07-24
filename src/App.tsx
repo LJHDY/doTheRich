@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, OverlayMarker } from './types';
 import { getComplexes, getPriceRanges, runBatchRealEstatePrice } from './services/api';
 import MapPage from './pages/MapPage';
@@ -11,8 +11,23 @@ import SearchBar, { SearchSelectData } from './components/SearchBar';
 import RegisterModal, { RegisterInitialData } from './components/RegisterModal';
 import LivingZonePanel from './components/LivingZonePanel';
 import AffordabilityPanel from './components/AffordabilityPanel';
+import { useIsMobile } from './hooks/useIsMobile';
 
 const App: React.FC = () => {
+  const isMobile = useIsMobile();
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(56);
+
+  // 헤더 높이를 동적으로 측정 — 모바일 2줄 / 데스크탑 1줄 전환 시 자동 반영
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    setHeaderHeight(el.offsetHeight);
+    const ro = new ResizeObserver(() => setHeaderHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const [complexes, setComplexes] = useState<ApartmentComplex[]>([]);
   const [priceRanges, setPriceRanges] = useState<string[]>([]);
   const [selectedComplex, setSelectedComplex] = useState<ApartmentComplex | null>(null);
@@ -149,109 +164,151 @@ const App: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      {/* 헤더 */}
-      <header style={{
-        display: 'flex', alignItems: 'center', padding: '0 16px', height: '56px',
+      {/* 헤더 — 데스크탑: 1줄 56px / 모바일: 2줄 (Row1 로고+버튼, Row2 검색+필터) */}
+      <header ref={headerRef} style={{
         backgroundColor: '#fff', borderBottom: '1px solid #e8eaed',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.08)', flexShrink: 0, gap: '16px', zIndex: 10,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.08)', flexShrink: 0, zIndex: 10,
+        ...(isMobile ? {} : {
+          display: 'flex', alignItems: 'center', padding: '0 16px', height: '56px', gap: '16px',
+        }),
       }}>
-        {/* 로고 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'contain' }} />
-          <span style={{ fontSize: '16px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>
-            DoTheRich
-          </span>
-        </div>
-
-        <div style={{ width: '1px', height: '24px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
-
-        {/* 금액대 버튼 → 팝업 오픈 */}
-        <PriceRangeFilter
-          key={filterResetKey}
-          priceRanges={priceRanges}
-          selectedRange={null}
-          onSelect={handlePriceRangeSelect}
-          onSelectAreaType={handleAreaTypeSelect}
-          complexes={complexes}
-        />
-
-        {/* 검색바 */}
-        <div style={{ marginLeft: 'auto' }}>
-          <SearchBar onSelect={handleSearchSelect} />
-        </div>
-
-        {/* 생활권 버튼 — 클릭 시 생활권 사이드패널 토글, ComplexInfoPanel과 상호 배타 */}
-        <button
-          onClick={() => {
-            const next = !livingZoneOpen;
-            setLivingZoneOpen(next);
-            if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
-          }}
-          style={{
-            padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-            border: '1px solid',
-            borderColor: livingZoneOpen ? '#1a73e8' : '#dadce0',
-            borderRadius: '6px',
-            backgroundColor: livingZoneOpen ? '#e8f0fe' : '#fff',
-            color: livingZoneOpen ? '#1a73e8' : '#5f6368',
-            cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-          }}
-        >생활권</button>
-
-        {/* 대출 분석 버튼 — LTV/DSR 기준 구매 가능 단지 분석 패널 토글 */}
-        <button
-          onClick={() => {
-            const next = !affordOpen;
-            setAffordOpen(next);
-            if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
-          }}
-          style={{
-            padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-            border: '1px solid',
-            borderColor: affordOpen ? '#0b8043' : '#dadce0',
-            borderRadius: '6px',
-            backgroundColor: affordOpen ? '#e6f4ea' : '#fff',
-            color: affordOpen ? '#0b8043' : '#5f6368',
-            cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-          }}
-        >대출분석</button>
-
-        {/* 비교하기 버튼 — 클릭 시 단지 선택 패널 토글 */}
-        <button
-          onClick={() => setCompareOpen(prev => !prev)}
-          style={{
-            padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-            border: '1px solid',
-            borderColor: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#dadce0',
-            borderRadius: '6px',
-            backgroundColor: compareOpen || compareIds.length > 0 ? '#e8f0fe' : '#fff',
-            color: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#5f6368',
-            cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-          }}
-        >
-          {compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}
-        </button>
-
-        {/* 실거래가 배치 수집 버튼 — 백엔드 202 즉시 반환, 백그라운드 처리 */}
-        <button
-          onClick={handleBatch}
-          disabled={batchLoading}
-          style={{
-            padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-            border: '1px solid #dadce0', borderRadius: '6px',
-            backgroundColor: '#fff',
-            color: batchLoading ? '#9e9e9e' : '#5f6368',
-            cursor: batchLoading ? 'not-allowed' : 'pointer',
-            whiteSpace: 'nowrap', flexShrink: 0,
-          }}
-        >
-          {batchLoading ? '요청 중...' : '시세 수집'}
-        </button>
-
-        {/* 단지 수 */}
-        <div style={{ fontSize: '13px', color: '#80868b', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          {loading ? '로딩...' : `${complexes.length}개 단지`}
-        </div>
+        {isMobile ? (
+          <>
+            {/* 모바일 Row1: 로고 + 단지수 + 액션 버튼 */}
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', height: '48px', gap: '6px' }}>
+              <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain', flexShrink: 0 }} />
+              <span style={{ fontSize: '14px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>DoTheRich</span>
+              <span style={{ fontSize: '11px', color: '#80868b', whiteSpace: 'nowrap' }}>
+                {loading ? '' : `${complexes.length}개`}
+              </span>
+              <div style={{ flex: 1 }} />
+              {/* 생활권 */}
+              <button
+                onClick={() => {
+                  const next = !livingZoneOpen;
+                  setLivingZoneOpen(next);
+                  if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
+                }}
+                style={{
+                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
+                  border: '1px solid', borderColor: livingZoneOpen ? '#1a73e8' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: livingZoneOpen ? '#e8f0fe' : '#fff',
+                  color: livingZoneOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >생활권</button>
+              {/* 대출 */}
+              <button
+                onClick={() => {
+                  const next = !affordOpen;
+                  setAffordOpen(next);
+                  if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
+                }}
+                style={{
+                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
+                  border: '1px solid', borderColor: affordOpen ? '#0b8043' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: affordOpen ? '#e6f4ea' : '#fff',
+                  color: affordOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >대출</button>
+              {/* 비교 */}
+              <button
+                onClick={() => setCompareOpen(prev => !prev)}
+                style={{
+                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
+                  border: '1px solid',
+                  borderColor: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#dadce0',
+                  borderRadius: '6px',
+                  backgroundColor: compareOpen || compareIds.length > 0 ? '#e8f0fe' : '#fff',
+                  color: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#5f6368',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >{compareIds.length > 0 ? `비교${compareIds.length}` : '비교'}</button>
+            </div>
+            {/* 모바일 Row2: 검색바 + 금액대 필터 */}
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px 8px', gap: '8px' }}>
+              <SearchBar onSelect={handleSearchSelect} fluid />
+              <PriceRangeFilter
+                key={filterResetKey}
+                priceRanges={priceRanges}
+                selectedRange={null}
+                onSelect={handlePriceRangeSelect}
+                onSelectAreaType={handleAreaTypeSelect}
+                complexes={complexes}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            {/* 데스크탑: 기존 단일 행 레이아웃 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'contain' }} />
+              <span style={{ fontSize: '16px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>DoTheRich</span>
+            </div>
+            <div style={{ width: '1px', height: '24px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
+            <PriceRangeFilter
+              key={filterResetKey}
+              priceRanges={priceRanges}
+              selectedRange={null}
+              onSelect={handlePriceRangeSelect}
+              onSelectAreaType={handleAreaTypeSelect}
+              complexes={complexes}
+            />
+            <div style={{ marginLeft: 'auto' }}>
+              <SearchBar onSelect={handleSearchSelect} />
+            </div>
+            <button
+              onClick={() => {
+                const next = !livingZoneOpen;
+                setLivingZoneOpen(next);
+                if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
+              }}
+              style={{
+                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid', borderColor: livingZoneOpen ? '#1a73e8' : '#dadce0',
+                borderRadius: '6px', backgroundColor: livingZoneOpen ? '#e8f0fe' : '#fff',
+                color: livingZoneOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >생활권</button>
+            <button
+              onClick={() => {
+                const next = !affordOpen;
+                setAffordOpen(next);
+                if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
+              }}
+              style={{
+                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid', borderColor: affordOpen ? '#0b8043' : '#dadce0',
+                borderRadius: '6px', backgroundColor: affordOpen ? '#e6f4ea' : '#fff',
+                color: affordOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >대출분석</button>
+            <button
+              onClick={() => setCompareOpen(prev => !prev)}
+              style={{
+                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid',
+                borderColor: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#dadce0',
+                borderRadius: '6px',
+                backgroundColor: compareOpen || compareIds.length > 0 ? '#e8f0fe' : '#fff',
+                color: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#5f6368',
+                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >{compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}</button>
+            <button
+              onClick={handleBatch}
+              disabled={batchLoading}
+              style={{
+                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff',
+                color: batchLoading ? '#9e9e9e' : '#5f6368',
+                cursor: batchLoading ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >{batchLoading ? '요청 중...' : '시세 수집'}</button>
+            <div style={{ fontSize: '13px', color: '#80868b', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {loading ? '로딩...' : `${complexes.length}개 단지`}
+            </div>
+          </>
+        )}
       </header>
 
       {/* 에러 배너 */}
@@ -267,8 +324,8 @@ const App: React.FC = () => {
       {/* 본문: 지도 + 사이드패널 (비교 모드에서는 비교 카드 뷰로 전환) */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {compareIds.length > 0 ? (
-          /* 비교 뷰 — 선택된 단지들을 좌→우 순서로 3등분 카드 표시 */
-          <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+          /* 비교 뷰 — 모바일에서 overflow-x: auto로 가로 스크롤, 각 카드 minWidth: 280px */
+          <div style={{ display: 'flex', flex: 1, overflowX: 'auto', overflowY: 'hidden', position: 'relative' }}>
             {compareIds.map(id => {
               const c = complexes.find(x => x.id === id);
               if (!c) return null;
@@ -285,7 +342,7 @@ const App: React.FC = () => {
               <div
                 onClick={() => setCompareOpen(true)}
                 style={{
-                  flex: 1, minWidth: 0, height: '100%',
+                  flex: 1, minWidth: isMobile ? '200px' : 0, height: '100%',
                   display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center',
                   gap: '10px', cursor: 'pointer',
@@ -299,7 +356,7 @@ const App: React.FC = () => {
             )}
           </div>
         ) : (
-          /* 기본 뷰 — 지도 + 우측 사이드패널 (단지 상세 or 생활권) */
+          /* 기본 뷰 — 지도는 항상 전체 렌더, 사이드패널은 모바일에서 fixed 오버레이 */
           <>
             <MapPage
               complexes={complexes}
@@ -310,32 +367,51 @@ const App: React.FC = () => {
               radiusCenter={radiusCenter}
             />
             {selectedComplex && !livingZoneOpen && (
-              <ComplexInfoPanel
-                complex={selectedComplex}
-                onClose={() => {
-                  (window as any).__closeInfoWindow?.();
-                  setSelectedComplex(null);
-                  setOverlayMarkers([]);
-                  setRadiusCenter(null);
-                }}
-                onMemoUpdate={handleMemoUpdate}
-                onDelete={handleComplexDelete}
-                onOverlayMarkersChange={setOverlayMarkers}
-                onComplexUpdate={handleComplexUpdate}
-                onRadiusToggle={setRadiusCenter}
-              />
+              /* 모바일: 화면 전체를 덮는 fixed 오버레이 / 데스크탑: flex 옆 패널 */
+              <div style={isMobile ? {
+                position: 'fixed', inset: 0, zIndex: 500,
+                display: 'flex', flexDirection: 'column',
+              } : {}}>
+                <ComplexInfoPanel
+                  complex={selectedComplex}
+                  onClose={() => {
+                    (window as any).__closeInfoWindow?.();
+                    setSelectedComplex(null);
+                    setOverlayMarkers([]);
+                    setRadiusCenter(null);
+                  }}
+                  onMemoUpdate={handleMemoUpdate}
+                  onDelete={handleComplexDelete}
+                  onOverlayMarkersChange={setOverlayMarkers}
+                  onComplexUpdate={handleComplexUpdate}
+                  onRadiusToggle={setRadiusCenter}
+                  isMobile={isMobile}
+                />
+              </div>
             )}
             {livingZoneOpen && (
-              <LivingZonePanel
-                complexes={complexes}
-                onClose={() => setLivingZoneOpen(false)}
-              />
+              <div style={isMobile ? {
+                position: 'fixed', inset: 0, zIndex: 500,
+                display: 'flex', flexDirection: 'column',
+              } : {}}>
+                <LivingZonePanel
+                  complexes={complexes}
+                  onClose={() => setLivingZoneOpen(false)}
+                  isMobile={isMobile}
+                />
+              </div>
             )}
             {affordOpen && (
-              <AffordabilityPanel
-                complexes={complexes}
-                onClose={() => setAffordOpen(false)}
-              />
+              <div style={isMobile ? {
+                position: 'fixed', inset: 0, zIndex: 500,
+                display: 'flex', flexDirection: 'column',
+              } : {}}>
+                <AffordabilityPanel
+                  complexes={complexes}
+                  onClose={() => setAffordOpen(false)}
+                  isMobile={isMobile}
+                />
+              </div>
             )}
           </>
         )}
@@ -349,6 +425,7 @@ const App: React.FC = () => {
           selectedIds={compareIds}
           onToggle={handleCompareToggle}
           onClose={() => setCompareOpen(false)}
+          top={headerHeight}
         />
       )}
 
@@ -376,6 +453,7 @@ const App: React.FC = () => {
           complexes={complexes}
           onClose={() => { setListModalRange(null); setListModalAreaType(null); setFilterResetKey(k => k + 1); }}
           onSelect={handleListSelect}
+          top={headerHeight}
         />
       )}
 

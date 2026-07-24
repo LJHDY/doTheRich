@@ -19,12 +19,13 @@ export interface SearchSelectData {
 
 interface Props {
   onSelect: (data: SearchSelectData) => void;
+  fluid?: boolean; // true이면 width: 100% (모바일 헤더 Row2 용)
 }
 
 // 네이버 검색 결과 title에 포함된 HTML 강조 태그(<b> 등) 제거
 const stripHtml = (html: string) => html.replace(/<[^>]+>/g, '');
 
-const SearchBar: React.FC<Props> = ({ onSelect }) => {
+const SearchBar: React.FC<Props> = ({ onSelect, fluid }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -82,7 +83,7 @@ const SearchBar: React.FC<Props> = ({ onSelect }) => {
   }, []);
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '280px', flexShrink: 0 }}>
+    <div ref={containerRef} style={{ position: 'relative', width: fluid ? '100%' : '280px', flexShrink: fluid ? 1 : 0 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: '8px',
         backgroundColor: '#f1f3f4', borderRadius: '24px',

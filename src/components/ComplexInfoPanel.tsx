@@ -15,6 +15,7 @@ interface ComplexInfoPanelProps {
   onOverlayMarkersChange?: (markers: OverlayMarker[]) => void;
   onComplexUpdate?: (complex: ApartmentComplex) => void; // 학군/인프라 저장 후 부모 상태 갱신
   onRadiusToggle?: (center: { lat: number; lng: number } | null) => void; // 도보 반경 원 토글
+  isMobile?: boolean; // 모바일 풀스크린 오버레이 모드
 }
 
 // 네이버 검색 결과 단건 — 학교·인프라 검색에서 공통 사용
@@ -268,7 +269,7 @@ const buildChartData = (
   return { rows, series };
 };
 
-const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, onMemoUpdate, onDelete, onOverlayMarkersChange, onComplexUpdate, onRadiusToggle }) => {
+const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, onMemoUpdate, onDelete, onOverlayMarkersChange, onComplexUpdate, onRadiusToggle, isMobile }) => {
   const [priceHistories, setPriceHistories] = useState<PriceHistory[]>([]);
   const [chartData, setChartData] = useState<{ rows: ChartDataRow[]; series: ChartSeries[] }>(() => ({ rows: [], series: [] }));
   const [showInputForm, setShowInputForm] = useState(false);
@@ -939,10 +940,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   return (
     <div
       style={{
-        width: '360px',
+        width: isMobile ? '100%' : '360px',
         height: '100%',
         backgroundColor: '#fff',
-        borderLeft: '1px solid #e8eaed',
+        borderLeft: isMobile ? 'none' : '1px solid #e8eaed',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',

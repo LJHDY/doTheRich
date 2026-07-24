@@ -10,9 +10,10 @@ import ZonePhotoModal from './ZonePhotoModal';
 interface Props {
   complexes: ApartmentComplex[];
   onClose: () => void;
+  isMobile?: boolean; // 모바일 풀스크린 오버레이 모드
 }
 
-const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
+const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
   const [zones, setZones] = useState<LivingZone[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -146,8 +147,8 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose }) => {
 
   return (
     <div style={{
-      width: '380px', height: '100%', display: 'flex', flexDirection: 'column',
-      backgroundColor: '#fff', borderLeft: '1px solid #e8eaed', flexShrink: 0,
+      width: isMobile ? '100%' : '380px', height: '100%', display: 'flex', flexDirection: 'column',
+      backgroundColor: '#fff', borderLeft: isMobile ? 'none' : '1px solid #e8eaed', flexShrink: 0,
     }}>
       {/* 헤더 */}
       <div style={{

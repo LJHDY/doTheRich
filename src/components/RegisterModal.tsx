@@ -595,6 +595,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
 
       <div style={{
         backgroundColor: '#fff', borderRadius: '12px', width: '640px',
+        maxWidth: 'calc(100vw - 16px)',
         maxHeight: '88vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
       }}>
