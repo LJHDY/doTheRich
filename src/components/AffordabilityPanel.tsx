@@ -94,8 +94,9 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
   const [filter, setFilter] = useState<'all' | 'ok' | 'ng'>('all');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // 패널 마운트 시 전체 단지 호가를 일괄 로드 — Map<complexId, askingPrice | null>
+  // 패널 마운트 시 전체 단지의 호가·KB시세를 일괄 로드
   const [askingPriceMap, setAskingPriceMap] = useState<Map<number, number | null>>(new Map());
+  const [kbPriceMap, setKbPriceMap] = useState<Map<number, number | null>>(new Map());
   const [loadingHistories, setLoadingHistories] = useState(false);
 
   useEffect(() => { localStorage.setItem('afford_income', income); }, [income]);
@@ -103,7 +104,7 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
   useEffect(() => { localStorage.setItem('afford_rate', rate); }, [rate]);
   useEffect(() => { localStorage.setItem('afford_years', String(loanYears)); }, [loanYears]);
 
-  // 패널이 열릴 때 모든 단지의 최근 시세 기록을 병렬 조회해 호가 추출
+  // 패널이 열릴 때 모든 단지의 최근 시세 기록을 병렬 조회해 호가·KB시세 추출
   useEffect(() => {
     if (complexes.length === 0) return;
     setLoadingHistories(true);
@@ -112,14 +113,17 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
         getPriceHistories(c.id)
           .then(histories => {
             const latest = [...histories].sort((a, b) => b.recordDate.localeCompare(a.recordDate))[0];
-            return { id: c.id, askingPrice: latest?.items?.[0]?.askingPrice ?? null };
+            const item = latest?.items?.[0];
+            return { id: c.id, askingPrice: item?.askingPrice ?? null, kbPrice: item?.kbPrice ?? null };
           })
-          .catch(() => ({ id: c.id, askingPrice: null }))
+          .catch(() => ({ id: c.id, askingPrice: null, kbPrice: null }))
       )
     ).then(results => {
-      const map = new Map<number, number | null>();
-      results.forEach(r => map.set(r.id, r.askingPrice));
-      setAskingPriceMap(map);
+      const aMap = new Map<number, number | null>();
+      const kMap = new Map<number, number | null>();
+      results.forEach(r => { aMap.set(r.id, r.askingPrice); kMap.set(r.id, r.kbPrice); });
+      setAskingPriceMap(aMap);
+      setKbPriceMap(kMap);
     }).finally(() => setLoadingHistories(false));
   // complexes가 바뀌어도 마운트 시 1회만 로드 (개인용 앱 특성상 재조회 불필요)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,15 +156,21 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complexes, cashWon, dsrMax]);
 
-  // 호가 기준 구매 가능 여부 맵 (호가 정보 있는 단지만)
+  // 호가 기준 구매 가능 여부 맵
   const affordMapAsking = useMemo(() => {
     const map = new Map<number, Analysis>();
-    askingPriceMap.forEach((price, id) => {
-      if (price) map.set(id, analyze(price));
-    });
+    askingPriceMap.forEach((price, id) => { if (price) map.set(id, analyze(price)); });
     return map;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askingPriceMap, cashWon, dsrMax]);
+
+  // KB시세 기준 구매 가능 여부 맵
+  const affordMapKb = useMemo(() => {
+    const map = new Map<number, Analysis>();
+    kbPriceMap.forEach((price, id) => { if (price) map.set(id, analyze(price)); });
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kbPriceMap, cashWon, dsrMax]);
 
   // 필터 + 정렬: 매매가 가능 먼저, 불가는 부족액 오름차순
   const displayed = useMemo(() => {
@@ -184,9 +194,14 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
     () => Array.from(affordMapAsking.values()).filter(v => v.canBuy).length,
     [affordMapAsking]
   );
+  const okCountKb = useMemo(
+    () => Array.from(affordMapKb.values()).filter(v => v.canBuy).length,
+    [affordMapKb]
+  );
 
   const selectedComplex = complexes.find(c => c.id === selectedId) ?? null;
   const selectedAskingPrice = selectedId != null ? (askingPriceMap.get(selectedId) ?? null) : null;
+  const selectedKbPrice = selectedId != null ? (kbPriceMap.get(selectedId) ?? null) : null;
 
   const inputStyle: React.CSSProperties = {
     border: '1px solid #dadce0', borderRadius: '6px',
@@ -283,6 +298,12 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
               <span style={{ color: '#5f6368' }}>매매가 기준 가능</span>
               <span style={{ fontWeight: 700, color: '#0b8043' }}>{okCountPrice} / {affordMap.size}개</span>
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+              <span style={{ color: '#5f6368' }}>KB시세 기준 가능</span>
+              <span style={{ fontWeight: 700, color: '#0b8043' }}>
+                {loadingHistories ? '—' : `${okCountKb} / ${affordMapKb.size}개`}
+              </span>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#5f6368' }}>호가 기준 가능</span>
               <span style={{ fontWeight: 700, color: '#0b8043' }}>
@@ -328,6 +349,16 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
               {selectedComplex.price > 0 && (
                 <AnalysisBlock label="매매가 기준" a={analyze(selectedComplex.price)} />
               )}
+              {selectedKbPrice ? (
+                <AnalysisBlock label="KB시세 기준" a={analyze(selectedKbPrice)} />
+              ) : (
+                <div style={{
+                  fontSize: '11px', color: '#9e9e9e', textAlign: 'center',
+                  padding: '8px', border: '1px dashed #e0e0e0', borderRadius: '6px',
+                }}>
+                  {loadingHistories ? 'KB시세 로딩 중...' : 'KB시세 없음 (시세 기록에 KB시세 입력 필요)'}
+                </div>
+              )}
               {selectedAskingPrice ? (
                 <AnalysisBlock label="호가 기준" a={analyze(selectedAskingPrice)} />
               ) : (
@@ -335,7 +366,7 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
                   fontSize: '11px', color: '#9e9e9e', textAlign: 'center',
                   padding: '8px', border: '1px dashed #e0e0e0', borderRadius: '6px',
                 }}>
-                  {loadingHistories ? '호가 로딩 중...' : '호가 정보 없음 (시세 기록에 호가 입력 필요)'}
+                  {loadingHistories ? '호가 로딩 중...' : '호가 없음 (시세 기록에 호가 입력 필요)'}
                 </div>
               )}
             </div>
@@ -364,7 +395,7 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {loadingHistories && (
           <div style={{ padding: '10px 16px', fontSize: '11px', color: '#9e9e9e', textAlign: 'center', borderBottom: '1px solid #f0f0f0' }}>
-            호가 정보 로딩 중...
+            KB시세·호가 로딩 중...
           </div>
         )}
         {displayed.length === 0 && !loadingHistories && (
@@ -374,7 +405,9 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
         )}
         {displayed.map(c => {
           const affPrice = affordMap.get(c.id);
+          const affKb = affordMapKb.get(c.id);
           const affAsking = affordMapAsking.get(c.id);
+          const hasKbData = kbPriceMap.has(c.id) && kbPriceMap.get(c.id) !== null;
           const hasAskingData = askingPriceMap.has(c.id) && askingPriceMap.get(c.id) !== null;
           const isSelected = c.id === selectedId;
 
@@ -400,10 +433,11 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
                 </div>
               </div>
 
-              {/* 매매가·호가 배지 — 입력값 있을 때만 */}
+              {/* 매매가·KB시세·호가 배지 — 입력값 있을 때만 */}
               {hasInputs && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end', flexShrink: 0 }}>
                   <SmallBadge prefix="매매가" a={affPrice} />
+                  <SmallBadge prefix="KB" a={affKb} noData={!hasKbData} />
                   <SmallBadge prefix="호가" a={affAsking} noData={!hasAskingData} />
                 </div>
               )}
