@@ -37,6 +37,8 @@ const App: React.FC = () => {
   const [registerData, setRegisterData] = useState<RegisterInitialData | null>(null);
   // null = 팝업 닫힘, '' = 전체, '7억대' = 특정 금액대
   const [listModalRange, setListModalRange] = useState<string | null>(null);
+  const [favoriteListOpen, setFavoriteListOpen] = useState(false);
+  const [myComplexListOpen, setMyComplexListOpen] = useState(false);
   // 평형 필터 — null이면 전체, '전용 59' 등 선택 시 해당 평형 단지만 표시
   const [listModalAreaType, setListModalAreaType] = useState<string | null>(null);
   // 모달 닫기 시 PriceRangeFilter 내부 상태 초기화용 key — 증가할 때마다 컴포넌트 재마운트
@@ -191,6 +193,26 @@ const App: React.FC = () => {
                 {loading ? '' : `${complexes.length}개`}
               </span>
               <div style={{ flex: 1 }} />
+              {/* 내 단지 검색 */}
+              <button
+                onClick={() => setMyComplexListOpen(v => !v)}
+                style={{
+                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
+                  border: '1px solid', borderColor: myComplexListOpen ? '#1a73e8' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: myComplexListOpen ? '#e8f0fe' : '#fff',
+                  color: myComplexListOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >내 단지</button>
+              {/* 즐겨찾기 */}
+              <button
+                onClick={() => setFavoriteListOpen(v => !v)}
+                style={{
+                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
+                  border: '1px solid', borderColor: favoriteListOpen ? '#f9ab00' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: favoriteListOpen ? '#fef9e7' : '#fff',
+                  color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >★</button>
               {/* 생활권 */}
               <button
                 onClick={() => {
@@ -265,6 +287,24 @@ const App: React.FC = () => {
             <div style={{ marginLeft: 'auto' }}>
               <SearchBar onSelect={handleSearchSelect} />
             </div>
+            <button
+              onClick={() => setMyComplexListOpen(v => !v)}
+              style={{
+                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid', borderColor: myComplexListOpen ? '#1a73e8' : '#dadce0',
+                borderRadius: '6px', backgroundColor: myComplexListOpen ? '#e8f0fe' : '#fff',
+                color: myComplexListOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >내 단지</button>
+            <button
+              onClick={() => setFavoriteListOpen(v => !v)}
+              style={{
+                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid', borderColor: favoriteListOpen ? '#f9ab00' : '#dadce0',
+                borderRadius: '6px', backgroundColor: favoriteListOpen ? '#fef9e7' : '#fff',
+                color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >★ 즐겨찾기</button>
             <button
               onClick={() => {
                 const next = !livingZoneOpen;
@@ -462,6 +502,29 @@ const App: React.FC = () => {
           complexes={complexes}
           onClose={() => { setListModalRange(null); setListModalAreaType(null); setFilterResetKey(k => k + 1); }}
           onSelect={handleListSelect}
+          top={headerHeight}
+        />
+      )}
+
+      {/* 즐겨찾기 단지 목록 팝업 */}
+      {favoriteListOpen && (
+        <ComplexListModal
+          range=""
+          complexes={complexes}
+          favoritesOnly
+          onClose={() => setFavoriteListOpen(false)}
+          onSelect={c => { handleListSelect(c); setFavoriteListOpen(false); }}
+          top={headerHeight}
+        />
+      )}
+
+      {/* 내가 등록한 단지 조회/검색 팝업 — 단지명 검색으로 위치 이동 */}
+      {myComplexListOpen && (
+        <ComplexListModal
+          range=""
+          complexes={complexes}
+          onClose={() => setMyComplexListOpen(false)}
+          onSelect={c => { handleListSelect(c); setMyComplexListOpen(false); }}
           top={headerHeight}
         />
       )}

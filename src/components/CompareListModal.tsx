@@ -30,14 +30,20 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
   complexes, priceRanges, selectedIds, onToggle, onClose, top = 56,
 }) => {
   const [selectedRange, setSelectedRange] = useState('');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const filtered = selectedRange
-    ? complexes.filter(c =>
-        c.areaTypePriceRanges
-          ? Object.values(c.areaTypePriceRanges).includes(selectedRange)
-          : c.priceRange === selectedRange
-      )
-    : complexes;
+  const filtered = complexes.filter(c => {
+    const q = searchQuery.trim().toLowerCase();
+    if (q && !c.complexName.toLowerCase().includes(q)) return false;
+    if (favoritesOnly && !c.isFavorite) return false;
+    if (selectedRange) {
+      return c.areaTypePriceRanges
+        ? Object.values(c.areaTypePriceRanges).includes(selectedRange)
+        : c.priceRange === selectedRange;
+    }
+    return true;
+  });
 
   // 금액대 오름차순 정렬 (숫자 파싱)
   const sortedRanges = [...priceRanges].sort((a, b) => {
@@ -77,6 +83,30 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
           }}>
             {selectedIds.length}/3
           </span>
+
+          {/* 즐겨찾기 토글 */}
+          <button
+            onClick={() => setFavoritesOnly(v => !v)}
+            style={{
+              padding: '4px 8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+              border: '1px solid', borderRadius: '6px',
+              borderColor: favoritesOnly ? '#f9ab00' : '#dadce0',
+              backgroundColor: favoritesOnly ? '#fef9e7' : '#fff',
+              color: favoritesOnly ? '#f9ab00' : '#9e9e9e',
+            }}
+          >★ 즐겨찾기</button>
+
+          {/* 단지명 검색 */}
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="단지명 검색..."
+            style={{
+              fontSize: '12px', padding: '4px 10px', width: '110px',
+              border: '1px solid #dadce0', borderRadius: '14px', outline: 'none', color: '#202124',
+            }}
+          />
 
           {/* 금액대 필터 */}
           <div style={{ marginLeft: 'auto', position: 'relative', display: 'inline-flex', alignItems: 'center' }}>

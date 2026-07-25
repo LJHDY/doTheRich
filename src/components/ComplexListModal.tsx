@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ApartmentComplex, formatPrice } from '../types';
 
 interface Props {
@@ -8,6 +8,7 @@ interface Props {
   onClose: () => void;
   onSelect: (complex: ApartmentComplex) => void;
   top?: number;            // 헤더 높이(px) — 기본값 56
+  favoritesOnly?: boolean; // true면 즐겨찾기 단지만 표시
 }
 
 // 현재 필터(range/areaType)에 매칭되는 평형 목록 반환
@@ -29,10 +30,16 @@ const getPriceForAreaType = (complex: ApartmentComplex, at: string | null): numb
   return complex.priceItems?.find(p => p.areaType === at)?.price ?? complex.price;
 };
 
-const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose, onSelect, top = 56 }) => {
-  // 금액대 + 평형 필터 적용 후 지역 가나다 → 동일 지역 내 최신 확인일 순으로 정렬
+const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose, onSelect, top = 56, favoritesOnly = false }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // 금액대 + 평형 + 즐겨찾기 + 이름 검색 필터 적용 후 지역 가나다 → 동일 지역 내 최신 확인일 순으로 정렬
   const sorted = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     const filtered = complexes.filter(c => {
+      if (q && !c.complexName.toLowerCase().includes(q)) return false;
+      if (favoritesOnly && !c.isFavorite) return false;
       const atMap = c.areaTypePriceRanges;
 
       if (range && areaType) {
@@ -55,12 +62,13 @@ const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose
       if (regionCmp !== 0) return regionCmp;
       return (b.checkDate || '').localeCompare(a.checkDate || '');
     });
-  }, [complexes, range, areaType]);
+  }, [complexes, range, areaType, favoritesOnly, searchQuery]);
 
-  // 타이틀에 선택한 평형 표시
-  const title = range
-    ? `${range}${areaType ? ` · ${areaType}` : ''} 단지 목록`
-    : '전체 단지 목록';
+  const title = favoritesOnly
+    ? `★ 즐겨찾기 단지`
+    : range
+      ? `${range}${areaType ? ` · ${areaType}` : ''} 단지 목록`
+      : '전체 단지 목록';
 
   // 2단계 그룹핑: 지역 → 평형 서브그룹 (평형 숫자 오름차순)
   const groups = useMemo(() => {
@@ -122,12 +130,26 @@ const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose
           flexShrink: 0,
           backgroundColor: '#fff',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: '#202124' }}>{title}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: '#202124', flexShrink: 0 }}>{title}</span>
             <span style={{
               fontSize: '12px', fontWeight: 600, color: '#1a73e8',
-              backgroundColor: '#e8f0fe', borderRadius: '12px', padding: '2px 10px',
+              backgroundColor: '#e8f0fe', borderRadius: '12px', padding: '2px 10px', flexShrink: 0,
             }}>{sorted.length}개</span>
+            {/* 단지명 검색 입력 */}
+            <input
+              ref={searchRef}
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="단지명 검색..."
+              style={{
+                flex: 1, minWidth: 0, maxWidth: '200px',
+                fontSize: '12px', padding: '4px 10px',
+                border: '1px solid #dadce0', borderRadius: '14px', outline: 'none',
+                color: '#202124',
+              }}
+            />
           </div>
           <button
             onClick={onClose}

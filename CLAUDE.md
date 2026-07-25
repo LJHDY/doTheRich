@@ -360,6 +360,10 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
   - 생활권 CRUD (생성·메모편집·단지추가·단지제거·삭제), 지역구 필터, 카드 펼침/닫힘
   - 생활권 생성 지역구: 기존 단지 region distinct 셀렉트 박스로 선택
   - 단지 선택: 체크박스 패널 (지역구 일치 단지만, 기존 체크 유지, 일괄 저장)
+- [x] 연식·세대수 인라인 편집 (ComplexInfoPanel ✏ 버튼, PATCH /api/complexes/:id/basic-info, 연식 저장 시 '년' 자동 추가)
+- [x] 참고가 평형탭 1개여도 표시, + 평형 버튼으로 새 areaType 추가 (POST new history → PATCH 전환)
+- [x] 내 단지 조회/검색 — 헤더 "내 단지" 버튼 → ComplexListModal(전체, 단지명 검색 입력, 선택 시 지도 이동)
+- [x] ComplexListModal·CompareListModal 단지명 검색 입력 (실시간 필터)
 
 ## 미완성 / TODO
 
