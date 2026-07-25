@@ -277,6 +277,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
   // 즐겨찾기 — form state와 분리해 boolean 타입 오염 방지
   const [isFavorite, setIsFavorite] = useState(false);
+  // 임장용 — 체크 시 매매가 유효성 검사 생략
+  const [isFieldVisitOnly, setIsFieldVisitOnly] = useState(false);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -501,7 +503,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   // ── 제출 ──────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!form.complexName.trim()) { setError('단지명을 입력해주세요.'); return; }
-    if (!priceInfos[0]?.priceUk) { setError('매매가를 입력해주세요.'); return; }
+    if (!isFieldVisitOnly && !priceInfos[0]?.priceUk) { setError('매매가를 입력해주세요.'); return; }
     setError('');
     setSubmitting(true);
 
@@ -614,6 +616,16 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
               onClick={() => setIsFavorite(prev => !prev)}
               style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, color: isFavorite ? '#f9ab00' : '#dadce0' }}
             >★</button>
+            {/* 임장용 체크박스 — 체크 시 매매가 유효성 검사 생략 */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginLeft: '4px' }}>
+              <input
+                type="checkbox"
+                checked={isFieldVisitOnly}
+                onChange={e => setIsFieldVisitOnly(e.target.checked)}
+                style={{ width: '14px', height: '14px', accentColor: '#1a73e8', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '12px', color: isFieldVisitOnly ? '#1a73e8' : '#80868b', fontWeight: isFieldVisitOnly ? 600 : 400 }}>임장용</span>
+            </label>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#80868b', padding: 0 }}>×</button>
         </div>

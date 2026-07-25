@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, PriceHistory, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType } from '../services/api';
+import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, calcCommuteGrade, OverlayMarker } from '../types';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -310,11 +310,18 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   // 참고가 인라인 편집 상태
   const [editingRefPrice, setEditingRefPrice] = useState(false);
   const [refPriceForm, setRefPriceForm] = useState({
+    areaType: '',
+    priceUk: '', jeonseUk: '',
     kbPriceUk: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '',
     tenYearAmountStr: '', tenYearRateStr: '',
   });
   const [refPriceSaving, setRefPriceSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // 기본 정보 인라인 편집 상태
+  const [editingBasicInfo, setEditingBasicInfo] = useState(false);
+  const [basicInfoForm, setBasicInfoForm] = useState({ builtYear: '', unitCount: '' });
+  const [basicInfoSaving, setBasicInfoSaving] = useState(false);
 
   // 학군 편집 상태 — editingSchool: 기존 항목 수정 폼, newSchoolRows: 신규 추가 행 배열
   const [editingSchool, setEditingSchool] = useState<SchoolEditState | null>(null);
@@ -408,7 +415,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       onRadiusToggle?.(null);
       setEditingVisitType(false);
       setLocalVisitType(complex.visitType || 'NONE');
-      // 참고가 탭·편집 상태도 초기화 — 다른 단지 선택 시 폼 닫기
+      // 기본 정보·참고가 탭·편집 상태도 초기화 — 다른 단지 선택 시 폼 닫기
+      setEditingBasicInfo(false);
       setSelectedRefTab('');
       setEditingRefPrice(false);
       // 학군/인프라 편집·추가 상태도 초기화 — 다른 단지 선택 시 이전 폼 닫기
@@ -475,16 +483,63 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     setTimeout(() => setSuccessMsg(null), 3000);
   };
 
+  // 전체 히스토리를 순서대로 순회해 areaType별 최신 item을 Map으로 구성
+  const latestItemPerAreaType = (() => {
+    const map = new Map<string, PriceHistoryItem>();
+    priceHistories.forEach(h => {
+      h.items.forEach(item => {
+        if (item.areaType) map.set(item.areaType, item);
+      });
+    });
+    return map;
+  })();
+
   // 현재 선택된 탭에 해당하는 최신 시세 아이템 반환 헬퍼
   const getSelectedRefItem = () => {
+    if (selectedRefTab && latestItemPerAreaType.has(selectedRefTab))
+      return latestItemPerAreaType.get(selectedRefTab)!;
+    // areaType 없는 item은 latestHistory 첫 항목에서 가져옴
     const latest = priceHistories.length > 0 ? priceHistories[priceHistories.length - 1] : null;
-    return latest?.items.find(i => i.areaType === selectedRefTab) ?? latest?.items[0] ?? null;
+    return latest?.items[0] ?? null;
+  };
+
+  // 기본 정보 편집 시작 — 현재 단지 값으로 폼 초기화
+  const startEditBasicInfo = () => {
+    setBasicInfoForm({
+      builtYear: complex?.builtYear ?? '',
+      unitCount: complex?.unitCount ? String(complex.unitCount) : '',
+    });
+    setEditingBasicInfo(true);
+  };
+
+  // 기본 정보 저장 — PATCH /api/complexes/:id/basic-info
+  const saveBasicInfo = async () => {
+    if (!complex) return;
+    setBasicInfoSaving(true);
+    try {
+      const payload: { builtYear?: string; unitCount?: number } = {};
+      if (basicInfoForm.builtYear) {
+        const yr = basicInfoForm.builtYear.trim();
+        payload.builtYear = yr.endsWith('년') ? yr : `${yr}년`;
+      }
+      if (basicInfoForm.unitCount) payload.unitCount = parseInt(basicInfoForm.unitCount, 10);
+      await updateComplexBasicInfo(complex.id, payload);
+      await refreshComplex();
+      setEditingBasicInfo(false);
+    } catch {
+      // 에러는 콘솔에만 — 인터셉터가 이미 출력
+    } finally {
+      setBasicInfoSaving(false);
+    }
   };
 
   // 참고가 편집 시작 — 선택된 탭 areaType의 기존 값으로 폼 초기화
   const startEditRefPrice = () => {
     const item = getSelectedRefItem();
     setRefPriceForm({
+      areaType: item?.areaType ?? '',
+      priceUk: item?.price ? String(item.price / 100_000_000) : '',
+      jeonseUk: item?.jeonsePrice ? String(item.jeonsePrice / 100_000_000) : '',
       kbPriceUk: item?.kbPrice ? String(item.kbPrice / 100_000_000) : '',
       askingPriceUk: item?.askingPrice ? String(item.askingPrice / 100_000_000) : '',
       highestPriceUk: item?.highestPrice ? String(item.highestPrice / 100_000_000) : '',
@@ -495,22 +550,36 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     setEditingRefPrice(true);
   };
 
-  // 참고가 저장 — PATCH /api/complexes/:id/price-history-items/:itemId
+  // 참고가 저장 — item 있으면 PATCH, 없으면 오늘 날짜로 POST 신규 생성
   const saveRefPrice = async () => {
+    if (!complex) return;
     const item = getSelectedRefItem();
-    if (!complex || !item?.id) return;
     setRefPriceSaving(true);
     try {
       const f = refPriceForm;
-      await updatePriceHistoryItem(complex.id, item.id, {
+      const savedAreaType = f.areaType.trim();
+      const normalizedAreaType = savedAreaType && /^\d+(\.\d+)?$/.test(savedAreaType)
+        ? `전용 ${savedAreaType}` : savedAreaType || undefined;
+      const payload = {
+        areaType: normalizedAreaType,
+        price: f.priceUk ? Math.round(parseFloat(f.priceUk) * 100_000_000) : undefined,
+        jeonsePrice: f.jeonseUk ? Math.round(parseFloat(f.jeonseUk) * 100_000_000) : undefined,
         kbPrice: f.kbPriceUk ? Math.round(parseFloat(f.kbPriceUk) * 100_000_000) : undefined,
         askingPrice: f.askingPriceUk ? Math.round(parseFloat(f.askingPriceUk) * 100_000_000) : undefined,
         highestPrice: f.highestPriceUk ? Math.round(parseFloat(f.highestPriceUk) * 100_000_000) : undefined,
         lowestPrice: f.lowestPriceUk ? Math.round(parseFloat(f.lowestPriceUk) * 100_000_000) : undefined,
         tenYearChangeAmount: f.tenYearAmountStr ? Math.round(parseFloat(f.tenYearAmountStr) * 100_000_000) : undefined,
         tenYearChangeRate: f.tenYearRateStr ? parseFloat(f.tenYearRateStr) : undefined,
-      });
+      };
+      if (item?.id) {
+        await updatePriceHistoryItem(complex.id, item.id, payload);
+      } else {
+        const today = new Date().toISOString().slice(0, 10);
+        await addPriceHistory(complex.id, { recordDate: today, items: [payload] });
+      }
       await loadPriceHistories(complex.id);
+      await refreshComplex(); // 지도 마커 가격 반영
+      if (normalizedAreaType) setSelectedRefTab(normalizedAreaType);
       setEditingRefPrice(false);
     } catch {
       // 에러는 콘솔에만 — 인터셉터가 이미 출력
@@ -910,12 +979,13 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     return entries.sort((a, b) => areaTypeNum(b[0]) - areaTypeNum(a[0]))[0][1];
   })();
 
-  // 현재 선택된 탭의 최신 시세 아이템
-  const selectedRefItem = latestHistory?.items.find(i => i.areaType === selectedRefTab)
-    ?? latestHistory?.items[0] ?? null;
+  // 현재 선택된 탭의 최신 시세 아이템 (전체 히스토리 기반)
+  const selectedRefItem = latestItemPerAreaType.get(selectedRefTab)
+    ?? (latestHistory?.items[0] ?? null);
 
-  // latestHistory에서 areaType 별 탭 목록
-  const refTabList = latestHistory?.items.map(i => i.areaType ?? '').filter(Boolean) ?? [];
+  // 전체 히스토리에서 수집한 areaType 탭 목록 (숫자 오름차순 정렬)
+  const refTabList = Array.from(latestItemPerAreaType.keys())
+    .sort((a, b) => (parseFloat(a.replace(/[^0-9.]/g, '')) || 0) - (parseFloat(b.replace(/[^0-9.]/g, '')) || 0));
 
   // 차트에 표시되는 평형 목록 (선택박스 옵션 생성용, 중복 제거)
   const seen = new Set<string>();
@@ -1067,48 +1137,151 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
         {/* 기본 정보 */}
         <div style={{ marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>
-            단지 정보
-          </h3>
-          <InfoRow label="연식" value={complex.builtYear} />
-          <InfoRow label="세대수" value={complex.unitCount ? `${complex.unitCount}세대` : null} />
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', margin: 0 }}>단지 정보</h3>
+            {!editingBasicInfo && (
+              <button
+                onClick={startEditBasicInfo}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px', marginLeft: '6px' }}
+                title="연식·세대수 수정"
+              >✏</button>
+            )}
+          </div>
+          {editingBasicInfo ? (
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '52px' }}>연식</span>
+                <input
+                  type="text"
+                  placeholder="예: 2023"
+                  value={basicInfoForm.builtYear}
+                  onChange={e => setBasicInfoForm(f => ({ ...f, builtYear: e.target.value }))}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '52px' }}>세대수</span>
+                <input
+                  type="number"
+                  placeholder="예: 2990"
+                  value={basicInfoForm.unitCount}
+                  onChange={e => setBasicInfoForm(f => ({ ...f, unitCount: e.target.value }))}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={saveBasicInfo}
+                  disabled={basicInfoSaving}
+                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: basicInfoSaving ? 'not-allowed' : 'pointer', opacity: basicInfoSaving ? 0.7 : 1 }}
+                >
+                  {basicInfoSaving ? '저장 중...' : '저장'}
+                </button>
+                <button
+                  onClick={() => setEditingBasicInfo(false)}
+                  disabled={basicInfoSaving}
+                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#f1f3f4', color: '#5f6368', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <InfoRow label="연식" value={complex.builtYear} />
+              <InfoRow label="세대수" value={complex.unitCount ? `${complex.unitCount}세대` : null} />
+            </>
+          )}
           <InfoRow label="주소" value={complex.address} />
           <InfoRow label="확인일자" value={complex.checkDate} />
-          {/* 평형 탭 + 수정 버튼 — latestHistory에 areaType이 있을 때 표시 */}
-          {refTabList.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 0 4px', borderBottom: '1px solid #f0f0f0', flexWrap: 'wrap' }}>
-              {refTabList.length > 1 && refTabList.map(at => (
-                <button
-                  key={at}
-                  onClick={() => { setSelectedRefTab(at); setEditingRefPrice(false); }}
-                  style={{
-                    padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
-                    cursor: 'pointer', border: 'none',
-                    backgroundColor: selectedRefTab === at ? '#1a73e8' : '#f1f3f4',
-                    color: selectedRefTab === at ? '#fff' : '#5f6368',
-                  }}
-                >
-                  {at}
-                </button>
-              ))}
-              {/* 수정 버튼 — 탭 행 오른쪽 끝 */}
-              {!editingRefPrice && (
-                <button
-                  onClick={startEditRefPrice}
-                  style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px', marginLeft: 'auto' }}
-                  title="참고가 수정"
-                >✏</button>
-              )}
-            </div>
-          )}
+          {/* 평형 탭 + 수정·추가 버튼 — 항상 표시 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 0 4px', borderBottom: '1px solid #f0f0f0', flexWrap: 'wrap' }}>
+            {refTabList.map(at => (
+              <button
+                key={at}
+                onClick={() => { setSelectedRefTab(at); setEditingRefPrice(false); }}
+                style={{
+                  padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                  cursor: 'pointer', border: 'none',
+                  backgroundColor: selectedRefTab === at ? '#1a73e8' : '#f1f3f4',
+                  color: selectedRefTab === at ? '#fff' : '#5f6368',
+                }}
+              >
+                {at}
+              </button>
+            ))}
+            {/* + 평형 추가 버튼 */}
+            {!editingRefPrice && (
+              <button
+                onClick={() => {
+                  setRefPriceForm({ areaType: '', priceUk: '', jeonseUk: '', kbPriceUk: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' });
+                  setEditingRefPrice(true);
+                }}
+                style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: '1px dashed #1a73e8', backgroundColor: 'transparent', color: '#1a73e8' }}
+                title="평형 추가"
+              >+ 평형</button>
+            )}
+            {/* 수정 버튼 — 탭이 선택된 경우에만 */}
+            {!editingRefPrice && selectedRefTab && (
+              <button
+                onClick={startEditRefPrice}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px', marginLeft: 'auto' }}
+                title="참고가 수정"
+              >✏</button>
+            )}
+          </div>
           {/* 참고가 — 편집 모드일 때는 인라인 폼, 아닐 때는 선택 탭 기준 읽기 전용 표시 */}
           {editingRefPrice ? (
             <div style={{ paddingTop: '8px' }}>
+              {/* 평형 — 숫자만 입력 시 onBlur에서 "전용 N" 자동 보완 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>평형</span>
+                <input
+                  type="text"
+                  placeholder="예: 전용 59"
+                  value={refPriceForm.areaType}
+                  onChange={e => setRefPriceForm(f => ({ ...f, areaType: e.target.value }))}
+                  onBlur={() => {
+                    const v = refPriceForm.areaType.trim();
+                    if (/^\d+(\.\d+)?$/.test(v)) setRefPriceForm(f => ({ ...f, areaType: `전용 ${v}` }));
+                  }}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+              </div>
+              {/* 매매가 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>매매가</span>
+                <input
+                  type="number" step="0.01"
+                  placeholder="억 단위"
+                  value={refPriceForm.priceUk}
+                  onChange={e => setRefPriceForm(f => ({ ...f, priceUk: e.target.value }))}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+              </div>
+              {/* 전세가 + 전세율 자동 계산 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>전세가</span>
+                <input
+                  type="number" step="0.01"
+                  placeholder="억 단위"
+                  value={refPriceForm.jeonseUk}
+                  onChange={e => setRefPriceForm(f => ({ ...f, jeonseUk: e.target.value }))}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+                <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0, minWidth: '36px', textAlign: 'right' }}>
+                  {(() => {
+                    const p = parseFloat(refPriceForm.priceUk);
+                    const j = parseFloat(refPriceForm.jeonseUk);
+                    return !isNaN(p) && !isNaN(j) && p > 0 ? (j / p * 100).toFixed(1) + '%' : '-';
+                  })()}
+                </span>
+              </div>
               {/* KB시세 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>KB시세</span>
                 <input
-                  type="text"
+                  type="number" step="0.01"
                   placeholder="억 단위"
                   value={refPriceForm.kbPriceUk}
                   onChange={e => setRefPriceForm(f => ({ ...f, kbPriceUk: e.target.value }))}
@@ -1119,7 +1292,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>호가</span>
                 <input
-                  type="text"
+                  type="number" step="0.01"
                   placeholder="억 단위"
                   value={refPriceForm.askingPriceUk}
                   onChange={e => setRefPriceForm(f => ({ ...f, askingPriceUk: e.target.value }))}
@@ -1130,7 +1303,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>전고점</span>
                 <input
-                  type="text"
+                  type="number" step="0.01"
                   placeholder="억 단위"
                   value={refPriceForm.highestPriceUk}
                   onChange={e => setRefPriceForm(f => ({ ...f, highestPriceUk: e.target.value }))}
@@ -1141,7 +1314,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>전저점</span>
                 <input
-                  type="text"
+                  type="number" step="0.01"
                   placeholder="억 단위"
                   value={refPriceForm.lowestPriceUk}
                   onChange={e => setRefPriceForm(f => ({ ...f, lowestPriceUk: e.target.value }))}
@@ -1194,6 +1367,13 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             </div>
           ) : (
             <>
+              <InfoRow label="매매가" value={selectedRefItem?.price ? formatPrice(selectedRefItem.price) : null} />
+              <InfoRow label="전세가" value={selectedRefItem?.jeonsePrice ? formatPrice(selectedRefItem.jeonsePrice) : null} />
+              <InfoRow label="전세율" value={selectedRefItem?.jeonseRate != null
+                ? `${selectedRefItem.jeonseRate.toFixed(1)}%`
+                : (selectedRefItem?.price && selectedRefItem?.jeonsePrice)
+                  ? `${(selectedRefItem.jeonsePrice / selectedRefItem.price * 100).toFixed(1)}%`
+                  : null} />
               <InfoRow label="KB시세" value={selectedRefItem?.kbPrice ? formatPrice(selectedRefItem.kbPrice) : null} />
               <InfoRow label="호가" value={selectedRefItem?.askingPrice ? formatPrice(selectedRefItem.askingPrice) : null} />
               <InfoRow label="전고점" value={selectedRefItem?.highestPrice ? formatPrice(selectedRefItem.highestPrice) : null} />

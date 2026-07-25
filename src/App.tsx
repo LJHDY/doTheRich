@@ -156,9 +156,18 @@ const App: React.FC = () => {
     setComplexes(prev => prev.filter(c => c.id !== complexId));
   };
 
-  // 학군/인프라 추가·편집 후 단지 정보 전체 갱신 — complexes 배열과 selectedComplex 동시 업데이트
+  // 단지 정보 갱신 — 상세 조회(getComplexById)는 목록용 computed 필드를 포함하지 않을 수 있으므로
+  // 기존 항목의 priceRange·areaTypes·areaTypePriceRanges를 fallback으로 유지
   const handleComplexUpdate = (updated: ApartmentComplex) => {
-    setComplexes(prev => prev.map(c => c.id === updated.id ? updated : c));
+    setComplexes(prev => prev.map(c => {
+      if (c.id !== updated.id) return c;
+      return {
+        ...updated,
+        priceRange: updated.priceRange || c.priceRange,
+        areaTypes: updated.areaTypes ?? c.areaTypes,
+        areaTypePriceRanges: updated.areaTypePriceRanges ?? c.areaTypePriceRanges,
+      };
+    }));
     setSelectedComplex(updated);
   };
 

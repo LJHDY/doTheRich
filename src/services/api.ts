@@ -186,6 +186,14 @@ export const updateVisitType = async (complexId: number, visitType: string): Pro
   await api.patch(`/api/complexes/${complexId}/visit-type`, { visitType });
 };
 
+/** 기본 정보 수정 — PATCH /api/complexes/:id/basic-info */
+export const updateComplexBasicInfo = async (
+  complexId: number,
+  data: { builtYear?: string; unitCount?: number }
+): Promise<void> => {
+  await api.patch(`/api/complexes/${complexId}/basic-info`, data);
+};
+
 /** 단지 사진 목록 조회 — GET /api/complexes/:id/photos */
 export const getComplexPhotos = async (complexId: number): Promise<ComplexPhoto[]> => {
   const { data } = await api.get<ComplexPhoto[]>(`/api/complexes/${complexId}/photos`);
@@ -212,6 +220,9 @@ export const updatePriceHistoryItem = async (
   complexId: number,
   itemId: number,
   data: {
+    areaType?: string;
+    price?: number;
+    jeonsePrice?: number;
     kbPrice?: number;
     askingPrice?: number;
     highestPrice?: number;
