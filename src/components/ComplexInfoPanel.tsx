@@ -1082,9 +1082,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             ×
           </button>
         </div>
-        {(latestHistory?.items.some(i => i.price) || complex.price) && (
-          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {/* 평형별 가격 표시 — latestHistory 있으면 areaType별, 없으면 단일 대표가 */}
+        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* 평형별 가격 표시 — 가격 있을 때만 */}
+          {(latestHistory?.items.some(i => i.price) || complex.price) && (
             <div style={{ fontSize: '15px', fontWeight: 700, display: 'flex', flexWrap: 'wrap', gap: '2px', flex: 1 }}>
               {latestHistory?.items.filter(i => i.price).length
                 ? latestHistory!.items.filter(i => i.price).map((item, idx) => (
@@ -1101,19 +1101,21 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 : <span style={{ fontSize: '20px' }}>{formatPrice(complex.price)}</span>
               }
             </div>
+          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
             {/* 즐겨찾기 버튼 — 노란별(활성)/회색별(비활성), 낙관적 업데이트 */}
             <button
               onClick={handleToggleFavorite}
               style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: 0, color: isFavorite ? '#f9ab00' : 'rgba(255,255,255,0.4)', flexShrink: 0 }}
             >★</button>
-            {/* 사진 보기 버튼 */}
+            {/* 사진 보기 버튼 — 가격 없는 단지(임장용 등)도 항상 표시 */}
             <button
               onClick={() => setShowPhotoModal(true)}
               title="사진 보기"
               style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0, color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}
             >📷</button>
           </div>
-        )}
+        </div>
       </div>
 
       {/* 본문 스크롤 영역 */}
