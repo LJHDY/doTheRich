@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo } from '../services/api';
+import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker } from '../types';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -89,6 +89,25 @@ interface InfraAddRow {
   searchResults: SearchItem[];
   showDropdown: boolean;
 }
+
+// 지하철 편집 행 — 기존(id 있음) + 신규(id 없음) 통합 관리
+interface SubwayEditRow {
+  localId: string;
+  id?: number;
+  stationName: string;
+  subwayLines: string;
+  walkingMinutes: string;
+  foundLines: string[];  // 역 조회 결과 호선 목록
+  fetching: boolean;
+}
+
+// 네이버 category("교통 > 지하철 > 서울 지하철 2호선")에서 "2호선"만 추출
+const parseLineFromCategory = (category: string): string =>
+  category.split('>').slice(-1)[0].trim()
+    .replace(/수도권전철\s+/, '').replace(/서울\s+지하철\s+/, '').replace(/^서울\s+/, '').trim();
+
+const isStation = (category: string) =>
+  category.includes('지하철') || category.includes('전철');
 
 // HTML 태그 제거 (네이버 검색 결과 title에 <b> 태그가 포함되어 있어 제거)
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '');
@@ -331,6 +350,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [editingInfra, setEditingInfra] = useState<InfraEditState | null>(null);
   const [newInfraRows, setNewInfraRows] = useState<InfraAddRow[]>([]);
   const [savingNewInfras, setSavingNewInfras] = useState(false);
+  // 지하철 편집 상태 — 기존·신규 행 통합 배열 + 삭제 예약 ID 목록
+  const [editingSubway, setEditingSubway] = useState(false);
+  const [subwayRows, setSubwayRows] = useState<SubwayEditRow[]>([]);
+  const [deletedSubwayIds, setDeletedSubwayIds] = useState<number[]>([]);
+  const [savingSubway, setSavingSubway] = useState(false);
   // 추가 행 localId 생성용 카운터 — useRef로 관리해 리렌더 시 초기화 방지
   const schoolRowCounter = useRef(0);
   const infraRowCounter = useRef(0);
@@ -429,6 +453,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setEditingInfra(null);
       setNewInfraRows([]);
       setSavingNewInfras(false);
+      setEditingSubway(false);
+      setSubwayRows([]);
+      setDeletedSubwayIds([]);
       loadPriceHistories(complex.id);
     }
   }, [complex, loadPriceHistories, onRadiusToggle]);
@@ -944,6 +971,115 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       await deleteInfraInfo(complex.id, infraId);
       await refreshComplex();
     } catch { /* 삭제 실패 시 UI 변화 없음 */ }
+  };
+
+  // ── 지하철 편집 ──────────────────────────────────────────────────
+
+  // 편집 모드 시작 — 기존 subwayInfos를 행으로 복사, 빈 신규 행 1개 추가
+  const startEditSubway = () => {
+    const existing: SubwayEditRow[] = (complex?.subwayInfos ?? []).map(s => ({
+      localId: `existing-${s.id}`,
+      id: s.id,
+      stationName: s.stationName ?? '',
+      subwayLines: s.subwayLines ?? '',
+      walkingMinutes: s.walkingMinutes != null ? String(s.walkingMinutes) : '',
+      foundLines: [],
+      fetching: false,
+    }));
+    setSubwayRows([...existing, { localId: `new-${Date.now()}`, stationName: '', subwayLines: '', walkingMinutes: '', foundLines: [], fetching: false }]);
+    setDeletedSubwayIds([]);
+    setEditingSubway(true);
+  };
+
+  const cancelEditSubway = () => {
+    setEditingSubway(false);
+    setSubwayRows([]);
+    setDeletedSubwayIds([]);
+  };
+
+  const updateSubwayRow = (localId: string, patch: Partial<SubwayEditRow>) =>
+    setSubwayRows(prev => prev.map(r => r.localId === localId ? { ...r, ...patch } : r));
+
+  // 행 삭제 — 기존 항목이면 deletedSubwayIds에 추가 예약
+  const removeSubwayRow = (localId: string) => {
+    const row = subwayRows.find(r => r.localId === localId);
+    if (row?.id) setDeletedSubwayIds(prev => [...prev, row.id!]);
+    setSubwayRows(prev => prev.filter(r => r.localId !== localId));
+  };
+
+  const addSubwayRow = () =>
+    setSubwayRows(prev => [...prev, { localId: `new-${Date.now()}`, stationName: '', subwayLines: '', walkingMinutes: '', foundLines: [], fetching: false }]);
+
+  // 역 조회 — 네이버 장소 검색 → 지하철 카테고리 필터 → 호선·도보시간 자동 입력
+  const lookupSubwayStation = async (localId: string) => {
+    if (!complex) return;
+    const row = subwayRows.find(r => r.localId === localId);
+    if (!row || !row.stationName.trim()) return;
+    const query = row.stationName.trim().endsWith('역') ? row.stationName.trim() : `${row.stationName.trim()}역`;
+    updateSubwayRow(localId, { fetching: true });
+    try {
+      const { data } = await api.get<{ items: { title: string; category: string; mapx: string; mapy: string }[] }>(
+        '/api/search/local', { params: { query } }
+      );
+      const stationItems = data.items.filter(it => isStation(it.category));
+      const lineSet = new Set(stationItems.map(it => parseLineFromCategory(it.category)).filter(Boolean));
+      const foundLines = Array.from(lineSet);
+      const first = stationItems[0] ?? data.items[0];
+      const stLat = first ? parseInt(first.mapy) / 10000000 : null;
+      const stLng = first ? parseInt(first.mapx) / 10000000 : null;
+
+      let walkingMinutes = row.walkingMinutes;
+      if (stLat && stLng) {
+        try {
+          const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
+            params: { startLat: complex.latitude, startLng: complex.longitude, goalLat: stLat, goalLng: stLng },
+          });
+          walkingMinutes = String(dir.minutes);
+        } catch {
+          const km = haversineKm(complex.latitude!, complex.longitude!, stLat, stLng);
+          walkingMinutes = String(Math.max(1, Math.round(km * 1.3 / 4 * 60)));
+        }
+      }
+      updateSubwayRow(localId, {
+        foundLines,
+        subwayLines: foundLines.length === 1 ? foundLines[0] : '',
+        walkingMinutes,
+        fetching: false,
+      });
+    } catch {
+      updateSubwayRow(localId, { fetching: false });
+    }
+  };
+
+  // 저장 — DELETE(삭제예약) → PATCH(기존 수정) → POST(신규 추가) → 재조회
+  const saveSubway = async () => {
+    if (!complex) return;
+    setSavingSubway(true);
+    try {
+      await Promise.all(deletedSubwayIds.map(id => deleteSubwayInfo(complex.id, id)));
+      const toUpdate = subwayRows.filter(r => r.id && r.stationName.trim());
+      await Promise.all(toUpdate.map(r =>
+        updateSubwayInfo(complex.id, r.id!, {
+          stationName: r.stationName,
+          subwayLines: r.subwayLines || undefined,
+          walkingMinutes: r.walkingMinutes ? parseInt(r.walkingMinutes) : undefined,
+        } as Omit<SubwayInfo, 'id'>)
+      ));
+      const toAdd = subwayRows.filter(r => !r.id && r.stationName.trim()).map(r => ({
+        stationName: r.stationName,
+        subwayLines: r.subwayLines || undefined,
+        walkingMinutes: r.walkingMinutes ? parseInt(r.walkingMinutes) : undefined,
+      }));
+      if (toAdd.length > 0) await addSubwayInfos(complex.id, toAdd as Omit<SubwayInfo, 'id'>[]);
+      setEditingSubway(false);
+      setSubwayRows([]);
+      setDeletedSubwayIds([]);
+      await refreshComplex();
+    } catch {
+      /* 저장 실패 시 폼 유지 */
+    } finally {
+      setSavingSubway(false);
+    }
   };
 
   if (!complex) {
@@ -1495,30 +1631,113 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
         </div>
 
-        {/* 지하철 정보 — subwayInfos 배열로 여러 노선 표시 */}
-        {complex.subwayInfos && complex.subwayInfos.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>
-              지하철
-            </h3>
-            {complex.subwayInfos.map((s) => (
-              <div
-                key={s.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '6px 0',
-                  borderBottom: '1px solid #f0f0f0',
-                }}
-              >
-                <span style={{ fontSize: '13px', color: '#202124' }}>{s.stationName}</span>
-                <span style={{ fontSize: '12px', color: '#80868b' }}>
-                  {s.subwayLines}{s.walkingMinutes ? ` · 도보 ${s.walkingMinutes}분` : ''}
-                </span>
-              </div>
-            ))}
+        {/* 지하철 정보 — 항상 표시, 편집 버튼으로 추가·수정·삭제 가능 */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>지하철</h3>
+            {!editingSubway && (
+              <button
+                onClick={startEditSubway}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px' }}
+                title="지하철 정보 수정"
+              >✏</button>
+            )}
           </div>
-        )}
+
+          {!editingSubway ? (
+            // 읽기 모드
+            complex.subwayInfos && complex.subwayInfos.length > 0 ? (
+              complex.subwayInfos.map(s => (
+                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <span style={{ fontSize: '13px', color: '#202124' }}>{s.stationName}</span>
+                  <span style={{ fontSize: '12px', color: '#80868b' }}>
+                    {s.subwayLines}{s.walkingMinutes ? ` · 도보 ${s.walkingMinutes}분` : ''}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div style={{ fontSize: '12px', color: '#9e9e9e', padding: '4px 0' }}>등록된 지하철 정보가 없습니다.</div>
+            )
+          ) : (
+            // 편집 모드
+            <div>
+              {subwayRows.map(row => (
+                <div key={row.localId} style={{ border: '1px solid #e8eaed', borderRadius: '8px', padding: '10px', marginBottom: '8px', backgroundColor: '#fafafa' }}>
+                  {/* 역명 + 조회 버튼 */}
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+                    <input
+                      placeholder="역명 (예: 구일역)"
+                      value={row.stationName}
+                      onChange={e => updateSubwayRow(row.localId, { stationName: e.target.value })}
+                      onKeyDown={e => { if (e.key === 'Enter') lookupSubwayStation(row.localId); }}
+                      style={{ ...editInputStyle, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => lookupSubwayStation(row.localId)}
+                      disabled={row.fetching || !row.stationName.trim()}
+                      style={{
+                        padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                        border: '1px solid #1a73e8', borderRadius: '6px',
+                        backgroundColor: row.fetching || !row.stationName.trim() ? '#f1f3f4' : '#e8f0fe',
+                        color: row.fetching || !row.stationName.trim() ? '#9e9e9e' : '#1a73e8',
+                        cursor: row.fetching || !row.stationName.trim() ? 'not-allowed' : 'pointer',
+                        whiteSpace: 'nowrap', flexShrink: 0,
+                      }}
+                    >{row.fetching ? '조회 중' : '조회'}</button>
+                    <button
+                      onClick={() => removeSubwayRow(row.localId)}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', color: '#c5221f', flexShrink: 0, padding: 0 }}
+                    >×</button>
+                  </div>
+                  {/* 호선 + 도보(분) */}
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {row.foundLines.length > 1 ? (
+                      <select
+                        value={row.subwayLines}
+                        onChange={e => updateSubwayRow(row.localId, { subwayLines: e.target.value })}
+                        style={{ ...editInputStyle, flex: 1 }}
+                      >
+                        <option value="">호선 선택</option>
+                        {row.foundLines.map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        placeholder="호선 (예: 1호선)"
+                        value={row.subwayLines}
+                        onChange={e => updateSubwayRow(row.localId, { subwayLines: e.target.value })}
+                        style={{ ...editInputStyle, flex: 1 }}
+                      />
+                    )}
+                    <input
+                      type="number"
+                      placeholder="도보(분)"
+                      value={row.walkingMinutes}
+                      onChange={e => updateSubwayRow(row.localId, { walkingMinutes: e.target.value })}
+                      style={{ ...editInputStyle, width: '72px', flexShrink: 0 }}
+                    />
+                  </div>
+                </div>
+              ))}
+              {/* + 역 추가 */}
+              <button
+                onClick={addSubwayRow}
+                style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, border: '1px dashed #1a73e8', borderRadius: '6px', backgroundColor: 'transparent', color: '#1a73e8', cursor: 'pointer', marginBottom: '8px' }}
+              >+ 역 추가</button>
+              {/* 저장·취소 */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  onClick={saveSubway}
+                  disabled={savingSubway}
+                  style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingSubway ? '#9e9e9e' : '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', cursor: savingSubway ? 'not-allowed' : 'pointer' }}
+                >{savingSubway ? '저장 중...' : '저장'}</button>
+                <button
+                  onClick={cancelEditSubway}
+                  style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: '#f1f3f4', color: '#5f6368', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                >취소</button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* 직장 밀도 */}
         {complex.grade && (

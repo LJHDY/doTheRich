@@ -6,6 +6,7 @@ import {
   PriceHistoryRequest,
   SchoolInfo,
   InfraInfo,
+  SubwayInfo,
   ComplexPhoto,
   LivingZone,
   LivingZonePhoto,
@@ -296,6 +297,36 @@ export const deleteLivingZonePhoto = async (zoneId: number, photoId: number): Pr
 export const runBatchRealEstatePrice = async (): Promise<void> => {
   // 배치 처리는 시간이 걸릴 수 있어 타임아웃을 3분으로 별도 설정
   await api.post('/api/batch/real-estate-price', {}, { timeout: 180_000 });
+};
+
+/** 지하철 정보 추가 — POST /api/complexes/:id/subway-infos */
+export const addSubwayInfos = async (
+  complexId: number,
+  items: Omit<SubwayInfo, 'id'>[]
+): Promise<SubwayInfo[]> => {
+  const { data } = await api.post<SubwayInfo[]>(
+    `/api/complexes/${complexId}/subway-infos`,
+    items
+  );
+  return data;
+};
+
+/** 지하철 정보 수정 — PATCH /api/complexes/:id/subway-infos/:sid */
+export const updateSubwayInfo = async (
+  complexId: number,
+  subwayId: number,
+  data: Omit<SubwayInfo, 'id'>
+): Promise<SubwayInfo> => {
+  const { data: result } = await api.patch<SubwayInfo>(
+    `/api/complexes/${complexId}/subway-infos/${subwayId}`,
+    data
+  );
+  return result;
+};
+
+/** 지하철 정보 삭제 — DELETE /api/complexes/:id/subway-infos/:sid */
+export const deleteSubwayInfo = async (complexId: number, subwayId: number): Promise<void> => {
+  await api.delete(`/api/complexes/${complexId}/subway-infos/${subwayId}`);
 };
 
 /** 경로 목록 조회 — GET /api/routes */
