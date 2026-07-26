@@ -125,6 +125,8 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
   const [priceHistories, setPriceHistories] = useState<PriceHistory[]>([]);
   const [chartData, setChartData] = useState<{ rows: ChartDataRow[]; series: ChartSeries[] }>({ rows: [], series: [] });
   const [loading, setLoading] = useState(false);
+  // 참고가 탭 — 선택된 areaType (빈 문자열이면 전체)
+  const [selectedRefTab, setSelectedRefTab] = useState<string>('');
 
   const loadHistories = useCallback(async () => {
     setLoading(true);
@@ -252,25 +254,47 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           <InfoRow label="세대수" value={complex.unitCount ? `${complex.unitCount}세대` : null} />
           <InfoRow label="주소" value={complex.address} />
           <InfoRow label="확인일자" value={complex.checkDate} />
-          {/* 평형별 참고가 — latestItemPerAreaType 기반으로 모든 평형 나열 */}
-          {Array.from(latestItemPerAreaType.entries())
-            .sort(([a], [b]) => areaTypeNum(a) - areaTypeNum(b))
-            .map(([at, item]) => (
-              <React.Fragment key={at}>
-                {latestItemPerAreaType.size > 1 && (
-                  <div style={{ fontSize: '10px', color: '#9e9e9e', padding: '4px 0 2px', fontWeight: 600 }}>{at}</div>
+          {/* 평형별 참고가 — 탭 버튼으로 선택, 선택된 areaType 참고가만 표시 */}
+          {latestItemPerAreaType.size > 0 && (() => {
+            const sortedEntries = Array.from(latestItemPerAreaType.entries())
+              .sort(([a], [b]) => areaTypeNum(a) - areaTypeNum(b));
+            // selectedRefTab이 없으면 첫 번째 areaType으로 초기화
+            const activeTab = selectedRefTab || sortedEntries[0]?.[0] || '';
+            const activeItem = latestItemPerAreaType.get(activeTab);
+            return (
+              <>
+                {/* 평형 탭 버튼 목록 */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', padding: '6px 0 4px' }}>
+                  {sortedEntries.map(([at]) => (
+                    <button
+                      key={at}
+                      onClick={() => setSelectedRefTab(at)}
+                      style={{
+                        fontSize: '10px', fontWeight: 600,
+                        padding: '2px 8px', borderRadius: '10px', cursor: 'pointer', border: 'none',
+                        backgroundColor: activeTab === at ? '#1a73e8' : '#e8eaed',
+                        color: activeTab === at ? '#fff' : '#5f6368',
+                      }}
+                    >{at}</button>
+                  ))}
+                </div>
+                {/* 선택된 탭의 참고가 표시 */}
+                {activeItem && (
+                  <>
+                    <InfoRow label="호가" value={activeItem.askingPrice ? formatPrice(activeItem.askingPrice) : null} />
+                    <InfoRow label="전고점" value={activeItem.highestPrice ? formatPrice(activeItem.highestPrice) : null} />
+                    <InfoRow label="전저점" value={activeItem.lowestPrice ? formatPrice(activeItem.lowestPrice) : null} />
+                    <InfoRow label="10년 등락" value={activeItem.tenYearChangeAmount != null
+                      ? `${activeItem.tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(activeItem.tenYearChangeAmount)}억`
+                      : null} />
+                    <InfoRow label="등락률" value={activeItem.tenYearChangeRate != null
+                      ? `${activeItem.tenYearChangeRate >= 0 ? '+' : ''}${activeItem.tenYearChangeRate}%`
+                      : null} />
+                  </>
                 )}
-                <InfoRow label="호가" value={item.askingPrice ? formatPrice(item.askingPrice) : null} />
-                <InfoRow label="전고점" value={item.highestPrice ? formatPrice(item.highestPrice) : null} />
-                <InfoRow label="전저점" value={item.lowestPrice ? formatPrice(item.lowestPrice) : null} />
-                <InfoRow label="10년 등락" value={item.tenYearChangeAmount != null
-                  ? `${item.tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(item.tenYearChangeAmount)}억`
-                  : null} />
-                <InfoRow label="등락률" value={item.tenYearChangeRate != null
-                  ? `${item.tenYearChangeRate >= 0 ? '+' : ''}${item.tenYearChangeRate}%`
-                  : null} />
-              </React.Fragment>
-            ))}
+              </>
+            );
+          })()}
           {complex.memo && (
             <div style={{ padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>
               <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>메모</div>
