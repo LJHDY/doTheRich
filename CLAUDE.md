@@ -73,7 +73,7 @@ src/
     ├── PriceRangeFilter.tsx  # 헤더 금액대 필터 버튼
     ├── ComplexListModal.tsx  # 금액대 클릭 시 단지 목록 팝업
     ├── CompareListModal.tsx  # 비교하기 단지 선택 패널 (헤더 하단 드롭다운)
-    ├── CompareCard.tsx       # 비교 뷰 단지 카드 (ComplexInfoPanel 간소화 버전)
+    ├── CompareCard.tsx       # 비교 뷰 단지 카드 (ComplexInfoPanel과 동일 표시, 수정/삭제 기능 제외)
     ├── CommuteGradeBadge.tsx # 입지 등급 배지 (S/A/B/C) — 공통 컴포넌트
     ├── SearchBar.tsx         # 네이버 장소 검색
     ├── RegisterModal.tsx     # 단지 등록 폼 (가격·교통·출퇴근 입력)
@@ -295,9 +295,16 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - 선택 행 파란 배경 하이라이트
 
 ### `CompareCard.tsx`
-- 비교 뷰에서 1/3 너비로 표시되는 단지 카드
-- **섹션 순서**: 헤더(파랑) → 단지정보 → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 재개발정보 → 임장유형 → 시세변동 → 최근 3건
+- 비교 뷰에서 1/3 너비로 표시되는 단지 카드 (ComplexInfoPanel과 동일 내용, 수정/삭제 기능 제외)
+- **섹션 순서**: 헤더(파랑) → 단지정보(참고가) → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 재개발정보 → 임장유형 → 시세변동 → 최근 5건
 - **종합평가 동기화 스크롤**: 어느 카드에서든 직장·교통·학군·환경 클릭 시 `window` 커스텀 이벤트(`compare-section-scroll`) 발행 → 마운트된 모든 카드가 각자의 해당 섹션으로 동시 스크롤 (섹션 없는 카드는 무동작)
+- `latestItemPerAreaType` Map으로 전체 이력에서 평형별 최신 시세 항목 집계 (ComplexInfoPanel과 동일 방식)
+- `buildChartData` dateMap 머징 — 같은 날짜 기록 하나의 X축 포인트로 합산
+- 참고가: 평형별 `latestItemPerAreaType` 기준 (호가·전고점·전저점·10년등락 chips)
+- 교통: 항상 표시, 데이터 없으면 "출퇴근 시간 정보 없음" 안내
+- 환경: 항상 표시 + 인프라 등급 배지, 데이터 없으면 "인프라 정보 없음" 안내
+- 임장유형: 항상 표시 (`VISIT_TYPE_LABELS`, NONE 포함)
+- 최근 기록: 5건, ▲/▼ 변동(억+%) + KB가 + 참고가 chips
 - ComplexInfoPanel과 동일한 등급 로직·레이블 맵 내장 (`calcSchoolGrade`, `calcInfraGrade`, `GRADE_COLORS`, `Tag` 등)
 - 닫기(×) 버튼 → 비교 목록 제거 + 체크박스 해제
 
@@ -420,6 +427,9 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - [x] 경로 삭제 confirm — `window.confirm()` 후 DELETE
 - [x] 경로 백엔드 CRUD — SQLAlchemy Route 모델(points=JSON Text), FastAPI 라우터, 서비스 계층, 앱 시작 시 테이블 자동 생성
 - [x] ComplexInfoPanel 교통(출퇴근 시간) 인라인 편집 — ✏ 버튼으로 편집 진입, 5개 고정 목적지(강남/시청/여의도/발산/마곡나루) 행 표시, "조회" 버튼으로 네이버 지도 대중교통 팝업, 분·환승·교통수단 입력 후 PATCH /commute-times 저장 (일괄 교체)
+- [x] 시세 차트 동일 날짜 중복 포인트 버그 수정 — dateMap 머징으로 같은 날짜 기록을 하나의 X축 포인트로 합산
+- [x] ComplexInfoPanel 헤더 평형별 금액 표시 — `latestItemPerAreaType`으로 전체 이력에서 평형별 최신 가격 집계 (단건 POST로 추가된 평형도 모두 표시)
+- [x] CompareCard 전면 재작성 — ComplexInfoPanel과 표시 내용 완전 동기화 (수정/삭제 기능 제외), 참고가·교통·환경·임장유형·최근5건 동일 표시
 
 ## 미완성 / TODO
 
