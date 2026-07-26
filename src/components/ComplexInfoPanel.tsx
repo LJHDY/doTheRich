@@ -292,15 +292,22 @@ const buildChartData = (
     }
   });
 
-  const rows: ChartDataRow[] = histories.map(h => {
-    const row: ChartDataRow = { date: h.recordDate };
+  // 같은 날짜 기록이 여러 개(평형별 별도 등록)일 때 하나의 row로 합산
+  const dateMap = new Map<string, ChartDataRow>();
+  const rows: ChartDataRow[] = [];
+  histories.forEach(h => {
+    if (!dateMap.has(h.recordDate)) {
+      const newRow: ChartDataRow = { date: h.recordDate };
+      dateMap.set(h.recordDate, newRow);
+      rows.push(newRow);
+    }
+    const row = dateMap.get(h.recordDate)!;
     h.items.forEach(item => {
       const at = item.areaType || '';
       if (!at) return;
       if (item.price) row[`${at}-sale`] = toUkUnit(item.price);
       if (item.jeonsePrice) row[`${at}-jeonse`] = toUkUnit(item.jeonsePrice);
     });
-    return row;
   });
 
   return { rows, series };
@@ -1203,11 +1210,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     if (!seen.has(s.areaType)) { seen.add(s.areaType); areaTypes.push(s.areaType); }
   });
 
-  // 선택된 타입의 대표 매매가로 변동폭 계산 — 전체일 때는 첫 번째 평형 기준
+  // 특정 평형 선택 시에만 변동폭 계산 — 전체(selectedAreaType='')일 때는 null로 숨김
   const getPriceForType = (history: typeof latestHistory) => {
-    if (!history) return undefined;
-    if (selectedAreaType) return history.items.find(i => i.areaType === selectedAreaType)?.price;
-    return history.items[0]?.price;
+    if (!history || !selectedAreaType) return undefined;
+    return history.items.find(i => i.areaType === selectedAreaType)?.price;
   };
   const latestPrice = getPriceForType(latestHistory);
   const firstPrice = getPriceForType(firstHistory);
