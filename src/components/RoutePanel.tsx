@@ -1,6 +1,25 @@
 import React from 'react';
 import { MapRoute } from '../types';
 
+function haversineMeters(p1: { lat: number; lng: number }, p2: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+  const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calcRouteStats(points: { lat: number; lng: number }[]): { km: string; minutes: number } {
+  if (points.length < 2) return { km: '0.0', minutes: 0 };
+  let totalM = 0;
+  for (let i = 0; i < points.length - 1; i++) totalM += haversineMeters(points[i], points[i + 1]);
+  return {
+    km: (Math.round(totalM / 100) / 10).toFixed(1),
+    minutes: Math.round(totalM * 60 / 4000),  // 4km/h 도보
+  };
+}
+
 const ROUTE_COLORS = ['#e53935', '#43a047', '#8e24aa', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
 
 interface RoutePanelProps {
@@ -76,6 +95,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
             const isActive = activeRouteIds.has(route.id);
             const isEditing = editingRouteId === route.id;
             const date = route.createdAt ? route.createdAt.slice(0, 10) : '';
+            const stats = calcRouteStats(route.points);
 
             return (
               <div
@@ -112,6 +132,9 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                     }}>{route.name}</div>
                     <div style={{ fontSize: '11px', color: '#9e9e9e', marginTop: '2px' }}>
                       {route.points.length}개 점 · {date}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#5f6368', marginTop: '2px', fontWeight: 500 }}>
+                      {stats.km}km · 약 {stats.minutes}분 (4km/h)
                     </div>
                   </div>
 

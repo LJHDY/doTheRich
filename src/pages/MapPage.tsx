@@ -4,6 +4,26 @@ import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, formatPrice } fr
 // 저장된 경로마다 순환 사용할 색상 팔레트
 const ROUTE_COLORS = ['#e53935', '#43a047', '#8e24aa', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
 
+// 두 좌표 간 거리 (미터)
+function haversineMeters(p1: RoutePoint, p2: RoutePoint): number {
+  const R = 6371000;
+  const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+  const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// p1 → p2 방향의 방위각 (도, 북=0, 시계방향)
+function calcBearing(p1: RoutePoint, p2: RoutePoint): number {
+  const lat1 = p1.lat * Math.PI / 180;
+  const lat2 = p2.lat * Math.PI / 180;
+  const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
 interface MapPageProps {
   complexes: ApartmentComplex[];
   selectedComplex: ApartmentComplex | null;
@@ -27,9 +47,11 @@ const MapPage: React.FC<MapPageProps> = ({
   const overlayMarkersRef = useRef<any[]>([]);
   const circleRef = useRef<any>(null);
   const boundsInitializedRef = useRef(false);
-  const routePolylinesRef = useRef<any[]>([]);   // 저장된 경로 폴리라인 배열
-  const drawingPolylineRef = useRef<any>(null);  // 현재 그리는 중인 폴리라인
-  const drawingMarkersRef = useRef<any[]>([]);   // 그리기 모드 점 마커 배열
+  const routePolylinesRef = useRef<any[]>([]);      // 저장된 경로 폴리라인 배열
+  const routeArrowMarkersRef = useRef<any[]>([]);   // 방향 화살표 마커 배열
+  const routeKmMarkersRef = useRef<any[]>([]);      // 1km 간격 거리 마커 배열
+  const drawingPolylineRef = useRef<any>(null);     // 현재 그리는 중인 폴리라인
+  const drawingMarkersRef = useRef<any[]>([]);      // 그리기 모드 점 마커 배열
   const mapClickListenerRef = useRef<any>(null); // 지도 클릭 이벤트 핸들러
   const onRoutePointAddRef = useRef(onRoutePointAdd);
 
@@ -428,23 +450,85 @@ const MapPage: React.FC<MapPageProps> = ({
     });
   }, [isDrawingRoute]);
 
-  // 저장된 경로 — routes 변경 시 폴리라인 재렌더링
+  // 저장된 경로 — routes 변경 시 폴리라인 + 방향 화살표 + 1km 마커 재렌더링
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !window.naver) return;
+
     routePolylinesRef.current.forEach(p => p.setMap(null));
     routePolylinesRef.current = [];
+    routeArrowMarkersRef.current.forEach(m => m.setMap(null));
+    routeArrowMarkersRef.current = [];
+    routeKmMarkersRef.current.forEach(m => m.setMap(null));
+    routeKmMarkersRef.current = [];
+
     (routes ?? []).forEach((route, idx) => {
       if (route.points.length < 2) return;
       const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+      const pts: RoutePoint[] = route.points;
+
+      // 폴리라인
       const polyline = new window.naver.maps.Polyline({
-        path: route.points.map((p: RoutePoint) => new window.naver.maps.LatLng(p.lat, p.lng)),
+        path: pts.map(p => new window.naver.maps.LatLng(p.lat, p.lng)),
         strokeColor: color,
         strokeWeight: 4,
         strokeOpacity: 0.85,
         map,
       });
       routePolylinesRef.current.push(polyline);
+
+      // 각 점마다 진행 방향 ❯ 화살표 마커
+      // ❯ 는 기본 오른쪽(East=90°)을 가리키므로, CSS rotation = bearing - 90
+      pts.forEach((p, i) => {
+        const isLast = i === pts.length - 1;
+        const bearing = isLast
+          ? calcBearing(pts[i - 1], pts[i])
+          : calcBearing(pts[i], pts[i + 1]);
+        const rotation = bearing - 90;
+
+        const m = new window.naver.maps.Marker({
+          position: new window.naver.maps.LatLng(p.lat, p.lng),
+          map,
+          icon: {
+            content: `<div style="position:relative;pointer-events:none;width:0;height:0;">
+              <div style="position:absolute;transform:translate(-50%,-50%) rotate(${rotation}deg);color:${color};font-size:18px;font-weight:900;text-shadow:0 0 3px #fff,0 0 5px #fff;line-height:1;">❯</div>
+            </div>`,
+            anchor: new window.naver.maps.Point(0, 0),
+          },
+          zIndex: 25,
+        });
+        routeArrowMarkersRef.current.push(m);
+      });
+
+      // 1km 간격 거리 마커
+      let cumDist = 0;
+      let kmCount = 1;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const segDist = haversineMeters(p1, p2);
+
+        while (cumDist + segDist >= kmCount * 1000) {
+          const t = (kmCount * 1000 - cumDist) / segDist;
+          const lat = p1.lat + t * (p2.lat - p1.lat);
+          const lng = p1.lng + t * (p2.lng - p1.lng);
+
+          const kmMarker = new window.naver.maps.Marker({
+            position: new window.naver.maps.LatLng(lat, lng),
+            map,
+            icon: {
+              content: `<div style="position:relative;pointer-events:none;width:0;height:0;">
+                <div style="position:absolute;transform:translate(-50%,-130%);background:${color};color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);white-space:nowrap;">${kmCount}km</div>
+              </div>`,
+              anchor: new window.naver.maps.Point(0, 0),
+            },
+            zIndex: 22,
+          });
+          routeKmMarkersRef.current.push(kmMarker);
+          kmCount++;
+        }
+        cumDist += segDist;
+      }
     });
   }, [routes]);
 

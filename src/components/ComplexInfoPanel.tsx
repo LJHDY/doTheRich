@@ -2054,17 +2054,15 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
         )}
 
-        {/* 임장 유형 — 값 없으면 NONE(임장X)으로 표시, 항상 렌더링 */}
+        {/* 임장 유형 — 항상 표시, 값 없으면 NONE(임장X)과 동일하게 표시 */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', margin: 0 }}>임장 유형</h3>
-            {!editingVisitType && (
-              <button
-                onClick={() => setEditingVisitType(true)}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px' }}
-                title="임장 유형 수정"
-              >✏</button>
-            )}
+            <button
+              onClick={() => setEditingVisitType(v => !v)}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px' }}
+              title="임장 유형 수정"
+            >✏</button>
           </div>
           {editingVisitType ? (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -2106,7 +2104,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               display: 'inline-block', padding: '4px 12px', borderRadius: '12px',
               backgroundColor: '#e8f0fe', color: '#1a73e8', fontSize: '13px', fontWeight: 600,
             }}>
-              {VISIT_TYPE_LABELS[localVisitType] ?? localVisitType}
+              {VISIT_TYPE_LABELS[complex.visitType ?? 'NONE'] ?? VISIT_TYPE_LABELS['NONE']}
             </div>
           )}
         </div>
