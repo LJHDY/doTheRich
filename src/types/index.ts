@@ -235,6 +235,20 @@ export interface ApartmentComplexRequest {
   isFavorite?: boolean;        // 즐겨찾기 여부
 }
 
+/** 경로 좌표 점 */
+export interface RoutePoint {
+  lat: number;
+  lng: number;
+}
+
+/** 저장된 경로 — 백엔드 RouteDto와 1:1 매핑 */
+export interface MapRoute {
+  id: number;
+  name: string;
+  points: RoutePoint[];
+  createdAt: string;
+}
+
 /** 다중 시리즈 차트 — 날짜별 행. 키는 '평형-타입' 형식 (e.g. '전용59-sale') */
 export interface ChartDataRow {
   date: string;

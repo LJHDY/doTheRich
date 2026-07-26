@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { ApartmentComplex, OverlayMarker, formatPrice } from '../types';
+import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, formatPrice } from '../types';
+
+// 저장된 경로마다 순환 사용할 색상 팔레트
+const ROUTE_COLORS = ['#e53935', '#43a047', '#8e24aa', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
 
 interface MapPageProps {
   complexes: ApartmentComplex[];
@@ -8,15 +11,27 @@ interface MapPageProps {
   focusLocation?: { lat: number; lng: number } | null;
   overlayMarkers?: OverlayMarker[];
   radiusCenter?: { lat: number; lng: number } | null;
+  routes?: MapRoute[];           // 저장된 경로 목록 — 지도에 폴리라인으로 표시
+  drawingPoints?: RoutePoint[];  // 현재 그리는 중인 점 배열 — 파란 점선으로 실시간 표시
+  isDrawingRoute?: boolean;      // 경로 그리기 모드 — 지도 클릭이 좌표 추가로 동작
+  onRoutePointAdd?: (p: RoutePoint) => void; // 지도 클릭 시 좌표 추가 콜백
 }
 
-const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter }) => {
+const MapPage: React.FC<MapPageProps> = ({
+  complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter,
+  routes, drawingPoints, isDrawingRoute, onRoutePointAdd,
+}) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
   const overlayMarkersRef = useRef<any[]>([]);
   const circleRef = useRef<any>(null);
   const boundsInitializedRef = useRef(false);
+  const routePolylinesRef = useRef<any[]>([]);   // 저장된 경로 폴리라인 배열
+  const drawingPolylineRef = useRef<any>(null);  // 현재 그리는 중인 폴리라인
+  const drawingMarkersRef = useRef<any[]>([]);   // 그리기 모드 점 마커 배열
+  const mapClickListenerRef = useRef<any>(null); // 지도 클릭 이벤트 핸들러
+  const onRoutePointAddRef = useRef(onRoutePointAdd);
 
   // 마커 diff를 위한 Map — 단지 id → { marker, listenerHandle }
   const markerMapRef = useRef<Map<number, { marker: any; listener: any }>>(new Map());
@@ -28,6 +43,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
   const onComplexSelectRef = useRef(onComplexSelect);
   useEffect(() => { complexesRef.current = complexes; }, [complexes]);
   useEffect(() => { onComplexSelectRef.current = onComplexSelect; }, [onComplexSelect]);
+  useEffect(() => { onRoutePointAddRef.current = onRoutePointAdd; }, [onRoutePointAdd]);
 
   // 네이버 지도 초기화 + body 직속 tooltip div 생성
   // position:fixed를 지도 DOM 안에 두면 Naver Maps의 CSS transform 컨텍스트에 갇혀
@@ -398,6 +414,78 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
     });
   }, [radiusCenter]);
 
+  // 경로 그리기 모드 — isDrawingRoute 토글 시 지도 클릭 리스너 추가·제거
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.naver) return;
+    if (mapClickListenerRef.current) {
+      window.naver.maps.Event.removeListener(mapClickListenerRef.current);
+      mapClickListenerRef.current = null;
+    }
+    if (!isDrawingRoute) return;
+    mapClickListenerRef.current = window.naver.maps.Event.addListener(map, 'click', (e: any) => {
+      onRoutePointAddRef.current?.({ lat: e.coord.lat(), lng: e.coord.lng() });
+    });
+  }, [isDrawingRoute]);
+
+  // 저장된 경로 — routes 변경 시 폴리라인 재렌더링
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.naver) return;
+    routePolylinesRef.current.forEach(p => p.setMap(null));
+    routePolylinesRef.current = [];
+    (routes ?? []).forEach((route, idx) => {
+      if (route.points.length < 2) return;
+      const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+      const polyline = new window.naver.maps.Polyline({
+        path: route.points.map((p: RoutePoint) => new window.naver.maps.LatLng(p.lat, p.lng)),
+        strokeColor: color,
+        strokeWeight: 4,
+        strokeOpacity: 0.85,
+        map,
+      });
+      routePolylinesRef.current.push(polyline);
+    });
+  }, [routes]);
+
+  // 그리기 중인 경로 — drawingPoints 변경 시 점선 폴리라인 + 점 마커 갱신
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.naver) return;
+    // 기존 그리기 폴리라인·마커 제거
+    if (drawingPolylineRef.current) { drawingPolylineRef.current.setMap(null); drawingPolylineRef.current = null; }
+    drawingMarkersRef.current.forEach(m => m.setMap(null));
+    drawingMarkersRef.current = [];
+
+    const pts = drawingPoints ?? [];
+    if (pts.length === 0) return;
+
+    // 점 마커 — 작은 파란 원
+    pts.forEach((p, i) => {
+      const m = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(p.lat, p.lng),
+        map,
+        icon: {
+          content: `<div style="width:10px;height:10px;border-radius:50%;background:${i === pts.length - 1 ? '#c5221f' : '#1a73e8'};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
+          anchor: new window.naver.maps.Point(5, 5),
+        },
+        zIndex: 20,
+      });
+      drawingMarkersRef.current.push(m);
+    });
+
+    // 폴리라인 — 점선 파란선 (점 2개 이상부터)
+    if (pts.length < 2) return;
+    drawingPolylineRef.current = new window.naver.maps.Polyline({
+      path: pts.map(p => new window.naver.maps.LatLng(p.lat, p.lng)),
+      strokeColor: '#1a73e8',
+      strokeWeight: 3,
+      strokeOpacity: 0.9,
+      strokeStyle: 'shortdash',
+      map,
+    });
+  }, [drawingPoints]);
+
   return (
     <div
       ref={mapRef}
@@ -406,6 +494,7 @@ const MapPage: React.FC<MapPageProps> = ({ complexes, selectedComplex, onComplex
         height: '100%',
         minHeight: '400px',
         backgroundColor: '#e8eaed',
+        cursor: isDrawingRoute ? 'crosshair' : 'default',
       }}
     />
   );

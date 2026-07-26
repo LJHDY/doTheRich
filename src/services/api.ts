@@ -9,6 +9,8 @@ import {
   ComplexPhoto,
   LivingZone,
   LivingZonePhoto,
+  MapRoute,
+  RoutePoint,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -294,6 +296,29 @@ export const deleteLivingZonePhoto = async (zoneId: number, photoId: number): Pr
 export const runBatchRealEstatePrice = async (): Promise<void> => {
   // 배치 처리는 시간이 걸릴 수 있어 타임아웃을 3분으로 별도 설정
   await api.post('/api/batch/real-estate-price', {}, { timeout: 180_000 });
+};
+
+/** 경로 목록 조회 — GET /api/routes */
+export const getRoutes = async (): Promise<MapRoute[]> => {
+  const { data } = await api.get<MapRoute[]>('/api/routes');
+  return data;
+};
+
+/** 경로 저장 — POST /api/routes */
+export const createRoute = async (name: string, points: RoutePoint[]): Promise<MapRoute> => {
+  const { data } = await api.post<MapRoute>('/api/routes', { name, points });
+  return data;
+};
+
+/** 경로 수정 — PATCH /api/routes/:id */
+export const updateRoute = async (id: number, name: string, points: RoutePoint[]): Promise<MapRoute> => {
+  const { data } = await api.patch<MapRoute>(`/api/routes/${id}`, { name, points });
+  return data;
+};
+
+/** 경로 삭제 — DELETE /api/routes/:id */
+export const deleteRoute = async (id: number): Promise<void> => {
+  await api.delete(`/api/routes/${id}`);
 };
 
 export default api;

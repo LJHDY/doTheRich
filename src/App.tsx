@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, OverlayMarker } from './types';
-import { getComplexes, getPriceRanges, runBatchRealEstatePrice } from './services/api';
+import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint } from './types';
+import { getComplexes, getPriceRanges, runBatchRealEstatePrice, getRoutes, createRoute, updateRoute, deleteRoute } from './services/api';
 import MapPage from './pages/MapPage';
 import PriceRangeFilter from './components/PriceRangeFilter';
 import ComplexInfoPanel from './components/ComplexInfoPanel';
@@ -11,6 +11,7 @@ import SearchBar, { SearchSelectData } from './components/SearchBar';
 import RegisterModal, { RegisterInitialData } from './components/RegisterModal';
 import LivingZonePanel from './components/LivingZonePanel';
 import AffordabilityPanel from './components/AffordabilityPanel';
+import RoutePanel from './components/RoutePanel';
 import { useIsMobile } from './hooks/useIsMobile';
 
 const App: React.FC = () => {
@@ -52,6 +53,15 @@ const App: React.FC = () => {
 
   // 생활권 패널 — ComplexInfoPanel과 동일 슬롯, 동시에 열리지 않음
   const [livingZoneOpen, setLivingZoneOpen] = useState(false);
+
+  // 경로 관리 패널 + 그리기/수정 모드
+  const [routePanelOpen, setRoutePanelOpen] = useState(false);
+  const [routes, setRoutes] = useState<MapRoute[]>([]);
+  const [activeRouteIds, setActiveRouteIds] = useState<Set<number>>(new Set());
+  const [editingRouteId, setEditingRouteId] = useState<number | null>(null); // 수정 중인 기존 경로 id
+  const [isDrawingRoute, setIsDrawingRoute] = useState(false);
+  const [drawingPoints, setDrawingPoints] = useState<RoutePoint[]>([]);
+  const [routeName, setRouteName] = useState('');
 
   // 구매 가능 분석 패널 — 생활권·단지패널과 상호 배타
   const [affordOpen, setAffordOpen] = useState(false);
@@ -97,6 +107,95 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => { loadComplexes(); }, [loadComplexes]);
+
+  // 경로 목록 초기 로드
+  useEffect(() => {
+    getRoutes().then(setRoutes).catch(() => {});
+  }, []);
+
+  // 신규 경로 그리기 시작
+  const handleStartDrawing = () => {
+    setEditingRouteId(null);
+    setIsDrawingRoute(true);
+    setDrawingPoints([]);
+    setRouteName('');
+  };
+
+  // 기존 경로 수정 시작 — 기존 점 로드 후 그리기 모드 진입
+  const handleStartEditRoute = (route: MapRoute) => {
+    setEditingRouteId(route.id);
+    setIsDrawingRoute(true);
+    setDrawingPoints([...route.points]);
+    setRouteName(route.name);
+  };
+
+  // 패널 닫기 — 지도의 경로·그리기 상태 모두 초기화
+  const handleClosRoutePanel = () => {
+    setRoutePanelOpen(false);
+    setActiveRouteIds(new Set());
+    setIsDrawingRoute(false);
+    setEditingRouteId(null);
+    setDrawingPoints([]);
+    setRouteName('');
+  };
+
+  // 경로 활성화 토글 — 클릭 시 지도에 표시/숨김
+  const handleToggleActiveRoute = (id: number) => {
+    setActiveRouteIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // 지도 클릭 시 좌표 추가
+  const handleRoutePointAdd = (p: RoutePoint) => {
+    setDrawingPoints(prev => [...prev, p]);
+  };
+
+  // 직전 점 삭제 (undo)
+  const handleUndoLastPoint = () => {
+    setDrawingPoints(prev => prev.slice(0, -1));
+  };
+
+  // 경로 저장 — 신규면 POST, 수정이면 PATCH
+  const handleSaveRoute = async () => {
+    if (!routeName.trim() || drawingPoints.length < 2) return;
+    try {
+      if (editingRouteId !== null) {
+        const updated = await updateRoute(editingRouteId, routeName.trim(), drawingPoints);
+        setRoutes(prev => prev.map(r => r.id === editingRouteId ? updated : r));
+        // 수정 후 활성 상태 유지
+        setActiveRouteIds(prev => new Set(Array.from(prev).concat(editingRouteId)));
+      } else {
+        const saved = await createRoute(routeName.trim(), drawingPoints);
+        setRoutes(prev => [saved, ...prev]);
+        setActiveRouteIds(prev => new Set(Array.from(prev).concat(saved.id)));
+      }
+      setIsDrawingRoute(false);
+      setEditingRouteId(null);
+      setDrawingPoints([]);
+      setRouteName('');
+    } catch {}
+  };
+
+  // 경로 그리기/수정 취소
+  const handleCancelDrawing = () => {
+    setIsDrawingRoute(false);
+    setEditingRouteId(null);
+    setDrawingPoints([]);
+    setRouteName('');
+  };
+
+  // 경로 삭제
+  const handleDeleteRoute = async (id: number) => {
+    try {
+      await deleteRoute(id);
+      setRoutes(prev => prev.filter(r => r.id !== id));
+      setActiveRouteIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      if (editingRouteId === id) handleCancelDrawing();
+    } catch {}
+  };
 
   const [batchLoading, setBatchLoading] = useState(false);
 
@@ -213,6 +312,16 @@ const App: React.FC = () => {
                   color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap',
                 }}
               >★</button>
+              {/* 경로 */}
+              <button
+                onClick={() => routePanelOpen ? handleClosRoutePanel() : setRoutePanelOpen(true)}
+                style={{
+                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
+                  border: '1px solid', borderColor: routePanelOpen ? '#0b8043' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: routePanelOpen ? '#e6f4ea' : '#fff',
+                  color: routePanelOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >경로</button>
               {/* 생활권 */}
               <button
                 onClick={() => {
@@ -305,6 +414,15 @@ const App: React.FC = () => {
                 color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
               }}
             >★ 즐겨찾기</button>
+            <button
+              onClick={() => setRoutePanelOpen(v => !v)}
+              style={{
+                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid', borderColor: routePanelOpen ? '#0b8043' : '#dadce0',
+                borderRadius: '6px', backgroundColor: routePanelOpen ? '#e6f4ea' : '#fff',
+                color: routePanelOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >경로</button>
             <button
               onClick={() => {
                 const next = !livingZoneOpen;
@@ -414,6 +532,10 @@ const App: React.FC = () => {
               focusLocation={focusLocation}
               overlayMarkers={overlayMarkers}
               radiusCenter={radiusCenter}
+              routes={routePanelOpen ? routes.filter(r => activeRouteIds.has(r.id)) : []}
+              drawingPoints={drawingPoints}
+              isDrawingRoute={isDrawingRoute}
+              onRoutePointAdd={handleRoutePointAdd}
             />
             {selectedComplex && !livingZoneOpen && (
               /* 모바일: 화면 전체를 덮는 fixed 오버레이 / 데스크탑: flex 옆 패널 */
@@ -462,6 +584,25 @@ const App: React.FC = () => {
                 />
               </div>
             )}
+            {routePanelOpen && (
+              <div style={isMobile ? {
+                position: 'fixed', inset: 0, zIndex: 500,
+                display: 'flex', flexDirection: 'column',
+              } : {}}>
+                <RoutePanel
+                  routes={routes}
+                  activeRouteIds={activeRouteIds}
+                  isDrawingRoute={isDrawingRoute}
+                  editingRouteId={editingRouteId}
+                  onToggleActive={handleToggleActiveRoute}
+                  onStartDrawing={handleStartDrawing}
+                  onStartEdit={handleStartEditRoute}
+                  onDelete={handleDeleteRoute}
+                  onClose={handleClosRoutePanel}
+                  isMobile={isMobile}
+                />
+              </div>
+            )}
           </>
         )}
       </div>
@@ -476,6 +617,66 @@ const App: React.FC = () => {
           onClose={() => setCompareOpen(false)}
           top={headerHeight}
         />
+      )}
+
+      {/* 경로 그리기 플로팅 바 — 지도를 클릭해 점을 찍고 이름 입력 후 저장 */}
+      {isDrawingRoute && (
+        <div style={{
+          position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 500, display: 'flex', alignItems: 'center', gap: '8px',
+          backgroundColor: '#fff', borderRadius: '12px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          padding: '10px 16px',
+        }}>
+          <span style={{ fontSize: '13px', color: '#5f6368', whiteSpace: 'nowrap' }}>
+            📍 {drawingPoints.length}개 점
+          </span>
+          <button
+            onClick={handleUndoLastPoint}
+            disabled={drawingPoints.length === 0}
+            style={{
+              padding: '6px 10px', fontSize: '12px', fontWeight: 600,
+              backgroundColor: drawingPoints.length === 0 ? '#f1f3f4' : '#fce8e6',
+              color: drawingPoints.length === 0 ? '#bdbdbd' : '#c5221f',
+              border: 'none', borderRadius: '8px',
+              cursor: drawingPoints.length === 0 ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+            title="직전 점 삭제"
+          >↩ 삭제</button>
+          <input
+            type="text"
+            value={routeName}
+            onChange={e => setRouteName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSaveRoute(); }}
+            placeholder="경로 이름 입력"
+            style={{
+              fontSize: '13px', padding: '6px 12px', border: '1px solid #dadce0',
+              borderRadius: '8px', outline: 'none', width: '140px',
+            }}
+            autoFocus={!editingRouteId}
+          />
+          <button
+            onClick={handleSaveRoute}
+            disabled={drawingPoints.length < 2 || !routeName.trim()}
+            style={{
+              padding: '6px 14px', fontSize: '13px', fontWeight: 600,
+              backgroundColor: drawingPoints.length < 2 || !routeName.trim() ? '#f1f3f4' : '#1a73e8',
+              color: drawingPoints.length < 2 || !routeName.trim() ? '#9e9e9e' : '#fff',
+              border: 'none', borderRadius: '8px',
+              cursor: drawingPoints.length < 2 || !routeName.trim() ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >저장</button>
+          <button
+            onClick={handleCancelDrawing}
+            style={{
+              padding: '6px 14px', fontSize: '13px', fontWeight: 600,
+              backgroundColor: '#f1f3f4', color: '#5f6368',
+              border: 'none', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >취소</button>
+        </div>
       )}
 
       {/* 비교 모드 종료 플로팅 버튼 — 비교 카드가 보일 때 표시 */}
