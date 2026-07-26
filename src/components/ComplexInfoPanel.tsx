@@ -361,12 +361,15 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   }, []);
 
   // priceHistories 최초 로드 시 참고가 탭을 첫 번째 areaType으로 초기화
+  // editingRefPrice=true 중에는 실행 금지 — + 평형 클릭으로 selectedRefTab을 ''로 만든 직후
+  // 이 effect가 발화해 기존 탭값으로 리셋하면 saveRefPrice에서 PATCH로 잘못 분기됨
   useEffect(() => {
+    if (editingRefPrice) return;
     if (priceHistories.length > 0 && !selectedRefTab) {
       const first = priceHistories[priceHistories.length - 1].items[0]?.areaType || '';
       setSelectedRefTab(first);
     }
-  }, [priceHistories, selectedRefTab]);
+  }, [priceHistories, selectedRefTab, editingRefPrice]);
 
   // 단지 변경 시 좌표가 저장된 학교·인프라를 오버레이 마커로 지도에 전달
   useEffect(() => {
