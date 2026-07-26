@@ -553,7 +553,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   // 참고가 저장 — item 있으면 PATCH, 없으면 오늘 날짜로 POST 신규 생성
   const saveRefPrice = async () => {
     if (!complex) return;
-    const item = getSelectedRefItem();
+    // selectedRefTab이 빈 문자열이면 신규 추가(+ 평형) → item을 null로 강제해 POST 경로로 진입
+    // getSelectedRefItem()의 fallback(latest.items[0])을 쓰면 기존 item id가 반환돼 PATCH로 잘못 분기됨
+    const item = selectedRefTab ? (latestItemPerAreaType.get(selectedRefTab) ?? null) : null;
     setRefPriceSaving(true);
     try {
       const f = refPriceForm;
