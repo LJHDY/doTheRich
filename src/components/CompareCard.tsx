@@ -278,9 +278,17 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                     >{at}</button>
                   ))}
                 </div>
-                {/* 선택된 탭의 참고가 표시 */}
+                {/* 선택된 탭의 가격 + 참고가 — ComplexInfoPanel과 동일 항목 순서 */}
                 {activeItem && (
                   <>
+                    <InfoRow label="매매가" value={activeItem.price ? formatPrice(activeItem.price) : null} />
+                    <InfoRow label="전세가" value={activeItem.jeonsePrice ? formatPrice(activeItem.jeonsePrice) : null} />
+                    <InfoRow label="전세율" value={activeItem.jeonseRate != null
+                      ? `${activeItem.jeonseRate.toFixed(1)}%`
+                      : (activeItem.price && activeItem.jeonsePrice)
+                        ? `${(activeItem.jeonsePrice / activeItem.price * 100).toFixed(1)}%`
+                        : null} />
+                    <InfoRow label="KB시세" value={activeItem.kbPrice ? formatPrice(activeItem.kbPrice) : null} />
                     <InfoRow label="호가" value={activeItem.askingPrice ? formatPrice(activeItem.askingPrice) : null} />
                     <InfoRow label="전고점" value={activeItem.highestPrice ? formatPrice(activeItem.highestPrice) : null} />
                     <InfoRow label="전저점" value={activeItem.lowestPrice ? formatPrice(activeItem.lowestPrice) : null} />
