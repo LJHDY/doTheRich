@@ -32,12 +32,13 @@ interface RoutePanelProps {
   onStartEdit: (route: MapRoute) => void;
   onDelete: (id: number) => void;
   onClose: () => void;
+  onShowMap?: () => void; // 모바일: 지도 뷰로 전환
   isMobile?: boolean;
 }
 
 const RoutePanel: React.FC<RoutePanelProps> = ({
   routes, activeRouteIds, isDrawingRoute, editingRouteId,
-  onToggleActive, onStartDrawing, onStartEdit, onDelete, onClose,
+  onToggleActive, onStartDrawing, onStartEdit, onDelete, onClose, onShowMap,
   isMobile = false,
 }) => {
   return (
@@ -60,10 +61,23 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
         flexShrink: 0,
       }}>
         <span style={{ fontSize: '15px', fontWeight: 700, color: '#202124' }}>경로 관리</span>
-        <button
-          onClick={onClose}
-          style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', color: '#80868b', padding: 0 }}
-        >×</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* 모바일에서만 표시 — 지도 뷰로 전환해 경로 확인 */}
+          {isMobile && onShowMap && (
+            <button
+              onClick={onShowMap}
+              style={{
+                padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid #0b8043', borderRadius: '6px',
+                backgroundColor: '#e6f4ea', color: '#0b8043', cursor: 'pointer',
+              }}
+            >지도 보기</button>
+          )}
+          <button
+            onClick={onClose}
+            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', color: '#80868b', padding: 0 }}
+          >×</button>
+        </div>
       </div>
 
       {/* 신규 경로 그리기 버튼 */}

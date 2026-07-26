@@ -56,6 +56,8 @@ const App: React.FC = () => {
 
   // 경로 관리 패널 + 그리기/수정 모드
   const [routePanelOpen, setRoutePanelOpen] = useState(false);
+  // 모바일 전용: 'list'=경로 목록 패널 / 'map'=지도에서 경로 확인
+  const [mobileRouteView, setMobileRouteView] = useState<'list' | 'map'>('list');
   const [routes, setRoutes] = useState<MapRoute[]>([]);
   const [activeRouteIds, setActiveRouteIds] = useState<Set<number>>(new Set());
   const [editingRouteId, setEditingRouteId] = useState<number | null>(null); // 수정 중인 기존 경로 id
@@ -132,6 +134,7 @@ const App: React.FC = () => {
   // 패널 닫기 — 지도의 경로·그리기 상태 모두 초기화
   const handleClosRoutePanel = () => {
     setRoutePanelOpen(false);
+    setMobileRouteView('list');
     setActiveRouteIds(new Set());
     setIsDrawingRoute(false);
     setEditingRouteId(null);
@@ -584,7 +587,8 @@ const App: React.FC = () => {
                 />
               </div>
             )}
-            {routePanelOpen && (
+            {/* 모바일: 'list' 뷰일 때만 패널 표시 / 데스크탑: 항상 패널 표시 */}
+            {routePanelOpen && (!isMobile || mobileRouteView === 'list') && (
               <div style={isMobile ? {
                 position: 'fixed', inset: 0, zIndex: 500,
                 display: 'flex', flexDirection: 'column',
@@ -599,6 +603,7 @@ const App: React.FC = () => {
                   onStartEdit={handleStartEditRoute}
                   onDelete={handleDeleteRoute}
                   onClose={handleClosRoutePanel}
+                  onShowMap={isMobile ? () => setMobileRouteView('map') : undefined}
                   isMobile={isMobile}
                 />
               </div>
@@ -617,6 +622,23 @@ const App: React.FC = () => {
           onClose={() => setCompareOpen(false)}
           top={headerHeight}
         />
+      )}
+
+      {/* 모바일 경로 지도 뷰 — 경로 목록 버튼 (지도 보는 중에 목록으로 돌아가기) */}
+      {isMobile && routePanelOpen && mobileRouteView === 'map' && (
+        <button
+          onClick={() => setMobileRouteView('list')}
+          style={{
+            position: 'fixed', bottom: '24px', right: '16px', zIndex: 500,
+            padding: '10px 16px', fontSize: '13px', fontWeight: 600,
+            backgroundColor: '#0b8043', color: '#fff',
+            border: 'none', borderRadius: '20px', cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            display: 'flex', alignItems: 'center', gap: '6px',
+          }}
+        >
+          ☰ 경로 목록
+        </button>
       )}
 
       {/* 경로 그리기 플로팅 바 — 지도를 클릭해 점을 찍고 이름 입력 후 저장 */}

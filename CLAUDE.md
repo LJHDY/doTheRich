@@ -79,6 +79,7 @@ src/
     ├── RegisterModal.tsx     # 단지 등록 폼 (가격·교통·출퇴근 입력)
     ├── ComplexInfoPanel.tsx  # 우측 단지 상세 패널
     ├── LivingZonePanel.tsx   # 우측 생활권 관리 패널 (ComplexInfoPanel과 상호 배타)
+    ├── RoutePanel.tsx        # 우측 경로 관리 패널 (지도 클릭 경로 그리기·수정·삭제)
     ├── PriceChart.tsx        # 평형×매매/전세 다중 라인 차트
     └── PriceInputForm.tsx    # 시세 기록 추가 폼 (패널 내)
 public/
@@ -132,6 +133,12 @@ PriceHistoryItem {
 
 // 시세 기록 헤더
 PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistoryItem[] }
+
+// 경로 좌표 한 점
+RoutePoint { lat: number; lng: number }
+
+// 저장된 지도 경로
+MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 ```
 
 ### 유틸 함수
@@ -173,6 +180,12 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 | GET | `/api/real-estate/trade/latest` | 실거래가 조회 (MOLIT) — ⚠️ 주석처리 중 |
 | GET | `/api/real-estate/jeonse/latest` | 전세가 조회 (MOLIT) — ⚠️ 주석처리 중 |
 | POST | `/api/batch/real-estate-price` | 실거래가/전세가 배치 수집 (수동 실행) |
+| PATCH | `/api/complexes/:id/basic-info` | 연식·세대수 수정 — `{ builtYear?, unitCount? }` |
+| PATCH | `/api/complexes/:id/visit-type` | 임장 유형 수정 — `{ visitType: string }` |
+| GET | `/api/routes` | 경로 목록 조회 |
+| POST | `/api/routes` | 경로 저장 (201) — `{ name, points: RoutePoint[] }` |
+| PATCH | `/api/routes/:id` | 경로 수정 — `{ name, points: RoutePoint[] }` |
+| DELETE | `/api/routes/:id` | 경로 삭제 (204) |
 
 ---
 
@@ -190,7 +203,22 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - `livingZoneOpen` → LivingZonePanel 표시 (ComplexInfoPanel과 상호 배타)
   - 생활권 버튼 클릭 시 selectedComplex 초기화 → ComplexInfoPanel 닫힘
   - 마커 클릭 시 `handleComplexSelect` → livingZoneOpen 닫힘
+- `myComplexListOpen` → ComplexListModal(전체, 단지명 검색) 오픈 (헤더 "내 단지" 버튼)
 - 검색 결과 선택 시 `fromSearch:true`로 RegisterModal 오픈
+- **경로 상태**:
+  - `routePanelOpen` → RoutePanel 표시 (헤더 "경로" 버튼)
+  - `routes: MapRoute[]` — 저장된 경로 목록
+  - `activeRouteIds: Set<number>` — 지도에 표시할 경로 ID 집합
+  - `isDrawingRoute` — 경로 그리기 모드 (클릭 시 점 추가)
+  - `drawingPoints: RoutePoint[]` — 현재 그리는 중인 점 배열
+  - `editingRouteId: number | null` — 수정 중인 경로 ID (null=신규)
+  - `routeName` — 저장할 경로 이름 입력
+  - `handleClosRoutePanel()`: 패널 닫기 + 경로 상태 전체 초기화 → MapPage에 빈 경로 배열 전달
+  - `handleToggleActiveRoute(id)`: activeRouteIds에서 id 토글
+  - `handleStartEditRoute(route)`: editingRouteId 설정 + 기존 점 로드 + isDrawingRoute=true
+  - `handleUndoLastPoint()`: drawingPoints 마지막 점 제거
+  - `handleSaveRoute()`: editingRouteId 있으면 PATCH, 없으면 POST
+  - MapPage에 전달: `routePanelOpen ? routes.filter(r => activeRouteIds.has(r.id)) : []`
 
 ### `LivingZonePanel.tsx`
 - 헤더 "생활권" 버튼 클릭 시 우측 사이드패널로 표시
@@ -218,6 +246,11 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - `focusLocation` 변경 시 지도 중심/줌(15) 이동
 - `overlayMarkers` 변경 시 학교·인프라 오버레이 마커 렌더링 (중=파랑/초=초록, 백화점=보라/마트=주황/병원=빨강/기타=회색)
 - `radiusCenter` prop 변경 시 도보 30분 반경 원(2km, 파란 점선) 그리기/제거 (`circleRef`로 단일 인스턴스 관리)
+- **경로 그리기**:
+  - `isDrawingRoute=true` 시 지도 커서 `crosshair`, 클릭 리스너 등록 → `onRoutePointAdd(lat, lng)` 콜백
+  - `drawingPoints` 변경 시: 첫 점=빨간 Marker, 나머지=파란 Marker + 점 2개부터 `shortdash` Polyline
+  - `routes` 변경 시: `ROUTE_COLORS` 팔레트 순서로 Polyline 그리기 (strokeWeight 4)
+  - `routePolylinesRef` / `drawingPolylineRef` / `drawingMarkersRef`로 오버레이 수명 관리
 
 ### `RegisterModal.tsx`
 - 섹션: 기본정보 / 가격정보 / 단지정보 / 교통정보 / 출퇴근시간 / 메모
@@ -226,6 +259,16 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - 교통정보: 역명 → 네이버 API 호선 자동 조회 + 도보시간 계산
 - 출퇴근시간: 강남/시청/여의도/발산/마곡나루 + 분 입력
 - ⚠️ 실거래가 자동조회 — 정확도 문제로 주석처리
+
+### `RoutePanel.tsx`
+- 헤더 "경로" 버튼 클릭 시 우측 사이드패널로 표시
+- "+ 신규 경로 그리기" 버튼 → `isDrawingRoute=true` (그리는 중엔 비활성화)
+- 저장된 경로 목록: `ROUTE_COLORS` 팔레트 순서대로 색상 점 표시
+  - 클릭 시 지도 표시 토글 (`activeRouteIds` 기반), 활성 시 색상 점 확대 + glow
+  - 활성 경로에 거리(km) + 도보시간(분) 표시 (`haversineMeters` + `calcRouteStats`)
+  - "✏ 경로 수정" 버튼: 활성 + 비그리기 상태에서만 표시 → `onStartEdit`
+  - 삭제 버튼(×): `window.confirm()` 후 `onDelete`
+- `isMobile` prop으로 너비 조절 (`'100%'` or `'320px'`)
 
 ### `ComplexInfoPanel.tsx`
 - 단지 선택 시 `GET /api/complexes/:id/price-history` 조회
@@ -247,7 +290,7 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 
 ### `CompareListModal.tsx`
 - 헤더 "비교하기" 버튼 클릭 시 헤더 하단 드롭다운 패널
-- 금액대 필터 + 체크박스 목록 (최대 3개)
+- 단지명 검색 입력 + 즐겨찾기 필터 + 금액대 필터 + 체크박스 목록 (최대 3개)
 - 선택 행 파란 배경 하이라이트
 
 ### `CompareCard.tsx`
@@ -277,12 +320,14 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 
 ### `ComplexListModal.tsx`
 - 헤더 하단 드롭다운 패널 (`position: fixed, top: 56px`)
-- `range` + `areaType` 동시 필터 지원
+- `range` + `areaType` + `searchQuery` 동시 필터 지원
+- 단지명 검색 입력 (실시간 필터, `useMemo` 의존배열에 `searchQuery` 포함 필수)
 - 단지 클릭 → `onSelect` → ComplexInfoPanel + 지도 이동
 - **2단계 그룹핑**: 지역구 sticky 헤더 → 평형 서브헤더(`전용 59` 형식, 숫자 오름차순) → 단지 그리드
   - 평형 정보 없는 경우 서브헤더 없이 표시
   - 한 단지가 여러 평형에 해당하면 각 평형 서브그룹에 각각 노출
   - 각 단지 카드: 금액대 배지(해당 평형 금액대) + 단지명 + 평형별 가격
+- ⚠️ `useMemo` 의존배열에 `favoritesOnly`, `searchQuery` 누락 시 필터 미동작 버그 주의
 
 ---
 
@@ -364,6 +409,15 @@ PriceHistory { id, complexId, complexName, recordDate, memo?, items: PriceHistor
 - [x] 참고가 평형탭 1개여도 표시, + 평형 버튼으로 새 areaType 추가 (POST new history → PATCH 전환)
 - [x] 내 단지 조회/검색 — 헤더 "내 단지" 버튼 → ComplexListModal(전체, 단지명 검색 입력, 선택 시 지도 이동)
 - [x] ComplexListModal·CompareListModal 단지명 검색 입력 (실시간 필터)
+- [x] + 평형 추가 버그 수정 — `setSelectedRefTab('')` 선행 호출로 POST/PATCH 경로 올바르게 분기
+- [x] 임장용 단지 사진(📷)·즐겨찾기(★) 버튼 항상 표시 (가격 데이터 유무와 무관)
+- [x] 임장유형 없을 때 NONE 라벨 표시, 수정 버튼 무조건 표시 (조건 제거)
+- [x] 경로 그리기 기능 — 지도 클릭으로 점 추가, Polyline 실시간 표시, 이름 입력 후 저장 (POST)
+- [x] 경로 수정 기능 — RoutePanel "✏ 경로 수정" → 기존 점 로드 후 추가/undo, 저장 시 PATCH
+- [x] 직전 점 삭제(Undo) — floating bar "↩ 삭제" 버튼 (drawingPoints 1개 미만 시 비활성)
+- [x] 경로 지도 표시 토글 — 패널에서 경로 클릭 시 activeRouteIds 토글, 패널 닫기 시 전체 제거
+- [x] 경로 삭제 confirm — `window.confirm()` 후 DELETE
+- [x] 경로 백엔드 CRUD — SQLAlchemy Route 모델(points=JSON Text), FastAPI 라우터, 서비스 계층, 앱 시작 시 테이블 자동 생성
 
 ## 미완성 / TODO
 
