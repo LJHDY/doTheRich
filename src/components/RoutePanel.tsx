@@ -140,7 +140,10 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
 
                   {/* 삭제 버튼 */}
                   <button
-                    onClick={e => { e.stopPropagation(); onDelete(route.id); }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (window.confirm(`"${route.name}" 경로를 삭제하시겠습니까?`)) onDelete(route.id);
+                    }}
                     style={{
                       border: 'none', background: 'none', cursor: 'pointer',
                       fontSize: '16px', color: '#dadce0', flexShrink: 0, padding: 0, lineHeight: 1,
