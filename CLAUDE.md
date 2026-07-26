@@ -182,6 +182,7 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 | POST | `/api/batch/real-estate-price` | 실거래가/전세가 배치 수집 (수동 실행) |
 | PATCH | `/api/complexes/:id/basic-info` | 연식·세대수 수정 — `{ builtYear?, unitCount? }` |
 | PATCH | `/api/complexes/:id/visit-type` | 임장 유형 수정 — `{ visitType: string }` |
+| PATCH | `/api/complexes/:id/commute-times` | 출퇴근 시간 일괄 교체 — `CommuteTimeRequest[]` (기존 삭제 후 재삽입) |
 | GET | `/api/routes` | 경로 목록 조회 |
 | POST | `/api/routes` | 경로 저장 (201) — `{ name, points: RoutePoint[] }` |
 | PATCH | `/api/routes/:id` | 경로 수정 — `{ name, points: RoutePoint[] }` |
@@ -275,7 +276,7 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - **섹션 순서**: 단지정보(참고가·메모) → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 재개발정보 → 임장유형 → 시세변동 → 최근기록
 - **종합평가**: 직장·교통·학군·환경 4칸 그리드, 각 S/A/B/C 배지 (데이터 없으면 `-`) — 클릭 시 해당 섹션으로 스크롤 (섹션 없으면 무동작)
 - **직장**: `complex.grade` 기반 배지 + 종사자수·사업체수 (`RegionWorkplaceConst`, DB 미저장)
-- **교통**: 주요 지구 소요시간, `CommuteGradeBadge` 배지 표시
+- **교통**: 항상 표시. 데이터 없으면 안내 문구. ✏ 버튼 → 편집 모드: 5개 고정 목적지 행(강남/시청/여의도/발산/마곡나루), "조회" 버튼으로 네이버 지도 대중교통 경로 팝업, 분·환승·교통수단 입력 후 PATCH `/commute-times` (일괄 교체). `CommuteGradeBadge` 배지 표시
 - **학군**: 중학교 `achievementScore` 기준 등급 배지 (S≥95/A≥90/B≥85/C) — 중학교 없으면 배지 미표시
 - **환경**: 주변 인프라, 항상 등급 배지 표시 (백화점 2개↑=S / 1개=A / 마트 1개↑=B / 나머지=C)
 - **재개발 정보**: 유형 + 진행단계, 단계 레이블 `?` 아이콘 호버 시 ①~⑦ 설명 tooltip
@@ -418,6 +419,7 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - [x] 경로 지도 표시 토글 — 패널에서 경로 클릭 시 activeRouteIds 토글, 패널 닫기 시 전체 제거
 - [x] 경로 삭제 confirm — `window.confirm()` 후 DELETE
 - [x] 경로 백엔드 CRUD — SQLAlchemy Route 모델(points=JSON Text), FastAPI 라우터, 서비스 계층, 앱 시작 시 테이블 자동 생성
+- [x] ComplexInfoPanel 교통(출퇴근 시간) 인라인 편집 — ✏ 버튼으로 편집 진입, 5개 고정 목적지(강남/시청/여의도/발산/마곡나루) 행 표시, "조회" 버튼으로 네이버 지도 대중교통 팝업, 분·환승·교통수단 입력 후 PATCH /commute-times 저장 (일괄 교체)
 
 ## 미완성 / TODO
 

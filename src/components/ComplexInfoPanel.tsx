@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo } from '../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -100,6 +100,24 @@ interface SubwayEditRow {
   foundLines: string[];  // 역 조회 결과 호선 목록
   fetching: boolean;
 }
+
+// 출퇴근 시간 편집 행 — 5개 고정 목적지
+interface CommuteEditRow {
+  destination: string;
+  minutes: string;
+  transportType: string;
+  transferCount: string;
+}
+
+// 네이버 지도 경로 URL 생성용 목적지 좌표 — RegisterModal과 동일
+const DESTINATION_COORDS: Record<string, { lng: number; lat: number; label: string }> = {
+  '강남':    { lng: 127.0276368, lat: 37.4979462, label: '강남역' },
+  '시청':    { lng: 126.9769157, lat: 37.5663174, label: '시청역' },
+  '여의도':  { lng: 126.9244095, lat: 37.5216839, label: '여의도역' },
+  '발산':    { lng: 126.8373108, lat: 37.5590293, label: '발산역' },
+  '마곡나루': { lng: 126.8275182, lat: 37.5667930, label: '마곡나루역' },
+};
+const COMMUTE_DESTINATIONS = ['강남', '시청', '여의도', '발산', '마곡나루'];
 
 // 네이버 category("교통 > 지하철 > 서울 지하철 2호선")에서 "2호선"만 추출
 const parseLineFromCategory = (category: string): string =>
@@ -355,6 +373,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [subwayRows, setSubwayRows] = useState<SubwayEditRow[]>([]);
   const [deletedSubwayIds, setDeletedSubwayIds] = useState<number[]>([]);
   const [savingSubway, setSavingSubway] = useState(false);
+  // 출퇴근 시간 편집 상태 — 5개 고정 목적지 행
+  const [editingCommute, setEditingCommute] = useState(false);
+  const [commuteRows, setCommuteRows] = useState<CommuteEditRow[]>([]);
+  const [savingCommute, setSavingCommute] = useState(false);
   // 추가 행 localId 생성용 카운터 — useRef로 관리해 리렌더 시 초기화 방지
   const schoolRowCounter = useRef(0);
   const infraRowCounter = useRef(0);
@@ -456,6 +478,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setEditingSubway(false);
       setSubwayRows([]);
       setDeletedSubwayIds([]);
+      setEditingCommute(false);
+      setCommuteRows([]);
       loadPriceHistories(complex.id);
     }
   }, [complex, loadPriceHistories, onRadiusToggle]);
@@ -1079,6 +1103,50 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       /* 저장 실패 시 폼 유지 */
     } finally {
       setSavingSubway(false);
+    }
+  };
+
+  // 출퇴근 시간 편집 시작 — 기존 데이터로 5개 행 초기화
+  const startEditCommute = () => {
+    const rows: CommuteEditRow[] = COMMUTE_DESTINATIONS.map(dest => {
+      const existing = complex?.commuteTimes?.find(ct => ct.destination === dest);
+      return {
+        destination: dest,
+        minutes: existing?.minutes != null ? String(existing.minutes) : '',
+        transportType: existing?.transportType || '지하철',
+        transferCount: existing?.transferCount != null ? String(existing.transferCount) : '',
+      };
+    });
+    setCommuteRows(rows);
+    setEditingCommute(true);
+  };
+
+  const cancelEditCommute = () => {
+    setEditingCommute(false);
+    setCommuteRows([]);
+  };
+
+  const saveCommute = async () => {
+    if (!complex) return;
+    setSavingCommute(true);
+    try {
+      // 분 입력이 있는 행만 전송, 없는 행은 제외 (삭제 처리)
+      const items = commuteRows
+        .filter(r => r.minutes.trim())
+        .map(r => ({
+          destination: r.destination,
+          minutes: parseInt(r.minutes),
+          transportType: r.transportType || undefined,
+          transferCount: r.transferCount.trim() ? parseInt(r.transferCount) : undefined,
+        }));
+      await updateCommuteTimes(complex.id, items);
+      setEditingCommute(false);
+      setCommuteRows([]);
+      await refreshComplex();
+    } catch {
+      /* 저장 실패 시 폼 유지 */
+    } finally {
+      setSavingCommute(false);
     }
   };
 
@@ -1769,49 +1837,123 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
         )}
 
-        {/* 교통 (주요 지구 소요시간) */}
-        {complex.commuteTimes && complex.commuteTimes.length > 0 && (
-          <div ref={commuteSectionRef} style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>
-                교통
-              </h3>
+        {/* 교통 (주요 지구 소요시간) — 항상 표시, ✏ 버튼으로 편집 진입 */}
+        <div ref={commuteSectionRef} style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>교통</h3>
+            {complex.commuteTimes && complex.commuteTimes.length > 0 && (
               <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '6px',
-              }}
-            >
-              {complex.commuteTimes.map((ct) => (
-                <div
-                  key={ct.id}
-                  style={{
-                    textAlign: 'center',
-                    padding: '8px 4px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '8px',
-                    border: '1px solid #e8eaed',
-                  }}
-                >
-                  <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '2px' }}>
-                    {ct.destination}
-                  </div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a73e8' }}>
-                    {ct.minutes}분
-                  </div>
-                  {ct.transferCount != null && (
-                    <div style={{ fontSize: '10px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', marginTop: '2px' }}>
-                      {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            )}
+            {!editingCommute && (
+              <button
+                onClick={startEditCommute}
+                style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#80868b', padding: '2px 4px' }}
+                title="출퇴근 시간 수정"
+              >✏</button>
+            )}
           </div>
-        )}
+
+          {/* 편집 모드 — 5개 목적지 행 입력 */}
+          {editingCommute ? (
+            <div>
+              {commuteRows.map((row, i) => {
+                const destCoords = DESTINATION_COORDS[row.destination];
+                return (
+                  <div key={row.destination} style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '6px' }}>
+                    {/* 목적지 라벨 */}
+                    <span style={{ fontSize: '12px', color: '#5f6368', width: '52px', flexShrink: 0 }}>{row.destination}</span>
+                    {/* 네이버 지도 조회 버튼 */}
+                    <button
+                      onClick={() => {
+                        if (!destCoords || !complex.latitude || !complex.longitude) return;
+                        const start = `${complex.longitude},${complex.latitude},${encodeURIComponent(complex.complexName)}`;
+                        const goal = `${destCoords.lng},${destCoords.lat},${encodeURIComponent(destCoords.label)}`;
+                        window.open(`https://map.naver.com/p/directions/${start}/${goal}/-/transit`, '_blank', 'noopener,noreferrer');
+                      }}
+                      style={{
+                        padding: '4px 8px', fontSize: '11px', fontWeight: 600,
+                        border: '1px solid #34a853', borderRadius: '6px',
+                        backgroundColor: '#e6f4ea', color: '#0b8043',
+                        cursor: 'pointer', flexShrink: 0,
+                      }}
+                      title="네이버 지도에서 대중교통 경로 확인"
+                    >조회</button>
+                    {/* 소요시간(분) */}
+                    <input
+                      type="number"
+                      placeholder="분"
+                      value={row.minutes}
+                      onChange={e => setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, minutes: e.target.value } : r))}
+                      style={{ ...editInputStyle, width: '52px', flexShrink: 0 }}
+                    />
+                    {/* 환승 횟수 */}
+                    <input
+                      type="number"
+                      placeholder="환승"
+                      value={row.transferCount}
+                      onChange={e => setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, transferCount: e.target.value } : r))}
+                      style={{ ...editInputStyle, width: '46px', flexShrink: 0 }}
+                    />
+                    {/* 교통수단 */}
+                    <select
+                      value={row.transportType}
+                      onChange={e => setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, transportType: e.target.value } : r))}
+                      style={{ ...editInputStyle, width: '62px', flexShrink: 0 }}
+                    >
+                      {['지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                );
+              })}
+              <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                <button
+                  onClick={saveCommute}
+                  disabled={savingCommute}
+                  style={{
+                    padding: '6px 14px', fontSize: '12px', fontWeight: 600,
+                    border: '1px solid #1a73e8', borderRadius: '6px',
+                    backgroundColor: '#e8f0fe', color: '#1a73e8', cursor: 'pointer',
+                  }}
+                >{savingCommute ? '저장 중…' : '저장'}</button>
+                <button
+                  onClick={cancelEditCommute}
+                  style={{
+                    padding: '6px 14px', fontSize: '12px',
+                    border: '1px solid #dadce0', borderRadius: '6px',
+                    background: 'none', color: '#5f6368', cursor: 'pointer',
+                  }}
+                >취소</button>
+              </div>
+            </div>
+          ) : (
+            /* 읽기 모드 */
+            complex.commuteTimes && complex.commuteTimes.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                {complex.commuteTimes.map((ct) => (
+                  <div
+                    key={ct.id}
+                    style={{
+                      textAlign: 'center', padding: '8px 4px',
+                      backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e8eaed',
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '2px' }}>{ct.destination}</div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a73e8' }}>{ct.minutes}분</div>
+                    {ct.transferCount != null && (
+                      <div style={{ fontSize: '10px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', marginTop: '2px' }}>
+                        {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: '12px', color: '#9e9e9e', padding: '6px 0' }}>
+                ✏ 버튼을 눌러 출퇴근 시간을 입력하세요.
+              </div>
+            )
+          )}
+        </div>
 
         {/* 학군 — 기존 데이터나 추가 행이 있을 때 섹션 표시 */}
         {((complex.schoolInfos && complex.schoolInfos.length > 0) || newSchoolRows.length > 0) && (

@@ -7,6 +7,7 @@ import {
   SchoolInfo,
   InfraInfo,
   SubwayInfo,
+  CommuteTime,
   ComplexPhoto,
   LivingZone,
   LivingZonePhoto,
@@ -327,6 +328,15 @@ export const updateSubwayInfo = async (
 /** 지하철 정보 삭제 — DELETE /api/complexes/:id/subway-infos/:sid */
 export const deleteSubwayInfo = async (complexId: number, subwayId: number): Promise<void> => {
   await api.delete(`/api/complexes/${complexId}/subway-infos/${subwayId}`);
+};
+
+/** 출퇴근 시간 일괄 교체 — PATCH /api/complexes/:id/commute-times */
+export const updateCommuteTimes = async (
+  complexId: number,
+  items: Array<{ destination: string; minutes?: number; transportType?: string; transferCount?: number }>
+): Promise<CommuteTime[]> => {
+  const { data } = await api.patch<CommuteTime[]>(`/api/complexes/${complexId}/commute-times`, items);
+  return data;
 };
 
 /** 경로 목록 조회 — GET /api/routes */
