@@ -1298,25 +1298,36 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </button>
         </div>
         <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {/* 평형별 가격 표시 — 가격 있을 때만 */}
-          {(latestHistory?.items.some(i => i.price) || complex.price) && (
-            <div style={{ fontSize: '15px', fontWeight: 700, display: 'flex', flexWrap: 'wrap', gap: '2px', flex: 1 }}>
-              {latestHistory?.items.filter(i => i.price).length
-                ? latestHistory!.items.filter(i => i.price).map((item, idx) => (
-                    <span key={item.areaType ?? idx} style={{ whiteSpace: 'nowrap' }}>
+          {/* 평형별 가격 표시 — latestItemPerAreaType으로 전체 히스토리에서 areaType별 최신값 수집
+               평형별 별도 등록(여러 PriceHistory)이어도 모든 평형이 표시됨 */}
+          {(() => {
+            const priceItems = Array.from(latestItemPerAreaType.entries())
+              .filter(([, item]) => item.price)
+              .sort(([a], [b]) => areaTypeNum(a) - areaTypeNum(b));
+            if (priceItems.length > 0) {
+              return (
+                <div style={{ fontSize: '15px', fontWeight: 700, display: 'flex', flexWrap: 'wrap', gap: '2px', flex: 1 }}>
+                  {priceItems.map(([at, item], idx) => (
+                    <span key={at} style={{ whiteSpace: 'nowrap' }}>
                       {idx > 0 && <span style={{ opacity: 0.5, margin: '0 3px' }}>|</span>}
                       {formatPrice(item.price!)}
-                      {item.areaType && (
-                        <span style={{ fontSize: '11px', fontWeight: 400, opacity: 0.8, marginLeft: '2px' }}>
-                          ({item.areaType})
-                        </span>
-                      )}
+                      <span style={{ fontSize: '11px', fontWeight: 400, opacity: 0.8, marginLeft: '2px' }}>
+                        ({at})
+                      </span>
                     </span>
-                  ))
-                : <span style={{ fontSize: '20px' }}>{formatPrice(complex.price)}</span>
-              }
-            </div>
-          )}
+                  ))}
+                </div>
+              );
+            }
+            if (complex.price) {
+              return (
+                <div style={{ fontSize: '15px', fontWeight: 700, flex: 1 }}>
+                  <span style={{ fontSize: '20px' }}>{formatPrice(complex.price)}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
             {/* 즐겨찾기 버튼 — 노란별(활성)/회색별(비활성), 낙관적 업데이트 */}
             <button
