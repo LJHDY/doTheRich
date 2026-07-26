@@ -1214,6 +1214,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             {!editingRefPrice && (
               <button
                 onClick={() => {
+                  setSelectedRefTab(''); // 탭 선택 해제 → saveRefPrice에서 POST 경로로 진입
                   setRefPriceForm({ areaType: '', priceUk: '', jeonseUk: '', kbPriceUk: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' });
                   setEditingRefPrice(true);
                 }}
