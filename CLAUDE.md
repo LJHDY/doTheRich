@@ -72,7 +72,8 @@ src/
 └── components/
     ├── PriceRangeFilter.tsx  # 헤더 금액대 필터 버튼
     ├── ComplexListModal.tsx  # 금액대 클릭 시 단지 목록 팝업
-    ├── CompareListModal.tsx  # 비교하기 단지 선택 패널 (헤더 하단 드롭다운)
+    ├── CompareListModal.tsx  # 비교하기 단지 선택 패널 (헤더 하단 드롭다운) + 비교평가 모드 토글
+    ├── ComparisonEvalPanel.tsx # 1:1 비교평가 패널 (사진+메모, 가치평가, 가격비교, 결론)
     ├── CompareCard.tsx       # 비교 뷰 단지 카드 (ComplexInfoPanel과 동일 표시, 수정/삭제 기능 제외)
     ├── CommuteGradeBadge.tsx # 입지 등급 배지 (S/A/B/C) — 공통 컴포넌트
     ├── SearchBar.tsx         # 네이버 장소 검색
@@ -291,8 +292,18 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 
 ### `CompareListModal.tsx`
 - 헤더 "비교하기" 버튼 클릭 시 헤더 하단 드롭다운 패널
-- 단지명 검색 입력 + 즐겨찾기 필터 + 금액대 필터 + 체크박스 목록 (최대 3개)
+- 단지명 검색 입력 + 즐겨찾기 필터 + 금액대 필터 + 체크박스 목록
+- **비교평가 모드 토글** (헤더 내 버튼): normal(최대 3개) / evaluation(최대 2개)
 - 선택 행 파란 배경 하이라이트
+
+### `ComparisonEvalPanel.tsx`
+- 비교평가 모드에서 2개 단지 선택 시 우측에 표시되는 패널
+- 마운트 시 `GET /api/comparisons`로 두 단지에 해당하는 기존 비교 자동 로드
+- **사진**: 업로드(POST + multipart), 메모 인라인 편집(PATCH), 삭제(DELETE), 썸네일 클릭 시 원본 새 탭
+- **텍스트 필드**: 가치 평가 / 가격 비교 평가 / 메모 / 결론 (textarea)
+- **저장**: 기존 없으면 POST, 있으면 PATCH (저장 후 사진 업로드 활성화)
+- **삭제**: 전체 비교 평가 + CASCADE 사진 삭제
+- 저장 전에는 사진 업로드 비활성 + 안내 문구 표시
 
 ### `CompareCard.tsx`
 - 비교 뷰에서 1/3 너비로 표시되는 단지 카드 (ComplexInfoPanel과 동일 내용, 수정/삭제 기능 제외)
@@ -430,6 +441,7 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - [x] 시세 차트 동일 날짜 중복 포인트 버그 수정 — dateMap 머징으로 같은 날짜 기록을 하나의 X축 포인트로 합산
 - [x] ComplexInfoPanel 헤더 평형별 금액 표시 — `latestItemPerAreaType`으로 전체 이력에서 평형별 최신 가격 집계 (단건 POST로 추가된 평형도 모두 표시)
 - [x] CompareCard 전면 재작성 — ComplexInfoPanel과 표시 내용 완전 동기화 (수정/삭제 기능 제외), 참고가·교통·환경·임장유형·최근5건 동일 표시
+- [x] 비교평가 기능 — CompareListModal에 모드 토글(normal/evaluation), 비교평가 모드 선택 시 1:1 비교 후 우측 ComparisonEvalPanel 표시 (사진+메모, 가치평가, 가격비교, 결론, CRUD)
 
 ## 미완성 / TODO
 

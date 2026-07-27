@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { ApartmentComplex, formatPrice } from '../types';
+import React, { useState, useEffect } from 'react';
+import { ApartmentComplex, Comparison, formatPrice } from '../types';
+import { getComparisons } from '../services/api';
 
 interface CompareListModalProps {
   complexes: ApartmentComplex[];
@@ -7,31 +8,47 @@ interface CompareListModalProps {
   selectedIds: number[];
   onToggle: (id: number) => void;
   onClose: () => void;
-  top?: number; // 헤더 높이(px) — 기본값 56
+  compareMode: 'normal' | 'evaluation';
+  onModeChange: (mode: 'normal' | 'evaluation') => void;
+  // 저장된 비교평가 선택 시 두 단지를 비교평가 모드로 바로 진입
+  onSelectComparison: (complexId1: number, complexId2: number) => void;
+  top?: number;
 }
 
-// 필터 기준 매칭 평형 목록 반환
 const getMatchingAreaTypes = (complex: ApartmentComplex, range: string): string[] => {
   if (!range) return [];
   const atMap = complex.areaTypePriceRanges;
-  if (atMap) {
-    return Object.entries(atMap).filter(([, r]) => r === range).map(([at]) => at);
-  }
+  if (atMap) return Object.entries(atMap).filter(([, r]) => r === range).map(([at]) => at);
   return complex.areaTypes ?? [];
 };
 
-// 특정 평형의 가격 반환 — priceItems 없으면 대표가 fallback
 const getPriceForAreaType = (complex: ApartmentComplex, at: string | null): number | undefined => {
   if (!at) return complex.price;
   return complex.priceItems?.find(p => p.areaType === at)?.price ?? complex.price;
 };
 
 const CompareListModal: React.FC<CompareListModalProps> = ({
-  complexes, priceRanges, selectedIds, onToggle, onClose, top = 56,
+  complexes, priceRanges, selectedIds, onToggle, onClose,
+  compareMode, onModeChange, onSelectComparison, top = 56,
 }) => {
   const [selectedRange, setSelectedRange] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // 조회 모드 — 저장된 비교평가 목록 표시
+  const [showComparisons, setShowComparisons] = useState(false);
+  const [comparisons, setComparisons] = useState<Comparison[]>([]);
+  const [loadingComparisons, setLoadingComparisons] = useState(false);
+
+  // 조회 버튼 클릭 시 비교평가 목록 로드
+  useEffect(() => {
+    if (!showComparisons) return;
+    setLoadingComparisons(true);
+    getComparisons()
+      .then(setComparisons)
+      .catch(() => setComparisons([]))
+      .finally(() => setLoadingComparisons(false));
+  }, [showComparisons]);
 
   const filtered = complexes.filter(c => {
     const q = searchQuery.trim().toLowerCase();
@@ -45,149 +62,240 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
     return true;
   });
 
-  // 금액대 오름차순 정렬 (숫자 파싱)
   const sortedRanges = [...priceRanges].sort((a, b) => {
     const na = parseInt(a); const nb = parseInt(b);
     return isNaN(na) || isNaN(nb) ? 0 : na - nb;
   });
 
+  const btnBase: React.CSSProperties = {
+    padding: '4px 10px', fontSize: '11px', fontWeight: 700,
+    cursor: 'pointer', border: '1px solid', borderRadius: '10px', whiteSpace: 'nowrap',
+  };
+
   return (
     <>
-      {/* 투명 백드롭 — 바깥 클릭 시 닫힘 */}
-      <div
-        style={{ position: 'fixed', inset: 0, zIndex: 300 }}
-        onClick={onClose}
-      />
+      {/* 투명 백드롭 */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 300 }} onClick={onClose} />
 
-      {/* 패널 본체 */}
       <div style={{
         position: 'fixed', top: `${top}px`, left: '50%', transform: 'translateX(-50%)',
-        width: '480px', maxWidth: 'calc(100vw - 16px)', maxHeight: '65vh',
+        width: '520px', maxWidth: 'calc(100vw - 16px)', maxHeight: '65vh',
         backgroundColor: '#fff', borderRadius: '0 0 12px 12px',
         boxShadow: '0 6px 24px rgba(0,0,0,0.15)',
         zIndex: 301, display: 'flex', flexDirection: 'column',
       }}>
-        {/* 헤더 */}
-        <div style={{
-          padding: '12px 16px', borderBottom: '1px solid #e8eaed',
-          display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0,
-        }}>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: '#202124' }}>
-            비교할 단지 선택
-          </span>
-          <span style={{
-            fontSize: '12px', fontWeight: 700,
-            color: selectedIds.length > 0 ? '#1a73e8' : '#9e9e9e',
-            backgroundColor: selectedIds.length > 0 ? '#e8f0fe' : '#f5f5f5',
-            padding: '2px 8px', borderRadius: '10px',
-          }}>
-            {selectedIds.length}/3
-          </span>
 
-          {/* 즐겨찾기 토글 */}
-          <button
-            onClick={() => setFavoritesOnly(v => !v)}
-            style={{
-              padding: '4px 8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-              border: '1px solid', borderRadius: '6px',
-              borderColor: favoritesOnly ? '#f9ab00' : '#dadce0',
-              backgroundColor: favoritesOnly ? '#fef9e7' : '#fff',
-              color: favoritesOnly ? '#f9ab00' : '#9e9e9e',
-            }}
-          >★ 즐겨찾기</button>
+        {/* 헤더 — 2줄 */}
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid #e8eaed', flexShrink: 0 }}>
 
-          {/* 단지명 검색 */}
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="단지명 검색..."
-            style={{
-              fontSize: '12px', padding: '4px 10px', width: '110px',
-              border: '1px solid #dadce0', borderRadius: '14px', outline: 'none', color: '#202124',
-            }}
-          />
+          {/* 1줄: 제목+카운트 / 비교평가·조회·즐겨찾기 버튼 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#202124' }}>
+              {showComparisons ? '저장된 비교평가' : '비교할 단지 선택'}
+            </span>
+            {!showComparisons && (
+              <span style={{
+                fontSize: '11px', fontWeight: 700,
+                color: selectedIds.length > 0 ? '#1a73e8' : '#9e9e9e',
+                backgroundColor: selectedIds.length > 0 ? '#e8f0fe' : '#f5f5f5',
+                padding: '2px 7px', borderRadius: '10px',
+              }}>
+                {selectedIds.length}/{compareMode === 'evaluation' ? 2 : 3}
+              </span>
+            )}
 
-          {/* 금액대 필터 */}
-          <div style={{ marginLeft: 'auto', position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-            <select
-              value={selectedRange}
-              onChange={e => setSelectedRange(e.target.value)}
-              style={{
-                appearance: 'none', WebkitAppearance: 'none',
-                fontSize: '12px', padding: '4px 24px 4px 8px',
-                border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
-                backgroundColor: selectedRange ? '#e8f0fe' : '#fff',
-                color: selectedRange ? '#1a73e8' : '#5f6368', cursor: 'pointer',
-              }}
-            >
-              <option value="">전체 금액대</option>
-              {sortedRanges.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-            <svg viewBox="0 0 24 24" fill="none" stroke="#9e9e9e" strokeWidth={2.5}
-              strokeLinecap="round" strokeLinejoin="round"
-              style={{ position: 'absolute', right: '7px', width: '10px', height: '10px', pointerEvents: 'none' }}>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </div>
-        </div>
-
-        {/* 단지 리스트 */}
-        <div style={{ overflowY: 'auto', flex: 1 }}>
-          {filtered.map(c => {
-            const isSelected = selectedIds.includes(c.id);
-            const matchingAts = getMatchingAreaTypes(c, selectedRange);
-            const singleAt = matchingAts.length === 1 ? matchingAts[0] : null;
-            const displayPrice = getPriceForAreaType(c, singleAt);
-            const displayRange = selectedRange || c.priceRange;
-
-            return (
-              <div
-                key={c.id}
-                onClick={() => onToggle(c.id)}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {/* 비교평가 토글 */}
+              <button
+                onClick={() => {
+                  setShowComparisons(false);
+                  onModeChange(compareMode === 'normal' ? 'evaluation' : 'normal');
+                }}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 16px', borderBottom: '1px solid #f5f5f5',
-                  backgroundColor: isSelected ? '#e8f0fe' : '#fff',
-                  cursor: 'pointer', transition: 'background-color 0.1s',
+                  ...btnBase,
+                  borderColor: compareMode === 'evaluation' ? '#34a853' : '#dadce0',
+                  backgroundColor: compareMode === 'evaluation' ? '#e6f4ea' : '#fff',
+                  color: compareMode === 'evaluation' ? '#34a853' : '#9e9e9e',
                 }}
               >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#202124', marginBottom: '3px' }}>
-                    {c.complexName}
+                {compareMode === 'evaluation' ? '✓ 비교평가' : '비교평가'}
+              </button>
+
+              {/* 조회 — 저장된 비교평가 목록 토글 */}
+              <button
+                onClick={() => setShowComparisons(v => !v)}
+                style={{
+                  ...btnBase,
+                  borderColor: showComparisons ? '#1a73e8' : '#dadce0',
+                  backgroundColor: showComparisons ? '#e8f0fe' : '#fff',
+                  color: showComparisons ? '#1a73e8' : '#9e9e9e',
+                }}
+              >
+                조회
+              </button>
+
+              {/* 즐겨찾기 필터 */}
+              <button
+                onClick={() => setFavoritesOnly(v => !v)}
+                style={{
+                  ...btnBase,
+                  borderColor: favoritesOnly ? '#f9ab00' : '#dadce0',
+                  backgroundColor: favoritesOnly ? '#fef9e7' : '#fff',
+                  color: favoritesOnly ? '#f9ab00' : '#9e9e9e',
+                }}
+              >★ 즐겨찾기</button>
+            </div>
+          </div>
+
+          {/* 2줄: 단지명 검색 + 금액대 셀렉트 (조회 모드일 때는 숨김) */}
+          {!showComparisons && (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="단지명 검색..."
+                style={{
+                  flex: 1, fontSize: '12px', padding: '5px 12px',
+                  border: '1px solid #dadce0', borderRadius: '14px', outline: 'none', color: '#202124',
+                }}
+              />
+              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+                <select
+                  value={selectedRange}
+                  onChange={e => setSelectedRange(e.target.value)}
+                  style={{
+                    appearance: 'none', WebkitAppearance: 'none',
+                    fontSize: '12px', padding: '5px 24px 5px 10px',
+                    border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
+                    backgroundColor: selectedRange ? '#e8f0fe' : '#fff',
+                    color: selectedRange ? '#1a73e8' : '#5f6368', cursor: 'pointer',
+                  }}
+                >
+                  <option value="">전체 금액대</option>
+                  {sortedRanges.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#9e9e9e" strokeWidth={2.5}
+                  strokeLinecap="round" strokeLinejoin="round"
+                  style={{ position: 'absolute', right: '7px', width: '10px', height: '10px', pointerEvents: 'none' }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 본문 — 조회 모드: 저장된 비교평가 목록 / 선택 모드: 단지 목록 */}
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {showComparisons ? (
+            // 저장된 비교평가 목록
+            loadingComparisons ? (
+              <div style={{ padding: '32px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>로딩 중...</div>
+            ) : comparisons.length === 0 ? (
+              <div style={{ padding: '32px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>
+                저장된 비교평가가 없습니다.
+              </div>
+            ) : (
+              comparisons.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => {
+                    onSelectComparison(c.complexId1, c.complexId2);
+                    onClose();
+                  }}
+                  style={{
+                    padding: '12px 16px', borderBottom: '1px solid #f5f5f5',
+                    cursor: 'pointer', transition: 'background-color 0.1s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                >
+                  {/* 단지 vs 단지 */}
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#202124', marginBottom: '4px' }}>
+                    {c.complexName1}
+                    <span style={{ color: '#9e9e9e', margin: '0 6px', fontWeight: 400 }}>vs</span>
+                    {c.complexName2}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                    {/* 금액대 배지 */}
-                    <span style={{
-                      fontSize: '10px', fontWeight: 700, color: '#fff',
-                      backgroundColor: '#1a73e8', borderRadius: '10px', padding: '1px 6px',
-                    }}>{displayRange}</span>
-                    {/* 매칭 평형 배지 */}
-                    {matchingAts.map(at => (
-                      <span key={at} style={{
-                        fontSize: '10px', fontWeight: 600, color: '#1a73e8',
-                        backgroundColor: '#e8f0fe', borderRadius: '10px', padding: '1px 6px',
-                      }}>{at.replace(/^전용\s*/, '')}</span>
-                    ))}
-                    <span style={{ fontSize: '11px', color: '#80868b' }}>
-                      {c.region}{displayPrice ? ` · ${formatPrice(displayPrice)}` : ''}
+                  {/* 결론 미리보기 */}
+                  {c.conclusion && (
+                    <div style={{ fontSize: '11px', color: '#34a853', fontWeight: 600, marginBottom: '2px' }}>
+                      → {c.conclusion}
+                    </div>
+                  )}
+                  {/* 가치평가 미리보기 */}
+                  {c.valueRating && !c.conclusion && (
+                    <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '2px' }}>
+                      {c.valueRating}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {c.photos.length > 0 && (
+                      <span style={{ fontSize: '10px', color: '#9e9e9e' }}>📷 {c.photos.length}장</span>
+                    )}
+                    <span style={{ fontSize: '10px', color: '#bdbdbd' }}>
+                      {new Date(c.createdAt).toLocaleDateString('ko-KR')}
                     </span>
                   </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => onToggle(c.id)}
-                  onClick={e => e.stopPropagation()}
-                  style={{ width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0, marginLeft: '12px', accentColor: '#1a73e8' }}
-                />
-              </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div style={{ padding: '32px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>
-              해당하는 단지가 없습니다.
-            </div>
+              ))
+            )
+          ) : (
+            // 단지 선택 목록
+            <>
+              {filtered.map(c => {
+                const isSelected = selectedIds.includes(c.id);
+                const matchingAts = getMatchingAreaTypes(c, selectedRange);
+                const singleAt = matchingAts.length === 1 ? matchingAts[0] : null;
+                const displayPrice = getPriceForAreaType(c, singleAt);
+                const displayRange = selectedRange || c.priceRange;
+
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => onToggle(c.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '10px 16px', borderBottom: '1px solid #f5f5f5',
+                      backgroundColor: isSelected ? '#e8f0fe' : '#fff',
+                      cursor: 'pointer', transition: 'background-color 0.1s',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#202124', marginBottom: '3px' }}>
+                        {c.complexName}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontSize: '10px', fontWeight: 700, color: '#fff',
+                          backgroundColor: '#1a73e8', borderRadius: '10px', padding: '1px 6px',
+                        }}>{displayRange}</span>
+                        {matchingAts.map(at => (
+                          <span key={at} style={{
+                            fontSize: '10px', fontWeight: 600, color: '#1a73e8',
+                            backgroundColor: '#e8f0fe', borderRadius: '10px', padding: '1px 6px',
+                          }}>{at.replace(/^전용\s*/, '')}</span>
+                        ))}
+                        <span style={{ fontSize: '11px', color: '#80868b' }}>
+                          {c.region}{displayPrice ? ` · ${formatPrice(displayPrice)}` : ''}
+                        </span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggle(c.id)}
+                      onClick={e => e.stopPropagation()}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0, marginLeft: '12px', accentColor: '#1a73e8' }}
+                    />
+                  </div>
+                );
+              })}
+              {filtered.length === 0 && (
+                <div style={{ padding: '32px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>
+                  해당하는 단지가 없습니다.
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

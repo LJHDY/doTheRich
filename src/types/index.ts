@@ -54,6 +54,32 @@ export interface InfraInfo {
   longitude?: number;
 }
 
+/** 비교 평가 사진 — 백엔드 ComparisonPhotoDto와 1:1 매핑 */
+export interface ComparisonPhoto {
+  id: number;
+  comparisonId: number;
+  fileName: string;
+  url: string;
+  memo?: string;
+  createdAt: string;
+}
+
+/** 1:1 단지 비교 평가 — 백엔드 ComparisonDto와 1:1 매핑 */
+export interface Comparison {
+  id: number;
+  complexId1: number;
+  complexId2: number;
+  complexName1: string;
+  complexName2: string;
+  memo?: string;
+  thumbnailUrl?: string;
+  valueRating?: string;  // 가치 평가
+  priceNote?: string;    // 가격 비교 평가
+  conclusion?: string;   // 결론
+  createdAt: string;
+  photos: ComparisonPhoto[];
+}
+
 /** 생활권 사진 — 백엔드 LivingZonePhotoDto와 1:1 매핑 */
 export interface LivingZonePhoto {
   id: number;

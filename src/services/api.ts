@@ -13,6 +13,8 @@ import {
   LivingZonePhoto,
   MapRoute,
   RoutePoint,
+  Comparison,
+  ComparisonPhoto,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -360,6 +362,67 @@ export const updateRoute = async (id: number, name: string, points: RoutePoint[]
 /** 경로 삭제 — DELETE /api/routes/:id */
 export const deleteRoute = async (id: number): Promise<void> => {
   await api.delete(`/api/routes/${id}`);
+};
+
+/** 비교 평가 목록 조회 — GET /api/comparisons */
+export const getComparisons = async (): Promise<Comparison[]> => {
+  const { data } = await api.get<Comparison[]>('/api/comparisons');
+  return data;
+};
+
+/** 비교 평가 단건 조회 — GET /api/comparisons/:id */
+export const getComparisonById = async (id: number): Promise<Comparison> => {
+  const { data } = await api.get<Comparison>(`/api/comparisons/${id}`);
+  return data;
+};
+
+/** 비교 평가 생성 — POST /api/comparisons */
+export const createComparison = async (body: {
+  complexId1: number; complexId2: number;
+  memo?: string; valueRating?: string; priceNote?: string; conclusion?: string;
+}): Promise<Comparison> => {
+  const { data } = await api.post<Comparison>('/api/comparisons', body);
+  return data;
+};
+
+/** 비교 평가 부분 수정 — PATCH /api/comparisons/:id */
+export const updateComparison = async (
+  id: number,
+  body: { memo?: string; valueRating?: string; priceNote?: string; conclusion?: string }
+): Promise<Comparison> => {
+  const { data } = await api.patch<Comparison>(`/api/comparisons/${id}`, body);
+  return data;
+};
+
+/** 비교 평가 삭제 (사진 CASCADE) — DELETE /api/comparisons/:id */
+export const deleteComparison = async (id: number): Promise<void> => {
+  await api.delete(`/api/comparisons/${id}`);
+};
+
+/** 비교 평가 사진 업로드 — POST /api/comparisons/:id/photos (multipart) */
+export const uploadComparisonPhoto = async (
+  id: number, file: File, memo?: string
+): Promise<ComparisonPhoto> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (memo) formData.append('memo', memo);
+  const { data } = await api.post<ComparisonPhoto>(
+    `/api/comparisons/${id}/photos`, formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return data;
+};
+
+/** 비교 평가 사진 메모 수정 — PATCH /api/comparisons/:id/photos/:photoId */
+export const updateComparisonPhotoMemo = async (
+  id: number, photoId: number, memo: string
+): Promise<void> => {
+  await api.patch(`/api/comparisons/${id}/photos/${photoId}`, { memo });
+};
+
+/** 비교 평가 사진 삭제 — DELETE /api/comparisons/:id/photos/:photoId */
+export const deleteComparisonPhoto = async (id: number, photoId: number): Promise<void> => {
+  await api.delete(`/api/comparisons/${id}/photos/${photoId}`);
 };
 
 export default api;

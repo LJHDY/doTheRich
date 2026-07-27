@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint } from './types';
+import { ApartmentComplex, Comparison, MapRoute, OverlayMarker, RoutePoint } from './types';
 import { getComplexes, getPriceRanges, runBatchRealEstatePrice, getRoutes, createRoute, updateRoute, deleteRoute } from './services/api';
 import MapPage from './pages/MapPage';
 import PriceRangeFilter from './components/PriceRangeFilter';
@@ -7,6 +7,7 @@ import ComplexInfoPanel from './components/ComplexInfoPanel';
 import ComplexListModal from './components/ComplexListModal';
 import CompareListModal from './components/CompareListModal';
 import CompareCard from './components/CompareCard';
+import ComparisonEvalPanel from './components/ComparisonEvalPanel';
 import SearchBar, { SearchSelectData } from './components/SearchBar';
 import RegisterModal, { RegisterInitialData } from './components/RegisterModal';
 import LivingZonePanel from './components/LivingZonePanel';
@@ -68,23 +69,48 @@ const App: React.FC = () => {
   // 구매 가능 분석 패널 — 생활권·단지패널과 상호 배타
   const [affordOpen, setAffordOpen] = useState(false);
 
-  // 비교하기 — 최대 3개 단지 선택, 선택 시 화면 3등분 카드 뷰로 전환
+  // 비교하기 — 일반(최대 3개) / 비교평가(1:1) 모드
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [compareMode, setCompareMode] = useState<'normal' | 'evaluation'>('normal');
+  const [currentComparison, setCurrentComparison] = useState<Comparison | null>(null);
 
-  // 체크박스 토글 — 3개 초과 시 alert, 이미 선택된 경우 해제
+  // 체크박스 토글 — 모드별 최대값 체크 후 추가/해제
   const handleCompareToggle = (id: number) => {
     setCompareIds(prev => {
       if (prev.includes(id)) return prev.filter(x => x !== id);
-      if (prev.length >= 3) { alert('최대 3개까지만 비교할 수 있습니다.'); return prev; }
+      const max = compareMode === 'evaluation' ? 2 : 3;
+      if (prev.length >= max) {
+        alert(`비교평가 모드는 최대 2개까지 선택할 수 있습니다.`);
+        return prev;
+      }
       return [...prev, id];
     });
   };
 
-  // 비교 모드 종료 — 선택 목록도 초기화
+  // 모드 변경 — evaluation으로 전환 시 3개 이상 선택된 경우 2개로 trim
+  const handleCompareModeChange = (mode: 'normal' | 'evaluation') => {
+    setCompareMode(mode);
+    if (mode === 'evaluation') {
+      setCompareIds(prev => prev.slice(0, 2));
+      setCurrentComparison(null);
+    }
+  };
+
+  // 저장된 비교평가 선택 — 두 단지를 비교평가 모드로 바로 진입
+  const handleSelectComparison = (complexId1: number, complexId2: number) => {
+    setCompareMode('evaluation');
+    setCompareIds([complexId1, complexId2]);
+    setCurrentComparison(null);
+    setCompareOpen(false);
+  };
+
+  // 비교 모드 종료 — 선택 목록·모드·비교 평가 초기화
   const handleCompareClose = () => {
     setCompareOpen(false);
     setCompareIds([]);
+    setCompareMode('normal');
+    setCurrentComparison(null);
   };
 
   // 앱 최초 마운트 시 금액대 목록을 서버에서 가져와 필터 버튼 생성
@@ -494,7 +520,7 @@ const App: React.FC = () => {
       {/* 본문: 지도 + 사이드패널 (비교 모드에서는 비교 카드 뷰로 전환) */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {compareIds.length > 0 ? (
-          /* 비교 뷰 — 모바일에서 overflow-x: auto로 가로 스크롤, 각 카드 minWidth: 280px */
+          /* 비교 뷰 — 일반: 최대 3카드 / 비교평가: 2카드 + 평가 패널 */
           <div style={{ display: 'flex', flex: 1, overflowX: 'auto', overflowY: 'hidden', position: 'relative' }}>
             {compareIds.map(id => {
               const c = complexes.find(x => x.id === id);
@@ -507,22 +533,58 @@ const App: React.FC = () => {
                 />
               );
             })}
-            {/* 빈 슬롯 — 3개 미만일 때 "+ 단지 추가" 안내 */}
-            {compareIds.length < 3 && (
-              <div
-                onClick={() => setCompareOpen(true)}
-                style={{
-                  flex: 1, minWidth: isMobile ? '200px' : 0, height: '100%',
-                  display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center',
-                  gap: '10px', cursor: 'pointer',
-                  backgroundColor: '#f8f9fa', borderRight: '1px solid #e8eaed',
-                  color: '#9e9e9e',
-                }}
-              >
-                <div style={{ fontSize: '36px', color: '#dadce0' }}>+</div>
-                <span style={{ fontSize: '13px' }}>단지 추가</span>
-              </div>
+
+            {compareMode === 'evaluation' ? (
+              compareIds.length < 2 ? (
+                /* 비교평가 — 1개만 선택됐을 때 빈 슬롯 */
+                <div
+                  onClick={() => setCompareOpen(true)}
+                  style={{
+                    flex: 1, minWidth: isMobile ? '200px' : 0, height: '100%',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    gap: '10px', cursor: 'pointer',
+                    backgroundColor: '#f0faf3', borderRight: '1px solid #ceead6',
+                    color: '#34a853',
+                  }}
+                >
+                  <div style={{ fontSize: '36px', color: '#a8d5b5' }}>+</div>
+                  <span style={{ fontSize: '13px' }}>비교할 단지 1개 더 추가</span>
+                </div>
+              ) : (
+                /* 비교평가 — 2개 선택 시 평가 패널 표시 */
+                (() => {
+                  const c1 = complexes.find(x => x.id === compareIds[0]);
+                  const c2 = complexes.find(x => x.id === compareIds[1]);
+                  if (!c1 || !c2) return null;
+                  return (
+                    <ComparisonEvalPanel
+                      key={`${c1.id}-${c2.id}`}
+                      complex1={c1}
+                      complex2={c2}
+                      onComparisonChange={setCurrentComparison}
+                    />
+                  );
+                })()
+              )
+            ) : (
+              /* 일반 비교 — 3개 미만일 때 빈 슬롯 */
+              compareIds.length < 3 && (
+                <div
+                  onClick={() => setCompareOpen(true)}
+                  style={{
+                    flex: 1, minWidth: isMobile ? '200px' : 0, height: '100%',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    gap: '10px', cursor: 'pointer',
+                    backgroundColor: '#f8f9fa', borderRight: '1px solid #e8eaed',
+                    color: '#9e9e9e',
+                  }}
+                >
+                  <div style={{ fontSize: '36px', color: '#dadce0' }}>+</div>
+                  <span style={{ fontSize: '13px' }}>단지 추가</span>
+                </div>
+              )
             )}
           </div>
         ) : (
@@ -620,6 +682,9 @@ const App: React.FC = () => {
           selectedIds={compareIds}
           onToggle={handleCompareToggle}
           onClose={() => setCompareOpen(false)}
+          compareMode={compareMode}
+          onModeChange={handleCompareModeChange}
+          onSelectComparison={handleSelectComparison}
           top={headerHeight}
         />
       )}
