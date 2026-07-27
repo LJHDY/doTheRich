@@ -59,6 +59,8 @@ const App: React.FC = () => {
   const [routePanelOpen, setRoutePanelOpen] = useState(false);
   // 모바일 전용: 'list'=경로 목록 패널 / 'map'=지도에서 경로 확인
   const [mobileRouteView, setMobileRouteView] = useState<'list' | 'map'>('list');
+  // 모바일 햄버거 풀다운 메뉴 열림 여부
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [routes, setRoutes] = useState<MapRoute[]>([]);
   const [activeRouteIds, setActiveRouteIds] = useState<Set<number>>(new Set());
   const [editingRouteId, setEditingRouteId] = useState<number | null>(null); // 수정 중인 기존 경로 id
@@ -309,86 +311,103 @@ const App: React.FC = () => {
       }}>
         {isMobile ? (
           <>
-            {/* 모바일 Row1: 로고 + 단지수 + 액션 버튼 */}
+            {/* 모바일 Row1: 로고 + 단지수 + 활성 뱃지 + ☰ 메뉴 버튼 */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', height: '48px', gap: '6px' }}>
               <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain', flexShrink: 0 }} />
               <span style={{ fontSize: '14px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>DoTheRich</span>
               <span style={{ fontSize: '11px', color: '#80868b', whiteSpace: 'nowrap' }}>
                 {loading ? '' : `${complexes.length}개`}
               </span>
-              <div style={{ flex: 1 }} />
-              {/* 내 단지 검색 */}
+              {/* 활성 기능 뱃지 — 어떤 패널이 열려있는지 한눈에 표시 */}
+              <div style={{ flex: 1, display: 'flex', gap: '4px', flexWrap: 'nowrap', overflow: 'hidden' }}>
+                {compareIds.length > 0 && (
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#1a73e8', backgroundColor: '#e8f0fe', padding: '2px 6px', borderRadius: '8px', whiteSpace: 'nowrap' }}>
+                    비교 {compareIds.length}
+                  </span>
+                )}
+                {livingZoneOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#1a73e8', backgroundColor: '#e8f0fe', padding: '2px 6px', borderRadius: '8px' }}>생활권</span>}
+                {routePanelOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#0b8043', backgroundColor: '#e6f4ea', padding: '2px 6px', borderRadius: '8px' }}>경로</span>}
+                {affordOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#0b8043', backgroundColor: '#e6f4ea', padding: '2px 6px', borderRadius: '8px' }}>대출</span>}
+              </div>
+              {/* 햄버거 버튼 */}
               <button
-                onClick={() => setMyComplexListOpen(v => !v)}
+                onClick={() => setMobileMenuOpen(v => !v)}
                 style={{
-                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
-                  border: '1px solid', borderColor: myComplexListOpen ? '#1a73e8' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: myComplexListOpen ? '#e8f0fe' : '#fff',
-                  color: myComplexListOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
+                  padding: '6px 10px', fontSize: '18px', lineHeight: 1,
+                  border: '1px solid', borderColor: mobileMenuOpen ? '#1a73e8' : '#dadce0',
+                  borderRadius: '8px', backgroundColor: mobileMenuOpen ? '#e8f0fe' : '#fff',
+                  color: mobileMenuOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', flexShrink: 0,
                 }}
-              >내 단지</button>
-              {/* 즐겨찾기 */}
-              <button
-                onClick={() => setFavoriteListOpen(v => !v)}
-                style={{
-                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
-                  border: '1px solid', borderColor: favoriteListOpen ? '#f9ab00' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: favoriteListOpen ? '#fef9e7' : '#fff',
-                  color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >★</button>
-              {/* 경로 */}
-              <button
-                onClick={() => routePanelOpen ? handleClosRoutePanel() : setRoutePanelOpen(true)}
-                style={{
-                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
-                  border: '1px solid', borderColor: routePanelOpen ? '#0b8043' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: routePanelOpen ? '#e6f4ea' : '#fff',
-                  color: routePanelOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >경로</button>
-              {/* 생활권 */}
-              <button
-                onClick={() => {
-                  const next = !livingZoneOpen;
-                  setLivingZoneOpen(next);
-                  if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
-                }}
-                style={{
-                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
-                  border: '1px solid', borderColor: livingZoneOpen ? '#1a73e8' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: livingZoneOpen ? '#e8f0fe' : '#fff',
-                  color: livingZoneOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >생활권</button>
-              {/* 대출 */}
-              <button
-                onClick={() => {
-                  const next = !affordOpen;
-                  setAffordOpen(next);
-                  if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
-                }}
-                style={{
-                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
-                  border: '1px solid', borderColor: affordOpen ? '#0b8043' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: affordOpen ? '#e6f4ea' : '#fff',
-                  color: affordOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >대출</button>
-              {/* 비교 */}
-              <button
-                onClick={() => setCompareOpen(prev => !prev)}
-                style={{
-                  padding: '4px 8px', fontSize: '11px', fontWeight: 600,
-                  border: '1px solid',
-                  borderColor: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#dadce0',
-                  borderRadius: '6px',
-                  backgroundColor: compareOpen || compareIds.length > 0 ? '#e8f0fe' : '#fff',
-                  color: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#5f6368',
-                  cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >{compareIds.length > 0 ? `비교${compareIds.length}` : '비교'}</button>
+                aria-label="메뉴"
+              >☰</button>
             </div>
+
+            {/* 풀다운 메뉴 — ☰ 클릭 시 펼침 */}
+            {mobileMenuOpen && (
+              <div style={{
+                padding: '8px 10px 10px',
+                borderTop: '1px solid #f0f0f0',
+                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px',
+              }}>
+                {/* 내 단지 */}
+                {([
+                  {
+                    label: '내 단지', active: myComplexListOpen,
+                    activeColor: '#1a73e8', activeBg: '#e8f0fe',
+                    onClick: () => { setMyComplexListOpen(v => !v); setMobileMenuOpen(false); },
+                  },
+                  {
+                    label: '★ 즐겨찾기', active: favoriteListOpen,
+                    activeColor: '#f9ab00', activeBg: '#fef9e7',
+                    onClick: () => { setFavoriteListOpen(v => !v); setMobileMenuOpen(false); },
+                  },
+                  {
+                    label: '경로', active: routePanelOpen,
+                    activeColor: '#0b8043', activeBg: '#e6f4ea',
+                    onClick: () => { routePanelOpen ? handleClosRoutePanel() : setRoutePanelOpen(true); setMobileMenuOpen(false); },
+                  },
+                  {
+                    label: '생활권', active: livingZoneOpen,
+                    activeColor: '#1a73e8', activeBg: '#e8f0fe',
+                    onClick: () => {
+                      const next = !livingZoneOpen;
+                      setLivingZoneOpen(next);
+                      if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
+                      setMobileMenuOpen(false);
+                    },
+                  },
+                  {
+                    label: '대출', active: affordOpen,
+                    activeColor: '#0b8043', activeBg: '#e6f4ea',
+                    onClick: () => {
+                      const next = !affordOpen;
+                      setAffordOpen(next);
+                      if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
+                      setMobileMenuOpen(false);
+                    },
+                  },
+                  {
+                    label: compareIds.length > 0 ? `비교 ${compareIds.length}` : '비교하기',
+                    active: compareOpen || compareIds.length > 0,
+                    activeColor: '#1a73e8', activeBg: '#e8f0fe',
+                    onClick: () => { setCompareOpen(prev => !prev); setMobileMenuOpen(false); },
+                  },
+                ] as { label: string; active: boolean; activeColor: string; activeBg: string; onClick: () => void }[]).map(item => (
+                  <button
+                    key={item.label}
+                    onClick={item.onClick}
+                    style={{
+                      padding: '8px 4px', fontSize: '12px', fontWeight: 600,
+                      border: '1px solid', borderRadius: '8px', cursor: 'pointer',
+                      borderColor: item.active ? item.activeColor : '#dadce0',
+                      backgroundColor: item.active ? item.activeBg : '#fff',
+                      color: item.active ? item.activeColor : '#5f6368',
+                    }}
+                  >{item.label}</button>
+                ))}
+              </div>
+            )}
+
             {/* 모바일 Row2: 검색바 + 금액대 필터 */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px 8px', gap: '8px' }}>
               <SearchBar onSelect={handleSearchSelect} fluid />
