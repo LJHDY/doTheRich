@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, Comparison, MapRoute, OverlayMarker, RoutePoint } from './types';
+import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint } from './types';
 import { getComplexes, getPriceRanges, runBatchRealEstatePrice, getRoutes, createRoute, updateRoute, deleteRoute } from './services/api';
 import MapPage from './pages/MapPage';
 import PriceRangeFilter from './components/PriceRangeFilter';
@@ -73,7 +73,6 @@ const App: React.FC = () => {
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [compareMode, setCompareMode] = useState<'normal' | 'evaluation'>('normal');
-  const [currentComparison, setCurrentComparison] = useState<Comparison | null>(null);
 
   // 체크박스 토글 — 모드별 최대값 체크 후 추가/해제
   const handleCompareToggle = (id: number) => {
@@ -93,7 +92,6 @@ const App: React.FC = () => {
     setCompareMode(mode);
     if (mode === 'evaluation') {
       setCompareIds(prev => prev.slice(0, 2));
-      setCurrentComparison(null);
     }
   };
 
@@ -101,16 +99,14 @@ const App: React.FC = () => {
   const handleSelectComparison = (complexId1: number, complexId2: number) => {
     setCompareMode('evaluation');
     setCompareIds([complexId1, complexId2]);
-    setCurrentComparison(null);
     setCompareOpen(false);
   };
 
-  // 비교 모드 종료 — 선택 목록·모드·비교 평가 초기화
+  // 비교 모드 종료 — 선택 목록·모드 초기화
   const handleCompareClose = () => {
     setCompareOpen(false);
     setCompareIds([]);
     setCompareMode('normal');
-    setCurrentComparison(null);
   };
 
   // 앱 최초 마운트 시 금액대 목록을 서버에서 가져와 필터 버튼 생성
@@ -562,7 +558,7 @@ const App: React.FC = () => {
                       key={`${c1.id}-${c2.id}`}
                       complex1={c1}
                       complex2={c2}
-                      onComparisonChange={setCurrentComparison}
+                      onComparisonChange={() => {}}
                     />
                   );
                 })()
