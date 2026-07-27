@@ -408,9 +408,12 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* 모바일 Row2: 검색바 + 금액대 필터 */}
-            <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px 8px', gap: '8px' }}>
+            {/* 모바일 Row2: 검색바 */}
+            <div style={{ padding: '0 10px 4px' }}>
               <SearchBar onSelect={handleSearchSelect} fluid />
+            </div>
+            {/* 모바일 Row3: 금액대 필터 */}
+            <div style={{ padding: '0 10px 8px' }}>
               <PriceRangeFilter
                 key={filterResetKey}
                 priceRanges={priceRanges}
