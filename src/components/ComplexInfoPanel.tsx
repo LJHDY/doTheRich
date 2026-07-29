@@ -387,6 +387,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   // 추가 행 localId 생성용 카운터 — useRef로 관리해 리렌더 시 초기화 방지
   const schoolRowCounter = useRef(0);
   const infraRowCounter = useRef(0);
+  // 검색 시퀀스 번호 — 비동기 경쟁 조건 방지: 선택 후 in-flight 검색 결과 무시
+  const newSchoolSearchSeq = useRef<Map<number, number>>(new Map());
+  const editSchoolSearchSeq = useRef(0);
+  const newInfraSearchSeq = useRef<Map<number, number>>(new Map());
+  const editInfraSearchSeq = useRef(0);
 
   // 종합평가 카드 클릭 시 해당 섹션으로 스크롤
   const workSectionRef = useRef<HTMLDivElement>(null);
@@ -697,21 +702,27 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   };
 
   // 추가 행 학교 검색 — 네이버 장소 검색 API 호출
+  // 결과 1건이면 자동 선택, 시퀀스 번호로 선택 후 in-flight 결과 폐기
   const handleNewSchoolSearch = async (localId: number) => {
     const row = newSchoolRows.find(r => r.localId === localId);
     if (!row || !row.schoolName.trim()) return;
+    const seq = (newSchoolSearchSeq.current.get(localId) ?? 0) + 1;
+    newSchoolSearchSeq.current.set(localId, seq);
     updateNewSchoolRow(localId, { fetching: true, showDropdown: false });
     try {
       const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query: row.schoolName.trim() } });
+      if (newSchoolSearchSeq.current.get(localId) !== seq) return;
+      if (data.items.length === 1) { await handleNewSchoolSelect(localId, data.items[0]); return; }
       updateNewSchoolRow(localId, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
     } catch {
-      updateNewSchoolRow(localId, { fetching: false });
+      if (newSchoolSearchSeq.current.get(localId) === seq) updateNewSchoolRow(localId, { fetching: false });
     }
   };
 
   // 추가 행 검색 결과 선택 — 주소·좌표 자동 입력 후 도보 거리 계산
   const handleNewSchoolSelect = async (localId: number, item: SearchItem) => {
     if (!complex) return;
+    newSchoolSearchSeq.current.set(localId, -1);  // 진행 중인 검색 결과 무시
     const addr = item.roadAddress || item.address;
     const lat = parseInt(item.mapy) / 10000000;
     const lng = parseInt(item.mapx) / 10000000;
@@ -774,23 +785,28 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     });
   };
 
-  // 수정 폼 학교명 검색
+  // 수정 폼 학교명 검색 — 결과 1건이면 자동 선택, 시퀀스로 stale 결과 폐기
   const handleSchoolSearch = async () => {
     if (!editingSchool) return;
     const query = editingSchool.schoolName.trim();
     if (!query) return;
+    const seq = editSchoolSearchSeq.current + 1;
+    editSchoolSearchSeq.current = seq;
     setEditingSchool(prev => prev ? { ...prev, fetching: true, showDropdown: false } : null);
     try {
       const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query } });
+      if (editSchoolSearchSeq.current !== seq) return;
+      if (data.items.length === 1) { await handleSchoolSelect(data.items[0]); return; }
       setEditingSchool(prev => prev ? { ...prev, fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 } : null);
     } catch {
-      setEditingSchool(prev => prev ? { ...prev, fetching: false } : null);
+      if (editSchoolSearchSeq.current === seq) setEditingSchool(prev => prev ? { ...prev, fetching: false } : null);
     }
   };
 
   // 수정 폼 드롭다운 항목 선택 — 주소·좌표 자동 입력 + 도보거리 계산
   const handleSchoolSelect = async (item: SearchItem) => {
     if (!editingSchool || !complex) return;
+    editSchoolSearchSeq.current = -1;  // 진행 중인 검색 결과 무시
     const addr = item.roadAddress || item.address;
     const lat = parseInt(item.mapy) / 10000000;
     const lng = parseInt(item.mapx) / 10000000;
@@ -866,22 +882,27 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     setNewInfraRows(prev => prev.map(r => r.localId === localId ? { ...r, ...update } : r));
   };
 
-  // 추가 행 인프라 검색
+  // 추가 행 인프라 검색 — 결과 1건이면 자동 선택, 시퀀스로 stale 결과 폐기
   const handleNewInfraSearch = async (localId: number) => {
     const row = newInfraRows.find(r => r.localId === localId);
     if (!row || !row.infraName.trim()) return;
+    const seq = (newInfraSearchSeq.current.get(localId) ?? 0) + 1;
+    newInfraSearchSeq.current.set(localId, seq);
     updateNewInfraRow(localId, { fetching: true, showDropdown: false });
     try {
       const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query: row.infraName.trim() } });
+      if (newInfraSearchSeq.current.get(localId) !== seq) return;
+      if (data.items.length === 1) { await handleNewInfraSelect(localId, data.items[0]); return; }
       updateNewInfraRow(localId, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
     } catch {
-      updateNewInfraRow(localId, { fetching: false });
+      if (newInfraSearchSeq.current.get(localId) === seq) updateNewInfraRow(localId, { fetching: false });
     }
   };
 
   // 추가 행 검색 결과 선택 — 주소·좌표 자동 입력 후 도보 거리 계산
   const handleNewInfraSelect = async (localId: number, item: SearchItem) => {
     if (!complex) return;
+    newInfraSearchSeq.current.set(localId, -1);  // 진행 중인 검색 결과 무시
     const addr = item.roadAddress || item.address;
     const lat = parseInt(item.mapy) / 10000000;
     const lng = parseInt(item.mapx) / 10000000;
@@ -944,18 +965,23 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     if (!editingInfra) return;
     const query = editingInfra.infraName.trim();
     if (!query) return;
+    const seq = editInfraSearchSeq.current + 1;
+    editInfraSearchSeq.current = seq;
     setEditingInfra(prev => prev ? { ...prev, fetching: true, showDropdown: false } : null);
     try {
       const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query } });
+      if (editInfraSearchSeq.current !== seq) return;
+      if (data.items.length === 1) { await handleInfraSelect(data.items[0]); return; }
       setEditingInfra(prev => prev ? { ...prev, fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 } : null);
     } catch {
-      setEditingInfra(prev => prev ? { ...prev, fetching: false } : null);
+      if (editInfraSearchSeq.current === seq) setEditingInfra(prev => prev ? { ...prev, fetching: false } : null);
     }
   };
 
   // 수정 폼 드롭다운 항목 선택
   const handleInfraSelect = async (item: SearchItem) => {
     if (!editingInfra || !complex) return;
+    editInfraSearchSeq.current = -1;  // 진행 중인 검색 결과 무시
     const addr = item.roadAddress || item.address;
     const lat = parseInt(item.mapy) / 10000000;
     const lng = parseInt(item.mapx) / 10000000;
@@ -1999,7 +2025,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         placeholder="예) 영등포초등학교"
                         value={editingSchool.schoolName}
                         onChange={e => setEditingSchool(prev => prev ? { ...prev, schoolName: e.target.value, showDropdown: false } : null)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSchoolSearch(); }}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSchoolSearch(); }}
                         style={{ ...editInputStyle, flex: 1 }}
                       />
                       <button
@@ -2124,7 +2150,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     placeholder="예) 영등포초등학교"
                     value={row.schoolName}
                     onChange={e => updateNewSchoolRow(row.localId, { schoolName: e.target.value, showDropdown: false })}
-                    onKeyDown={e => { if (e.key === 'Enter') handleNewSchoolSearch(row.localId); }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleNewSchoolSearch(row.localId); }}
                     style={{ ...editInputStyle, flex: 1 }}
                   />
                   <button onClick={() => handleNewSchoolSearch(row.localId)} disabled={row.fetching}
@@ -2235,7 +2261,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         placeholder="시설명 입력 후 조회"
                         value={editingInfra.infraName}
                         onChange={e => setEditingInfra(prev => prev ? { ...prev, infraName: e.target.value, showDropdown: false } : null)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleInfraSearch(); }}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleInfraSearch(); }}
                         style={{ ...editInputStyle, flex: 1 }}
                       />
                       <button onClick={handleInfraSearch} disabled={editingInfra.fetching}
@@ -2318,7 +2344,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     placeholder="시설명 입력 후 조회"
                     value={row.infraName}
                     onChange={e => updateNewInfraRow(row.localId, { infraName: e.target.value, showDropdown: false })}
-                    onKeyDown={e => { if (e.key === 'Enter') handleNewInfraSearch(row.localId); }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleNewInfraSearch(row.localId); }}
                     style={{ ...editInputStyle, flex: 1 }}
                   />
                   <button onClick={() => handleNewInfraSearch(row.localId)} disabled={row.fetching}

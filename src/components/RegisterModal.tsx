@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { uploadComplexPhotos } from '../services/api';
 import { compressImages } from '../utils/imageUtils';
@@ -275,6 +275,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   );
   const [schoolInfos, setSchoolInfos] = useState<SchoolRow[]>([]);
   const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
+  // 검색 시퀀스 번호 — 비동기 경쟁 조건 방지: 선택 후 in-flight 검색 결과 무시
+  const schoolSearchSeq = useRef<Map<number, number>>(new Map());
+  const infraSearchSeq = useRef<Map<number, number>>(new Map());
   // 즐겨찾기 — form state와 분리해 boolean 타입 오염 방지
   const [isFavorite, setIsFavorite] = useState(false);
   // 임장용 — 체크 시 매매가 유효성 검사 생략
@@ -437,16 +440,21 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const handleSchoolSearch = async (i: number) => {
     const query = schoolInfos[i].schoolName.trim();
     if (!query) return;
+    const seq = (schoolSearchSeq.current.get(i) ?? 0) + 1;
+    schoolSearchSeq.current.set(i, seq);
     updateSchool(i, { fetching: true, showDropdown: false });
     try {
       const { data } = await api.get<{ items: SearchLocalItem[] }>('/api/search/local', { params: { query } });
+      if (schoolSearchSeq.current.get(i) !== seq) return;
+      if (data.items.length === 1) { await handleSchoolSelect(i, data.items[0]); return; }
       updateSchool(i, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
     } catch {
-      updateSchool(i, { fetching: false });
+      if (schoolSearchSeq.current.get(i) === seq) updateSchool(i, { fetching: false });
     }
   };
 
   const handleSchoolSelect = async (i: number, item: SearchLocalItem) => {
+    schoolSearchSeq.current.set(i, -1);  // 진행 중인 검색 결과 무시
     const schoolAddress = item.roadAddress || item.address;
     const lat = parseInt(item.mapy) / 10000000;
     const lng = parseInt(item.mapx) / 10000000;
@@ -475,16 +483,21 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const handleInfraSearch = async (i: number) => {
     const query = infraInfos[i].infraName.trim();
     if (!query) return;
+    const seq = (infraSearchSeq.current.get(i) ?? 0) + 1;
+    infraSearchSeq.current.set(i, seq);
     updateInfra(i, { fetching: true, showDropdown: false });
     try {
       const { data } = await api.get<{ items: SearchLocalItem[] }>('/api/search/local', { params: { query } });
+      if (infraSearchSeq.current.get(i) !== seq) return;
+      if (data.items.length === 1) { await handleInfraSelect(i, data.items[0]); return; }
       updateInfra(i, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
     } catch {
-      updateInfra(i, { fetching: false });
+      if (infraSearchSeq.current.get(i) === seq) updateInfra(i, { fetching: false });
     }
   };
 
   const handleInfraSelect = async (i: number, item: SearchLocalItem) => {
+    infraSearchSeq.current.set(i, -1);  // 진행 중인 검색 결과 무시
     const infraAddress = item.roadAddress || item.address;
     const lat = parseInt(item.mapy) / 10000000;
     const lng = parseInt(item.mapx) / 10000000;
@@ -922,7 +935,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                       placeholder="예) 영등포초등학교"
                       value={row.schoolName}
                       onChange={e => updateSchool(i, { schoolName: e.target.value, showDropdown: false })}
-                      onKeyDown={e => { if (e.key === 'Enter') handleSchoolSearch(i); }}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSchoolSearch(i); }}
                       style={{ ...inputStyle, flex: 1 }}
                     />
                     <button
@@ -1041,7 +1054,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                       placeholder="예) 현대백화점"
                       value={row.infraName}
                       onChange={e => updateInfra(i, { infraName: e.target.value, showDropdown: false })}
-                      onKeyDown={e => { if (e.key === 'Enter') handleInfraSearch(i); }}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleInfraSearch(i); }}
                       style={{ ...inputStyle, flex: 1 }}
                     />
                     <button
