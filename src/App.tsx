@@ -72,6 +72,9 @@ const App: React.FC = () => {
   // 행정구역 경계 표시 — 선택한 구/시 폴리곤을 지도에 오버레이
   const [selectedDistrict, setSelectedDistrict] = useState<string | null>(null);
 
+  // 로드뷰 패널 — 지도 하단 분할 뷰
+  const [roadViewOpen, setRoadViewOpen] = useState(false);
+
   // 구매 가능 분석 패널 — 생활권·단지패널과 상호 배타
   const [affordOpen, setAffordOpen] = useState(false);
 
@@ -395,6 +398,11 @@ const App: React.FC = () => {
                     },
                   },
                   {
+                    label: '로드뷰', active: roadViewOpen,
+                    activeColor: '#0b8043', activeBg: '#e6f4ea',
+                    onClick: () => { setRoadViewOpen(v => !v); setMobileMenuOpen(false); },
+                  },
+                  {
                     label: compareIds.length > 0 ? `비교 ${compareIds.length}` : '비교하기',
                     active: compareOpen || compareIds.length > 0,
                     activeColor: '#1a73e8', activeBg: '#e8f0fe',
@@ -470,6 +478,15 @@ const App: React.FC = () => {
                 color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
               }}
             >★ 즐겨찾기</button>
+            <button
+              onClick={() => setRoadViewOpen(v => !v)}
+              style={{
+                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid', borderColor: roadViewOpen ? '#0b8043' : '#dadce0',
+                borderRadius: '6px', backgroundColor: roadViewOpen ? '#e6f4ea' : '#fff',
+                color: roadViewOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >로드뷰</button>
             {/* 행정구역 경계 선택 드롭다운 */}
             <DistrictSelector value={selectedDistrict} onChange={setSelectedDistrict} />
             <button
@@ -631,6 +648,7 @@ const App: React.FC = () => {
               isDrawingRoute={isDrawingRoute}
               onRoutePointAdd={handleRoutePointAdd}
               selectedDistrict={selectedDistrict}
+              roadViewOpen={roadViewOpen}
             />
             {selectedComplex && !livingZoneOpen && (
               /* 모바일: 화면 전체를 덮는 fixed 오버레이 / 데스크탑: flex 옆 패널 */

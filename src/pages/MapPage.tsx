@@ -37,11 +37,12 @@ interface MapPageProps {
   isDrawingRoute?: boolean;      // 경로 그리기 모드 — 지도 클릭이 좌표 추가로 동작
   onRoutePointAdd?: (p: RoutePoint) => void; // 지도 클릭 시 좌표 추가 콜백
   selectedDistrict?: string | null; // 행정구역 경계 표시용 구/시 이름
+  roadViewOpen?: boolean;        // 로드뷰 패널 표시 여부
 }
 
 const MapPage: React.FC<MapPageProps> = ({
   complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter,
-  routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict,
+  routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict, roadViewOpen,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -58,6 +59,9 @@ const MapPage: React.FC<MapPageProps> = ({
   const drawingPolylineRef = useRef<any>(null);     // 현재 그리는 중인 폴리라인
   const drawingMarkersRef = useRef<any[]>([]);      // 그리기 모드 점 마커 배열
   const mapClickListenerRef = useRef<any>(null); // 지도 클릭 이벤트 핸들러
+  const panoRef = useRef<HTMLDivElement>(null);  // 로드뷰 컨테이너 DOM 참조
+  const panoInstanceRef = useRef<any>(null);     // naver.maps.Panorama 인스턴스
+  const roadViewClickRef = useRef<any>(null);    // 로드뷰용 지도 클릭 리스너
   const onRoutePointAddRef = useRef(onRoutePointAdd);
 
   // 마커 diff를 위한 Map — 단지 id → { marker, listenerHandle }
@@ -699,37 +703,91 @@ const MapPage: React.FC<MapPageProps> = ({
     );
   }, []);
 
+  // 로드뷰 초기화 — roadViewOpen이 true가 될 때 Panorama 인스턴스 생성 (최초 1회)
+  // panoRef.current는 조건부 렌더링이므로 DOM 마운트 후 setTimeout으로 접근
+  useEffect(() => {
+    if (!roadViewOpen) {
+      // 로드뷰 닫힐 때 지도 클릭 리스너 제거
+      if (roadViewClickRef.current && window.naver) {
+        window.naver.maps.Event.removeListener(roadViewClickRef.current);
+        roadViewClickRef.current = null;
+      }
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (!panoRef.current || !(window.naver?.maps as any)?.Panorama) return;
+      if (!panoInstanceRef.current) {
+        panoInstanceRef.current = new (window.naver.maps as any).Panorama(panoRef.current, {
+          position: new window.naver.maps.LatLng(37.5665, 126.978),
+          pov: { pan: 0, tilt: 0, fov: 100 },
+        });
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [roadViewOpen]);
+
+  // 로드뷰 지도 클릭 — 경로 그리기 중이 아닐 때만 파노라마 위치 업데이트
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.naver) return;
+    if (roadViewClickRef.current) {
+      window.naver.maps.Event.removeListener(roadViewClickRef.current);
+      roadViewClickRef.current = null;
+    }
+    if (!roadViewOpen || isDrawingRoute) return;
+    roadViewClickRef.current = window.naver.maps.Event.addListener(map, 'click', (e: any) => {
+      if (panoInstanceRef.current) {
+        panoInstanceRef.current.setPosition(new window.naver.maps.LatLng(e.coord.lat(), e.coord.lng()));
+      }
+    });
+  }, [roadViewOpen, isDrawingRoute]);
+
   return (
-    <div style={{ position: 'relative', flex: 1, height: '100%', display: 'flex' }}>
-    <div
-      ref={mapRef}
-      style={{
-        flex: 1,
-        height: '100%',
-        minHeight: '400px',
-        backgroundColor: '#e8eaed',
-        cursor: isDrawingRoute ? 'crosshair' : 'default',
-      }}
-    />
-    {/* 내 위치 플로팅 버튼 — 네이버 줌 컨트롤 아래 오른쪽 고정 */}
-    <button
-      onClick={handleMyLocation}
-      disabled={locating}
-      title="내 위치로 이동"
-      style={{
-        position: 'absolute', bottom: '24px', right: '12px',
-        width: '40px', height: '40px', borderRadius: '8px',
-        backgroundColor: '#fff', border: '1px solid #dadce0',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
-        cursor: locating ? 'wait' : 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '18px', zIndex: 50,
-        opacity: locating ? 0.6 : 1,
-        transition: 'opacity 0.2s',
-      }}
-    >
-      {locating ? '⌛' : '📍'}
-    </button>
+    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* 지도 + 내 위치 버튼 — 로드뷰 패널 위에 남은 공간 전부 사용 */}
+      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+        <div
+          ref={mapRef}
+          style={{
+            width: '100%',
+            height: '100%',
+            minHeight: '200px',
+            backgroundColor: '#e8eaed',
+            cursor: isDrawingRoute ? 'crosshair' : 'default',
+          }}
+        />
+        {/* 내 위치 플로팅 버튼 — 네이버 줌 컨트롤 아래 오른쪽 고정 */}
+        <button
+          onClick={handleMyLocation}
+          disabled={locating}
+          title="내 위치로 이동"
+          style={{
+            position: 'absolute', bottom: '24px', right: '12px',
+            width: '40px', height: '40px', borderRadius: '8px',
+            backgroundColor: '#fff', border: '1px solid #dadce0',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+            cursor: locating ? 'wait' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '18px', zIndex: 50,
+            opacity: locating ? 0.6 : 1,
+            transition: 'opacity 0.2s',
+          }}
+        >
+          {locating ? '⌛' : '📍'}
+        </button>
+      </div>
+      {/* 로드뷰 패널 — 항상 DOM에 유지 (Panorama 인스턴스가 div에 바인딩된 상태를 유지하기 위해)
+          roadViewOpen=false 시 height:0 + overflow:hidden으로 숨김 처리 */}
+      <div style={{
+        height: roadViewOpen ? '300px' : '0',
+        flexShrink: 0,
+        overflow: 'hidden',
+        borderTop: roadViewOpen ? '2px solid #1a73e8' : 'none',
+        backgroundColor: '#000',
+        transition: 'height 0.2s ease',
+      }}>
+        <div ref={panoRef} style={{ width: '100%', height: '300px' }} />
+      </div>
     </div>
   );
 };
