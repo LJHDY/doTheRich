@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, formatPrice } from '../types';
 import { loadDistrictGeoJson, getFeatureName } from '../utils/districtGeoJson';
 
@@ -49,6 +49,8 @@ const MapPage: React.FC<MapPageProps> = ({
   const overlayMarkersRef = useRef<any[]>([]);
   const circleRef = useRef<any>(null);
   const districtPolygonsRef = useRef<any[]>([]); // 행정구역 경계 폴리곤 배열
+  const myLocationMarkerRef = useRef<any>(null); // 내 위치 마커
+  const [locating, setLocating] = useState(false); // 위치 조회 중 로딩 상태
   const boundsInitializedRef = useRef(false);
   const routePolylinesRef = useRef<any[]>([]);      // 저장된 경로 폴리라인 배열
   const routeArrowMarkersRef = useRef<any[]>([]);   // 방향 화살표 마커 배열
@@ -637,7 +639,68 @@ const MapPage: React.FC<MapPageProps> = ({
     });
   }, [drawingPoints]);
 
+  // 내 위치 버튼 핸들러 — Geolocation API로 현재 위치 조회 후 마커 표시
+  const handleMyLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      alert('이 브라우저는 위치 정보를 지원하지 않습니다.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        const map = mapInstanceRef.current;
+        if (!map || !window.naver) { setLocating(false); return; }
+
+        // 기존 내 위치 마커 제거 후 새로 생성
+        if (myLocationMarkerRef.current) myLocationMarkerRef.current.setMap(null);
+        myLocationMarkerRef.current = new window.naver.maps.Marker({
+          position: new window.naver.maps.LatLng(lat, lng),
+          map,
+          icon: {
+            content: `
+              <div style="position:relative;width:20px;height:20px;">
+                <div style="
+                  position:absolute;inset:0;border-radius:50%;
+                  background:rgba(26,115,232,0.2);
+                  animation:mylocpulse 1.8s ease-out infinite;
+                "></div>
+                <div style="
+                  position:absolute;inset:4px;border-radius:50%;
+                  background:#1a73e8;border:2.5px solid #fff;
+                  box-shadow:0 1px 4px rgba(0,0,0,0.35);
+                "></div>
+              </div>
+              <style>
+                @keyframes mylocpulse {
+                  0%   { transform:scale(1);   opacity:0.7; }
+                  100% { transform:scale(2.8); opacity:0; }
+                }
+              </style>
+            `,
+            anchor: new window.naver.maps.Point(10, 10),
+          },
+          zIndex: 200,
+        });
+
+        map.setCenter(new window.naver.maps.LatLng(lat, lng));
+        map.setZoom(15);
+        setLocating(false);
+      },
+      err => {
+        setLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          alert('위치 권한이 거부됐습니다. 브라우저 설정에서 위치 접근을 허용해주세요.');
+        } else {
+          alert('위치를 가져오지 못했습니다.');
+        }
+      },
+      { timeout: 10000, maximumAge: 30000 }
+    );
+  }, []);
+
   return (
+    <div style={{ position: 'relative', flex: 1, height: '100%', display: 'flex' }}>
     <div
       ref={mapRef}
       style={{
@@ -648,6 +711,26 @@ const MapPage: React.FC<MapPageProps> = ({
         cursor: isDrawingRoute ? 'crosshair' : 'default',
       }}
     />
+    {/* 내 위치 플로팅 버튼 — 네이버 줌 컨트롤 아래 오른쪽 고정 */}
+    <button
+      onClick={handleMyLocation}
+      disabled={locating}
+      title="내 위치로 이동"
+      style={{
+        position: 'absolute', bottom: '24px', right: '12px',
+        width: '40px', height: '40px', borderRadius: '8px',
+        backgroundColor: '#fff', border: '1px solid #dadce0',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+        cursor: locating ? 'wait' : 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '18px', zIndex: 50,
+        opacity: locating ? 0.6 : 1,
+        transition: 'opacity 0.2s',
+      }}
+    >
+      {locating ? '⌛' : '📍'}
+    </button>
+    </div>
   );
 };
 
