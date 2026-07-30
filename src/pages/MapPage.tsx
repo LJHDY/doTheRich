@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, formatPrice } from '../types';
+import { loadDistrictGeoJson, getFeatureName } from '../utils/districtGeoJson';
 
 // 저장된 경로마다 순환 사용할 색상 팔레트
 const ROUTE_COLORS = ['#e53935', '#43a047', '#8e24aa', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
@@ -35,17 +36,19 @@ interface MapPageProps {
   drawingPoints?: RoutePoint[];  // 현재 그리는 중인 점 배열 — 파란 점선으로 실시간 표시
   isDrawingRoute?: boolean;      // 경로 그리기 모드 — 지도 클릭이 좌표 추가로 동작
   onRoutePointAdd?: (p: RoutePoint) => void; // 지도 클릭 시 좌표 추가 콜백
+  selectedDistrict?: string | null; // 행정구역 경계 표시용 구/시 이름
 }
 
 const MapPage: React.FC<MapPageProps> = ({
   complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter,
-  routes, drawingPoints, isDrawingRoute, onRoutePointAdd,
+  routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
   const overlayMarkersRef = useRef<any[]>([]);
   const circleRef = useRef<any>(null);
+  const districtPolygonsRef = useRef<any[]>([]); // 행정구역 경계 폴리곤 배열
   const boundsInitializedRef = useRef(false);
   const routePolylinesRef = useRef<any[]>([]);      // 저장된 경로 폴리라인 배열
   const routeArrowMarkersRef = useRef<any[]>([]);   // 방향 화살표 마커 배열
@@ -435,6 +438,70 @@ const MapPage: React.FC<MapPageProps> = ({
       strokeStyle: 'shortdash',
     });
   }, [radiusCenter]);
+
+  // 행정구역 경계 폴리곤 — selectedDistrict 변경 시 기존 제거 후 새 경계 그리기
+  // Polygon에 clickable:false 설정 → 경로 그리기 클릭 이벤트를 가리지 않음
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    districtPolygonsRef.current.forEach(p => p.setMap(null));
+    districtPolygonsRef.current = [];
+
+    if (!selectedDistrict || !map || !window.naver) return;
+
+    loadDistrictGeoJson()
+      .then(data => {
+        const feature = (data.features ?? []).find(
+          (f: any) => getFeatureName(f) === selectedDistrict
+        );
+        if (!feature) return;
+
+        const geometry = feature.geometry;
+
+        // GeoJSON 좌표 [lng, lat] → Naver LatLng(lat, lng) 변환
+        const toLatLng = (c: [number, number]) =>
+          new window.naver.maps.LatLng(c[1], c[0]);
+
+        // 각 ring(외곽 + 홀)을 LatLng 배열로 변환 → Polygon paths
+        const ringsToNaverPaths = (rings: any[][]) =>
+          rings.map(ring => ring.map(toLatLng));
+
+        const polygonConfigs: any[][][] = [];
+
+        if (geometry.type === 'Polygon') {
+          polygonConfigs.push(ringsToNaverPaths(geometry.coordinates));
+        } else if (geometry.type === 'MultiPolygon') {
+          // MultiPolygon: 각 polygon을 독립된 Polygon 오버레이로 생성
+          geometry.coordinates.forEach((polyCoords: any[][]) => {
+            polygonConfigs.push(ringsToNaverPaths(polyCoords));
+          });
+        }
+
+        polygonConfigs.forEach(paths => {
+          const polygon = new window.naver.maps.Polygon({
+            map,
+            paths,
+            fillColor: '#1a73e8',
+            fillOpacity: 0.07,
+            strokeColor: '#1a73e8',
+            strokeOpacity: 0.75,
+            strokeWeight: 2.5,
+            clickable: false, // 마우스 이벤트 미차단 — 경로 그리기와 충돌 방지
+          });
+          districtPolygonsRef.current.push(polygon);
+        });
+
+        // 선택한 구역으로 지도 이동 (현재 뷰포트 밖에 있을 수 있으므로)
+        if (districtPolygonsRef.current.length > 0) {
+          const bounds = new window.naver.maps.LatLngBounds();
+          (geometry.type === 'Polygon'
+            ? [geometry.coordinates[0]]
+            : geometry.coordinates.map((p: any[][]) => p[0])
+          ).forEach((ring: any[]) => ring.forEach((c: any) => bounds.extend(toLatLng(c))));
+          map.fitBounds(bounds, { padding: 60 });
+        }
+      })
+      .catch(() => {});
+  }, [selectedDistrict]);
 
   // 경로 그리기 모드 — isDrawingRoute 토글 시 지도 클릭 리스너 추가·제거
   useEffect(() => {

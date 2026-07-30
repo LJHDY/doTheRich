@@ -13,6 +13,7 @@ import RegisterModal, { RegisterInitialData } from './components/RegisterModal';
 import LivingZonePanel from './components/LivingZonePanel';
 import AffordabilityPanel from './components/AffordabilityPanel';
 import RoutePanel from './components/RoutePanel';
+import DistrictSelector from './components/DistrictSelector';
 import { useIsMobile } from './hooks/useIsMobile';
 
 const App: React.FC = () => {
@@ -67,6 +68,9 @@ const App: React.FC = () => {
   const [isDrawingRoute, setIsDrawingRoute] = useState(false);
   const [drawingPoints, setDrawingPoints] = useState<RoutePoint[]>([]);
   const [routeName, setRouteName] = useState('');
+
+  // 행정구역 경계 표시 — 선택한 구/시 폴리곤을 지도에 오버레이
+  const [selectedDistrict, setSelectedDistrict] = useState<string | null>(null);
 
   // 구매 가능 분석 패널 — 생활권·단지패널과 상호 배타
   const [affordOpen, setAffordOpen] = useState(false);
@@ -347,8 +351,12 @@ const App: React.FC = () => {
               <div style={{
                 padding: '8px 10px 10px',
                 borderTop: '1px solid #f0f0f0',
-                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px',
               }}>
+              {/* 구 경계 선택 */}
+              <div style={{ marginBottom: '8px' }}>
+                <DistrictSelector value={selectedDistrict} onChange={v => { setSelectedDistrict(v); setMobileMenuOpen(false); }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
                 {/* 내 단지 */}
                 {([
                   {
@@ -406,6 +414,7 @@ const App: React.FC = () => {
                   >{item.label}</button>
                 ))}
               </div>
+              </div>
             )}
 
             {/* 모바일 Row2: 검색바 */}
@@ -461,6 +470,8 @@ const App: React.FC = () => {
                 color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
               }}
             >★ 즐겨찾기</button>
+            {/* 행정구역 경계 선택 드롭다운 */}
+            <DistrictSelector value={selectedDistrict} onChange={setSelectedDistrict} />
             <button
               onClick={() => setRoutePanelOpen(v => !v)}
               style={{
@@ -619,6 +630,7 @@ const App: React.FC = () => {
               drawingPoints={drawingPoints}
               isDrawingRoute={isDrawingRoute}
               onRoutePointAdd={handleRoutePointAdd}
+              selectedDistrict={selectedDistrict}
             />
             {selectedComplex && !livingZoneOpen && (
               /* 모바일: 화면 전체를 덮는 fixed 오버레이 / 데스크탑: flex 옆 패널 */
