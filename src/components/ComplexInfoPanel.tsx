@@ -2049,10 +2049,19 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '2px' }}>{ct.destination}</div>
                     <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a73e8' }}>{ct.minutes}분</div>
                     {ct.transferCount != null && (
-                      <div style={{ fontSize: '10px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', marginTop: '2px' }}>
-                        {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
+                      <div style={{ marginTop: '3px' }}>
+                        <div style={{ fontSize: '10px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', fontWeight: ct.transferCount === 0 ? 600 : 400 }}>
+                          {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
+                        </div>
                         {ct.transferLines && (
-                          <span style={{ color: '#9e9e9e', marginLeft: '4px' }}>{ct.transferLines}</span>
+                          <div style={{ fontSize: '10px', color: '#5f6368', marginTop: '2px', lineHeight: 1.4 }}>
+                            {ct.transferLines.split(' ➡️ ').map((line, i, arr) => (
+                              <span key={i}>
+                                <span style={{ fontWeight: 600 }}>{line}</span>
+                                {i < arr.length - 1 && <span style={{ color: '#fbbc04', margin: '0 1px' }}> ➡ </span>}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </div>
                     )}
