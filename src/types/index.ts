@@ -159,6 +159,9 @@ export interface ApartmentComplex {
   employees?: number;   // 지역 종사자수
   businesses?: number;  // 지역 사업체수
   isFavorite?: boolean; // 즐겨찾기 여부
+  slopeType?: string;         // 경사도: FLAT/GENTLE/MODERATE/STEEP
+  buildingStructure?: string; // 아파트구조: STAIRCASE/CORRIDOR/MIXED
+  floorAreaRatio?: number;    // 용적률 (%)
 }
 
 /** 평형별 시세 항목 — 백엔드 PriceHistoryItemDto와 1:1 매핑 */
@@ -221,6 +224,9 @@ export interface ApartmentComplexRequest {
   redevelopType?: string;   // 'REDEVELOPMENT' | 'RECONSTRUCTION' | 'REMODELING'
   redevelopStage?: string;  // 'INITIAL' | 'COMMITTEE' | 'ASSOCIATION' | 'APPROVAL' | 'MGMT_APPROVAL' | 'RELOCATION' | 'COMPLETION'
   visitType?: string;       // 'ATMOSPHERE' | 'COMPLEX' | 'LISTING' | 'NONE'
+  slopeType?: string;         // 경사도: FLAT/GENTLE/MODERATE/STEEP
+  buildingStructure?: string; // 아파트구조: STAIRCASE/CORRIDOR/MIXED
+  floorAreaRatio?: number;    // 용적률 (%)
   // 평형별 가격 배열 — 첫 번째 항목이 단지 대표 가격으로 사용됨
   priceItems?: {
     areaType?: string;

@@ -364,7 +364,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
   // 기본 정보 인라인 편집 상태
   const [editingBasicInfo, setEditingBasicInfo] = useState(false);
-  const [basicInfoForm, setBasicInfoForm] = useState({ builtYear: '', unitCount: '' });
+  const [basicInfoForm, setBasicInfoForm] = useState({ builtYear: '', unitCount: '', slopeType: '', buildingStructure: '', floorAreaRatio: '' });
   const [basicInfoSaving, setBasicInfoSaving] = useState(false);
 
   // 학군 편집 상태 — editingSchool: 기존 항목 수정 폼, newSchoolRows: 신규 추가 행 배열
@@ -574,6 +574,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     setBasicInfoForm({
       builtYear: complex?.builtYear ?? '',
       unitCount: complex?.unitCount ? String(complex.unitCount) : '',
+      slopeType: complex?.slopeType ?? '',
+      buildingStructure: complex?.buildingStructure ?? '',
+      floorAreaRatio: complex?.floorAreaRatio != null ? String(complex.floorAreaRatio) : '',
     });
     setEditingBasicInfo(true);
   };
@@ -583,12 +586,15 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     if (!complex) return;
     setBasicInfoSaving(true);
     try {
-      const payload: { builtYear?: string; unitCount?: number } = {};
+      const payload: { builtYear?: string; unitCount?: number; slopeType?: string; buildingStructure?: string; floorAreaRatio?: number } = {};
       if (basicInfoForm.builtYear) {
         const yr = basicInfoForm.builtYear.trim();
         payload.builtYear = yr.endsWith('년') ? yr : `${yr}년`;
       }
       if (basicInfoForm.unitCount) payload.unitCount = parseInt(basicInfoForm.unitCount, 10);
+      if (basicInfoForm.slopeType) payload.slopeType = basicInfoForm.slopeType;
+      if (basicInfoForm.buildingStructure) payload.buildingStructure = basicInfoForm.buildingStructure;
+      if (basicInfoForm.floorAreaRatio) payload.floorAreaRatio = parseFloat(basicInfoForm.floorAreaRatio);
       await updateComplexBasicInfo(complex.id, payload);
       await refreshComplex();
       setEditingBasicInfo(false);
@@ -1403,39 +1409,39 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
           {editingBasicInfo ? (
             <div style={{ marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '52px' }}>연식</span>
-                <input
-                  type="text"
-                  placeholder="예: 2023"
-                  value={basicInfoForm.builtYear}
-                  onChange={e => setBasicInfoForm(f => ({ ...f, builtYear: e.target.value }))}
-                  style={{ ...editInputStyle, flex: 1 }}
-                />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-                <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '52px' }}>세대수</span>
-                <input
-                  type="number"
-                  placeholder="예: 2990"
-                  value={basicInfoForm.unitCount}
-                  onChange={e => setBasicInfoForm(f => ({ ...f, unitCount: e.target.value }))}
-                  style={{ ...editInputStyle, flex: 1 }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={saveBasicInfo}
-                  disabled={basicInfoSaving}
-                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: basicInfoSaving ? 'not-allowed' : 'pointer', opacity: basicInfoSaving ? 0.7 : 1 }}
-                >
+              {[
+                { label: '연식', key: 'builtYear', type: 'text', placeholder: '예: 2023' },
+                { label: '세대수', key: 'unitCount', type: 'number', placeholder: '예: 2990' },
+                { label: '용적률(%)', key: 'floorAreaRatio', type: 'number', placeholder: '예: 250' },
+              ].map(({ label, key, type, placeholder }) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>{label}</span>
+                  <input type={type} placeholder={placeholder}
+                    value={(basicInfoForm as any)[key]}
+                    onChange={e => setBasicInfoForm(f => ({ ...f, [key]: e.target.value }))}
+                    style={{ ...editInputStyle, flex: 1 }} />
+                </div>
+              ))}
+              {[
+                { label: '경사도', key: 'slopeType', options: [['', '선택 안함'], ['FLAT', '평지'], ['GENTLE', '완경사'], ['MODERATE', '중경사'], ['STEEP', '급경사']] },
+                { label: '아파트구조', key: 'buildingStructure', options: [['', '선택 안함'], ['STAIRCASE', '계단식'], ['CORRIDOR', '복도식'], ['MIXED', '혼합식']] },
+              ].map(({ label, key, options }) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, width: '60px' }}>{label}</span>
+                  <select value={(basicInfoForm as any)[key]}
+                    onChange={e => setBasicInfoForm(f => ({ ...f, [key]: e.target.value }))}
+                    style={{ ...editInputStyle, flex: 1 }}>
+                    {options.map(([val, lbl]) => <option key={val} value={val}>{lbl}</option>)}
+                  </select>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <button onClick={saveBasicInfo} disabled={basicInfoSaving}
+                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: basicInfoSaving ? 'not-allowed' : 'pointer', opacity: basicInfoSaving ? 0.7 : 1 }}>
                   {basicInfoSaving ? '저장 중...' : '저장'}
                 </button>
-                <button
-                  onClick={() => setEditingBasicInfo(false)}
-                  disabled={basicInfoSaving}
-                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#f1f3f4', color: '#5f6368', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                >
+                <button onClick={() => setEditingBasicInfo(false)} disabled={basicInfoSaving}
+                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#f1f3f4', color: '#5f6368', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
                   취소
                 </button>
               </div>
@@ -1444,6 +1450,13 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             <>
               <InfoRow label="연식" value={complex.builtYear} />
               <InfoRow label="세대수" value={complex.unitCount ? `${complex.unitCount}세대` : null} />
+              <InfoRow label="경사도" value={
+                complex.slopeType ? { FLAT: '평지', GENTLE: '완경사', MODERATE: '중경사', STEEP: '급경사' }[complex.slopeType] ?? null : null
+              } />
+              <InfoRow label="아파트구조" value={
+                complex.buildingStructure ? { STAIRCASE: '계단식', CORRIDOR: '복도식', MIXED: '혼합식' }[complex.buildingStructure] ?? null : null
+              } />
+              <InfoRow label="용적률" value={complex.floorAreaRatio != null ? `${complex.floorAreaRatio}%` : null} />
             </>
           )}
           <InfoRow label="주소" value={complex.address} />

@@ -195,7 +195,7 @@ export const updateVisitType = async (complexId: number, visitType: string): Pro
 /** 기본 정보 수정 — PATCH /api/complexes/:id/basic-info */
 export const updateComplexBasicInfo = async (
   complexId: number,
-  data: { builtYear?: string; unitCount?: number }
+  data: { builtYear?: string; unitCount?: number; slopeType?: string; buildingStructure?: string; floorAreaRatio?: number }
 ): Promise<void> => {
   await api.patch(`/api/complexes/${complexId}/basic-info`, data);
 };

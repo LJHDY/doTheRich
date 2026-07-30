@@ -252,6 +252,13 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>단지 정보</h4>
           <InfoRow label="연식" value={complex.builtYear} />
           <InfoRow label="세대수" value={complex.unitCount ? `${complex.unitCount}세대` : null} />
+          <InfoRow label="경사도" value={
+            complex.slopeType ? ({ FLAT: '평지', GENTLE: '완경사', MODERATE: '중경사', STEEP: '급경사' } as Record<string,string>)[complex.slopeType] ?? null : null
+          } />
+          <InfoRow label="아파트구조" value={
+            complex.buildingStructure ? ({ STAIRCASE: '계단식', CORRIDOR: '복도식', MIXED: '혼합식' } as Record<string,string>)[complex.buildingStructure] ?? null : null
+          } />
+          <InfoRow label="용적률" value={complex.floorAreaRatio != null ? `${complex.floorAreaRatio}%` : null} />
           <InfoRow label="주소" value={complex.address} />
           <InfoRow label="확인일자" value={complex.checkDate} />
           {/* 평형별 참고가 — 탭 버튼으로 선택, 선택된 areaType 참고가만 표시 */}

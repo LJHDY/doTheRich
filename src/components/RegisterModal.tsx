@@ -263,6 +263,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     redevelopType: '',   // '' = 해당없음, 'REDEVELOPMENT' | 'RECONSTRUCTION' | 'REMODELING'
     redevelopStage: '',  // 체크 시 표시되는 진행단계
     visitType: '',       // '' = null(미입력), 'ATMOSPHERE' | 'COMPLEX' | 'LISTING' | 'NONE'
+    slopeType: '',         // '' = 미입력, 'FLAT' | 'GENTLE' | 'MODERATE' | 'STEEP'
+    buildingStructure: '', // '' = 미입력, 'STAIRCASE' | 'CORRIDOR' | 'MIXED'
+    floorAreaRatio: '',    // 용적률 (%) 숫자 문자열
   });
 
   const [priceInfos, setPriceInfos] = useState<PriceInfoRow[]>([
@@ -535,6 +538,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
         redevelopType: form.redevelopType || undefined,
         redevelopStage: form.redevelopStage || undefined,
         visitType: form.visitType || undefined,
+        slopeType: form.slopeType || undefined,
+        buildingStructure: form.buildingStructure || undefined,
+        floorAreaRatio: form.floorAreaRatio ? parseFloat(form.floorAreaRatio) : undefined,
         isFavorite: isFavorite,
         latitude: initialData.latitude,
         longitude: initialData.longitude,
@@ -819,6 +825,29 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             <div>
               <label style={labelStyle}>세대수</label>
               <input style={inputStyle} type="number" placeholder="예) 500" value={form.unitCount} onChange={e => set('unitCount', e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>경사도</label>
+              <select style={inputStyle} value={form.slopeType} onChange={e => set('slopeType', e.target.value)}>
+                <option value="">선택 안함</option>
+                <option value="FLAT">평지</option>
+                <option value="GENTLE">완경사</option>
+                <option value="MODERATE">중경사</option>
+                <option value="STEEP">급경사</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>아파트 구조</label>
+              <select style={inputStyle} value={form.buildingStructure} onChange={e => set('buildingStructure', e.target.value)}>
+                <option value="">선택 안함</option>
+                <option value="STAIRCASE">계단식</option>
+                <option value="CORRIDOR">복도식</option>
+                <option value="MIXED">혼합식</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>용적률 (%)</label>
+              <input style={inputStyle} type="number" placeholder="예) 250" value={form.floorAreaRatio} onChange={e => set('floorAreaRatio', e.target.value)} />
             </div>
           </div>
 

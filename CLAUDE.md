@@ -446,6 +446,7 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 ## 미완성 / TODO
 
 - [x] 학군·인프라 검색 드롭다운 이중표시 버그 수정 — IME Enter 이중발화(`isComposing` 가드) + 시퀀스 번호로 stale 비동기 결과 폐기 + 결과 1건이면 자동선택
+- [x] 경사도(slopeType)/아파트구조(buildingStructure)/용적률(floorAreaRatio) 추가 — RegisterModal 입력, ComplexInfoPanel 표시+인라인편집, CompareCard 표시전용
 - [ ] 실거래가 자동조회 (RegisterModal 주석 해제) — 정확도 개선 필요
 - [ ] 금액대 필터 버튼에 평형 표시 — 백엔드 priceItems 포함 필요
 - [ ] 시세 기록 삭제 기능
