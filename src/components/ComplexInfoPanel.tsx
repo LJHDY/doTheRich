@@ -1589,13 +1589,13 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {/* 기본 정보 */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', margin: 0 }}>단지 정보</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>단지 정보</h3>
             {!editingBasicInfo && (
               <button
                 onClick={startEditBasicInfo}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px', marginLeft: '6px' }}
+                style={{ border: '1px solid #34a853', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#188038', padding: '2px 8px', borderRadius: '6px', marginLeft: 'auto' }}
                 title="연식·세대수 수정"
-              >✏</button>
+              >수정</button>
             )}
           </div>
           {editingBasicInfo ? (
@@ -1684,9 +1684,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             {!editingRefPrice && selectedRefTab && (
               <button
                 onClick={startEditRefPrice}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px', marginLeft: 'auto' }}
+                style={{ border: '1px solid #34a853', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#188038', padding: '2px 8px', borderRadius: '6px', marginLeft: 'auto' }}
                 title="참고가 수정"
-              >✏</button>
+              >수정</button>
             )}
           </div>
           {/* 참고가 — 편집 모드일 때는 인라인 폼, 아닐 때는 선택 탭 기준 읽기 전용 표시 */}
@@ -1852,10 +1852,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               {!editingMemo && (
                 <button
                   onClick={() => { setMemoText(displayMemo); setEditingMemo(true); setMemoError(null); }}
-                  style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px' }}
+                  style={{ border: '1px solid #34a853', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#188038', padding: '2px 8px', borderRadius: '6px' }}
                   title="메모 편집"
                 >
-                  ✏
+                  수정
                 </button>
               )}
             </div>
@@ -1916,7 +1916,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
         {/* 종합평가 — 직장·교통·학군·환경 4개 등급을 한눈에 비교 */}
         <div style={{ marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>종합평가</h3>
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', marginBottom: '8px' }}>종합평가</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
             {([
               { label: '직장', grade: complex.grade ? { grade: complex.grade, color: GRADE_COLORS[complex.grade] ?? '#9e9e9e' } : null, sectionRef: workSectionRef },
@@ -1949,13 +1949,13 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {/* 지하철 정보 — 항상 표시, 편집 버튼으로 추가·수정·삭제 가능 */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>지하철</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>지하철</h3>
             {!editingSubway && (
               <button
                 onClick={startEditSubway}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px' }}
+                style={{ border: '1px solid #34a853', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#188038', padding: '2px 8px', borderRadius: '6px', marginLeft: 'auto' }}
                 title="지하철 정보 수정"
-              >✏</button>
+              >수정</button>
             )}
           </div>
 
@@ -2058,7 +2058,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {complex.grade && (
           <div ref={workSectionRef} style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>직장</h3>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>직장</h3>
               <span style={{
                 fontSize: '12px', fontWeight: 800, color: '#fff',
                 backgroundColor: GRADE_COLORS[complex.grade] ?? '#9e9e9e',
@@ -2087,16 +2087,16 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {/* 교통 (주요 지구 소요시간) — 항상 표시, ✏ 버튼으로 편집 진입 */}
         <div ref={commuteSectionRef} style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>교통</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>교통</h3>
             {complex.commuteTimes && complex.commuteTimes.length > 0 && (
               <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
             )}
             {!editingCommute && (
               <button
                 onClick={startEditCommute}
-                style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#80868b', padding: '2px 4px' }}
+                style={{ border: '1px solid #34a853', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#188038', padding: '2px 8px', borderRadius: '6px', marginLeft: 'auto' }}
                 title="출퇴근 시간 수정"
-              >✏</button>
+              >수정</button>
             )}
           </div>
 
@@ -2245,21 +2245,30 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           )}
         </div>
 
-        {/* 학군 — 기존 데이터나 추가 행이 있을 때 섹션 표시 */}
-        {((complex.schoolInfos && complex.schoolInfos.length > 0) || newSchoolRows.length > 0) && (
-          <div ref={schoolSectionRef} style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>학군</h3>
-              {(() => {
-                const g = calcSchoolGrade(complex.schoolInfos ?? []);
-                return g ? (
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#fff', backgroundColor: g.color, padding: '1px 8px', borderRadius: '10px' }}>
-                    {g.grade}
-                  </span>
-                ) : null;
-              })()}
-            </div>
+        {/* 학군 — 항상 표시 */}
+        <div ref={schoolSectionRef} style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>학군</h3>
+            {(() => {
+              const g = calcSchoolGrade(complex.schoolInfos ?? []);
+              return g ? (
+                <span style={{ fontSize: '12px', fontWeight: 800, color: '#fff', backgroundColor: g.color, padding: '1px 8px', borderRadius: '10px' }}>
+                  {g.grade}
+                </span>
+              ) : null;
+            })()}
+            {!editingSchool && (
+              <button onClick={startAddSchool}
+                style={{ border: '1px dashed #1a73e8', background: 'none', cursor: 'pointer', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: '#1a73e8', marginLeft: 'auto' }}>
+                + 추가
+              </button>
+            )}
+          </div>
 
+            {/* 데이터 없을 때 안내 */}
+            {(complex.schoolInfos ?? []).length === 0 && newSchoolRows.length === 0 && (
+              <div style={{ fontSize: '12px', color: '#9e9e9e', paddingBottom: '4px' }}>등록된 학군 없음</div>
+            )}
             {/* 기존 학교 항목 목록 */}
             {(complex.schoolInfos ?? []).map((s: SchoolInfo) => (
               <div key={s.id}>
@@ -2456,42 +2465,43 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               </div>
             ))}
 
-            {/* 하단 버튼 행 — 행 추가 + 일괄 저장 */}
-            <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-              {/* 수정 폼이 열려 있지 않을 때만 추가 버튼 표시 */}
-              {!editingSchool && (
-                <button onClick={startAddSchool}
-                  style={{ flex: 1, padding: '6px', fontSize: '12px', border: '1px dashed #1a73e8', borderRadius: '6px', backgroundColor: 'transparent', color: '#1a73e8', cursor: 'pointer' }}>
-                  + 학교 추가
-                </button>
-              )}
-              {/* 추가 행이 1개 이상일 때 일괄 저장 버튼 표시 */}
-              {newSchoolRows.length > 0 && (
+            {/* 추가 행이 1개 이상일 때 일괄 저장 버튼 */}
+            {newSchoolRows.length > 0 && (
+              <div style={{ marginTop: '8px' }}>
                 <button onClick={saveNewSchools} disabled={savingNewSchools}
-                  style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewSchools ? '#9e9e9e' : '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                  style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewSchools ? '#9e9e9e' : '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
                   {savingNewSchools ? '저장 중...' : `${newSchoolRows.length}건 저장`}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+        </div>
+
+        {/* 환경 (주변 인프라) — 항상 표시 */}
+        <div ref={infraSectionRef} style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>환경</h3>
+            {(() => {
+              const g = calcInfraGrade(complex.infraInfos ?? []);
+              return (
+                <span style={{ fontSize: '12px', fontWeight: 800, color: '#fff', backgroundColor: g.color, padding: '1px 8px', borderRadius: '10px' }}>
+                  {g.grade}
+                </span>
+              );
+            })()}
+            {!editingInfra && (
+              <button onClick={startAddInfra}
+                style={{ border: '1px dashed #f9ab00', background: 'none', cursor: 'pointer', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: '#e37400', marginLeft: 'auto' }}>
+                + 추가
+              </button>
+            )}
           </div>
-        )}
 
-        {/* 환경 (주변 인프라) — 기존 데이터나 추가 행이 있을 때 섹션 표시 */}
-        {((complex.infraInfos && complex.infraInfos.length > 0) || newInfraRows.length > 0) && (
-          <div ref={infraSectionRef} style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>환경</h3>
-              {(() => {
-                const g = calcInfraGrade(complex.infraInfos ?? []);
-                return (
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#fff', backgroundColor: g.color, padding: '1px 8px', borderRadius: '10px' }}>
-                    {g.grade}
-                  </span>
-                );
-              })()}
-            </div>
+          {/* 데이터 없을 때 안내 */}
+          {(complex.infraInfos ?? []).length === 0 && newInfraRows.length === 0 && (
+            <div style={{ fontSize: '12px', color: '#9e9e9e', paddingBottom: '4px' }}>등록된 인프라 없음</div>
+          )}
 
-            {/* 기존 인프라 항목 목록 */}
+          {/* 기존 인프라 항목 목록 */}
             {(complex.infraInfos ?? []).map((inf: InfraInfo) => (
               <div key={inf.id}>
                 {/* 수정 중인 항목 — 인라인 편집 폼 표시 */}
@@ -2627,33 +2637,24 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               </div>
             ))}
 
-            {/* 하단 버튼 행 — 행 추가 + 일괄 저장 */}
-            <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-              {/* 수정 폼이 열려 있지 않을 때만 추가 버튼 표시 */}
-              {!editingInfra && (
-                <button onClick={startAddInfra}
-                  style={{ flex: 1, padding: '6px', fontSize: '12px', border: '1px dashed #f9ab00', borderRadius: '6px', backgroundColor: 'transparent', color: '#e37400', cursor: 'pointer' }}>
-                  + 인프라 추가
-                </button>
-              )}
-              {/* 추가 행이 1개 이상일 때 일괄 저장 버튼 표시 */}
-              {newInfraRows.length > 0 && (
-                <button onClick={saveNewInfras} disabled={savingNewInfras}
-                  style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewInfras ? '#9e9e9e' : '#e37400', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                  {savingNewInfras ? '저장 중...' : `${newInfraRows.length}건 저장`}
-                </button>
-              )}
+          {/* 추가 행이 1개 이상일 때 일괄 저장 버튼 */}
+          {newInfraRows.length > 0 && (
+            <div style={{ marginTop: '8px' }}>
+              <button onClick={saveNewInfras} disabled={savingNewInfras}
+                style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewInfras ? '#9e9e9e' : '#e37400', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                {savingNewInfras ? '저장 중...' : `${newInfraRows.length}건 저장`}
+              </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* 유해시설 */}
         <div ref={hazardSectionRef} style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>유해시설</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>유해시설</h3>
             {!editingHazard && (
               <button onClick={startAddHazard}
-                style={{ border: '1px dashed #c5221f', background: 'none', cursor: 'pointer', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: '#c5221f' }}>
+                style={{ border: '1px dashed #c5221f', background: 'none', cursor: 'pointer', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: '#c5221f', marginLeft: 'auto' }}>
                 + 추가
               </button>
             )}
@@ -2796,7 +2797,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {/* 재개발 정보 */}
         {complex.redevelopType && (
           <div style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', marginBottom: '8px' }}>재개발 정보</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', marginBottom: '8px' }}>재개발 정보</h3>
             <InfoRow label="유형" value={REDEVELOP_TYPE_LABELS[complex.redevelopType]} />
             {/* 진행단계 — ? 아이콘 호버 시 각 단계 설명 tooltip 표시 */}
             {complex.redevelopStage && (
@@ -2859,12 +2860,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {/* 임장 유형 — 항상 표시, 값 없으면 NONE(임장X)과 동일하게 표시 */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', margin: 0 }}>임장 유형</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>임장 유형</h3>
             <button
               onClick={() => setEditingVisitType(v => !v)}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#1a73e8', padding: '0 2px' }}
+              style={{ border: '1px solid #34a853', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#188038', padding: '2px 8px', borderRadius: '6px', marginLeft: 'auto' }}
               title="임장 유형 수정"
-            >✏</button>
+            >수정</button>
           </div>
           {editingVisitType ? (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -2914,7 +2915,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {/* 시세 변동 그래프 */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>
               시세 변동
             </h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2997,7 +2998,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {priceHistories.length > 0 && (
           <div style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368', margin: 0 }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>
                 최근 기록
               </h3>
               {/* 물음표 아이콘 — 호버 시 tooltip 표시 */}
@@ -3147,35 +3148,6 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </button>
         )}
 
-        {/* 학군/인프라 데이터가 없고 추가 행도 없을 때만 추가 버튼 표시 — 삭제 버튼 바로 위 */}
-        {(() => {
-          const noSchool = !complex.schoolInfos || complex.schoolInfos.length === 0;
-          const noInfra = !complex.infraInfos || complex.infraInfos.length === 0;
-          // 둘 다 이미 있거나 삭제 확인 중이면 버튼 숨김
-          if ((!noSchool && !noInfra) || deleteConfirm) return null;
-          return (
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-              {/* 학군 데이터 없고 추가 행도 없고 수정 폼도 닫혀 있을 때 */}
-              {noSchool && newSchoolRows.length === 0 && !editingSchool && (
-                <button
-                  onClick={startAddSchool}
-                  style={{ flex: 1, padding: '8px', border: '1px dashed #1a73e8', background: 'none', borderRadius: '8px', color: '#1a73e8', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  + 학군 추가
-                </button>
-              )}
-              {/* 인프라 데이터 없고 추가 행도 없고 수정 폼도 닫혀 있을 때 */}
-              {noInfra && newInfraRows.length === 0 && !editingInfra && (
-                <button
-                  onClick={startAddInfra}
-                  style={{ flex: 1, padding: '8px', border: '1px dashed #f9ab00', background: 'none', borderRadius: '8px', color: '#e37400', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  + 환경 추가
-                </button>
-              )}
-            </div>
-          );
-        })()}
 
         {/* 단지 삭제 — 실수 방지를 위해 2단계 확인 */}
         <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px', marginBottom: '16px' }}>

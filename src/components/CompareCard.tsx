@@ -249,7 +249,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
 
         {/* 단지 정보 */}
         <div style={{ marginBottom: '12px' }}>
-          <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>단지 정보</h4>
+          <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>단지 정보</h4>
           <InfoRow label="연식" value={complex.builtYear} />
           <InfoRow label="세대수" value={complex.unitCount ? `${complex.unitCount}세대` : null} />
           <InfoRow label="경사도" value={
@@ -320,7 +320,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
 
         {/* 종합평가 */}
         <div style={{ marginBottom: '12px' }}>
-          <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>종합평가</h4>
+          <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>종합평가</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
             {([
               { label: '직장', grade: complex.grade ? { grade: complex.grade, color: GRADE_COLORS[complex.grade] ?? '#9e9e9e' } : null, sectionKey: 'work' },
@@ -353,7 +353,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
         {/* 지하철 */}
         {complex.subwayInfos && complex.subwayInfos.length > 0 && (
           <div style={{ marginBottom: '12px' }}>
-            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>지하철</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>지하철</h4>
             {complex.subwayInfos.map(s => (
               <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>
                 <span style={{ fontSize: '12px', color: '#202124' }}>{s.stationName}</span>
@@ -369,7 +369,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
         {complex.grade && (
           <div ref={workSectionRef} style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>직장</h4>
+              <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054' }}>직장</h4>
               <span style={{
                 fontSize: '11px', fontWeight: 800, color: '#fff',
                 backgroundColor: GRADE_COLORS[complex.grade] ?? '#9e9e9e',
@@ -398,7 +398,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
         {/* 교통 — 항상 표시, 데이터 없으면 안내 문구 */}
         <div ref={commuteSectionRef} style={{ marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>교통</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054' }}>교통</h4>
             {complex.commuteTimes && complex.commuteTimes.length > 0 && (
               <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
             )}
@@ -441,7 +441,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
         {complex.schoolInfos && complex.schoolInfos.length > 0 && (
           <div ref={schoolSectionRef} style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>학군</h4>
+              <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054' }}>학군</h4>
               {(() => {
                 const g = calcSchoolGrade(complex.schoolInfos ?? []);
                 return g ? (
@@ -481,7 +481,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
         {/* 환경 (주변 인프라) — 항상 표시, 등급 배지 항상 */}
         <div ref={infraSectionRef} style={{ marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>환경</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054' }}>환경</h4>
             {(() => {
               const g = calcInfraGrade(complex.infraInfos ?? []);
               return (
@@ -509,7 +509,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
         {/* 재개발 정보 */}
         {complex.redevelopType && (
           <div style={{ marginBottom: '12px' }}>
-            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>재개발 정보</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>재개발 정보</h4>
             <InfoRow label="유형" value={REDEVELOP_TYPE_LABELS[complex.redevelopType]} />
             {complex.redevelopStage && (
               <InfoRow label="진행단계" value={REDEVELOP_STAGE_LABELS[complex.redevelopStage]} />
@@ -519,7 +519,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
 
         {/* 임장 유형 — 항상 표시 (NONE 포함) */}
         <div style={{ marginBottom: '12px' }}>
-          <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>임장 유형</h4>
+          <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>임장 유형</h4>
           <div style={{
             display: 'inline-block', padding: '3px 10px', borderRadius: '10px',
             backgroundColor: '#e8f0fe', color: '#1a73e8', fontSize: '12px', fontWeight: 600,
@@ -530,7 +530,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
 
         {/* 시세 변동 그래프 */}
         <div style={{ marginBottom: '12px' }}>
-          <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>시세 변동</h4>
+          <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>시세 변동</h4>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '20px', color: '#9e9e9e', fontSize: '12px' }}>로딩 중...</div>
           ) : (
@@ -541,7 +541,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
         {/* 최근 기록 5건 — 직전 기록 대비 변동률 포함 */}
         {priceHistories.length > 0 && (
           <div style={{ marginBottom: '12px' }}>
-            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>최근 기록</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>최근 기록</h4>
             {(() => {
               const reversed = [...priceHistories].reverse();
               return reversed.slice(0, 5).map((h, idx) => {
