@@ -437,8 +437,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
       alert('환승 횟수는 최대 4회까지 입력할 수 있습니다.');
       return;
     }
-    // transferCount 변경 시 transferLines 초기화 — 횟수만큼 빈 문자열 배열 생성
-    const lines = count > 0 ? Array(count).fill('') : [];
+    // 환승 N회 = 탑승 노선 N+1개 (환승 없으면 1칸, 환승 1회면 2칸, ...)
+    const lines = Array(count + 1).fill('');
     updateCommute(i, { transferCount: val, transferLines: lines });
   };
 

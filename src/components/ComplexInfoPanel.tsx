@@ -1150,11 +1150,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const startEditCommute = () => {
     const rows: CommuteEditRow[] = COMMUTE_DESTINATIONS.map(dest => {
       const existing = complex?.commuteTimes?.find(ct => ct.destination === dest);
-      // transferLines: 기존 문자열이 있으면 ' ➡️ '로 분리, 없으면 transferCount 만큼 빈 배열 생성
+      // transferLines: 기존 문자열이 있으면 ' ➡️ '로 분리, 없으면 transferCount+1 만큼 빈 배열 생성
       const transferLines = existing?.transferLines
         ? existing.transferLines.split(' ➡️ ').filter(Boolean)
-        : (existing?.transferCount && existing.transferCount > 0
-            ? Array(existing.transferCount).fill('')
+        : (existing?.transferCount != null
+            ? Array(existing.transferCount + 1).fill('')
             : []);
       return {
         destination: dest,
@@ -1180,8 +1180,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       alert('환승 횟수는 최대 4회까지 입력할 수 있습니다.');
       return;
     }
-    // transferCount 변경 시 transferLines 초기화 — 횟수만큼 빈 문자열 배열 생성
-    const lines = count > 0 ? Array(count).fill('') : [];
+    // 환승 N회 = 탑승 노선 N+1개 (환승 없으면 1칸, 환승 1회면 2칸, ...)
+    const lines = Array(count + 1).fill('');
     setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, transferCount: val, transferLines: lines } : r));
   };
 
@@ -1987,8 +1987,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                       </select>
                     </div>
 
-                    {/* Line 3: 환승 노선 입력 (환승 횟수 > 0 일 때만 표시) */}
-                    {parseInt(row.transferCount) > 0 && (
+                    {/* Line 3: 환승 횟수 입력 후 노선 칸 표시 (N회 환승 = N+1칸) */}
+                    {row.transferLines.length > 0 && (
                       <div style={{ marginTop: '6px', borderTop: '1px dashed #e8eaed', paddingTop: '6px' }}>
                         <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '4px' }}>환승노선</div>
                         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
