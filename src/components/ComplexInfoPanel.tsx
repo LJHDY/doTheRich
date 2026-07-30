@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes } from '../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -83,6 +83,33 @@ interface InfraAddRow {
   infraName: string;
   infraAddress: string;
   distance: string;
+  latitude: number | null;
+  longitude: number | null;
+  fetching: boolean;
+  searchResults: SearchItem[];
+  showDropdown: boolean;
+}
+
+// 유해시설 기존 항목 수정 폼 상태
+interface HazardEditState {
+  hazardId: number;
+  hazardName: string;
+  hazardAddress: string;
+  distance: string;          // 미터
+  latitude: number | null;
+  longitude: number | null;
+  fetching: boolean;
+  searchResults: SearchItem[];
+  showDropdown: boolean;
+  saving: boolean;
+}
+
+// 유해시설 신규 추가 행
+interface HazardAddRow {
+  localId: number;
+  hazardName: string;
+  hazardAddress: string;
+  distance: string;          // 미터
   latitude: number | null;
   longitude: number | null;
   fetching: boolean;
@@ -376,6 +403,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [editingInfra, setEditingInfra] = useState<InfraEditState | null>(null);
   const [newInfraRows, setNewInfraRows] = useState<InfraAddRow[]>([]);
   const [savingNewInfras, setSavingNewInfras] = useState(false);
+  // 유해시설 편집 상태
+  const [editingHazard, setEditingHazard] = useState<HazardEditState | null>(null);
+  const [newHazardRows, setNewHazardRows] = useState<HazardAddRow[]>([]);
+  const [savingNewHazards, setSavingNewHazards] = useState(false);
   // 지하철 편집 상태 — 기존·신규 행 통합 배열 + 삭제 예약 ID 목록
   const [editingSubway, setEditingSubway] = useState(false);
   const [subwayRows, setSubwayRows] = useState<SubwayEditRow[]>([]);
@@ -388,17 +419,21 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   // 추가 행 localId 생성용 카운터 — useRef로 관리해 리렌더 시 초기화 방지
   const schoolRowCounter = useRef(0);
   const infraRowCounter = useRef(0);
+  const hazardRowCounter = useRef(0);
   // 검색 시퀀스 번호 — 비동기 경쟁 조건 방지: 선택 후 in-flight 검색 결과 무시
   const newSchoolSearchSeq = useRef<Map<number, number>>(new Map());
   const editSchoolSearchSeq = useRef(0);
   const newInfraSearchSeq = useRef<Map<number, number>>(new Map());
   const editInfraSearchSeq = useRef(0);
+  const newHazardSearchSeq = useRef<Map<number, number>>(new Map());
+  const editHazardSearchSeq = useRef(0);
 
   // 종합평가 카드 클릭 시 해당 섹션으로 스크롤
   const workSectionRef = useRef<HTMLDivElement>(null);
   const commuteSectionRef = useRef<HTMLDivElement>(null);
   const schoolSectionRef = useRef<HTMLDivElement>(null);
   const infraSectionRef = useRef<HTMLDivElement>(null);
+  const hazardSectionRef = useRef<HTMLDivElement>(null);
 
   const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1033,6 +1068,140 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     if (!complex) return;
     try {
       await deleteInfraInfo(complex.id, infraId);
+      await refreshComplex();
+    } catch { /* 삭제 실패 시 UI 변화 없음 */ }
+  };
+
+  // ── 유해시설 편집 ────────────────────────────────────────────────
+
+  const startAddHazard = () => {
+    const localId = ++hazardRowCounter.current;
+    setNewHazardRows(prev => [...prev, {
+      localId, hazardName: '', hazardAddress: '', distance: '',
+      latitude: null, longitude: null, fetching: false, searchResults: [], showDropdown: false,
+    }]);
+    setTimeout(() => hazardSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  };
+
+  const removeNewHazardRow = (localId: number) =>
+    setNewHazardRows(prev => prev.filter(r => r.localId !== localId));
+
+  const updateNewHazardRow = (localId: number, update: Partial<HazardAddRow>) =>
+    setNewHazardRows(prev => prev.map(r => r.localId === localId ? { ...r, ...update } : r));
+
+  const handleNewHazardSearch = async (localId: number) => {
+    const row = newHazardRows.find(r => r.localId === localId);
+    if (!row || !row.hazardName.trim()) return;
+    const seq = (newHazardSearchSeq.current.get(localId) ?? 0) + 1;
+    newHazardSearchSeq.current.set(localId, seq);
+    updateNewHazardRow(localId, { fetching: true, showDropdown: false });
+    try {
+      const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query: row.hazardName.trim() } });
+      if (newHazardSearchSeq.current.get(localId) !== seq) return;
+      if (data.items.length === 1) { await handleNewHazardSelect(localId, data.items[0]); return; }
+      updateNewHazardRow(localId, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
+    } catch {
+      if (newHazardSearchSeq.current.get(localId) === seq) updateNewHazardRow(localId, { fetching: false });
+    }
+  };
+
+  const handleNewHazardSelect = async (localId: number, item: SearchItem) => {
+    if (!complex) return;
+    newHazardSearchSeq.current.set(localId, -1);
+    const addr = item.roadAddress || item.address;
+    const lat = parseInt(item.mapy) / 10000000;
+    const lng = parseInt(item.mapx) / 10000000;
+    const distanceM = Math.round(haversineKm(complex.latitude!, complex.longitude!, lat, lng) * 1000);
+    updateNewHazardRow(localId, {
+      hazardName: stripHtml(item.title), hazardAddress: addr,
+      latitude: lat, longitude: lng, distance: String(distanceM),
+      showDropdown: false, searchResults: [], fetching: false,
+    });
+  };
+
+  const saveNewHazards = async () => {
+    if (!complex || newHazardRows.length === 0) return;
+    setSavingNewHazards(true);
+    const items = newHazardRows
+      .filter(r => r.hazardName.trim())
+      .map(r => ({
+        hazardName: r.hazardName || undefined,
+        hazardAddress: r.hazardAddress || undefined,
+        distance: r.distance ? parseInt(r.distance) : undefined,
+        latitude: r.latitude ?? undefined,
+        longitude: r.longitude ?? undefined,
+      }));
+    try {
+      await addHazardInfos(complex.id, items as any);
+      setNewHazardRows([]);
+      await refreshComplex();
+    } catch { /* 저장 실패 시 폼 유지 */ }
+    finally { setSavingNewHazards(false); }
+  };
+
+  const startEditHazard = (h: { id: number; hazardName?: string; hazardAddress?: string; distance?: number; latitude?: number; longitude?: number }) => {
+    setEditingHazard({
+      hazardId: h.id,
+      hazardName: h.hazardName ?? '',
+      hazardAddress: h.hazardAddress ?? '',
+      distance: h.distance != null ? String(h.distance) : '',
+      latitude: h.latitude ?? null,
+      longitude: h.longitude ?? null,
+      fetching: false, searchResults: [], showDropdown: false, saving: false,
+    });
+  };
+
+  const handleEditHazardSearch = async () => {
+    if (!editingHazard) return;
+    const query = editingHazard.hazardName.trim();
+    if (!query) return;
+    const seq = editHazardSearchSeq.current + 1;
+    editHazardSearchSeq.current = seq;
+    setEditingHazard(prev => prev ? { ...prev, fetching: true, showDropdown: false } : null);
+    try {
+      const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', { params: { query } });
+      if (editHazardSearchSeq.current !== seq) return;
+      if (data.items.length === 1) { await handleEditHazardSelect(data.items[0]); return; }
+      setEditingHazard(prev => prev ? { ...prev, fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 } : null);
+    } catch {
+      if (editHazardSearchSeq.current === seq) setEditingHazard(prev => prev ? { ...prev, fetching: false } : null);
+    }
+  };
+
+  const handleEditHazardSelect = async (item: SearchItem) => {
+    if (!editingHazard || !complex) return;
+    editHazardSearchSeq.current = -1;
+    const addr = item.roadAddress || item.address;
+    const lat = parseInt(item.mapy) / 10000000;
+    const lng = parseInt(item.mapx) / 10000000;
+    const distanceM = Math.round(haversineKm(complex.latitude!, complex.longitude!, lat, lng) * 1000);
+    setEditingHazard(prev => prev ? {
+      ...prev, hazardName: stripHtml(item.title), hazardAddress: addr,
+      latitude: lat, longitude: lng, distance: String(distanceM),
+      showDropdown: false, searchResults: [], fetching: false,
+    } : null);
+  };
+
+  const saveEditingHazard = async () => {
+    if (!editingHazard || !complex) return;
+    setEditingHazard(prev => prev ? { ...prev, saving: true } : null);
+    try {
+      await updateHazardInfo(complex.id, editingHazard.hazardId, {
+        hazardName: editingHazard.hazardName || undefined,
+        hazardAddress: editingHazard.hazardAddress || undefined,
+        distance: editingHazard.distance ? parseInt(editingHazard.distance) : undefined,
+        latitude: editingHazard.latitude ?? undefined,
+        longitude: editingHazard.longitude ?? undefined,
+      } as any);
+      setEditingHazard(null);
+      await refreshComplex();
+    } catch { setEditingHazard(prev => prev ? { ...prev, saving: false } : null); }
+  };
+
+  const handleDeleteHazard = async (hazardId: number) => {
+    if (!complex) return;
+    try {
+      await deleteHazardInfo(complex.id, hazardId);
       await refreshComplex();
     } catch { /* 삭제 실패 시 UI 변화 없음 */ }
   };
@@ -2477,6 +2646,152 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             </div>
           </div>
         )}
+
+        {/* 유해시설 */}
+        <div ref={hazardSectionRef} style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#5f6368' }}>유해시설</h3>
+            {!editingHazard && (
+              <button onClick={startAddHazard}
+                style={{ border: '1px dashed #c5221f', background: 'none', cursor: 'pointer', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: '#c5221f' }}>
+                + 추가
+              </button>
+            )}
+          </div>
+
+          {/* 기존 유해시설 목록 */}
+          {(complex.hazardInfos ?? []).length === 0 && newHazardRows.length === 0 && (
+            <div style={{ fontSize: '12px', color: '#9e9e9e', paddingBottom: '4px' }}>등록된 유해시설 없음</div>
+          )}
+          {(complex.hazardInfos ?? []).map((h: { id: number; hazardName?: string; hazardAddress?: string; distance?: number; latitude?: number; longitude?: number }) => (
+            <div key={h.id}>
+              {editingHazard?.hazardId === h.id ? (
+                // 수정 폼
+                <div style={{ border: '1px solid #c5221f', borderRadius: '8px', padding: '10px', marginBottom: '8px', backgroundColor: '#fff8f7' }}>
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                    <input
+                      placeholder="시설명 입력 후 조회"
+                      value={editingHazard.hazardName}
+                      onChange={e => setEditingHazard(prev => prev ? { ...prev, hazardName: e.target.value, showDropdown: false } : null)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleEditHazardSearch(); }}
+                      style={{ ...editInputStyle, flex: 1 }}
+                    />
+                    <button onClick={handleEditHazardSearch} disabled={editingHazard.fetching}
+                      style={{ padding: '6px 10px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      {editingHazard.fetching ? '...' : '조회'}
+                    </button>
+                  </div>
+                  {editingHazard.showDropdown && (
+                    <div style={{ border: '1px solid #e8eaed', borderRadius: '6px', backgroundColor: '#fff', maxHeight: '160px', overflowY: 'auto', marginBottom: '4px' }}>
+                      {editingHazard.searchResults.map((item, idx) => (
+                        <div key={idx} onClick={() => handleEditHazardSelect(item)}
+                          style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}>
+                          <div style={{ fontWeight: 600 }}>{stripHtml(item.title)}</div>
+                          <div style={{ color: '#80868b', fontSize: '11px' }}>{item.roadAddress || item.address}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {editingHazard.hazardAddress && (
+                    <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '4px', padding: '2px 4px', backgroundColor: '#fff0ee', borderRadius: '4px' }}>
+                      {editingHazard.hazardAddress}
+                    </div>
+                  )}
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>거리(m)</div>
+                    <input type="number" value={editingHazard.distance}
+                      onChange={e => setEditingHazard(prev => prev ? { ...prev, distance: e.target.value } : null)}
+                      style={editInputStyle} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={saveEditingHazard} disabled={editingHazard.saving}
+                      style={{ flex: 1, padding: '7px', fontSize: '12px', fontWeight: 600, backgroundColor: editingHazard.saving ? '#9e9e9e' : '#c5221f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                      {editingHazard.saving ? '저장 중...' : '저장'}
+                    </button>
+                    <button onClick={() => setEditingHazard(null)}
+                      style={{ flex: 1, padding: '7px', fontSize: '12px', backgroundColor: '#fff', color: '#5f6368', border: '1px solid #dadce0', borderRadius: '6px', cursor: 'pointer' }}>
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // 읽기 행
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <span style={{ fontSize: '13px', color: '#202124', flex: 1 }}>{h.hazardName}</span>
+                  {h.distance != null && (
+                    <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0 }}>{h.distance}m</span>
+                  )}
+                  <button onClick={() => startEditHazard(h)}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#80868b', padding: '0 2px', flexShrink: 0 }}
+                    title="수정">✏</button>
+                  <button onClick={() => handleDeleteHazard(h.id)}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#c5221f', padding: '0 2px', flexShrink: 0 }}
+                    title="삭제">🗑</button>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* 신규 추가 행 */}
+          {newHazardRows.map((row, idx) => (
+            <div key={row.localId} style={{ border: '1px dashed #c5221f', borderRadius: '8px', padding: '10px', marginTop: '6px', backgroundColor: '#fff8f7' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#c5221f' }}>추가 {idx + 1}</span>
+                <button onClick={() => removeNewHazardRow(row.localId)}
+                  style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '16px' }}>×</button>
+              </div>
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                <input
+                  placeholder="시설명 입력 후 조회"
+                  value={row.hazardName}
+                  onChange={e => updateNewHazardRow(row.localId, { hazardName: e.target.value, showDropdown: false })}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleNewHazardSearch(row.localId); }}
+                  style={{ ...editInputStyle, flex: 1 }}
+                />
+                <button onClick={() => handleNewHazardSearch(row.localId)} disabled={row.fetching}
+                  style={{ padding: '6px 10px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  {row.fetching ? '...' : '조회'}
+                </button>
+              </div>
+              {row.showDropdown && (
+                <div style={{ border: '1px solid #e8eaed', borderRadius: '6px', backgroundColor: '#fff', maxHeight: '160px', overflowY: 'auto', marginBottom: '4px' }}>
+                  {row.searchResults.map((item, j) => (
+                    <div key={j} onClick={() => handleNewHazardSelect(row.localId, item)}
+                      style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}>
+                      <div style={{ fontWeight: 600 }}>{stripHtml(item.title)}</div>
+                      <div style={{ color: '#80868b', fontSize: '11px' }}>{item.roadAddress || item.address}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {row.hazardAddress && (
+                <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '4px', padding: '2px 4px', backgroundColor: '#fff0ee', borderRadius: '4px' }}>
+                  {row.hazardAddress}
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '3px' }}>거리(m)</div>
+                <input type="number" value={row.distance}
+                  onChange={e => updateNewHazardRow(row.localId, { distance: e.target.value })}
+                  style={editInputStyle} />
+              </div>
+            </div>
+          ))}
+
+          {/* 일괄 저장 버튼 */}
+          {newHazardRows.length > 0 && (
+            <div style={{ marginTop: '8px' }}>
+              <button onClick={saveNewHazards} disabled={savingNewHazards}
+                style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewHazards ? '#9e9e9e' : '#c5221f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                {savingNewHazards ? '저장 중...' : `${newHazardRows.length}건 저장`}
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* 재개발 정보 */}
         {complex.redevelopType && (

@@ -443,6 +443,7 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - [x] CompareCard 전면 재작성 — ComplexInfoPanel과 표시 내용 완전 동기화 (수정/삭제 기능 제외), 참고가·교통·환경·임장유형·최근5건 동일 표시
 - [x] 비교평가 기능 — CompareListModal에 모드 토글(normal/evaluation), 비교평가 모드 선택 시 1:1 비교 후 우측 ComparisonEvalPanel 표시 (사진+메모, 가치평가, 가격비교, 결론, CRUD)
 - [x] 출퇴근 시간 `transferLines`(환승 노선) 필드 추가 — `CommuteTime` 타입에 `transferLines?: string` 추가, `updateCommuteTimes` API 파라미터에 포함, RegisterModal/ComplexInfoPanel 편집 UI 카드 스타일로 재작성 + 환승 횟수 > 0 시 노선 입력칸 표시 (➡️ 구분자), 읽기 모드에서 환승 노선 문자열 표시 (ComplexInfoPanel·CompareCard 공통)
+- [x] 유해시설(HazardInfo) CUD — RegisterModal 입력 섹션 추가 (시설명 네이버 검색·거리m 자동계산), ComplexInfoPanel 인라인 추가·수정·삭제 (빨간 테마, isComposing 가드·시퀀스 번호 적용), `HazardInfo` 타입·API 함수(`addHazardInfos`/`updateHazardInfo`/`deleteHazardInfo`) 추가
 
 ## 미완성 / TODO
 

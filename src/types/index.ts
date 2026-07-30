@@ -44,6 +44,16 @@ export interface SchoolInfo {
   longitude?: number;
 }
 
+/** 유해시설 정보 — 백엔드 HazardInfoDto와 1:1 매핑 */
+export interface HazardInfo {
+  id: number;
+  hazardName?: string;
+  distance?: number;    // 거리 (미터)
+  hazardAddress?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 /** 주변 인프라 정보 — 백엔드 InfraInfoDto와 1:1 매핑 */
 export interface InfraInfo {
   id: number;
@@ -153,6 +163,7 @@ export interface ApartmentComplex {
   subwayInfos: SubwayInfo[];
   schoolInfos?: SchoolInfo[];
   infraInfos?: InfraInfo[];
+  hazardInfos?: HazardInfo[];
   areaTypes?: string[];                        // 최신 시세 기록 기준 평형 목록
   areaTypePriceRanges?: Record<string, string>; // 평형 → 금액대 매핑 (예: {"전용 59": "11억대", "전용 84": "14억대"})
   priceItems?: PriceItem[]; // 백엔드가 포함 시 금액대 필터에서 평형 정보 표시 가능
@@ -265,6 +276,13 @@ export interface ApartmentComplexRequest {
     infraName: string;
     infraAddress?: string;
     distance?: number;         // 도보 분 단위
+  }[];
+  hazardInfos?: {
+    hazardName: string;
+    hazardAddress?: string;
+    distance?: number;         // 거리 (미터)
+    latitude?: number;
+    longitude?: number;
   }[];
   isFavorite?: boolean;        // 즐겨찾기 여부
 }

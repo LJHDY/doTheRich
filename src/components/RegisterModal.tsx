@@ -80,6 +80,17 @@ interface InfraRow {
   showDropdown: boolean;
 }
 
+interface HazardRow {
+  hazardName: string;
+  hazardAddress: string;
+  distance: string;        // 거리 (미터)
+  latitude: number | null;
+  longitude: number | null;
+  fetching: boolean;
+  searchResults: SearchLocalItem[];
+  showDropdown: boolean;
+}
+
 const INFRA_TYPES = [
   { key: 'DEPARTMENT_STORE', label: '백화점' },
   { key: 'MART',             label: '마트' },
@@ -279,9 +290,11 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   );
   const [schoolInfos, setSchoolInfos] = useState<SchoolRow[]>([]);
   const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
+  const [hazardInfos, setHazardInfos] = useState<HazardRow[]>([]);
   // 검색 시퀀스 번호 — 비동기 경쟁 조건 방지: 선택 후 in-flight 검색 결과 무시
   const schoolSearchSeq = useRef<Map<number, number>>(new Map());
   const infraSearchSeq = useRef<Map<number, number>>(new Map());
+  const hazardSearchSeq = useRef<Map<number, number>>(new Map());
   // 즐겨찾기 — form state와 분리해 boolean 타입 오염 방지
   const [isFavorite, setIsFavorite] = useState(false);
   // 임장용 — 체크 시 매매가 유효성 검사 생략
@@ -529,6 +542,43 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     }
   };
 
+  // ── 유해시설 ──────────────────────────────────────────────────────
+  const addHazard = () => setHazardInfos(prev => [...prev, {
+    hazardName: '', hazardAddress: '', distance: '',
+    latitude: null, longitude: null, fetching: false, searchResults: [], showDropdown: false,
+  }]);
+
+  const removeHazard = (i: number) => setHazardInfos(prev => prev.filter((_, idx) => idx !== i));
+
+  const updateHazard = (i: number, update: Partial<HazardRow>) =>
+    setHazardInfos(prev => prev.map((r, idx) => idx === i ? { ...r, ...update } : r));
+
+  const handleHazardSearch = async (i: number) => {
+    const query = hazardInfos[i].hazardName.trim();
+    if (!query) return;
+    const seq = (hazardSearchSeq.current.get(i) ?? 0) + 1;
+    hazardSearchSeq.current.set(i, seq);
+    updateHazard(i, { fetching: true, showDropdown: false });
+    try {
+      const { data } = await api.get<{ items: SearchLocalItem[] }>('/api/search/local', { params: { query } });
+      if (hazardSearchSeq.current.get(i) !== seq) return;
+      if (data.items.length === 1) { await handleHazardSelect(i, data.items[0]); return; }
+      updateHazard(i, { fetching: false, searchResults: data.items, showDropdown: data.items.length > 0 });
+    } catch {
+      if (hazardSearchSeq.current.get(i) === seq) updateHazard(i, { fetching: false });
+    }
+  };
+
+  const handleHazardSelect = async (i: number, item: SearchLocalItem) => {
+    hazardSearchSeq.current.set(i, -1);
+    const hazardAddress = item.roadAddress || item.address;
+    const lat = parseInt(item.mapy) / 10000000;
+    const lng = parseInt(item.mapx) / 10000000;
+    // 직선거리 미터로 계산 (haversine)
+    const distanceM = Math.round(haversineKm(initialData.latitude, initialData.longitude, lat, lng) * 1000);
+    updateHazard(i, { hazardName: stripHtml(item.title), hazardAddress, latitude: lat, longitude: lng, distance: String(distanceM), showDropdown: false, searchResults: [], fetching: false });
+  };
+
   // ── 제출 ──────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!form.complexName.trim()) { setError('단지명을 입력해주세요.'); return; }
@@ -604,6 +654,14 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           infraType: r.infraType,
           infraName: r.infraName,
           infraAddress: r.infraAddress || undefined,
+          distance: r.distance ? parseInt(r.distance) : undefined,
+          latitude: r.latitude ?? undefined,
+          longitude: r.longitude ?? undefined,
+        })),
+        // 유해시설명이 입력된 항목만 포함 — distance는 미터 단위
+        hazardInfos: hazardInfos.filter(r => r.hazardName.trim()).map(r => ({
+          hazardName: r.hazardName,
+          hazardAddress: r.hazardAddress || undefined,
           distance: r.distance ? parseInt(r.distance) : undefined,
           latitude: r.latitude ?? undefined,
           longitude: r.longitude ?? undefined,
@@ -1176,6 +1234,69 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
             color: '#1a73e8', marginBottom: '20px',
           }}>+ 인프라 추가</button>
+
+          {/* 유해시설 */}
+          <div style={sectionTitle}>유해시설</div>
+          {hazardInfos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 28px', gap: '6px', marginBottom: '4px' }}>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>시설명</span>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>거리(m)</span>
+              <span />
+            </div>
+          )}
+          {hazardInfos.map((row, i) => (
+            <div key={i} style={{ marginBottom: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 28px', gap: '6px', alignItems: 'flex-start' }}>
+                {/* 시설명 검색 */}
+                <div style={{ position: 'relative' }}>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <input
+                      placeholder="예) 하수처리장, 쓰레기 소각장 ..."
+                      value={row.hazardName}
+                      onChange={e => updateHazard(i, { hazardName: e.target.value, showDropdown: false })}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleHazardSearch(i); }}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => handleHazardSearch(i)}
+                      disabled={row.fetching || !row.hazardName.trim()}
+                      style={actionBtn('#c5221f', row.fetching || !row.hazardName.trim())}
+                    >{row.fetching ? '...' : '조회'}</button>
+                  </div>
+                  {row.showDropdown && row.searchResults.length > 0 && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                      backgroundColor: '#fff', border: '1px solid #dadce0', borderRadius: '6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)', maxHeight: '180px', overflowY: 'auto',
+                    }}>
+                      {row.searchResults.map((item, j) => (
+                        <div
+                          key={j}
+                          onClick={() => handleHazardSelect(i, item)}
+                          style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = '#f8f9fa'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = ''; }}
+                        >
+                          <div style={{ fontWeight: 600 }}>{stripHtml(item.title)}</div>
+                          <div style={{ fontSize: '11px', color: '#80868b', marginTop: '2px' }}>{item.roadAddress || item.address}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <input type="number" placeholder="미터"
+                  value={row.distance}
+                  onChange={e => updateHazard(i, { distance: e.target.value })}
+                  style={inputStyle} />
+                <button onClick={() => removeHazard(i)} style={{ ...iconBtn('#c5221f'), marginTop: '8px' }}>×</button>
+              </div>
+            </div>
+          ))}
+          <button onClick={addHazard} style={{
+            border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
+            borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
+            color: '#c5221f', marginBottom: '20px',
+          }}>+ 유해시설 추가</button>
 
           {/* 재개발/재건축/리모델링 여부 */}
           <div style={sectionTitle}>재개발·재건축·리모델링</div>

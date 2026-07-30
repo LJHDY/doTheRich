@@ -6,6 +6,7 @@ import {
   PriceHistoryRequest,
   SchoolInfo,
   InfraInfo,
+  HazardInfo,
   SubwayInfo,
   CommuteTime,
   ComplexPhoto,
@@ -180,6 +181,36 @@ export const updateInfraInfo = async (
 /** 인프라 정보 단건 삭제 — DELETE /api/complexes/:id/infra-infos/:iid */
 export const deleteInfraInfo = async (complexId: number, infraId: number): Promise<void> => {
   await api.delete(`/api/complexes/${complexId}/infra-infos/${infraId}`);
+};
+
+/** 유해시설 정보 다건 추가 — POST /api/complexes/:id/hazard-infos */
+export const addHazardInfos = async (
+  complexId: number,
+  items: Omit<HazardInfo, 'id'>[]
+): Promise<HazardInfo[]> => {
+  const { data } = await api.post<HazardInfo[]>(
+    `/api/complexes/${complexId}/hazard-infos`,
+    items
+  );
+  return data;
+};
+
+/** 유해시설 정보 단건 수정 — PATCH /api/complexes/:id/hazard-infos/:hazardId */
+export const updateHazardInfo = async (
+  complexId: number,
+  hazardId: number,
+  data: Omit<HazardInfo, 'id'>
+): Promise<HazardInfo> => {
+  const { data: result } = await api.patch<HazardInfo>(
+    `/api/complexes/${complexId}/hazard-infos/${hazardId}`,
+    data
+  );
+  return result;
+};
+
+/** 유해시설 정보 단건 삭제 — DELETE /api/complexes/:id/hazard-infos/:hazardId */
+export const deleteHazardInfo = async (complexId: number, hazardId: number): Promise<void> => {
+  await api.delete(`/api/complexes/${complexId}/hazard-infos/${hazardId}`);
 };
 
 /** 즐겨찾기 토글 — PATCH /api/complexes/:id/favorite */
