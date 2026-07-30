@@ -50,7 +50,8 @@ interface CommuteRow {
   destination: string;
   minutes: string;
   transportType: string;
-  transferCount: string; // 환승 횟수 (빈 문자열 = 미입력)
+  transferCount: string;    // 환승 횟수 (빈 문자열 = 미입력)
+  transferLines: string[];  // 환승 노선명 배열 (저장 시 ' ➡️ '로 join)
 }
 
 interface SchoolRow {
@@ -274,7 +275,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const [subwayInfos, setSubwayInfos] = useState<SubwayRow[]>([]);
   // 기본 목적지 5개를 빈 값으로 미리 채워둠 — 사용자가 분만 입력하면 됨
   const [commuteTimes, setCommuteTimes] = useState<CommuteRow[]>(
-    DESTINATIONS.map(d => ({ destination: d, minutes: '', transportType: '지하철', transferCount: '' }))
+    DESTINATIONS.map(d => ({ destination: d, minutes: '', transportType: '지하철', transferCount: '', transferLines: [] }))
   );
   const [schoolInfos, setSchoolInfos] = useState<SchoolRow[]>([]);
   const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
@@ -421,13 +422,25 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
 
   // ── 출퇴근 시간 ─────────────────────────────────────────────────
   const addCommute = () =>
-    setCommuteTimes(prev => [...prev, { destination: '', minutes: '', transportType: '지하철', transferCount: '' }]);
+    setCommuteTimes(prev => [...prev, { destination: '', minutes: '', transportType: '지하철', transferCount: '', transferLines: [] }]);
 
   const removeCommute = (i: number) =>
     setCommuteTimes(prev => prev.filter((_, idx) => idx !== i));
 
   const updateCommute = (i: number, update: Partial<CommuteRow>) =>
     setCommuteTimes(prev => prev.map((r, idx) => idx === i ? { ...r, ...update } : r));
+
+  // 환승 횟수 변경 시 transferLines 배열 크기를 동기화 (최대 4회 제한)
+  const handleCommuteTransferCountChange = (i: number, val: string) => {
+    const count = val === '' ? 0 : parseInt(val);
+    if (!isNaN(count) && count > 4) {
+      alert('환승 횟수는 최대 4회까지 입력할 수 있습니다.');
+      return;
+    }
+    // transferCount 변경 시 transferLines 초기화 — 횟수만큼 빈 문자열 배열 생성
+    const lines = count > 0 ? Array(count).fill('') : [];
+    updateCommute(i, { transferCount: val, transferLines: lines });
+  };
 
   // ── 학군 정보 ─────────────────────────────────────────────────────
   const addSchool = () => setSchoolInfos(prev => [...prev, {
@@ -571,6 +584,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           minutes: parseInt(r.minutes),
           transportType: r.transportType,
           transferCount: r.transferCount !== '' ? parseInt(r.transferCount) : 0,
+          // 노선명이 하나라도 있으면 ' ➡️ '로 연결, 없으면 undefined (DB에 저장 안 함)
+          transferLines: r.transferLines.filter(l => l.trim()).join(' ➡️ ') || undefined,
         })),
         // 학교명이 입력된 학군 정보만 포함 — schoolType은 ELEMENTARY/MIDDLE enum key로 전송
         schoolInfos: schoolInfos.filter(r => r.schoolName.trim()).map(r => ({
@@ -901,49 +916,82 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             color: '#1a73e8', marginBottom: '20px',
           }}>+ 역 추가</button>
 
-          {/* 출퇴근 시간 */}
+          {/* 출퇴근 시간 — 카드 스타일로 목적지별 행 표시 */}
           <div style={sectionTitle}>출퇴근 시간</div>
           {commuteTimes.map((row, i) => (
-            <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
-              {/* 목적지: 텍스트 입력 — 기본 5개는 채워진 상태, 추가 행은 직접 입력 */}
-              <input
-                placeholder="예) 강남"
-                value={row.destination}
-                onChange={e => updateCommute(i, { destination: e.target.value })}
-                style={{ ...inputStyle, width: '90px', flexShrink: 0 }}
-              />
-              {/* 네이버 지도 경로 버튼 — DESTINATION_COORDS에 있는 기본 목적지만 활성화 */}
-              <button
-                type="button"
-                onClick={() => {
-                  const dest = DESTINATION_COORDS[row.destination];
-                  if (!dest) return;
-                  // Naver Maps /p/directions/ URL은 lng,lat 순서 사용 (WGS84 decimal degrees)
-                  const start = `${initialData.longitude},${initialData.latitude},${encodeURIComponent(form.complexName || '출발지')}`;
-                  const goal = `${dest.lng},${dest.lat},${encodeURIComponent(dest.label)}`;
-                  window.open(
-                    `https://map.naver.com/p/directions/${start}/${goal}/-/transit`,
-                    '_blank',
-                    'noopener,noreferrer'
-                  );
-                }}
-                disabled={!DESTINATION_COORDS[row.destination]}
-                style={actionBtn('#34a853', !DESTINATION_COORDS[row.destination])}
-                title="네이버 지도에서 경로 확인"
-              >
-                지도
-              </button>
-              <input type="number" placeholder="분" value={row.minutes}
-                onChange={e => updateCommute(i, { minutes: e.target.value })}
-                style={{ ...inputStyle, width: '60px', flexShrink: 0 }} />
-              <input type="number" placeholder="환승" value={row.transferCount}
-                onChange={e => updateCommute(i, { transferCount: e.target.value })}
-                style={{ ...inputStyle, width: '55px', flexShrink: 0 }} />
-              <select value={row.transportType} onChange={e => updateCommute(i, { transportType: e.target.value })}
-                style={{ ...inputStyle, width: '80px', flexShrink: 0 }}>
-                {['지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
-              </select>
-              <button onClick={() => removeCommute(i)} style={iconBtn('#c5221f')}>×</button>
+            <div key={i} style={{
+              border: '1px solid #e8eaed', borderRadius: '12px',
+              padding: '10px 12px', marginBottom: '8px', background: '#fff',
+            }}>
+              {/* Line 1: 목적지 입력 + 지도 버튼 */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <input
+                  placeholder="예) 강남"
+                  value={row.destination}
+                  onChange={e => updateCommute(i, { destination: e.target.value })}
+                  style={{ ...inputStyle, flex: 1, marginRight: '8px' }}
+                />
+                {/* 네이버 지도 경로 버튼 — DESTINATION_COORDS에 있는 기본 목적지만 활성화 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const dest = DESTINATION_COORDS[row.destination];
+                    if (!dest) return;
+                    const start = `${initialData.longitude},${initialData.latitude},${encodeURIComponent(form.complexName || '출발지')}`;
+                    const goal = `${dest.lng},${dest.lat},${encodeURIComponent(dest.label)}`;
+                    window.open(
+                      `https://map.naver.com/p/directions/${start}/${goal}/-/transit`,
+                      '_blank',
+                      'noopener,noreferrer'
+                    );
+                  }}
+                  disabled={!DESTINATION_COORDS[row.destination]}
+                  style={actionBtn('#34a853', !DESTINATION_COORDS[row.destination])}
+                  title="네이버 지도에서 경로 확인"
+                >
+                  지도
+                </button>
+              </div>
+
+              {/* Line 2: 분 + 환승횟수 + 교통수단 + 삭제 버튼 (모바일 대응 flex-wrap) */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input type="number" placeholder="분" value={row.minutes}
+                  onChange={e => updateCommute(i, { minutes: e.target.value })}
+                  style={{ ...inputStyle, width: '52px', flexShrink: 0 }} />
+                <input type="number" placeholder="환승" value={row.transferCount}
+                  onChange={e => handleCommuteTransferCountChange(i, e.target.value)}
+                  style={{ ...inputStyle, width: '46px', flexShrink: 0 }} />
+                <select value={row.transportType} onChange={e => updateCommute(i, { transportType: e.target.value })}
+                  style={{ ...inputStyle, flex: 1, minWidth: '70px' }}>
+                  {['지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
+                </select>
+                <button onClick={() => removeCommute(i)} style={iconBtn('#c5221f')}>×</button>
+              </div>
+
+              {/* Line 3: 환승 노선 입력 (환승 횟수 > 0 일 때만 표시) */}
+              {row.transferLines.length > 0 && (
+                <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #e8eaed' }}>
+                  <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '4px' }}>환승노선</div>
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                    {row.transferLines.map((line, j) => (
+                      <React.Fragment key={j}>
+                        {/* 두 번째 칸부터 ➡️ 이모지 구분자 표시 */}
+                        {j > 0 && <span style={{ color: '#f9ab00', fontWeight: 700 }}>➡️</span>}
+                        <input
+                          placeholder={`노선${j + 1}`}
+                          value={line}
+                          onChange={e => {
+                            const newLines = [...row.transferLines];
+                            newLines[j] = e.target.value;
+                            updateCommute(i, { transferLines: newLines });
+                          }}
+                          style={{ ...inputStyle, width: '70px' }}
+                        />
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <button onClick={addCommute} style={{

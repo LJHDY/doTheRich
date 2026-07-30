@@ -277,7 +277,7 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - **섹션 순서**: 단지정보(참고가·메모) → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 재개발정보 → 임장유형 → 시세변동 → 최근기록
 - **종합평가**: 직장·교통·학군·환경 4칸 그리드, 각 S/A/B/C 배지 (데이터 없으면 `-`) — 클릭 시 해당 섹션으로 스크롤 (섹션 없으면 무동작)
 - **직장**: `complex.grade` 기반 배지 + 종사자수·사업체수 (`RegionWorkplaceConst`, DB 미저장)
-- **교통**: 항상 표시. 데이터 없으면 안내 문구. ✏ 버튼 → 편집 모드: 5개 고정 목적지 행(강남/시청/여의도/발산/마곡나루), "조회" 버튼으로 네이버 지도 대중교통 경로 팝업, 분·환승·교통수단 입력 후 PATCH `/commute-times` (일괄 교체). `CommuteGradeBadge` 배지 표시
+- **교통**: 항상 표시. 데이터 없으면 안내 문구. ✏ 버튼 → 편집 모드: 5개 고정 목적지 카드 스타일(강남/시청/여의도/발산/마곡나루), "조회" 버튼으로 네이버 지도 대중교통 경로 팝업, 분·환승횟수·환승노선(➡️ 구분자)·교통수단 입력 후 PATCH `/commute-times` (일괄 교체). `CommuteGradeBadge` 배지 표시. 환승 노선은 `transferLines` 필드(`' ➡️ '` join 문자열)로 저장·표시
 - **학군**: 중학교 `achievementScore` 기준 등급 배지 (S≥95/A≥90/B≥85/C) — 중학교 없으면 배지 미표시
 - **환경**: 주변 인프라, 항상 등급 배지 표시 (백화점 2개↑=S / 1개=A / 마트 1개↑=B / 나머지=C)
 - **재개발 정보**: 유형 + 진행단계, 단계 레이블 `?` 아이콘 호버 시 ①~⑦ 설명 tooltip
@@ -442,6 +442,7 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - [x] ComplexInfoPanel 헤더 평형별 금액 표시 — `latestItemPerAreaType`으로 전체 이력에서 평형별 최신 가격 집계 (단건 POST로 추가된 평형도 모두 표시)
 - [x] CompareCard 전면 재작성 — ComplexInfoPanel과 표시 내용 완전 동기화 (수정/삭제 기능 제외), 참고가·교통·환경·임장유형·최근5건 동일 표시
 - [x] 비교평가 기능 — CompareListModal에 모드 토글(normal/evaluation), 비교평가 모드 선택 시 1:1 비교 후 우측 ComparisonEvalPanel 표시 (사진+메모, 가치평가, 가격비교, 결론, CRUD)
+- [x] 출퇴근 시간 `transferLines`(환승 노선) 필드 추가 — `CommuteTime` 타입에 `transferLines?: string` 추가, `updateCommuteTimes` API 파라미터에 포함, RegisterModal/ComplexInfoPanel 편집 UI 카드 스타일로 재작성 + 환승 횟수 > 0 시 노선 입력칸 표시 (➡️ 구분자), 읽기 모드에서 환승 노선 문자열 표시 (ComplexInfoPanel·CompareCard 공통)
 
 ## 미완성 / TODO
 

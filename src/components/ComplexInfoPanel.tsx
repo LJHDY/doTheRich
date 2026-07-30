@@ -107,6 +107,7 @@ interface CommuteEditRow {
   minutes: string;
   transportType: string;
   transferCount: string;
+  transferLines: string[]; // 환승 노선명 배열 (저장 시 ' ➡️ '로 join)
 }
 
 // 네이버 지도 경로 URL 생성용 목적지 좌표 — RegisterModal과 동일
@@ -1149,11 +1150,18 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const startEditCommute = () => {
     const rows: CommuteEditRow[] = COMMUTE_DESTINATIONS.map(dest => {
       const existing = complex?.commuteTimes?.find(ct => ct.destination === dest);
+      // transferLines: 기존 문자열이 있으면 ' ➡️ '로 분리, 없으면 transferCount 만큼 빈 배열 생성
+      const transferLines = existing?.transferLines
+        ? existing.transferLines.split(' ➡️ ').filter(Boolean)
+        : (existing?.transferCount && existing.transferCount > 0
+            ? Array(existing.transferCount).fill('')
+            : []);
       return {
         destination: dest,
         minutes: existing?.minutes != null ? String(existing.minutes) : '',
         transportType: existing?.transportType || '지하철',
         transferCount: existing?.transferCount != null ? String(existing.transferCount) : '',
+        transferLines,
       };
     });
     setCommuteRows(rows);
@@ -1163,6 +1171,18 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const cancelEditCommute = () => {
     setEditingCommute(false);
     setCommuteRows([]);
+  };
+
+  // 환승 횟수 변경 시 transferLines 배열 크기를 동기화 (최대 4회 제한)
+  const handleCommuteTransferCountChange = (i: number, val: string) => {
+    const count = val === '' ? 0 : parseInt(val);
+    if (!isNaN(count) && count > 4) {
+      alert('환승 횟수는 최대 4회까지 입력할 수 있습니다.');
+      return;
+    }
+    // transferCount 변경 시 transferLines 초기화 — 횟수만큼 빈 문자열 배열 생성
+    const lines = count > 0 ? Array(count).fill('') : [];
+    setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, transferCount: val, transferLines: lines } : r));
   };
 
   const saveCommute = async () => {
@@ -1177,6 +1197,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           minutes: parseInt(r.minutes),
           transportType: r.transportType || undefined,
           transferCount: r.transferCount.trim() ? parseInt(r.transferCount) : undefined,
+          // 노선명이 하나라도 있으면 ' ➡️ '로 연결, 없으면 undefined (DB에 저장 안 함)
+          transferLines: r.transferLines.filter(l => l.trim()).join(' ➡️ ') || undefined,
         }));
       await updateCommuteTimes(complex.id, items);
       setEditingCommute(false);
@@ -1909,55 +1931,86 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             )}
           </div>
 
-          {/* 편집 모드 — 5개 목적지 행 입력 */}
+          {/* 편집 모드 — 5개 목적지 카드 스타일 입력 */}
           {editingCommute ? (
             <div>
               {commuteRows.map((row, i) => {
                 const destCoords = DESTINATION_COORDS[row.destination];
                 return (
-                  <div key={row.destination} style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '6px' }}>
-                    {/* 목적지 라벨 */}
-                    <span style={{ fontSize: '12px', color: '#5f6368', width: '52px', flexShrink: 0 }}>{row.destination}</span>
-                    {/* 네이버 지도 조회 버튼 */}
-                    <button
-                      onClick={() => {
-                        if (!destCoords || !complex.latitude || !complex.longitude) return;
-                        const start = `${complex.longitude},${complex.latitude},${encodeURIComponent(complex.complexName)}`;
-                        const goal = `${destCoords.lng},${destCoords.lat},${encodeURIComponent(destCoords.label)}`;
-                        window.open(`https://map.naver.com/p/directions/${start}/${goal}/-/transit`, '_blank', 'noopener,noreferrer');
-                      }}
-                      style={{
-                        padding: '4px 8px', fontSize: '11px', fontWeight: 600,
-                        border: '1px solid #34a853', borderRadius: '6px',
-                        backgroundColor: '#e6f4ea', color: '#0b8043',
-                        cursor: 'pointer', flexShrink: 0,
-                      }}
-                      title="네이버 지도에서 대중교통 경로 확인"
-                    >조회</button>
-                    {/* 소요시간(분) */}
-                    <input
-                      type="number"
-                      placeholder="분"
-                      value={row.minutes}
-                      onChange={e => setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, minutes: e.target.value } : r))}
-                      style={{ ...editInputStyle, width: '52px', flexShrink: 0 }}
-                    />
-                    {/* 환승 횟수 */}
-                    <input
-                      type="number"
-                      placeholder="환승"
-                      value={row.transferCount}
-                      onChange={e => setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, transferCount: e.target.value } : r))}
-                      style={{ ...editInputStyle, width: '46px', flexShrink: 0 }}
-                    />
-                    {/* 교통수단 */}
-                    <select
-                      value={row.transportType}
-                      onChange={e => setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, transportType: e.target.value } : r))}
-                      style={{ ...editInputStyle, width: '62px', flexShrink: 0 }}
-                    >
-                      {['지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
-                    </select>
+                  <div key={row.destination} style={{
+                    border: '1px solid #e8eaed', borderRadius: '10px',
+                    padding: '8px 10px', marginBottom: '6px', background: '#f8f9fa',
+                  }}>
+                    {/* Line 1: 목적지 라벨 + 조회 버튼 */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#202124' }}>{row.destination}</span>
+                      <button
+                        onClick={() => {
+                          if (!destCoords || !complex.latitude || !complex.longitude) return;
+                          const start = `${complex.longitude},${complex.latitude},${encodeURIComponent(complex.complexName)}`;
+                          const goal = `${destCoords.lng},${destCoords.lat},${encodeURIComponent(destCoords.label)}`;
+                          window.open(`https://map.naver.com/p/directions/${start}/${goal}/-/transit`, '_blank', 'noopener,noreferrer');
+                        }}
+                        style={{
+                          padding: '3px 8px', fontSize: '11px', fontWeight: 600,
+                          border: '1px solid #34a853', borderRadius: '6px',
+                          backgroundColor: '#e6f4ea', color: '#0b8043',
+                          cursor: 'pointer', flexShrink: 0,
+                        }}
+                        title="네이버 지도에서 대중교통 경로 확인"
+                      >조회</button>
+                    </div>
+
+                    {/* Line 2: 분 + 환승횟수 + 교통수단 */}
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        placeholder="분"
+                        value={row.minutes}
+                        onChange={e => setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, minutes: e.target.value } : r))}
+                        style={{ ...editInputStyle, width: '52px', flexShrink: 0 }}
+                      />
+                      {/* 환승 횟수 변경 시 handleCommuteTransferCountChange로 transferLines 동기화 */}
+                      <input
+                        type="number"
+                        placeholder="환승"
+                        value={row.transferCount}
+                        onChange={e => handleCommuteTransferCountChange(i, e.target.value)}
+                        style={{ ...editInputStyle, width: '46px', flexShrink: 0 }}
+                      />
+                      <select
+                        value={row.transportType}
+                        onChange={e => setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, transportType: e.target.value } : r))}
+                        style={{ ...editInputStyle, flex: 1 }}
+                      >
+                        {['지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
+                      </select>
+                    </div>
+
+                    {/* Line 3: 환승 노선 입력 (환승 횟수 > 0 일 때만 표시) */}
+                    {parseInt(row.transferCount) > 0 && (
+                      <div style={{ marginTop: '6px', borderTop: '1px dashed #e8eaed', paddingTop: '6px' }}>
+                        <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '4px' }}>환승노선</div>
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                          {row.transferLines.map((line, j) => (
+                            <React.Fragment key={j}>
+                              {/* 두 번째 칸부터 ➡️ 이모지 구분자 표시 */}
+                              {j > 0 && <span style={{ color: '#f9ab00', fontWeight: 700, margin: '0 2px' }}>➡️</span>}
+                              <input
+                                placeholder={`노선${j + 1}`}
+                                value={line}
+                                onChange={e => {
+                                  const newLines = [...row.transferLines];
+                                  newLines[j] = e.target.value;
+                                  setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, transferLines: newLines } : r));
+                                }}
+                                style={{ ...editInputStyle, width: '60px' }}
+                              />
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1998,6 +2051,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     {ct.transferCount != null && (
                       <div style={{ fontSize: '10px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', marginTop: '2px' }}>
                         {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
+                      </div>
+                    )}
+                    {/* 환승 노선 문자열 표시 (예: "1호선 ➡️ 2호선") */}
+                    {ct.transferLines && (
+                      <div style={{ fontSize: '10px', color: '#9e9e9e', marginTop: '1px', lineHeight: 1.3 }}>
+                        {ct.transferLines}
                       </div>
                     )}
                   </div>

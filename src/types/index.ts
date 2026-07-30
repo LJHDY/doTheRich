@@ -20,6 +20,7 @@ export interface CommuteTime {
   minutes: number;
   transportType: string;
   transferCount?: number; // 환승 횟수 (0 = 환승 없음, undefined = 미입력)
+  transferLines?: string; // 환승 노선 문자열 (예: "1호선 ➡️ 2호선")
 }
 
 /** 지하철 정보 (역명 + 호선 + 도보 시간) */
@@ -244,6 +245,7 @@ export interface ApartmentComplexRequest {
     destination: string;
     minutes: number;
     transportType?: string;
+    transferLines?: string; // 환승 노선 문자열 (예: "1호선 ➡️ 2호선")
   }[];
   subwayInfos?: {
     stationName: string;

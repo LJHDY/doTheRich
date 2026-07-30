@@ -417,6 +417,12 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                       {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
                     </div>
                   )}
+                  {/* 환승 노선 문자열 표시 (예: "1호선 ➡️ 2호선") */}
+                  {ct.transferLines && (
+                    <div style={{ fontSize: '9px', color: '#9e9e9e', marginTop: '1px', lineHeight: 1.3 }}>
+                      {ct.transferLines}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
