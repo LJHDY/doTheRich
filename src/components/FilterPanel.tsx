@@ -82,10 +82,10 @@ const matchChangeRate = (rate: number | undefined, ranges: string[]): boolean =>
   if (ranges.length === 0) return true;
   if (rate == null) return false;
   return ranges.some(r => {
-    if (r === '30이상') return rate >= 30;
-    if (r === '10~30') return rate >= 10 && rate < 30;
-    if (r === '0~10') return rate >= 0 && rate < 10;
-    if (r === '마이너스') return rate < 0;
+    if (r === '80~100') return rate >= 80 && rate < 100;
+    if (r === '100~150') return rate >= 100 && rate < 150;
+    if (r === '150~200') return rate >= 150 && rate < 200;
+    if (r === '200이상') return rate >= 200;
     return false;
   });
 };
@@ -405,12 +405,12 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         <div style={{ ...sectionStyle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
           <SectionLabel>10년 등락률</SectionLabel>
           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-            {(['30이상', '10~30', '0~10', '마이너스'] as const).map(r => (
+            {(['80~100', '100~150', '150~200', '200이상'] as const).map(r => (
               <Chip
                 key={r}
-                label={r === '마이너스' ? '하락' : `+${r}%`}
+                label={r === '200이상' ? '200%+' : `${r}%`}
                 active={filters.changeRateRanges.includes(r)}
-                color={r === '마이너스' ? '#1a73e8' : '#34a853'}
+                color='#34a853'
                 onClick={() => upd({ changeRateRanges: toggle(filters.changeRateRanges, r) })}
               />
             ))}

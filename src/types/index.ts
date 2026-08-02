@@ -303,7 +303,7 @@ export interface ActiveFilters {
   regions: string[]             // 지역구 (예: "서울 관악구")
   isFavoriteOnly: boolean
   jeonseRateRanges: string[]    // "60미만"|"60~70"|"70~80"|"80이상"
-  changeRateRanges: string[]    // "상승"|"하락"|"30이상"|"10~30"|"0~10"|"마이너스"
+  changeRateRanges: string[]    // "80~100"|"100~150"|"150~200"|"200이상"
 }
 
 export const EMPTY_FILTERS: ActiveFilters = {
