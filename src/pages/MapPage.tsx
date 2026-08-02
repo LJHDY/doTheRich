@@ -141,10 +141,12 @@ const MapPage: React.FC<MapPageProps> = ({
   const createMarkerIcon = useCallback(
     (complex: ApartmentComplex, isSelected: boolean) => {
       // 실제 가격을 억 단위로 변환 (천만 자리에서 반올림) — 없으면 금액대 숫자로 fallback
+      // price가 있는 평형의 최신 날짜가 다를 경우에도 백엔드가 올바른 값을 내려주므로 여기서 추가 처리 불필요
       const priceUk = complex.price
         ? Math.round(complex.price / 10000000) / 10
         : (() => { const m = complex.priceRange?.match(/^(\d+)/); return m ? parseInt(m[1]) : null; })();
-      const label = priceUk !== null ? String(priceUk) : complex.priceRange;
+      // 가격 정보가 전혀 없으면 '?' 표시 — undefined/null이 마커에 그대로 노출되는 것 방지
+      const label = priceUk !== null ? String(priceUk) : (complex.priceRange ?? '?');
 
       // 가격 기준 색상 구분: 선택=보라, 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=검정
       const bgColor = isSelected
