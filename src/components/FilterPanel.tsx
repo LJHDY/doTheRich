@@ -78,7 +78,6 @@ const matchJeonseRate = (rate: number | undefined, ranges: string[]): boolean =>
 };
 
 // ── 10년 등락률 범위 판별 ─────────────────────────────────────────────────────
-const CHANGE_RATE_RANGES = ['30이상', '10~30', '0~10', '마이너스'] as const;
 const matchChangeRate = (rate: number | undefined, ranges: string[]): boolean => {
   if (ranges.length === 0) return true;
   if (rate == null) return false;
