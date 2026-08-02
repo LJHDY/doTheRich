@@ -452,11 +452,21 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
   - proj4로 런타임 EPSG:5179 → WGS84 변환 (`src/utils/districtGeoJson.ts`)
   - `DistrictSelector.tsx` 신규 컴포넌트, GeoJSON 모듈 레벨 캐시
   - `polygon.clickable:false` → 경로 그리기와 충돌 없음
+- [x] 내 위치 버튼 — 지도 우하단 📍 플로팅 버튼, Geolocation API → 파란 pulse 마커 + 지도 이동
+- [x] 로드뷰 — 헤더 "로드뷰" 버튼 → 지도 하단 300px 고정 분할 뷰 (naver.maps.Panorama)
+  - 지도 클릭 시 해당 위치 파노라마로 이동 (경로 그리기 중에는 비활성화)
+  - Panorama div 항상 DOM 유지(height 0↔300px 토글)로 재마운트 시 검정화면 방지
 
 ## 미완성 / TODO
 
 - [x] 학군·인프라 검색 드롭다운 이중표시 버그 수정 — IME Enter 이중발화(`isComposing` 가드) + 시퀀스 번호로 stale 비동기 결과 폐기 + 결과 1건이면 자동선택
 - [x] 경사도(slopeType)/아파트구조(buildingStructure)/용적률(floorAreaRatio) 추가 — RegisterModal 입력, ComplexInfoPanel 표시+인라인편집, CompareCard 표시전용
+- [x] 종합 필터 기능 — FilterPanel 컴포넌트, 헤더 "필터" 버튼 (활성 시 `필터 N/M` 뱃지)
+  - 필터 항목: 즐겨찾기, 지역구, 임장유형, 세대수, 연식, 직장밀도·입지·학군·환경 등급, 재개발, 경사도, 구조
+  - `ActiveFilters` / `EMPTY_FILTERS` / `isFiltersActive()` → `types/index.ts`
+  - `applyFilters()` → `FilterPanel.tsx` export, App.tsx에서 `filteredComplexes = useMemo(...)`
+  - MapPage에 `filteredComplexes` 전달 → 필터 적용 단지만 지도 마커 표시
+  - 결과 목록: 등급 배지(교/학/환) + 단지명 검색, 클릭 시 지도 이동 + 패널 오픈
 - [ ] 실거래가 자동조회 (RegisterModal 주석 해제) — 정확도 개선 필요
 - [ ] 금액대 필터 버튼에 평형 표시 — 백엔드 priceItems 포함 필요
 - [ ] 시세 기록 삭제 기능

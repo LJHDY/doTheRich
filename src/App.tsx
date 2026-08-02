@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint } from './types';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, ActiveFilters, EMPTY_FILTERS, isFiltersActive } from './types';
 import { getComplexes, getPriceRanges, runBatchRealEstatePrice, getRoutes, createRoute, updateRoute, deleteRoute } from './services/api';
 import MapPage from './pages/MapPage';
 import PriceRangeFilter from './components/PriceRangeFilter';
@@ -13,6 +13,7 @@ import RegisterModal, { RegisterInitialData } from './components/RegisterModal';
 import LivingZonePanel from './components/LivingZonePanel';
 import AffordabilityPanel from './components/AffordabilityPanel';
 import RoutePanel from './components/RoutePanel';
+import FilterPanel, { applyFilters } from './components/FilterPanel';
 import DistrictSelector from './components/DistrictSelector';
 import { useIsMobile } from './hooks/useIsMobile';
 
@@ -74,6 +75,16 @@ const App: React.FC = () => {
 
   // 로드뷰 패널 — 지도 하단 분할 뷰
   const [roadViewOpen, setRoadViewOpen] = useState(false);
+
+  // 필터 패널
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
+
+  // 필터 적용된 단지 목록 — 지도 마커에 사용
+  const filteredComplexes = useMemo(
+    () => isFiltersActive(activeFilters) ? complexes.filter(c => applyFilters(c, activeFilters)) : complexes,
+    [complexes, activeFilters]
+  );
 
   // 구매 가능 분석 패널 — 생활권·단지패널과 상호 배타
   const [affordOpen, setAffordOpen] = useState(false);
@@ -363,6 +374,12 @@ const App: React.FC = () => {
                 {/* 내 단지 */}
                 {([
                   {
+                    label: isFiltersActive(activeFilters) ? `필터 ${filteredComplexes.length}/${complexes.length}` : '필터',
+                    active: filterOpen || isFiltersActive(activeFilters),
+                    activeColor: '#8e24aa', activeBg: '#f3e5f5',
+                    onClick: () => { setFilterOpen(v => !v); setMobileMenuOpen(false); },
+                  },
+                  {
                     label: '내 단지', active: myComplexListOpen,
                     activeColor: '#1a73e8', activeBg: '#e8f0fe',
                     onClick: () => { setMyComplexListOpen(v => !v); setMobileMenuOpen(false); },
@@ -469,6 +486,30 @@ const App: React.FC = () => {
                 color: myComplexListOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
               }}
             >내 단지</button>
+            {/* 필터 버튼 — 활성 필터 수 뱃지 표시 */}
+            <button
+              onClick={() => setFilterOpen(v => !v)}
+              style={{
+                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid',
+                borderColor: filterOpen || isFiltersActive(activeFilters) ? '#8e24aa' : '#dadce0',
+                borderRadius: '6px',
+                backgroundColor: filterOpen || isFiltersActive(activeFilters) ? '#f3e5f5' : '#fff',
+                color: filterOpen || isFiltersActive(activeFilters) ? '#8e24aa' : '#5f6368',
+                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                display: 'flex', alignItems: 'center', gap: '5px',
+              }}
+            >
+              <span>필터</span>
+              {isFiltersActive(activeFilters) && (
+                <span style={{
+                  backgroundColor: '#8e24aa', color: '#fff', borderRadius: '8px',
+                  fontSize: '10px', fontWeight: 700, padding: '1px 5px',
+                }}>
+                  {filteredComplexes.length}/{complexes.length}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => setFavoriteListOpen(v => !v)}
               style={{
@@ -637,7 +678,7 @@ const App: React.FC = () => {
           /* 기본 뷰 — 지도는 항상 전체 렌더, 사이드패널은 모바일에서 fixed 오버레이 */
           <>
             <MapPage
-              complexes={complexes}
+              complexes={filteredComplexes}
               selectedComplex={selectedComplex}
               onComplexSelect={handleComplexSelect}
               focusLocation={focusLocation}
@@ -698,6 +739,21 @@ const App: React.FC = () => {
               </div>
             )}
             {/* 모바일: 'list' 뷰일 때만 패널 표시 / 데스크탑: 항상 패널 표시 */}
+            {filterOpen && (
+              <div style={isMobile ? {
+                position: 'fixed', inset: 0, zIndex: 500,
+                display: 'flex', flexDirection: 'column',
+              } : {}}>
+                <FilterPanel
+                  complexes={complexes}
+                  filters={activeFilters}
+                  onChange={setActiveFilters}
+                  onClose={() => setFilterOpen(false)}
+                  onSelect={c => { handleListSelect(c); if (isMobile) setFilterOpen(false); }}
+                  isMobile={isMobile}
+                />
+              </div>
+            )}
             {routePanelOpen && (!isMobile || mobileRouteView === 'list') && (
               <div style={isMobile ? {
                 position: 'fixed', inset: 0, zIndex: 500,

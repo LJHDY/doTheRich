@@ -287,6 +287,35 @@ export interface ApartmentComplexRequest {
   isFavorite?: boolean;        // 즐겨찾기 여부
 }
 
+/** 필터 패널 활성 필터 상태 — 빈 배열/null = 해당 카테고리 필터 없음 */
+export interface ActiveFilters {
+  visitTypes: string[]          // ATMOSPHERE | COMPLEX | LISTING | NONE
+  grades: string[]              // S|A|B|C 직장밀도 등급
+  commuteGrades: string[]       // S|A|B|C 입지(교통) 등급
+  schoolGrades: string[]        // S|A|B|C 학군 등급
+  infraGrades: string[]         // S|A|B|C 환경(인프라) 등급
+  unitCountRanges: string[]     // "500이하"|"500~1000"|"1000~2000"|"2000이상"
+  redevelopTypes: string[]      // REDEVELOPMENT|RECONSTRUCTION|REMODELING|없음
+  slopeTypes: string[]          // FLAT|GENTLE|MODERATE|STEEP
+  buildingStructures: string[]  // STAIRCASE|CORRIDOR|MIXED
+  builtYearRanges: string[]     // "2020이후"|"2010년대"|"2000년대"|"1999이전"
+  regions: string[]             // 지역구 (예: "서울 관악구")
+  isFavoriteOnly: boolean
+}
+
+export const EMPTY_FILTERS: ActiveFilters = {
+  visitTypes: [], grades: [], commuteGrades: [], schoolGrades: [], infraGrades: [],
+  unitCountRanges: [], redevelopTypes: [], slopeTypes: [], buildingStructures: [],
+  builtYearRanges: [], regions: [], isFavoriteOnly: false,
+};
+
+/** 필터가 하나라도 활성화돼 있는지 */
+export const isFiltersActive = (f: ActiveFilters): boolean =>
+  f.visitTypes.length > 0 || f.grades.length > 0 || f.commuteGrades.length > 0 ||
+  f.schoolGrades.length > 0 || f.infraGrades.length > 0 || f.unitCountRanges.length > 0 ||
+  f.redevelopTypes.length > 0 || f.slopeTypes.length > 0 || f.buildingStructures.length > 0 ||
+  f.builtYearRanges.length > 0 || f.regions.length > 0 || f.isFavoriteOnly;
+
 /** 경로 좌표 점 */
 export interface RoutePoint {
   lat: number;
