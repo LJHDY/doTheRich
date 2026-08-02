@@ -170,6 +170,7 @@ export interface ApartmentComplex {
   grade?: string;       // 지역 직장 밀도 등급 (S/A/B/C) — RegionWorkplaceConst 기준, DB 미저장
   employees?: number;   // 지역 종사자수
   businesses?: number;  // 지역 사업체수
+  tenYearChangeRate?: number; // 최신 시세 기록의 10년 등락률 (%) — 백엔드 집계값
   isFavorite?: boolean; // 즐겨찾기 여부
   slopeType?: string;         // 경사도: FLAT/GENTLE/MODERATE/STEEP
   buildingStructure?: string; // 아파트구조: STAIRCASE/CORRIDOR/MIXED
@@ -301,12 +302,15 @@ export interface ActiveFilters {
   builtYearRanges: string[]     // "2020이후"|"2010년대"|"2000년대"|"1999이전"
   regions: string[]             // 지역구 (예: "서울 관악구")
   isFavoriteOnly: boolean
+  jeonseRateRanges: string[]    // "60미만"|"60~70"|"70~80"|"80이상"
+  changeRateRanges: string[]    // "상승"|"하락"|"30이상"|"10~30"|"0~10"|"마이너스"
 }
 
 export const EMPTY_FILTERS: ActiveFilters = {
   visitTypes: [], grades: [], commuteGrades: [], schoolGrades: [], infraGrades: [],
   unitCountRanges: [], redevelopTypes: [], slopeTypes: [], buildingStructures: [],
   builtYearRanges: [], regions: [], isFavoriteOnly: false,
+  jeonseRateRanges: [], changeRateRanges: [],
 };
 
 /** 필터가 하나라도 활성화돼 있는지 */
@@ -314,7 +318,8 @@ export const isFiltersActive = (f: ActiveFilters): boolean =>
   f.visitTypes.length > 0 || f.grades.length > 0 || f.commuteGrades.length > 0 ||
   f.schoolGrades.length > 0 || f.infraGrades.length > 0 || f.unitCountRanges.length > 0 ||
   f.redevelopTypes.length > 0 || f.slopeTypes.length > 0 || f.buildingStructures.length > 0 ||
-  f.builtYearRanges.length > 0 || f.regions.length > 0 || f.isFavoriteOnly;
+  f.builtYearRanges.length > 0 || f.regions.length > 0 || f.isFavoriteOnly ||
+  f.jeonseRateRanges.length > 0 || f.changeRateRanges.length > 0;
 
 /** 경로 좌표 점 */
 export interface RoutePoint {

@@ -35,19 +35,58 @@ const matchUnitCount = (unitCount: number | undefined, ranges: string[]): boolea
   });
 };
 
-// ── 연식 범위 판별 ─────────────────────────────────────────────────────────────
+// ── 연식 파싱 — "95년" → 1995, "00년" → 2000, "2023년" → 2023
+// 2자리: 30이상=19xx, 29이하=20xx (부동산 데이터는 30년이내 준공이 대부분)
+const parseBuiltYear = (builtYear: string): number | null => {
+  const m4 = builtYear.match(/(\d{4})/);
+  if (m4) return parseInt(m4[1]);
+  const m2 = builtYear.match(/^(\d{2})년?/);
+  if (m2) {
+    const y2 = parseInt(m2[1]);
+    return y2 >= 30 ? 1900 + y2 : 2000 + y2;
+  }
+  return null;
+};
+
 const BUILT_YEAR_RANGES = ['2020이후', '2010년대', '2000년대', '1999이전'] as const;
 const matchBuiltYear = (builtYear: string | undefined, ranges: string[]): boolean => {
   if (ranges.length === 0) return true;
   if (!builtYear) return false;
-  const m = builtYear.match(/(\d{4})/);
-  if (!m) return false;
-  const y = parseInt(m[1]);
+  const y = parseBuiltYear(builtYear);
+  if (y === null) return false;
   return ranges.some(r => {
     if (r === '2020이후') return y >= 2020;
     if (r === '2010년대') return y >= 2010 && y < 2020;
     if (r === '2000년대') return y >= 2000 && y < 2010;
     if (r === '1999이전') return y < 2000;
+    return false;
+  });
+};
+
+// ── 전세가율 범위 판별 ────────────────────────────────────────────────────────
+const JEONSE_RATE_RANGES = ['60미만', '60~70', '70~80', '80이상'] as const;
+const matchJeonseRate = (rate: number | undefined, ranges: string[]): boolean => {
+  if (ranges.length === 0) return true;
+  if (rate == null) return false;
+  return ranges.some(r => {
+    if (r === '60미만') return rate < 60;
+    if (r === '60~70') return rate >= 60 && rate < 70;
+    if (r === '70~80') return rate >= 70 && rate < 80;
+    if (r === '80이상') return rate >= 80;
+    return false;
+  });
+};
+
+// ── 10년 등락률 범위 판별 ─────────────────────────────────────────────────────
+const CHANGE_RATE_RANGES = ['30이상', '10~30', '0~10', '마이너스'] as const;
+const matchChangeRate = (rate: number | undefined, ranges: string[]): boolean => {
+  if (ranges.length === 0) return true;
+  if (rate == null) return false;
+  return ranges.some(r => {
+    if (r === '30이상') return rate >= 30;
+    if (r === '10~30') return rate >= 10 && rate < 30;
+    if (r === '0~10') return rate >= 0 && rate < 10;
+    if (r === '마이너스') return rate < 0;
     return false;
   });
 };
@@ -83,6 +122,8 @@ export const applyFilters = (c: ApartmentComplex, f: ActiveFilters): boolean => 
   }
   if (!matchUnitCount(c.unitCount, f.unitCountRanges)) return false;
   if (!matchBuiltYear(c.builtYear, f.builtYearRanges)) return false;
+  if (!matchJeonseRate(c.jeonseRate, f.jeonseRateRanges)) return false;
+  if (!matchChangeRate(c.tenYearChangeRate, f.changeRateRanges)) return false;
 
   // 등급 계산 필터
   if (f.commuteGrades.length > 0) {
@@ -182,7 +223,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     filters.visitTypes.length + filters.grades.length + filters.commuteGrades.length +
     filters.schoolGrades.length + filters.infraGrades.length + filters.unitCountRanges.length +
     filters.redevelopTypes.length + filters.slopeTypes.length + filters.buildingStructures.length +
-    filters.builtYearRanges.length + filters.regions.length + (filters.isFavoriteOnly ? 1 : 0);
+    filters.builtYearRanges.length + filters.regions.length + (filters.isFavoriteOnly ? 1 : 0) +
+    filters.jeonseRateRanges.length + filters.changeRateRanges.length;
 
   const panelStyle: React.CSSProperties = isMobile
     ? { position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }
@@ -339,13 +381,43 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         </div>
 
         {/* 아파트 구조 */}
-        <div style={{ ...sectionStyle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
+        <div style={sectionStyle}>
           <SectionLabel>아파트 구조</SectionLabel>
           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
             {Object.entries(STRUCT_LABELS).map(([k, v]) => (
               <Chip key={k} label={v} active={filters.buildingStructures.includes(k)}
                 onClick={() => upd({ buildingStructures: toggle(filters.buildingStructures, k) })} />
             ))}
+          </div>
+        </div>
+
+        {/* 전세가율 */}
+        <div style={sectionStyle}>
+          <SectionLabel>전세가율 (%)</SectionLabel>
+          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+            {JEONSE_RATE_RANGES.map(r => (
+              <Chip key={r} label={r + '%'} active={filters.jeonseRateRanges.includes(r)}
+                onClick={() => upd({ jeonseRateRanges: toggle(filters.jeonseRateRanges, r) })} />
+            ))}
+          </div>
+        </div>
+
+        {/* 10년 등락률 */}
+        <div style={{ ...sectionStyle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
+          <SectionLabel>10년 등락률</SectionLabel>
+          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+            {(['30이상', '10~30', '0~10', '마이너스'] as const).map(r => (
+              <Chip
+                key={r}
+                label={r === '마이너스' ? '하락' : `+${r}%`}
+                active={filters.changeRateRanges.includes(r)}
+                color={r === '마이너스' ? '#1a73e8' : '#34a853'}
+                onClick={() => upd({ changeRateRanges: toggle(filters.changeRateRanges, r) })}
+              />
+            ))}
+          </div>
+          <div style={{ fontSize: '11px', color: '#bdbdbd', marginTop: '6px' }}>
+            ※ 시세 기록에 10년 등락률이 입력된 단지만 필터됩니다
           </div>
         </div>
       </div>
@@ -411,6 +483,12 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                         {c.region && <span>{c.region}</span>}
                         {c.builtYear && <span>{c.builtYear}</span>}
                         {c.unitCount && <span>{c.unitCount.toLocaleString()}세대</span>}
+                        {c.jeonseRate != null && <span>전세율 {c.jeonseRate}%</span>}
+                        {c.tenYearChangeRate != null && (
+                          <span style={{ color: c.tenYearChangeRate >= 0 ? '#34a853' : '#1a73e8', fontWeight: 600 }}>
+                            {c.tenYearChangeRate >= 0 ? '+' : ''}{c.tenYearChangeRate}%
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
