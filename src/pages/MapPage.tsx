@@ -776,13 +776,13 @@ const MapPage: React.FC<MapPageProps> = ({
             cursor: isDrawingRoute ? 'crosshair' : 'default',
           }}
         />
-        {/* 내 위치 플로팅 버튼 — 네이버 줌 컨트롤 아래 오른쪽 고정 */}
+        {/* 내 위치 플로팅 버튼 — 왼쪽 상단 고정 (모바일에서 경로 목록 버튼과 겹침 방지) */}
         <button
           onClick={handleMyLocation}
           disabled={locating}
           title="내 위치로 이동"
           style={{
-            position: 'absolute', bottom: '24px', right: '12px',
+            position: 'absolute', top: '12px', left: '12px',
             width: '40px', height: '40px', borderRadius: '8px',
             backgroundColor: '#fff', border: '1px solid #dadce0',
             boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
