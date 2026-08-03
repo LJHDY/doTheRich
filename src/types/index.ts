@@ -125,7 +125,7 @@ export interface OverlayMarker {
   name: string;
   lat: number;
   lng: number;
-  markerType: 'school' | 'infra';
+  markerType: 'school' | 'infra' | 'hazard';
   subType?: string;            // schoolType 또는 infraType
   achievementScore?: number;   // 중학교 학업성취도 (마커 위에 표시)
   walkingMinutes?: number;     // 도보시간 (초등학교 마커 위에 표시)

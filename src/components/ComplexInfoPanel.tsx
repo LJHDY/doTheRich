@@ -492,6 +492,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         markers.push({ id: `infra-${inf.id}`, name: inf.infraName, lat: inf.latitude, lng: inf.longitude, markerType: 'infra', subType: inf.infraType });
       }
     });
+    (complex?.hazardInfos ?? []).forEach(h => {
+      if (h.latitude != null && h.longitude != null) {
+        markers.push({ id: `hazard-${h.id}`, name: h.hazardName ?? '', lat: h.latitude, lng: h.longitude, markerType: 'hazard' });
+      }
+    });
     onOverlayMarkersChange(markers);
   }, [complex, onOverlayMarkersChange]);
 

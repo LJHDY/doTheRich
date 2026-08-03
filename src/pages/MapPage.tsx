@@ -378,12 +378,30 @@ const MapPage: React.FC<MapPageProps> = ({
 
     (overlayMarkers ?? []).forEach(om => {
       const isSchool = om.markerType === 'school';
+      const isHazard = om.markerType === 'hazard';
       const bgColor = isSchool
         ? (SCHOOL_COLORS[om.subType ?? ''] ?? '#34a853')
         : (INFRA_COLORS[om.subType ?? ''] ?? '#607d8b');
 
       let content: string;
-      if (isSchool) {
+      if (isHazard) {
+        // 검정 채운 삼각형 — 위를 가리키는 ▲, 이름 2~4글자 말줄임
+        const label = (om.name ?? '').slice(0, 4);
+        content = `
+          <div style="display:flex;flex-direction:column;align-items:center;cursor:default;">
+            <div style="
+              width:0; height:0;
+              border-left:8px solid transparent;
+              border-right:8px solid transparent;
+              border-bottom:14px solid #000;
+              margin-bottom:1px;
+            "></div>
+            <div style="
+              font-size:9px; font-weight:700; color:#000;
+              white-space:nowrap; line-height:1.2; text-align:center;
+            ">${label}</div>
+          </div>`;
+      } else if (isSchool) {
         const shortName = truncateSchoolName(om.name);
         const isMiddle = om.subType === 'MIDDLE';
         const topLine = isMiddle
