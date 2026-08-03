@@ -410,7 +410,12 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                   textAlign: 'center', padding: '7px 4px',
                   backgroundColor: '#f8f9fa', borderRadius: '7px', border: '1px solid #e8eaed',
                 }}>
-                  <div style={{ fontSize: '10px', color: '#80868b', marginBottom: '2px' }}>{ct.destination}</div>
+                  <div style={{ fontSize: '10px', color: '#80868b', marginBottom: '2px' }}>
+                    {ct.destination}
+                    {ct.distanceKm != null && (
+                      <span style={{ marginLeft: '3px', fontSize: '9px', color: '#b0b8c1' }}>{ct.distanceKm}km</span>
+                    )}
+                  </div>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a73e8' }}>{ct.minutes}분</div>
                   {ct.transferCount != null && (
                     <div style={{ marginTop: '3px' }}>
@@ -505,6 +510,37 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
             <div style={{ fontSize: '11px', color: '#9e9e9e' }}>인프라 정보 없음</div>
           )}
         </div>
+
+        {/* 유해시설 */}
+        {(complex.hazardInfos ?? []).length > 0 && (
+          <div style={{ marginBottom: '12px' }}>
+            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>유해시설</h4>
+            {complex.hazardInfos!.map(h => (
+              <div key={h.id} style={{ padding: '4px 0', borderBottom: '1px solid #f0f0f0' }}>
+                {(h.macroCategory || h.subCategory) && (
+                  <div style={{ display: 'flex', gap: '3px', marginBottom: '2px', flexWrap: 'wrap' }}>
+                    {h.macroCategory && (
+                      <span style={{ fontSize: '9px', background: '#fce8e6', color: '#c5221f', borderRadius: '4px', padding: '1px 5px', fontWeight: 600 }}>
+                        {h.macroCategory}
+                      </span>
+                    )}
+                    {h.subCategory && (
+                      <span style={{ fontSize: '9px', background: '#f1f3f4', color: '#5f6368', borderRadius: '4px', padding: '1px 5px' }}>
+                        {h.subCategory}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', color: '#202124', flex: 1 }}>{h.hazardName}</span>
+                  {h.distance != null && (
+                    <span style={{ fontSize: '10px', color: '#80868b', flexShrink: 0 }}>{h.distance}m</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* 재개발 정보 */}
         {complex.redevelopType && (
