@@ -1496,8 +1496,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 }}
               >반경</button>
             </div>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, lineHeight: 1.3 }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, lineHeight: 1.3, display: 'flex', alignItems: 'baseline', gap: '6px' }}>
               {complex.complexName}
+              <span style={{ fontSize: '11px', fontWeight: 400, color: 'rgba(255,255,255,0.55)', userSelect: 'all' }}>#{complex.id}</span>
             </h2>
           </div>
           <button
@@ -1590,7 +1591,6 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>단지 정보</h3>
-            <span style={{ fontSize: '10px', color: '#bdbdbd', marginLeft: '6px', fontWeight: 400, userSelect: 'all' }}>#{complex.id}</span>
             {!editingBasicInfo && (
               <button
                 onClick={startEditBasicInfo}
