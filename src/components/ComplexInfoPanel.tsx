@@ -138,6 +138,7 @@ interface CommuteEditRow {
   transportType: string;
   transferCount: string;
   transferLines: string[]; // 환승 노선명 배열 (저장 시 ' ➡️ '로 join)
+  distanceKm?: number;     // 직선거리 (km) — 좌표 있으면 자동 계산
 }
 
 // 네이버 지도 경로 URL 생성용 목적지 좌표 — RegisterModal과 동일
@@ -1385,12 +1386,19 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         : (existing?.transferCount != null
             ? Array(existing.transferCount + 1).fill('')
             : []);
+      // 직선거리: 기존 저장값 우선, 없으면 좌표로 계산
+      const destCoordEntry = DESTINATION_COORDS[dest];
+      const distanceKm = existing?.distanceKm
+        ?? (destCoordEntry && complex?.latitude && complex?.longitude
+            ? parseFloat(haversineKm(complex.latitude, complex.longitude, destCoordEntry.lat, destCoordEntry.lng).toFixed(2))
+            : undefined);
       return {
         destination: dest,
         minutes: existing?.minutes != null ? String(existing.minutes) : '',
         transportType: existing?.transportType || '지하철',
         transferCount: existing?.transferCount != null ? String(existing.transferCount) : '',
         transferLines,
+        distanceKm,
       };
     });
     setCommuteRows(rows);
@@ -1428,6 +1436,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           transferCount: r.transferCount.trim() ? parseInt(r.transferCount) : undefined,
           // 노선명이 하나라도 있으면 ' ➡️ '로 연결, 없으면 undefined (DB에 저장 안 함)
           transferLines: r.transferLines.filter(l => l.trim()).join(' ➡️ ') || undefined,
+          distanceKm: r.distanceKm,
         }));
       await updateCommuteTimes(complex.id, items);
       setEditingCommute(false);

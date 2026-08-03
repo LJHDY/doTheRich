@@ -366,7 +366,7 @@ export const deleteSubwayInfo = async (complexId: number, subwayId: number): Pro
 /** 출퇴근 시간 일괄 교체 — PATCH /api/complexes/:id/commute-times */
 export const updateCommuteTimes = async (
   complexId: number,
-  items: Array<{ destination: string; minutes?: number; transportType?: string; transferCount?: number; transferLines?: string }>
+  items: Array<{ destination: string; minutes?: number; transportType?: string; transferCount?: number; transferLines?: string; distanceKm?: number }>
 ): Promise<CommuteTime[]> => {
   const { data } = await api.patch<CommuteTime[]>(`/api/complexes/${complexId}/commute-times`, items);
   return data;

@@ -54,6 +54,7 @@ interface CommuteRow {
   transportType: string;
   transferCount: string;    // 환승 횟수 (빈 문자열 = 미입력)
   transferLines: string[];  // 환승 노선명 배열 (저장 시 ' ➡️ '로 join)
+  distanceKm?: number;      // 직선거리 (km)
 }
 
 interface SchoolRow {
@@ -290,7 +291,13 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const [subwayInfos, setSubwayInfos] = useState<SubwayRow[]>([]);
   // 기본 목적지 5개를 빈 값으로 미리 채워둠 — 사용자가 분만 입력하면 됨
   const [commuteTimes, setCommuteTimes] = useState<CommuteRow[]>(
-    DESTINATIONS.map(d => ({ destination: d, minutes: '', transportType: '지하철', transferCount: '', transferLines: [] }))
+    DESTINATIONS.map(d => {
+      const dest = DESTINATION_COORDS[d];
+      const distanceKm = dest && initialData.latitude && initialData.longitude
+        ? parseFloat(haversineKm(initialData.latitude, initialData.longitude, dest.lat, dest.lng).toFixed(2))
+        : undefined;
+      return { destination: d, minutes: '', transportType: '지하철', transferCount: '', transferLines: [], distanceKm };
+    })
   );
   const [schoolInfos, setSchoolInfos] = useState<SchoolRow[]>([]);
   const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
@@ -705,6 +712,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           transferCount: r.transferCount !== '' ? parseInt(r.transferCount) : 0,
           // 노선명이 하나라도 있으면 ' ➡️ '로 연결, 없으면 undefined (DB에 저장 안 함)
           transferLines: r.transferLines.filter(l => l.trim()).join(' ➡️ ') || undefined,
+          distanceKm: r.distanceKm,
         })),
         // 학교명이 입력된 학군 정보만 포함 — schoolType은 ELEMENTARY/MIDDLE enum key로 전송
         schoolInfos: schoolInfos.filter(r => r.schoolName.trim()).map(r => ({

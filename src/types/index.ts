@@ -19,8 +19,9 @@ export interface CommuteTime {
   destination: string;   // "강남", "시청", "여의도", "발산", "마곡나루"
   minutes: number;
   transportType: string;
-  transferCount?: number; // 환승 횟수 (0 = 환승 없음, undefined = 미입력)
-  transferLines?: string; // 환승 노선 문자열 (예: "1호선 ➡️ 2호선")
+  transferCount?: number;  // 환승 횟수 (0 = 환승 없음, undefined = 미입력)
+  transferLines?: string;  // 환승 노선 문자열 (예: "1호선 ➡️ 2호선")
+  distanceKm?: number;     // 직선거리 (km)
 }
 
 /** 지하철 정보 (역명 + 호선 + 도보 시간) */
