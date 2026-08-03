@@ -2292,7 +2292,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                       backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e8eaed',
                     }}
                   >
-                    <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '2px' }}>{ct.destination}</div>
+                    <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '2px' }}>
+                      {ct.destination}
+                      {ct.distanceKm != null && (
+                        <span style={{ marginLeft: '3px', fontSize: '10px', color: '#b0b8c1' }}>{ct.distanceKm}km</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a73e8' }}>{ct.minutes}분</div>
                     {ct.transferCount != null && (
                       <div style={{ marginTop: '3px' }}>
