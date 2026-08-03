@@ -5,6 +5,7 @@ import { compressImages } from '../utils/imageUtils';
 import { ApartmentComplex } from '../types';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import HAZARD_LOCATIONS from '../constants/hazardLocations';
+import { FACILITY_MACRO_CATEGORY, getSimplifiedCategory } from '../constants/hazardCategories';
 
 export interface RegisterInitialData {
   complexName: string;
@@ -90,6 +91,8 @@ interface HazardRow {
   fetching: boolean;
   searchResults: SearchLocalItem[];
   showDropdown: boolean;
+  macroCategory?: string;  // 자동 감지 시 매크로 그룹 (예: '장묘시설')
+  subCategory?: string;    // 자동 감지 시 단순화된 세부 카테고리
 }
 
 const INFRA_TYPES = [
@@ -346,7 +349,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     Promise.allSettled(
       files.map(f => fetch(`/data/${f}.json`).then(r => r.json()))
     ).then(results => {
-      type FacilityItem = { name: string; roadAddress?: string; address?: string; lat: number; lng: number };
+      type FacilityItem = { name: string; type?: string; category?: string; roadAddress?: string; address?: string; lat: number; lng: number };
       const allNearby: HazardRow[] = [];
       results.forEach(result => {
         if (result.status !== 'fulfilled') return;
@@ -362,6 +365,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
               fetching: false,
               searchResults: [],
               showDropdown: false,
+              macroCategory: FACILITY_MACRO_CATEGORY[f.type ?? ''] ?? '',
+              subCategory: getSimplifiedCategory(f.type ?? '', f.category),
             });
           }
         });
@@ -1310,6 +1315,19 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           )}
           {hazardInfos.map((row, i) => (
             <div key={i} style={{ marginBottom: '8px' }}>
+              {/* 자동 감지된 항목: 매크로 카테고리 > 세부 카테고리 배지 */}
+              {row.macroCategory && (
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '3px' }}>
+                  <span style={{ fontSize: '10px', background: '#fce8e6', color: '#c5221f', borderRadius: '4px', padding: '1px 6px', fontWeight: 600 }}>
+                    {row.macroCategory}
+                  </span>
+                  {row.subCategory && (
+                    <span style={{ fontSize: '10px', background: '#f1f3f4', color: '#5f6368', borderRadius: '4px', padding: '1px 6px' }}>
+                      {row.subCategory}
+                    </span>
+                  )}
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 28px', gap: '6px', alignItems: 'flex-start' }}>
                 {/* 시설명 검색 */}
                 <div style={{ position: 'relative' }}>
