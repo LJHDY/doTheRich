@@ -1058,6 +1058,13 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                   onChange={e => updateCommute(i, { destination: e.target.value })}
                   style={{ ...inputStyle, flex: 1, marginRight: '8px' }}
                 />
+                {/* 직선거리 — DESTINATION_COORDS에 있는 목적지이고 단지 좌표 있을 때 표시 */}
+                {(() => {
+                  const dest = DESTINATION_COORDS[row.destination];
+                  if (!dest || !initialData.latitude || !initialData.longitude) return null;
+                  const km = haversineKm(initialData.latitude, initialData.longitude, dest.lat, dest.lng);
+                  return <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>{km.toFixed(1)}km</span>;
+                })()}
                 {/* 네이버 지도 경로 버튼 — DESTINATION_COORDS에 있는 기본 목적지만 활성화 */}
                 <button
                   type="button"

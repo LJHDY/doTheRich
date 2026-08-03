@@ -2171,9 +2171,16 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     border: '1px solid #e8eaed', borderRadius: '10px',
                     padding: '8px 10px', marginBottom: '6px', background: '#f8f9fa',
                   }}>
-                    {/* Line 1: 목적지 라벨 + 조회 버튼 */}
+                    {/* Line 1: 목적지 라벨 + 직선거리 + 조회 버튼 */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#202124' }}>{row.destination}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#202124' }}>{row.destination}</span>
+                        {destCoords && complex.latitude && complex.longitude && (
+                          <span style={{ fontSize: '10px', color: '#80868b' }}>
+                            {haversineKm(complex.latitude, complex.longitude, destCoords.lat, destCoords.lng).toFixed(1)}km
+                          </span>
+                        )}
+                      </div>
                       <button
                         onClick={() => {
                           if (!destCoords || !complex.latitude || !complex.longitude) return;
