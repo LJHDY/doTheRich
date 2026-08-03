@@ -1109,7 +1109,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       results.forEach(res => {
         if (res.status !== 'fulfilled') return;
         (res.value as FItem[]).forEach(f => {
-          if (haversineKm(lat, lng, f.lat, f.lng) <= 2) {
+          if (haversineKm(lat, lng, f.lat, f.lng) <= 2 && !f.name.includes('동물병원')) {
             nearby.push({
               localId: ++cnt,
               hazardName: f.name,

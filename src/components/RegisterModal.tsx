@@ -355,7 +355,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
         if (result.status !== 'fulfilled') return;
         const list = result.value as FacilityItem[];
         list.forEach(f => {
-          if (haversineKm(lat, lng, f.lat, f.lng) <= 2) {
+          if (haversineKm(lat, lng, f.lat, f.lng) <= 2 && !f.name.includes('동물병원')) {
             allNearby.push({
               hazardName: f.name,
               hazardAddress: f.roadAddress ?? f.address ?? '',
