@@ -325,6 +325,38 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     setForm(prev => ({ ...prev, region: extractRegion(prev.address) }));
   }, [form.address]);
 
+  // 폐기물 처리시설 JSON lazy load — 좌표 있을 때만 fetch, 3km 이내 항목을 hazardInfos에 추가
+  useEffect(() => {
+    if (!initialData.latitude || !initialData.longitude) return;
+    const lat = initialData.latitude;
+    const lng = initialData.longitude;
+    fetch('/data/waste-facilities.json')
+      .then(r => r.json())
+      .then((list: { name: string; roadAddress?: string; lat: number; lng: number; category?: string }[]) => {
+        const nearby: HazardRow[] = list
+          .filter(f => haversineKm(lat, lng, f.lat, f.lng) <= 3)
+          .map(f => ({
+            hazardName: f.name,
+            hazardAddress: f.roadAddress ?? '',
+            distance: String(Math.round(haversineKm(lat, lng, f.lat, f.lng) * 1000)),
+            latitude: f.lat,
+            longitude: f.lng,
+            fetching: false,
+            searchResults: [],
+            showDropdown: false,
+          }));
+        if (nearby.length > 0) {
+          // 이미 수동 등록된 항목과 이름 중복 제거
+          setHazardInfos(prev => {
+            const existingNames = new Set(prev.map(r => r.hazardName));
+            return [...prev, ...nearby.filter(r => !existingNames.has(r.hazardName))];
+          });
+        }
+      })
+      .catch(() => {}); // 네트워크 오류 시 무시
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // (삭제됨) 금액대는 이제 행별로 자동 계산
 
   // TODO: 실거래가 자동 조회 — 검색 정확도 개선 후 재활성화

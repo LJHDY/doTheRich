@@ -240,7 +240,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
             <div style={{ fontSize: '18px', fontWeight: 700 }}>{formatPrice(complex.price)}</div>
           ) : null}
           {/* 즐겨찾기 — 읽기 전용 */}
-          {complex.isFavorite && <span style={{ fontSize: '18px', color: '#f9ab00', lineHeight: 1, marginLeft: 'auto' }}>★</span>}
+          {complex.isFavorite && <span style={{ fontSize: '18px', color: '#f9ab00', lineHeight: 1 }}>★</span>}
         </div>
       </div>
 
