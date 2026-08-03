@@ -4,6 +4,7 @@ import { uploadComplexPhotos } from '../services/api';
 import { compressImages } from '../utils/imageUtils';
 import { ApartmentComplex } from '../types';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
+import HAZARD_LOCATIONS from '../constants/hazardLocations';
 
 export interface RegisterInitialData {
   complexName: string;
@@ -290,7 +291,18 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   );
   const [schoolInfos, setSchoolInfos] = useState<SchoolRow[]>([]);
   const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
-  const [hazardInfos, setHazardInfos] = useState<HazardRow[]>([]);
+  const [hazardInfos, setHazardInfos] = useState<HazardRow[]>(() => {
+    // 단지 좌표가 있으면 마운트 시점에 상수 유해 지역 자동 감지 (반경 3km)
+    if (!initialData.latitude || !initialData.longitude) return [];
+    const auto: HazardRow[] = [];
+    for (const loc of HAZARD_LOCATIONS) {
+      const distKm = haversineKm(initialData.latitude, initialData.longitude, loc.lat, loc.lng);
+      if (distKm <= 3) {
+        auto.push({ hazardName: loc.name, hazardAddress: loc.address ?? '', distance: String(Math.round(distKm * 1000)), latitude: loc.lat, longitude: loc.lng, fetching: false, searchResults: [], showDropdown: false });
+      }
+    }
+    return auto;
+  });
   // 검색 시퀀스 번호 — 비동기 경쟁 조건 방지: 선택 후 in-flight 검색 결과 무시
   const schoolSearchSeq = useRef<Map<number, number>>(new Map());
   const infraSearchSeq = useRef<Map<number, number>>(new Map());
