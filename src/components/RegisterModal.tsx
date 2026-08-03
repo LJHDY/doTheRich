@@ -295,12 +295,12 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const [schoolInfos, setSchoolInfos] = useState<SchoolRow[]>([]);
   const [infraInfos, setInfraInfos] = useState<InfraRow[]>([]);
   const [hazardInfos, setHazardInfos] = useState<HazardRow[]>(() => {
-    // 단지 좌표가 있으면 마운트 시점에 상수 유해 지역 자동 감지 (반경 3km)
+    // 단지 좌표가 있으면 마운트 시점에 상수 유해 지역 자동 감지 (반경 2km)
     if (!initialData.latitude || !initialData.longitude) return [];
     const auto: HazardRow[] = [];
     for (const loc of HAZARD_LOCATIONS) {
       const distKm = haversineKm(initialData.latitude, initialData.longitude, loc.lat, loc.lng);
-      if (distKm <= 3) {
+      if (distKm <= 2) {
         auto.push({ hazardName: loc.name, hazardAddress: loc.address ?? '', distance: String(Math.round(distKm * 1000)), latitude: loc.lat, longitude: loc.lng, fetching: false, searchResults: [], showDropdown: false });
       }
     }
@@ -328,7 +328,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     setForm(prev => ({ ...prev, region: extractRegion(prev.address) }));
   }, [form.address]);
 
-  // 유해시설 JSON lazy load — 좌표 있을 때만 병렬 fetch, 3km 이내 항목을 hazardInfos에 추가
+  // 유해시설 JSON lazy load — 좌표 있을 때만 병렬 fetch, 2km 이내 항목을 hazardInfos에 추가
   useEffect(() => {
     if (!initialData.latitude || !initialData.longitude) return;
     const lat = initialData.latitude;
@@ -355,7 +355,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
         if (result.status !== 'fulfilled') return;
         const list = result.value as FacilityItem[];
         list.forEach(f => {
-          if (haversineKm(lat, lng, f.lat, f.lng) <= 3) {
+          if (haversineKm(lat, lng, f.lat, f.lng) <= 2) {
             allNearby.push({
               hazardName: f.name,
               hazardAddress: f.roadAddress ?? f.address ?? '',
