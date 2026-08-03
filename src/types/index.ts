@@ -48,10 +48,12 @@ export interface SchoolInfo {
 export interface HazardInfo {
   id: number;
   hazardName?: string;
-  distance?: number;    // 거리 (미터)
+  distance?: number;       // 거리 (미터)
   hazardAddress?: string;
   latitude?: number;
   longitude?: number;
+  macroCategory?: string;  // 매크로 그룹 (예: '장묘시설') — 백엔드 컬럼 추가 시 표시
+  subCategory?: string;    // 단순화된 세부 카테고리 (예: '소각·열처리')
 }
 
 /** 주변 인프라 정보 — 백엔드 InfraInfoDto와 1:1 매핑 */

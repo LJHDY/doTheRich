@@ -6,6 +6,7 @@ import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
 import PhotoSlideModal from './PhotoSlideModal';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
+import { FACILITY_MACRO_CATEGORY, getSimplifiedCategory } from '../constants/hazardCategories';
 
 interface ComplexInfoPanelProps {
   complex: ApartmentComplex | null;
@@ -115,6 +116,8 @@ interface HazardAddRow {
   fetching: boolean;
   searchResults: SearchItem[];
   showDropdown: boolean;
+  macroCategory?: string;    // 자동 감지 시 매크로 그룹
+  subCategory?: string;      // 자동 감지 시 세부 카테고리
 }
 
 // 지하철 편집 행 — 기존(id 있음) + 신규(id 없음) 통합 관리
@@ -407,6 +410,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [editingHazard, setEditingHazard] = useState<HazardEditState | null>(null);
   const [newHazardRows, setNewHazardRows] = useState<HazardAddRow[]>([]);
   const [savingNewHazards, setSavingNewHazards] = useState(false);
+  const [loadingHazardSuggestions, setLoadingHazardSuggestions] = useState(false);
   // 지하철 편집 상태 — 기존·신규 행 통합 배열 + 삭제 예약 ID 목록
   const [editingSubway, setEditingSubway] = useState(false);
   const [subwayRows, setSubwayRows] = useState<SubwayEditRow[]>([]);
@@ -1074,6 +1078,55 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
   // ── 유해시설 편집 ────────────────────────────────────────────────
 
+  // 단지 변경 시: 추가 행 초기화 + 유해시설 없으면 11개 JSON 자동 조회
+  useEffect(() => {
+    setNewHazardRows([]);
+    setEditingHazard(null);
+    if (!complex?.id || !complex.latitude || !complex.longitude) return;
+    if ((complex.hazardInfos ?? []).length > 0) return;
+
+    const lat = complex.latitude;
+    const lng = complex.longitude;
+    const files = [
+      'waste-facilities', 'chemical-facilities', 'correctional-facilities',
+      'animal-shelters', 'funeral-homes', 'cemeteries', 'columbarium-facilities',
+      'crematoriums', 'natural-burial-sites', 'energy-storage-bases',
+      'construction-material-factories',
+    ];
+
+    setLoadingHazardSuggestions(true);
+    let cnt = hazardRowCounter.current;
+    Promise.allSettled(
+      files.map(f => fetch(`/data/${f}.json`).then(r => r.json()))
+    ).then(results => {
+      type FItem = { name: string; type?: string; category?: string; roadAddress?: string; address?: string; lat: number; lng: number };
+      const nearby: HazardAddRow[] = [];
+      results.forEach(res => {
+        if (res.status !== 'fulfilled') return;
+        (res.value as FItem[]).forEach(f => {
+          if (haversineKm(lat, lng, f.lat, f.lng) <= 3) {
+            nearby.push({
+              localId: ++cnt,
+              hazardName: f.name,
+              hazardAddress: f.roadAddress ?? f.address ?? '',
+              distance: String(Math.round(haversineKm(lat, lng, f.lat, f.lng) * 1000)),
+              latitude: f.lat,
+              longitude: f.lng,
+              fetching: false,
+              searchResults: [],
+              showDropdown: false,
+              macroCategory: FACILITY_MACRO_CATEGORY[f.type ?? ''] ?? '',
+              subCategory: getSimplifiedCategory(f.type ?? '', f.category),
+            });
+          }
+        });
+      });
+      hazardRowCounter.current = cnt;
+      setNewHazardRows(nearby);
+    }).finally(() => setLoadingHazardSuggestions(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complex?.id]);
+
   const startAddHazard = () => {
     const localId = ++hazardRowCounter.current;
     setNewHazardRows(prev => [...prev, {
@@ -1130,6 +1183,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         distance: r.distance ? parseInt(r.distance) : undefined,
         latitude: r.latitude ?? undefined,
         longitude: r.longitude ?? undefined,
+        macroCategory: r.macroCategory || undefined,
+        subCategory: r.subCategory || undefined,
       }));
     try {
       await addHazardInfos(complex.id, items as any);
@@ -2663,9 +2718,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
           {/* 기존 유해시설 목록 */}
           {(complex.hazardInfos ?? []).length === 0 && newHazardRows.length === 0 && (
-            <div style={{ fontSize: '12px', color: '#9e9e9e', paddingBottom: '4px' }}>등록된 유해시설 없음</div>
+            <div style={{ fontSize: '12px', color: '#9e9e9e', paddingBottom: '4px' }}>
+              {loadingHazardSuggestions ? '주변 유해시설 조회 중...' : '등록된 유해시설 없음'}
+            </div>
           )}
-          {(complex.hazardInfos ?? []).map((h: { id: number; hazardName?: string; hazardAddress?: string; distance?: number; latitude?: number; longitude?: number }) => (
+          {(complex.hazardInfos ?? []).map((h: { id: number; hazardName?: string; hazardAddress?: string; distance?: number; latitude?: number; longitude?: number; macroCategory?: string; subCategory?: string }) => (
             <div key={h.id}>
               {editingHazard?.hazardId === h.id ? (
                 // 수정 폼
@@ -2721,7 +2778,22 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               ) : (
                 // 읽기 행
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
-                  <span style={{ fontSize: '13px', color: '#202124', flex: 1 }}>{h.hazardName}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* 카테고리 배지 (백엔드에 저장된 경우만 표시) */}
+                    {h.macroCategory && (
+                      <div style={{ display: 'flex', gap: '4px', marginBottom: '2px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '10px', background: '#fce8e6', color: '#c5221f', borderRadius: '4px', padding: '1px 6px', fontWeight: 600 }}>
+                          {h.macroCategory}
+                        </span>
+                        {h.subCategory && (
+                          <span style={{ fontSize: '10px', background: '#f1f3f4', color: '#5f6368', borderRadius: '4px', padding: '1px 6px' }}>
+                            {h.subCategory}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <span style={{ fontSize: '13px', color: '#202124' }}>{h.hazardName}</span>
+                  </div>
                   {h.distance != null && (
                     <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0 }}>{h.distance}m</span>
                   )}
@@ -2739,8 +2811,21 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           {/* 신규 추가 행 */}
           {newHazardRows.map((row, idx) => (
             <div key={row.localId} style={{ border: '1px dashed #c5221f', borderRadius: '8px', padding: '10px', marginTop: '6px', backgroundColor: '#fff8f7' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#c5221f' }}>추가 {idx + 1}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#c5221f' }}>추가 {idx + 1}</span>
+                  {/* 자동 감지 항목 카테고리 배지 */}
+                  {row.macroCategory && (
+                    <span style={{ fontSize: '10px', background: '#fce8e6', color: '#c5221f', borderRadius: '4px', padding: '1px 6px', fontWeight: 600 }}>
+                      {row.macroCategory}
+                    </span>
+                  )}
+                  {row.subCategory && (
+                    <span style={{ fontSize: '10px', background: '#f1f3f4', color: '#5f6368', borderRadius: '4px', padding: '1px 6px' }}>
+                      {row.subCategory}
+                    </span>
+                  )}
+                </div>
                 <button onClick={() => removeNewHazardRow(row.localId)}
                   style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '16px' }}>×</button>
               </div>
@@ -2785,13 +2870,21 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           ))}
 
           {/* 일괄 저장 버튼 */}
-          {newHazardRows.length > 0 && (
-            <div style={{ marginTop: '8px' }}>
+          {newHazardRows.length > 0 && !loadingHazardSuggestions && (
+            <div style={{ marginTop: '8px', display: 'flex', gap: '6px' }}>
               <button onClick={saveNewHazards} disabled={savingNewHazards}
-                style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewHazards ? '#9e9e9e' : '#c5221f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewHazards ? '#9e9e9e' : '#c5221f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
                 {savingNewHazards ? '저장 중...' : `${newHazardRows.length}건 저장`}
               </button>
+              <button onClick={() => setNewHazardRows([])}
+                style={{ padding: '6px 12px', fontSize: '12px', backgroundColor: '#fff', color: '#5f6368', border: '1px solid #dadce0', borderRadius: '6px', cursor: 'pointer' }}>
+                전체 삭제
+              </button>
             </div>
+          )}
+          {/* 자동 조회 로딩 인디케이터 */}
+          {loadingHazardSuggestions && (
+            <div style={{ fontSize: '12px', color: '#c5221f', paddingTop: '4px' }}>주변 유해시설 조회 중...</div>
           )}
         </div>
 
