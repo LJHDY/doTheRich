@@ -324,7 +324,7 @@ const App: React.FC = () => {
         backgroundColor: '#fff', borderBottom: '1px solid #e8eaed',
         boxShadow: '0 1px 4px rgba(0,0,0,0.08)', flexShrink: 0, zIndex: 10,
         ...(isMobile ? {} : {
-          display: 'flex', alignItems: 'center', padding: '0 12px', height: '56px', gap: '6px', overflowX: 'auto',
+          display: 'flex', flexDirection: 'column',
         }),
       }}>
         {isMobile ? (
@@ -460,135 +460,158 @@ const App: React.FC = () => {
           </>
         ) : (
           <>
-            {/* 데스크탑: 기존 단일 행 레이아웃 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-              <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'contain' }} />
-              <span style={{ fontSize: '16px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>DoTheRich</span>
+            {/* 데스크탑 Row 1: 로고 + 검색 + 주요 버튼 */}
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', height: '48px', gap: '8px' }}>
+              {/* 로고 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '30px', height: '30px', borderRadius: '8px', objectFit: 'contain' }} />
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>DoTheRich</span>
+              </div>
+              <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
+              {/* 검색바 — fluid로 flex:1 영역 전체 사용 */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <SearchBar onSelect={handleSearchSelect} fluid />
+              </div>
+              <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
+              {/* 내 단지 */}
+              <button
+                onClick={() => setMyComplexListOpen(v => !v)}
+                style={{
+                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid', borderColor: myComplexListOpen ? '#1a73e8' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: myComplexListOpen ? '#e8f0fe' : '#fff',
+                  color: myComplexListOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >내 단지</button>
+              {/* 필터 */}
+              <button
+                onClick={() => setFilterOpen(v => !v)}
+                style={{
+                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid',
+                  borderColor: filterOpen || isFiltersActive(activeFilters) ? '#8e24aa' : '#dadce0',
+                  borderRadius: '6px',
+                  backgroundColor: filterOpen || isFiltersActive(activeFilters) ? '#f3e5f5' : '#fff',
+                  color: filterOpen || isFiltersActive(activeFilters) ? '#8e24aa' : '#5f6368',
+                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                }}
+              >
+                <span>필터</span>
+                {isFiltersActive(activeFilters) && (
+                  <span style={{
+                    backgroundColor: '#8e24aa', color: '#fff', borderRadius: '8px',
+                    fontSize: '10px', fontWeight: 700, padding: '1px 5px',
+                  }}>
+                    {filteredComplexes.length}/{complexes.length}
+                  </span>
+                )}
+              </button>
+              {/* 즐겨찾기 */}
+              <button
+                onClick={() => setFavoriteListOpen(v => !v)}
+                style={{
+                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid', borderColor: favoriteListOpen ? '#f9ab00' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: favoriteListOpen ? '#fef9e7' : '#fff',
+                  color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >★ 즐겨찾기</button>
+              {/* 비교하기 */}
+              <button
+                onClick={() => setCompareOpen(prev => !prev)}
+                style={{
+                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid',
+                  borderColor: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#dadce0',
+                  borderRadius: '6px',
+                  backgroundColor: compareOpen || compareIds.length > 0 ? '#e8f0fe' : '#fff',
+                  color: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#5f6368',
+                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >{compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}</button>
+              {/* 단지 수 */}
+              <div style={{ fontSize: '12px', color: '#80868b', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {loading ? '로딩...' : `${complexes.length}개`}
+              </div>
             </div>
-            <div style={{ width: '1px', height: '24px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
-            <PriceRangeFilter
-              key={filterResetKey}
-              priceRanges={priceRanges}
-              selectedRange={null}
-              onSelect={handlePriceRangeSelect}
-              onSelectAreaType={handleAreaTypeSelect}
-              complexes={complexes}
-            />
-            <div style={{ marginLeft: 'auto' }}>
-              <SearchBar onSelect={handleSearchSelect} />
-            </div>
-            <button
-              onClick={() => setMyComplexListOpen(v => !v)}
-              style={{
-                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-                border: '1px solid', borderColor: myComplexListOpen ? '#1a73e8' : '#dadce0',
-                borderRadius: '6px', backgroundColor: myComplexListOpen ? '#e8f0fe' : '#fff',
-                color: myComplexListOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >내 단지</button>
-            {/* 필터 버튼 — 활성 필터 수 뱃지 표시 */}
-            <button
-              onClick={() => setFilterOpen(v => !v)}
-              style={{
-                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-                border: '1px solid',
-                borderColor: filterOpen || isFiltersActive(activeFilters) ? '#8e24aa' : '#dadce0',
-                borderRadius: '6px',
-                backgroundColor: filterOpen || isFiltersActive(activeFilters) ? '#f3e5f5' : '#fff',
-                color: filterOpen || isFiltersActive(activeFilters) ? '#8e24aa' : '#5f6368',
-                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                display: 'flex', alignItems: 'center', gap: '5px',
-              }}
-            >
-              <span>필터</span>
-              {isFiltersActive(activeFilters) && (
-                <span style={{
-                  backgroundColor: '#8e24aa', color: '#fff', borderRadius: '8px',
-                  fontSize: '10px', fontWeight: 700, padding: '1px 5px',
-                }}>
-                  {filteredComplexes.length}/{complexes.length}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setFavoriteListOpen(v => !v)}
-              style={{
-                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-                border: '1px solid', borderColor: favoriteListOpen ? '#f9ab00' : '#dadce0',
-                borderRadius: '6px', backgroundColor: favoriteListOpen ? '#fef9e7' : '#fff',
-                color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >★ 즐겨찾기</button>
-            <button
-              onClick={() => setRoadViewOpen(v => !v)}
-              style={{
-                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-                border: '1px solid', borderColor: roadViewOpen ? '#0b8043' : '#dadce0',
-                borderRadius: '6px', backgroundColor: roadViewOpen ? '#e6f4ea' : '#fff',
-                color: roadViewOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >로드뷰</button>
-            {/* 행정구역 경계 선택 드롭다운 */}
-            <DistrictSelector value={selectedDistrict} onChange={setSelectedDistrict} />
-            <button
-              onClick={() => setRoutePanelOpen(v => !v)}
-              style={{
-                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-                border: '1px solid', borderColor: routePanelOpen ? '#0b8043' : '#dadce0',
-                borderRadius: '6px', backgroundColor: routePanelOpen ? '#e6f4ea' : '#fff',
-                color: routePanelOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >경로</button>
-            <button
-              onClick={() => {
-                const next = !livingZoneOpen;
-                setLivingZoneOpen(next);
-                if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
-              }}
-              style={{
-                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-                border: '1px solid', borderColor: livingZoneOpen ? '#1a73e8' : '#dadce0',
-                borderRadius: '6px', backgroundColor: livingZoneOpen ? '#e8f0fe' : '#fff',
-                color: livingZoneOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >생활권</button>
-            <button
-              onClick={() => {
-                const next = !affordOpen;
-                setAffordOpen(next);
-                if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
-              }}
-              style={{
-                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-                border: '1px solid', borderColor: affordOpen ? '#0b8043' : '#dadce0',
-                borderRadius: '6px', backgroundColor: affordOpen ? '#e6f4ea' : '#fff',
-                color: affordOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >대출분석</button>
-            <button
-              onClick={() => setCompareOpen(prev => !prev)}
-              style={{
-                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-                border: '1px solid',
-                borderColor: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#dadce0',
-                borderRadius: '6px',
-                backgroundColor: compareOpen || compareIds.length > 0 ? '#e8f0fe' : '#fff',
-                color: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#5f6368',
-                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >{compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}</button>
-            <button
-              onClick={handleBatch}
-              disabled={batchLoading}
-              style={{
-                padding: '5px 11px', fontSize: '12px', fontWeight: 600,
-                border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff',
-                color: batchLoading ? '#9e9e9e' : '#5f6368',
-                cursor: batchLoading ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >{batchLoading ? '요청 중...' : '시세 수집'}</button>
-            <div style={{ fontSize: '13px', color: '#80868b', whiteSpace: 'nowrap', flexShrink: 0 }}>
-              {loading ? '로딩...' : `${complexes.length}개 단지`}
+
+            {/* 데스크탑 Row 2: 금액대 + 지도 도구 버튼 */}
+            <div style={{
+              display: 'flex', alignItems: 'center', padding: '0 12px', height: '36px', gap: '6px',
+              borderTop: '1px solid #f0f0f0', backgroundColor: '#fafafa',
+            }}>
+              {/* 금액대 필터 */}
+              <PriceRangeFilter
+                key={filterResetKey}
+                priceRanges={priceRanges}
+                selectedRange={null}
+                onSelect={handlePriceRangeSelect}
+                onSelectAreaType={handleAreaTypeSelect}
+                complexes={complexes}
+              />
+              <div style={{ width: '1px', height: '18px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
+              {/* 로드뷰 */}
+              <button
+                onClick={() => setRoadViewOpen(v => !v)}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid', borderColor: roadViewOpen ? '#0b8043' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: roadViewOpen ? '#e6f4ea' : '#fff',
+                  color: roadViewOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >로드뷰</button>
+              {/* 구 경계 */}
+              <DistrictSelector value={selectedDistrict} onChange={setSelectedDistrict} />
+              {/* 경로 */}
+              <button
+                onClick={() => setRoutePanelOpen(v => !v)}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid', borderColor: routePanelOpen ? '#0b8043' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: routePanelOpen ? '#e6f4ea' : '#fff',
+                  color: routePanelOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >경로</button>
+              {/* 생활권 */}
+              <button
+                onClick={() => {
+                  const next = !livingZoneOpen;
+                  setLivingZoneOpen(next);
+                  if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
+                }}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid', borderColor: livingZoneOpen ? '#1a73e8' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: livingZoneOpen ? '#e8f0fe' : '#fff',
+                  color: livingZoneOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >생활권</button>
+              {/* 대출분석 */}
+              <button
+                onClick={() => {
+                  const next = !affordOpen;
+                  setAffordOpen(next);
+                  if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
+                }}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid', borderColor: affordOpen ? '#0b8043' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: affordOpen ? '#e6f4ea' : '#fff',
+                  color: affordOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >대출분석</button>
+              {/* 시세 수집 */}
+              <button
+                onClick={handleBatch}
+                disabled={batchLoading}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff',
+                  color: batchLoading ? '#9e9e9e' : '#5f6368',
+                  cursor: batchLoading ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >{batchLoading ? '요청 중...' : '시세 수집'}</button>
             </div>
           </>
         )}

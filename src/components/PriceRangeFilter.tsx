@@ -24,9 +24,9 @@ const selectStyle = (active: boolean): React.CSSProperties => ({
   borderRadius: '16px',
   backgroundColor: active ? '#e8f0fe' : '#fff',
   color: active ? '#1a73e8' : '#4a4f54',
-  fontSize: '13px',
+  fontSize: '12px',
   fontWeight: 600,
-  padding: '6px 30px 6px 14px',
+  padding: '3px 24px 3px 10px',
   cursor: 'pointer',
   outline: 'none',
   boxShadow: active
@@ -118,8 +118,8 @@ const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: '8px',
-      padding: '8px 0', flexShrink: 0,
+      display: 'flex', alignItems: 'center', gap: '6px',
+      padding: '2px 0', flexShrink: 0,
     }}>
       <span style={{ fontSize: '12px', color: '#9e9e9e', fontWeight: 500, whiteSpace: 'nowrap' }}>
         금액대
