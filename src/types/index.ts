@@ -325,6 +325,25 @@ export const isFiltersActive = (f: ActiveFilters): boolean =>
   f.jeonseRateRanges.length > 0 || f.changeRateRanges.length > 0;
 
 /** 경로 좌표 점 */
+/** 체크리스트 템플릿 항목 — 백엔드 ChecklistTemplateDto와 1:1 매핑 */
+export interface ChecklistTemplate {
+  id: number;
+  visitType: string;    // ATMOSPHERE | COMPLEX | PROPERTY
+  itemName: string;
+  displayOrder: number;
+}
+
+/** 단지 체크 결과 — 미체크 항목도 rating=null로 포함 */
+export interface ChecklistResultItem {
+  id: number;
+  templateId: number;
+  itemName: string;
+  visitType: string;    // ATMOSPHERE | COMPLEX | PROPERTY
+  displayOrder: number;
+  rating: 'UPPER' | 'MIDDLE' | 'LOWER' | null;
+  memo: string | null;
+}
+
 export interface RoutePoint {
   lat: number;
   lng: number;

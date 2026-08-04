@@ -16,6 +16,8 @@ import {
   RoutePoint,
   Comparison,
   ComparisonPhoto,
+  ChecklistTemplate,
+  ChecklistResultItem,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -252,6 +254,11 @@ export const deleteComplexPhoto = async (complexId: number, photoId: number): Pr
   await api.delete(`/api/complexes/${complexId}/photos/${photoId}`);
 };
 
+/** areaType별 시세 기록 전체 삭제 — DELETE /api/complexes/:id/price-history/area-type/:areaType */
+export const deletePriceHistoryByAreaType = async (complexId: number, areaType: string): Promise<void> => {
+  await api.delete(`/api/complexes/${complexId}/price-history/area-type/${encodeURIComponent(areaType)}`);
+};
+
 /** 참고가 수정 — PATCH /api/complexes/:id/price-history-items/:itemId */
 export const updatePriceHistoryItem = async (
   complexId: number,
@@ -454,6 +461,57 @@ export const updateComparisonPhotoMemo = async (
 /** 비교 평가 사진 삭제 — DELETE /api/comparisons/:id/photos/:photoId */
 export const deleteComparisonPhoto = async (id: number, photoId: number): Promise<void> => {
   await api.delete(`/api/comparisons/${id}/photos/${photoId}`);
+};
+
+/** 체크리스트 템플릿 목록 조회 — GET /api/checklists/templates */
+export const getChecklistTemplates = async (visitType?: string): Promise<ChecklistTemplate[]> => {
+  const params = visitType ? { visitType } : {};
+  const { data } = await api.get<ChecklistTemplate[]>('/api/checklists/templates', { params });
+  return data;
+};
+
+/** 체크리스트 템플릿 추가 — POST /api/checklists/templates */
+export const createChecklistTemplate = async (
+  req: { visitType: string; itemName: string; displayOrder?: number }
+): Promise<ChecklistTemplate> => {
+  const { data } = await api.post<ChecklistTemplate>('/api/checklists/templates', req);
+  return data;
+};
+
+/** 체크리스트 템플릿 수정 — PATCH /api/checklists/templates/:id */
+export const updateChecklistTemplate = async (
+  id: number, req: { itemName?: string; displayOrder?: number }
+): Promise<ChecklistTemplate> => {
+  const { data } = await api.patch<ChecklistTemplate>(`/api/checklists/templates/${id}`, req);
+  return data;
+};
+
+/** 체크리스트 템플릿 삭제 — DELETE /api/checklists/templates/:id */
+export const deleteChecklistTemplate = async (id: number): Promise<void> => {
+  await api.delete(`/api/checklists/templates/${id}`);
+};
+
+/** 단지 체크리스트 조회 — GET /api/complexes/:id/checklists */
+export const getComplexChecklist = async (
+  complexId: number, visitType?: string
+): Promise<ChecklistResultItem[]> => {
+  const params = visitType ? { visitType } : {};
+  const { data } = await api.get<ChecklistResultItem[]>(
+    `/api/complexes/${complexId}/checklists`, { params }
+  );
+  return data;
+};
+
+/** 단지 체크 결과 upsert — PATCH /api/complexes/:id/checklists/:templateId */
+export const upsertChecklistResult = async (
+  complexId: number,
+  templateId: number,
+  req: { rating?: string | null; memo?: string | null }
+): Promise<ChecklistResultItem> => {
+  const { data } = await api.patch<ChecklistResultItem>(
+    `/api/complexes/${complexId}/checklists/${templateId}`, req
+  );
+  return data;
 };
 
 export default api;

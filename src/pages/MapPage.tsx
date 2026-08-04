@@ -385,8 +385,8 @@ const MapPage: React.FC<MapPageProps> = ({
 
       let content: string;
       if (isHazard) {
-        // 검정 채운 삼각형 — 위를 가리키는 ▲, 이름 2~4글자 말줄임
-        const label = (om.name ?? '').slice(0, 4);
+        // 검정 채운 삼각형 — 위를 가리키는 ▲, 매크로 카테고리명 표시
+        const label = om.subType ?? (om.name ?? '').slice(0, 4);
         content = `
           <div style="display:flex;flex-direction:column;align-items:center;cursor:default;">
             <div style="

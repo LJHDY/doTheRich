@@ -67,6 +67,10 @@ src/
 │   └── index.ts              # 전체 타입 정의 + formatPrice / toUkUnit / calcCommuteGrade 유틸
 ├── services/
 │   └── api.ts                # axios 인스턴스 + API 함수
+├── constants/
+│   └── hazardCategories.ts   # 유해시설 매크로 카테고리 매핑 (11개 파일 → 7개 그룹), 폐기물/화학 세분류 정리
+├── utils/
+│   └── districtGeoJson.ts    # EPSG:5179 → WGS84 변환 (proj4), 행정구역 GeoJSON 캐시
 ├── pages/
 │   └── MapPage.tsx           # 네이버 지도 초기화, 마커 렌더링
 └── components/
@@ -75,7 +79,10 @@ src/
     ├── CompareListModal.tsx  # 비교하기 단지 선택 패널 (헤더 하단 드롭다운) + 비교평가 모드 토글
     ├── ComparisonEvalPanel.tsx # 1:1 비교평가 패널 (사진+메모, 가치평가, 가격비교, 결론)
     ├── CompareCard.tsx       # 비교 뷰 단지 카드 (ComplexInfoPanel과 동일 표시, 수정/삭제 기능 제외)
+    ├── ChecklistSection.tsx  # 임장 체크리스트 섹션 (ComplexInfoPanel 내부 사용)
     ├── CommuteGradeBadge.tsx # 입지 등급 배지 (S/A/B/C) — 공통 컴포넌트
+    ├── DistrictSelector.tsx  # 행정구역 경계 선택 드롭다운
+    ├── FilterPanel.tsx       # 종합 필터 패널
     ├── SearchBar.tsx         # 네이버 장소 검색
     ├── RegisterModal.tsx     # 단지 등록 폼 (가격·교통·출퇴근 입력)
     ├── ComplexInfoPanel.tsx  # 우측 단지 상세 패널
@@ -85,7 +92,19 @@ src/
     └── PriceInputForm.tsx    # 시세 기록 추가 폼 (패널 내)
 public/
 ├── favicon.ico               # 파비콘
-└── do_the_rich.png           # 헤더 로고 이미지
+├── do_the_rich.png           # 헤더 로고 이미지
+└── data/                     # 유해시설 JSON 데이터 (공공데이터 기반, 브라우저에서 fetch)
+    ├── waste-facilities.json            # 폐기물 처리시설 (10,568개)
+    ├── chemical-facilities.json         # 화학·위험 제조시설 (3,588개)
+    ├── construction-material-factories.json # 건설재료 공장 (2,086개)
+    ├── funeral-homes.json               # 장례식장 (901개)
+    ├── animal-shelters.json             # 동물보호소 (332개)
+    ├── cemeteries.json                  # 묘지 (340개)
+    ├── columbarium-facilities.json      # 납골당 (226개)
+    ├── natural-burial-sites.json        # 자연장지 (78개)
+    ├── crematoriums.json                # 화장시설 (58개)
+    ├── correctional-facilities.json     # 교정시설 (55개)
+    └── energy-storage-bases.json        # 에너지 저장소 (9개)
 ```
 
 ---
@@ -95,8 +114,8 @@ public/
 ### 핵심 인터페이스
 
 ```typescript
-// 지도 오버레이 마커 (학교·인프라 위치 표시)
-OverlayMarker { id, name, lat, lng, markerType: 'school'|'infra', subType? }
+// 지도 오버레이 마커 (학교·인프라·유해시설 위치 표시)
+OverlayMarker { id, name, lat, lng, markerType: 'school'|'infra'|'hazard', subType? }
 
 // 단지 대표 정보 (백엔드 ApartmentComplexDto 1:1)
 ApartmentComplex {
@@ -122,6 +141,12 @@ ApartmentComplex {
 SchoolInfo { ..., latitude?, longitude? }
 InfraInfo  { ..., latitude?, longitude? }
 
+// 유해시설 정보 (카테고리 분류 포함)
+HazardInfo { id, hazardName, distanceM?, macroCategory?, subCategory? }
+
+// 출퇴근 시간 (직선거리 포함)
+CommuteTime { destination, minutes?, transfers?, transportMode?, transferLines?, distanceKm? }
+
 // 시세 기록 아이템 (평형별 1개) — 참고가 필드 포함
 PriceHistoryItem {
   id, areaType, floor, price, jeonsePrice?, jeonseRate?,
@@ -140,6 +165,12 @@ RoutePoint { lat: number; lng: number }
 
 // 저장된 지도 경로
 MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
+
+// 체크리스트 템플릿 항목
+ChecklistTemplate { id, visitType: 'ATMOSPHERE'|'COMPLEX'|'PROPERTY', itemName, displayOrder }
+
+// 단지 체크 결과 (미체크 항목도 rating=null로 포함)
+ChecklistResultItem { id, templateId, itemName, visitType, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null, memo: string|null }
 ```
 
 ### 유틸 함수
@@ -188,6 +219,12 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 | POST | `/api/routes` | 경로 저장 (201) — `{ name, points: RoutePoint[] }` |
 | PATCH | `/api/routes/:id` | 경로 수정 — `{ name, points: RoutePoint[] }` |
 | DELETE | `/api/routes/:id` | 경로 삭제 (204) |
+| GET | `/api/checklists/templates` | 체크리스트 템플릿 목록 (visitType 필터 가능) |
+| POST | `/api/checklists/templates` | 템플릿 항목 추가 — `{ visitType, itemName, displayOrder? }` |
+| PATCH | `/api/checklists/templates/:id` | 템플릿 항목 수정 — `{ itemName?, displayOrder? }` |
+| DELETE | `/api/checklists/templates/:id` | 템플릿 항목 삭제 (연결 결과 CASCADE, 204) |
+| GET | `/api/complexes/:id/checklists` | 단지 체크 결과 조회 (미체크 항목도 포함, visitType 필터 가능) |
+| PATCH | `/api/complexes/:id/checklists/:templateId` | 체크 결과 upsert — `{ rating?, memo? }` (rating/memo 모두 null이면 결과 행 삭제) |
 
 ---
 
@@ -246,8 +283,12 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - 마커 클릭 → InfoWindow + `onComplexSelect`
 - 지도 클릭 → 역방향 지오코딩 → `onMapClick` 콜백으로 주소 전달
 - `focusLocation` 변경 시 지도 중심/줌(15) 이동
-- `overlayMarkers` 변경 시 학교·인프라 오버레이 마커 렌더링 (중=파랑/초=초록, 백화점=보라/마트=주황/병원=빨강/기타=회색)
+- `overlayMarkers` 변경 시 학교·인프라·유해시설 오버레이 마커 렌더링
+  - 학교: 중=파랑/초=초록
+  - 인프라: 백화점=보라/마트=주황/병원=빨강/기타=회색
+  - 유해시설: 검정 CSS border 삼각형 ▲ + 시설명 4글자 (markerType='hazard')
 - `radiusCenter` prop 변경 시 도보 30분 반경 원(2km, 파란 점선) 그리기/제거 (`circleRef`로 단일 인스턴스 관리)
+- 내 위치 버튼: 지도 **좌상단** (top: 12px, left: 12px) 📍 플로팅 버튼 (모바일에서 경로 목록 버튼에 가리지 않도록 이동)
 - **경로 그리기**:
   - `isDrawingRoute=true` 시 지도 커서 `crosshair`, 클릭 리스너 등록 → `onRoutePointAdd(lat, lng)` 콜백
   - `drawingPoints` 변경 시: 첫 점=빨간 Marker, 나머지=파란 Marker + 점 2개부터 `shortdash` Polyline
@@ -255,11 +296,17 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
   - `routePolylinesRef` / `drawingPolylineRef` / `drawingMarkersRef`로 오버레이 수명 관리
 
 ### `RegisterModal.tsx`
-- 섹션: 기본정보 / 가격정보 / 단지정보 / 교통정보 / 출퇴근시간 / 메모
+- 섹션: 기본정보 / 가격정보 / 단지정보 / 교통정보 / 출퇴근시간 / 유해시설 / 메모
 - **가격정보 행**: 평형 | 층수 | 매매가 | 전세가 | 전세율 | 금액대(자동) | ×
   - **참고가 서브행**: 호가 | 전고점 | 전저점 | 10년 등락(A-B 패턴 자동계산) | 등락률
 - 교통정보: 역명 → 네이버 API 호선 자동 조회 + 도보시간 계산
 - 출퇴근시간: 강남/시청/여의도/발산/마곡나루 + 분 입력
+  - 직선거리(`distanceKm`) 자동 계산 — `DESTINATION_COORDS`로 단지 좌표와 Haversine 거리 계산, "조회" 버튼 옆에 `{km}km` 표시
+- **유해시설 자동탐지**: 단지 좌표 기준 2km 반경 내 시설 자동 제안
+  - `Promise.allSettled`로 11개 JSON 파일 병렬 fetch
+  - `동물병원` 포함 시설명 필터링 제외
+  - `FACILITY_MACRO_CATEGORY` + `getSimplifiedCategory`로 매크로/서브 카테고리 자동 분류
+  - 매크로 카테고리 배지(빨강) + 서브 카테고리 배지(회색) 표시
 - ⚠️ 실거래가 자동조회 — 정확도 문제로 주석처리
 
 ### `RoutePanel.tsx`
@@ -274,12 +321,18 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 
 ### `ComplexInfoPanel.tsx`
 - 단지 선택 시 `GET /api/complexes/:id/price-history` 조회
-- **섹션 순서**: 단지정보(참고가·메모) → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 재개발정보 → 임장유형 → 시세변동 → 최근기록
+- **섹션 순서**: 단지정보(참고가·메모) → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 유해시설 → 재개발정보 → 임장유형 → 체크리스트 → 시세변동 → 최근기록
 - **종합평가**: 직장·교통·학군·환경 4칸 그리드, 각 S/A/B/C 배지 (데이터 없으면 `-`) — 클릭 시 해당 섹션으로 스크롤 (섹션 없으면 무동작)
 - **직장**: `complex.grade` 기반 배지 + 종사자수·사업체수 (`RegionWorkplaceConst`, DB 미저장)
 - **교통**: 항상 표시. 데이터 없으면 안내 문구. ✏ 버튼 → 편집 모드: 5개 고정 목적지 카드 스타일(강남/시청/여의도/발산/마곡나루), "조회" 버튼으로 네이버 지도 대중교통 경로 팝업, 분·환승횟수·환승노선(➡️ 구분자)·교통수단 입력 후 PATCH `/commute-times` (일괄 교체). `CommuteGradeBadge` 배지 표시. 환승 노선은 `transferLines` 필드(`' ➡️ '` join 문자열)로 저장·표시
+  - **읽기 모드**: 목적지명 옆에 직선거리 `{distanceKm}km` 표시 (데이터 있을 때만)
 - **학군**: 중학교 `achievementScore` 기준 등급 배지 (S≥95/A≥90/B≥85/C) — 중학교 없으면 배지 미표시
 - **환경**: 주변 인프라, 항상 등급 배지 표시 (백화점 2개↑=S / 1개=A / 마트 1개↑=B / 나머지=C)
+- **유해시설**: 항상 섹션 표시. 등록된 유해시설이 없을 때 자동탐지 실행
+  - `useEffect(complex?.id)` 트리거 → `Promise.allSettled` 11개 JSON 병렬 fetch
+  - 단지 좌표 기준 2km 이내 + `동물병원` 미포함 시설 필터링
+  - `getSimplifiedCategory`로 매크로(빨강 배지) + 서브 카테고리(회색 배지) 분류
+  - 지도 오버레이 마커에도 hazardInfos 포함 (좌표 있는 항목만, markerType='hazard')
 - **재개발 정보**: 유형 + 진행단계, 단계 레이블 `?` 아이콘 호버 시 ①~⑦ 설명 tooltip
 - **차트**: 평형별 다중 라인 (매매 파란계열, 전세 빨간계열)
 - 최근 기록: 최신 5건 (참고가 chips 포함)
@@ -307,17 +360,30 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 
 ### `CompareCard.tsx`
 - 비교 뷰에서 1/3 너비로 표시되는 단지 카드 (ComplexInfoPanel과 동일 내용, 수정/삭제 기능 제외)
-- **섹션 순서**: 헤더(파랑) → 단지정보(참고가) → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 재개발정보 → 임장유형 → 시세변동 → 최근 5건
+- **섹션 순서**: 헤더(파랑) → 단지정보(참고가) → 종합평가 → 지하철 → 직장 → 교통 → 학군 → 환경 → 유해시설 → 재개발정보 → 임장유형 → 시세변동 → 최근 5건
 - **종합평가 동기화 스크롤**: 어느 카드에서든 직장·교통·학군·환경 클릭 시 `window` 커스텀 이벤트(`compare-section-scroll`) 발행 → 마운트된 모든 카드가 각자의 해당 섹션으로 동시 스크롤 (섹션 없는 카드는 무동작)
 - `latestItemPerAreaType` Map으로 전체 이력에서 평형별 최신 시세 항목 집계 (ComplexInfoPanel과 동일 방식)
 - `buildChartData` dateMap 머징 — 같은 날짜 기록 하나의 X축 포인트로 합산
 - 참고가: 평형별 `latestItemPerAreaType` 기준 (호가·전고점·전저점·10년등락 chips)
-- 교통: 항상 표시, 데이터 없으면 "출퇴근 시간 정보 없음" 안내
+- 교통: 항상 표시, 데이터 없으면 "출퇴근 시간 정보 없음" 안내. 목적지명 옆 직선거리(`distanceKm`) 표시
 - 환경: 항상 표시 + 인프라 등급 배지, 데이터 없으면 "인프라 정보 없음" 안내
+- 유해시설: 등록된 데이터 있을 때만 표시. 매크로 카테고리(빨강 배지) + 서브 카테고리(회색 배지) + 거리(m) 표시
 - 임장유형: 항상 표시 (`VISIT_TYPE_LABELS`, NONE 포함)
 - 최근 기록: 5건, ▲/▼ 변동(억+%) + KB가 + 참고가 chips
 - ComplexInfoPanel과 동일한 등급 로직·레이블 맵 내장 (`calcSchoolGrade`, `calcInfraGrade`, `GRADE_COLORS`, `Tag` 등)
 - 닫기(×) 버튼 → 비교 목록 제거 + 체크박스 해제
+
+### `ChecklistSection.tsx`
+- `complexId` prop만 받아 독립적으로 동작하는 체크리스트 섹션 (ComplexInfoPanel 내부 사용)
+- 마운트 시 `getComplexChecklist` + `getChecklistTemplates` 병렬 조회
+- **체크 항목 행**: 항목명 + 💬 메모 토글 버튼 + 상/중/하 버튼 (클릭 시 PATCH upsert, 동일 버튼 재클릭=해제)
+  - 메모: 0.8초 debounce 자동저장, 열려 있는 메모가 있으면 기본 펼침
+- **그룹핑**: visitType별 그룹 (분위기/단지/매물 임장), display_order 정렬
+- **항목 관리** 버튼: 토글로 `TemplateManager` 패널 열기
+  - 탭(분위기/단지/매물) 선택 → 해당 visit_type 항목 CRUD
+  - 추가·수정(Enter 저장, Escape 취소)·삭제(confirm 확인)
+  - 템플릿 변경 시 items 배열 실시간 동기화 (삭제=제거, 추가=미체크 행 삽입)
+- 헤더에 체크된 항목 수 / 전체 항목 수 표시 (`3/7` 형식)
 
 ### `CommuteGradeBadge.tsx`
 - `commuteTimes` 받아서 S/A/B/C 배지 렌더링
@@ -372,6 +438,13 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 | `ApartmentComplex` 응답에 `priceItems` 포함 | 금액대 필터에서 평형 정보 표시 가능 |
 | MOLIT 동 단위 필터링 | 법정동 기반 포스트 필터링 추가 |
 | 실거래가 정확도 개선 | 단지명 매핑 로직 개선 후 RegisterModal 주석 해제 |
+
+### 완료된 백엔드 추가 작업
+- ✅ `hazard_info` 테이블: `macro_category VARCHAR(50)`, `sub_category VARCHAR(50)` 컬럼 추가 (앱 시작 시 idempotent `ALTER TABLE` 마이그레이션)
+- ✅ `commute_time` 테이블: `distance_km DOUBLE` 컬럼 추가 (동일 방식)
+- ✅ `HazardInfoDto`/`HazardInfoRequest`: `macro_category`, `sub_category` 포함
+- ✅ `CommuteTimeDto`/`CommuteTimeRequest`: `distance_km` 포함
+- ✅ `complex_service.py`: `add_hazard_infos`, `update_hazard_info`, `update_commute_times`, `register` 함수에서 새 필드 저장
 
 ---
 
@@ -456,6 +529,23 @@ MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 - [x] 로드뷰 — 헤더 "로드뷰" 버튼 → 지도 하단 300px 고정 분할 뷰 (naver.maps.Panorama)
   - 지도 클릭 시 해당 위치 파노라마로 이동 (경로 그리기 중에는 비활성화)
   - Panorama div 항상 DOM 유지(height 0↔300px 토글)로 재마운트 시 검정화면 방지
+- [x] 유해시설 공공데이터 11종 저장 — `public/data/` 에 JSON 파일로 저장 (폐기물/화학/건설재료/장례식장/동물보호소/묘지/납골당/자연장지/화장시설/교정시설/에너지저장소)
+- [x] 유해시설 카테고리 분류 — `src/constants/hazardCategories.ts`: 11개 파일 → 7개 매크로 그룹, 폐기물(41→6), 화학(33→10) 세분류 매핑
+- [x] 유해시설 카테고리 배지 — ComplexInfoPanel/CompareCard 읽기 모드에서 매크로(빨강) + 서브(회색) 배지 표시
+- [x] 유해시설 자동탐지 — ComplexInfoPanel 오픈 시 등록된 유해시설 없으면 2km 반경 자동 탐지 (`useEffect(complex?.id)`, `Promise.allSettled`, `동물병원` 필터링)
+- [x] 유해시설 지도 오버레이 마커 — 검정 CSS border 삼각형 ▲ + 매크로 카테고리명 표시 (subType에 macroCategory 전달, fallback: 시설명 4글자)
+- [x] 백엔드 유해시설 `macro_category`/`sub_category` 컬럼 추가 + 관련 API 연동
+- [x] 출퇴근 직선거리(`distanceKm`) — 단지 등록 시 5개 목적지 Haversine 자동계산, 저장/표시 (ComplexInfoPanel·CompareCard 읽기 모드, RegisterModal 조회 버튼 옆)
+- [x] 백엔드 출퇴근 `distance_km` 컬럼 추가 + 관련 API 연동
+- [x] 현재 위치 버튼 좌상단 이동 — 모바일 경로 목록 버튼에 가려지지 않도록 (top: 12px, left: 12px)
+- [x] CompareCard 유해시설 섹션 추가 + distanceKm 표시 — ComplexInfoPanel과 표시 내용 완전 동기화
+- [x] areaType별 시세 기록 전체 삭제 — ComplexInfoPanel 참고가 탭 선택 시 "삭제" 버튼 표시, 확인 후 `DELETE /api/complexes/:id/price-history/area-type/:areaType` (백엔드: 빈 history 자동 정리)
+- [x] 임장 체크리스트 — `ChecklistSection` 컴포넌트, ComplexInfoPanel 임장유형 섹션 다음에 표시
+  - 단지별 체크리스트 조회/평가 (상/중/하 버튼, 동일 버튼 재클릭=해제)
+  - 메모 💬 버튼으로 항목별 메모 textarea 토글, 0.8초 debounce 자동저장
+  - 분위기/단지/매물 임장 visit_type별 그룹핑
+  - "항목 관리" 버튼 → 탭 기반 템플릿 CRUD (추가·수정·삭제, 삭제 시 단지 결과 CASCADE)
+  - 백엔드: `checklist_template`/`complex_checklist_result` 테이블 + 관련 API 6개
 
 ## 미완성 / TODO
 

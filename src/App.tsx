@@ -324,7 +324,7 @@ const App: React.FC = () => {
         backgroundColor: '#fff', borderBottom: '1px solid #e8eaed',
         boxShadow: '0 1px 4px rgba(0,0,0,0.08)', flexShrink: 0, zIndex: 10,
         ...(isMobile ? {} : {
-          display: 'flex', alignItems: 'center', padding: '0 16px', height: '56px', gap: '16px',
+          display: 'flex', alignItems: 'center', padding: '0 12px', height: '56px', gap: '6px', overflowX: 'auto',
         }),
       }}>
         {isMobile ? (

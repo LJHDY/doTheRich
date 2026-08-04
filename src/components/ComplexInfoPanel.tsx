@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes } from '../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
 import PhotoSlideModal from './PhotoSlideModal';
+import ChecklistSection from './ChecklistSection';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import { FACILITY_MACRO_CATEGORY, getSimplifiedCategory } from '../constants/hazardCategories';
 
@@ -392,6 +393,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     tenYearAmountStr: '', tenYearRateStr: '',
   });
   const [refPriceSaving, setRefPriceSaving] = useState(false);
+  const [deletingAreaType, setDeletingAreaType] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // 기본 정보 인라인 편집 상태
@@ -495,7 +497,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     });
     (complex?.hazardInfos ?? []).forEach(h => {
       if (h.latitude != null && h.longitude != null) {
-        markers.push({ id: `hazard-${h.id}`, name: h.hazardName ?? '', lat: h.latitude, lng: h.longitude, markerType: 'hazard' });
+        markers.push({ id: `hazard-${h.id}`, name: h.hazardName ?? '', lat: h.latitude, lng: h.longitude, markerType: 'hazard', subType: h.macroCategory });
       }
     });
     onOverlayMarkersChange(markers);
@@ -706,6 +708,21 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     } finally {
       setRefPriceSaving(false);
     }
+  };
+
+  // areaType 전체 삭제 — 해당 평형의 모든 시세 기록 삭제 후 재조회
+  const handleDeleteAreaType = async (areaType: string) => {
+    if (!complex) return;
+    if (!window.confirm(`"${areaType}" 평형의 모든 시세 기록을 삭제합니다.\n이 작업은 되돌릴 수 없습니다.`)) return;
+    setDeletingAreaType(true);
+    try {
+      await deletePriceHistoryByAreaType(complex.id, areaType);
+      setSelectedRefTab('');
+      setEditingRefPrice(false);
+      await loadPriceHistories(complex.id);
+      await refreshComplex();
+    } catch { /* 에러는 인터셉터가 출력 */ }
+    finally { setDeletingAreaType(false); }
   };
 
   // 저장 후 단지 전체 재조회 → 부모·오버레이 마커 동시 갱신
@@ -1750,13 +1767,21 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 title="평형 추가"
               >+ 평형</button>
             )}
-            {/* 수정 버튼 — 탭이 선택된 경우에만 */}
+            {/* 수정·삭제 버튼 — 탭이 선택된 경우에만 */}
             {!editingRefPrice && selectedRefTab && (
-              <button
-                onClick={startEditRefPrice}
-                style={{ border: '1px solid #34a853', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#188038', padding: '2px 8px', borderRadius: '6px', marginLeft: 'auto' }}
-                title="참고가 수정"
-              >수정</button>
+              <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+                <button
+                  onClick={startEditRefPrice}
+                  style={{ border: '1px solid #34a853', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#188038', padding: '2px 8px', borderRadius: '6px' }}
+                  title="참고가 수정"
+                >수정</button>
+                <button
+                  onClick={() => handleDeleteAreaType(selectedRefTab)}
+                  disabled={deletingAreaType}
+                  style={{ border: '1px solid #c5221f', background: 'none', cursor: deletingAreaType ? 'not-allowed' : 'pointer', fontSize: '11px', color: '#c5221f', padding: '2px 8px', borderRadius: '6px', opacity: deletingAreaType ? 0.5 : 1 }}
+                  title="이 평형 시세 기록 전체 삭제"
+                >{deletingAreaType ? '...' : '삭제'}</button>
+              </div>
             )}
           </div>
           {/* 참고가 — 편집 모드일 때는 인라인 폼, 아닐 때는 선택 탭 기준 읽기 전용 표시 */}
@@ -3031,6 +3056,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             </div>
           )}
         </div>
+
+        {/* 체크리스트 */}
+        <ChecklistSection complexId={complex.id} />
 
         {/* 시세 변동 그래프 */}
         <div style={{ marginBottom: '16px' }}>
