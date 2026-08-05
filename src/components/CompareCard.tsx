@@ -3,6 +3,7 @@ import { ApartmentComplex, PriceHistory, PriceHistoryItem, ChartDataRow, ChartSe
 import { getPriceHistories } from '../services/api';
 import PriceChart from './PriceChart';
 import CommuteGradeBadge from './CommuteGradeBadge';
+import ChecklistSection from './ChecklistSection';
 
 interface CompareCardProps {
   complex: ApartmentComplex;
@@ -128,6 +129,11 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
   const [loading, setLoading] = useState(false);
   // 참고가 탭 — 선택된 areaType (빈 문자열이면 전체)
   const [selectedRefTab, setSelectedRefTab] = useState<string>('');
+  // 시세 차트 평형 필터
+  const [selectedAreaType, setSelectedAreaType] = useState('');
+  // tooltip 표시 상태
+  const [showStageTooltip, setShowStageTooltip] = useState(false);
+  const [showRecordTooltip, setShowRecordTooltip] = useState(false);
 
   const loadHistories = useCallback(async () => {
     setLoading(true);
@@ -156,6 +162,16 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
     });
     return map;
   })();
+
+  // 차트 series에서 areaType 목록 추출 (중복 제거, 등장 순서 유지)
+  const areaTypes: string[] = [];
+  const _atSeen = new Set<string>();
+  chartData.series.filter(s => s.areaType).forEach(s => {
+    if (!_atSeen.has(s.areaType)) { _atSeen.add(s.areaType); areaTypes.push(s.areaType); }
+  });
+  const filteredSeries = selectedAreaType
+    ? chartData.series.filter(s => s.areaType === selectedAreaType)
+    : chartData.series;
 
   const workSectionRef = useRef<HTMLDivElement>(null);
   const commuteSectionRef = useRef<HTMLDivElement>(null);
@@ -549,7 +565,59 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
             <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>재개발 정보</h4>
             <InfoRow label="유형" value={REDEVELOP_TYPE_LABELS[complex.redevelopType]} />
             {complex.redevelopStage && (
-              <InfoRow label="진행단계" value={REDEVELOP_STAGE_LABELS[complex.redevelopStage]} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, marginRight: '8px' }}>
+                  <span style={{ fontSize: '11px', color: '#80868b' }}>진행단계</span>
+                  {/* ? 아이콘 — 호버 시 단계별 설명 tooltip */}
+                  <div
+                    style={{ position: 'relative', display: 'inline-flex' }}
+                    onMouseEnter={() => setShowStageTooltip(true)}
+                    onMouseLeave={() => setShowStageTooltip(false)}
+                  >
+                    <div style={{
+                      width: '13px', height: '13px', borderRadius: '50%',
+                      backgroundColor: '#dadce0', color: '#5f6368',
+                      fontSize: '9px', fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'default', lineHeight: 1,
+                    }}>?</div>
+                    {showStageTooltip && (
+                      <div style={{
+                        position: 'absolute', bottom: '120%', left: 0, zIndex: 20,
+                        backgroundColor: '#3c4043', color: '#fff',
+                        fontSize: '10px', lineHeight: 1.6,
+                        padding: '8px 10px', borderRadius: '6px',
+                        width: '240px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                        pointerEvents: 'none',
+                      }}>
+                        {([
+                          ['①', '정비구역 지정', '지자체가 구역을 지정'],
+                          ['②', '추진위원회 구성 및 승인', '준비 조직 구성 후 승인'],
+                          ['③', '조합 설립 인가', '법정 동의율 확보 후 인가'],
+                          ['④', '사업시행인가', '건축·이주 계획 최종 승인'],
+                          ['⑤', '관리처분인가', '분양·분담금 등 최종 확정'],
+                          ['⑥', '이주·철거 및 착공', '철거 후 공사 시작'],
+                          ['⑦', '준공 및 입주', '공사 완료 후 입주'],
+                        ] as const).map(([num, title, desc]) => (
+                          <div key={num} style={{ marginBottom: '3px' }}>
+                            <span style={{ fontWeight: 700 }}>{num} {title}</span><br />
+                            <span style={{ color: '#bdbdbd', fontSize: '9px' }}>{desc}</span>
+                          </div>
+                        ))}
+                        <div style={{
+                          position: 'absolute', top: '100%', left: '7px',
+                          borderWidth: '5px', borderStyle: 'solid',
+                          borderColor: '#3c4043 transparent transparent transparent',
+                        }} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <span style={{ fontSize: '12px', color: '#202124', textAlign: 'right' }}>
+                  {REDEVELOP_STAGE_LABELS[complex.redevelopStage]}
+                </span>
+              </div>
             )}
           </div>
         )}
@@ -565,20 +633,105 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           </div>
         </div>
 
+        {/* 임장 체크리스트 — ComplexInfoPanel과 동일 컴포넌트, 읽기/평가 모두 가능 */}
+        <ChecklistSection complexId={complex.id} />
+
         {/* 시세 변동 그래프 */}
         <div style={{ marginBottom: '12px' }}>
-          <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>시세 변동</h4>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054' }}>시세 변동</h4>
+            {/* 평형이 2개 이상일 때만 필터 셀렉트박스 표시 */}
+            {areaTypes.length > 1 && (
+              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                <select
+                  value={selectedAreaType}
+                  onChange={e => setSelectedAreaType(e.target.value)}
+                  style={{
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none',
+                    border: '1.5px solid',
+                    borderColor: selectedAreaType ? '#1a73e8' : '#d2d5da',
+                    borderRadius: '14px',
+                    backgroundColor: selectedAreaType ? '#e8f0fe' : '#f8f9fa',
+                    color: selectedAreaType ? '#1a73e8' : '#5f6368',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '3px 22px 3px 8px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value="">전체 평형</option>
+                  {areaTypes.map(at => (
+                    <option key={at} value={at}>{at}</option>
+                  ))}
+                </select>
+                <svg
+                  viewBox="0 0 24 24" fill="none"
+                  stroke={selectedAreaType ? '#1a73e8' : '#9e9e9e'}
+                  strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
+                  style={{
+                    position: 'absolute', right: '6px', top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '10px', height: '10px', pointerEvents: 'none',
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+            )}
+          </div>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '20px', color: '#9e9e9e', fontSize: '12px' }}>로딩 중...</div>
           ) : (
-            <PriceChart rows={chartData.rows} series={chartData.series} />
+            <PriceChart rows={chartData.rows} series={filteredSeries} />
+          )}
+          {priceHistories.length > 0 && (
+            <div style={{ marginTop: '6px', fontSize: '11px', color: '#80868b', textAlign: 'right' }}>
+              총 {priceHistories.length}건의 기록
+            </div>
           )}
         </div>
 
         {/* 최근 기록 5건 — 직전 기록 대비 변동률 포함 */}
         {priceHistories.length > 0 && (
           <div style={{ marginBottom: '12px' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>최근 기록</h4>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: 0 }}>최근 기록</h4>
+              {/* 물음표 아이콘 — 호버 시 전세가율 설명 tooltip */}
+              <div
+                style={{ position: 'relative', display: 'inline-flex' }}
+                onMouseEnter={() => setShowRecordTooltip(true)}
+                onMouseLeave={() => setShowRecordTooltip(false)}
+              >
+                <div style={{
+                  width: '13px', height: '13px', borderRadius: '50%',
+                  backgroundColor: '#dadce0', color: '#5f6368',
+                  fontSize: '9px', fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'default', flexShrink: 0, lineHeight: 1,
+                }}>?</div>
+                {showRecordTooltip && (
+                  <div style={{
+                    position: 'absolute', bottom: '120%', left: 0,
+                    backgroundColor: '#3c4043', color: '#fff',
+                    fontSize: '10px', lineHeight: 1.6,
+                    padding: '7px 10px', borderRadius: '6px',
+                    width: '180px', zIndex: 20,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    pointerEvents: 'none',
+                  }}>
+                    전세가율 : 낮으면 호황/급등기, 높으면 불황
+                    <div style={{
+                      position: 'absolute', top: '100%', left: '7px',
+                      borderWidth: '5px', borderStyle: 'solid',
+                      borderColor: '#3c4043 transparent transparent transparent',
+                    }} />
+                  </div>
+                )}
+              </div>
+            </div>
             {(() => {
               const reversed = [...priceHistories].reverse();
               return reversed.slice(0, 5).map((h, idx) => {
