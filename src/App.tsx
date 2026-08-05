@@ -176,28 +176,6 @@ const App: React.FC = () => {
   // 로고 클릭 — 페이지 전체 새로고침
   const handleGoHome = () => {
     window.location.reload();
-    return;
-    setSelectedComplex(null);
-    setListModalRange(null);
-    setFavoriteListOpen(false);
-    setMyComplexListOpen(false);
-    setLivingZoneOpen(false);
-    setAffordOpen(false);
-    setCompareOpen(false);
-    setCompareIds([]);
-    setCompareMode('normal');
-    setFilterOpen(false);
-    setActiveFilters(EMPTY_FILTERS);
-    setFilterResetKey(k => k + 1);
-    setMobileMenuOpen(false);
-    setRoadViewOpen(false);
-    setRoutePanelOpen(false);
-    setMobileRouteView('list');
-    setActiveRouteIds(new Set());
-    setIsDrawingRoute(false);
-    setEditingRouteId(null);
-    setDrawingPoints([]);
-    setRouteName('');
   };
 
   // 패널 닫기 — 지도의 경로·그리기 상태 모두 초기화
