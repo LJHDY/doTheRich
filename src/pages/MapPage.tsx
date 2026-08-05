@@ -1,19 +1,10 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, formatPrice } from '../types';
 import { loadDistrictGeoJson, getFeatureName } from '../utils/districtGeoJson';
+import { haversineMeters } from '../utils/geo';
 
 // 저장된 경로마다 순환 사용할 색상 팔레트
 const ROUTE_COLORS = ['#e53935', '#43a047', '#8e24aa', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
-
-// 두 좌표 간 거리 (미터)
-function haversineMeters(p1: RoutePoint, p2: RoutePoint): number {
-  const R = 6371000;
-  const dLat = (p2.lat - p1.lat) * Math.PI / 180;
-  const dLng = (p2.lng - p1.lng) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 // p1 → p2 방향의 방위각 (도, 북=0, 시계방향)
 function calcBearing(p1: RoutePoint, p2: RoutePoint): number {

@@ -1,14 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { MapRoute } from '../types';
-
-function haversineMeters(p1: { lat: number; lng: number }, p2: { lat: number; lng: number }): number {
-  const R = 6371000;
-  const dLat = (p2.lat - p1.lat) * Math.PI / 180;
-  const dLng = (p2.lng - p1.lng) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+import { haversineMeters } from '../utils/geo';
 
 function calcRouteStats(points: { lat: number; lng: number }[]): { km: string; minutes: number } {
   if (points.length < 2) return { km: '0.0', minutes: 0 };
@@ -16,7 +8,7 @@ function calcRouteStats(points: { lat: number; lng: number }[]): { km: string; m
   for (let i = 0; i < points.length - 1; i++) totalM += haversineMeters(points[i], points[i + 1]);
   return {
     km: (Math.round(totalM / 100) / 10).toFixed(1),
-    minutes: Math.round(totalM * 60 / 4000),  // 4km/h 도보
+    minutes: Math.round(totalM * 60 / 4000),
   };
 }
 
@@ -41,6 +33,13 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   onToggleActive, onStartDrawing, onStartEdit, onDelete, onClose, onShowMap,
   isMobile = false,
 }) => {
+  // 경로별 거리·도보시간 사전 계산 — routes가 바뀔 때만 재계산
+  const routeStatsMap = useMemo(() => {
+    const map = new Map<number, { km: string; minutes: number }>();
+    routes.forEach(route => map.set(route.id, calcRouteStats(route.points)));
+    return map;
+  }, [routes]);
+
   return (
     <div style={{
       width: isMobile ? '100%' : '320px',
@@ -109,7 +108,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
             const isActive = activeRouteIds.has(route.id);
             const isEditing = editingRouteId === route.id;
             const date = route.createdAt ? route.createdAt.slice(0, 10) : '';
-            const stats = calcRouteStats(route.points);
+            const stats = routeStatsMap.get(route.id) ?? { km: '0.0', minutes: 0 };
 
             return (
               <div

@@ -145,13 +145,13 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
   // 로컬 미리보기 사진 목록 (저장 전)
   const [localPhotos, setLocalPhotos] = useState<LocalPhoto[]>([]);
   const localIdRef = useRef(0);
+  // ref로 최신 localPhotos 추적 — 언마운트 cleanup 클로저가 stale 상태를 참조하는 문제 방지
+  const localPhotosRef = useRef<LocalPhoto[]>([]);
+  useEffect(() => { localPhotosRef.current = localPhotos; }, [localPhotos]);
 
-  // 컴포넌트 언마운트 시 objectURL 해제
+  // 언마운트 시 남은 objectURL 전부 해제 (저장하지 않고 닫은 경우)
   useEffect(() => {
-    return () => {
-      localPhotos.forEach(p => URL.revokeObjectURL(p.previewUrl));
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { localPhotosRef.current.forEach(p => URL.revokeObjectURL(p.previewUrl)); };
   }, []);
 
   const loadComparison = useCallback(async () => {

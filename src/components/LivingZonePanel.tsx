@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ApartmentComplex, LivingZone } from '../types';
 import {
   getLivingZones, createLivingZone, updateLivingZoneMemo,
@@ -59,13 +59,17 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
 
   useEffect(() => { load(); }, [load]);
 
-  // 기존 생활권에서 지역구 목록 추출 — 필터 셀렉트 옵션으로 사용
-  const districts = Array.from(new Set(zones.map(z => z.district))).sort((a, b) => a.localeCompare(b, 'ko'));
+  // 기존 생활권에서 지역구 목록 추출 — zones 변경 시에만 재계산
+  const districts = useMemo(
+    () => Array.from(new Set(zones.map(z => z.district))).sort((a, b) => a.localeCompare(b, 'ko')),
+    [zones]
+  );
 
-  // 등록된 단지의 region을 distinct 추출 — 생활권 추가 시 지역구 셀렉트 옵션으로 사용
-  const complexRegions = Array.from(
-    new Set(complexes.map(c => c.region).filter((r): r is string => !!r))
-  ).sort((a, b) => a.localeCompare(b, 'ko'));
+  // 등록된 단지의 region distinct 추출 — complexes 변경 시에만 재계산
+  const complexRegions = useMemo(
+    () => Array.from(new Set(complexes.map(c => c.region).filter((r): r is string => !!r))).sort((a, b) => a.localeCompare(b, 'ko')),
+    [complexes]
+  );
 
   // 필터 적용
   const displayed = selectedDistrict

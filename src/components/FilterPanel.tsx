@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { ApartmentComplex, ActiveFilters, EMPTY_FILTERS, calcCommuteGrade } from '../types';
 
 // ── 등급 계산 (ComplexInfoPanel과 동일 로직) ────────────────────────────────
@@ -215,7 +215,28 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     return filtered.filter(c => c.complexName.toLowerCase().includes(q));
   }, [filtered, searchQuery]);
 
-  const upd = (patch: Partial<ActiveFilters>) => onChange({ ...filters, ...patch });
+  // filters/onChange가 바뀔 때만 새 함수 생성 — Chip 불필요 re-render 방지
+  // displayList 단지별 등급 사전 계산 — 목록 렌더 시 O(1) 조회
+  const gradesCache = useMemo(() => {
+    const cache = new Map<number, {
+      commuteGrade: ReturnType<typeof calcCommuteGrade>;
+      schoolGrade: string | null;
+      infraGrade: string;
+    }>();
+    displayList.forEach(c => {
+      cache.set(c.id, {
+        commuteGrade: calcCommuteGrade(c.commuteTimes ?? []),
+        schoolGrade: calcSchoolGrade(c.schoolInfos),
+        infraGrade: calcInfraGrade(c.infraInfos),
+      });
+    });
+    return cache;
+  }, [displayList]);
+
+  const upd = useCallback(
+    (patch: Partial<ActiveFilters>) => onChange({ ...filters, ...patch }),
+    [filters, onChange]
+  );
 
   // 활성 필터 수
   const activeCount =
@@ -456,9 +477,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             </div>
           ) : (
             displayList.map(c => {
-              const commuteGrade = calcCommuteGrade(c.commuteTimes ?? []);
-              const schoolGrade = calcSchoolGrade(c.schoolInfos);
-              const infraGrade = calcInfraGrade(c.infraInfos);
+              // gradesCache에서 O(1) 조회 — 매 렌더마다 재계산하지 않음
+              const { commuteGrade, schoolGrade, infraGrade } = gradesCache.get(c.id)!;
               return (
                 <div
                   key={c.id}

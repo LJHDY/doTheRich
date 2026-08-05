@@ -9,7 +9,8 @@ interface CompareCardProps {
   onClose: () => void; // 닫기 = 비교 목록에서 제거 + 체크박스 해제
 }
 
-const InfoRow: React.FC<{ label: string; value?: string | number | null }> = ({ label, value }) => {
+// React.memo로 감싸 props가 바뀌지 않으면 re-render 생략
+const InfoRow = React.memo<{ label: string; value?: string | number | null }>(({ label, value }) => {
   if (!value && value !== 0) return null;
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>
@@ -17,7 +18,7 @@ const InfoRow: React.FC<{ label: string; value?: string | number | null }> = ({ 
       <span style={{ fontSize: '12px', color: '#202124', textAlign: 'right' }}>{value}</span>
     </div>
   );
-};
+});
 
 // ComplexInfoPanel과 동일한 레이블 맵
 const REDEVELOP_TYPE_LABELS: Record<string, string> = {

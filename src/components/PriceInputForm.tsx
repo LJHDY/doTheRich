@@ -23,15 +23,48 @@ interface PriceInfoRow {
   tenYearRateStr: string;    // 10년 등락률 (%)
 }
 
+// new Function() 대신 직접 구현한 재귀 하강 파서 — 연산자 우선순위(*/보다 +/-) 지원
+const safeCalcExpr = (expr: string): number | null => {
+  let pos = 0;
+  const parseNum = (): number | null => {
+    const start = pos;
+    while (pos < expr.length && /[0-9.]/.test(expr[pos])) pos++;
+    if (pos === start) return null;
+    const n = parseFloat(expr.slice(start, pos));
+    return isFinite(n) ? n : null;
+  };
+  const parseMulDiv = (): number | null => {
+    let left = parseNum();
+    if (left === null) return null;
+    while (pos < expr.length && (expr[pos] === '*' || expr[pos] === '/')) {
+      const op = expr[pos++];
+      const right = parseNum();
+      if (right === null) return null;
+      left = op === '*' ? left * right : right !== 0 ? left / right : left;
+    }
+    return left;
+  };
+  const parseAddSub = (): number | null => {
+    let left = parseMulDiv();
+    if (left === null) return null;
+    while (pos < expr.length && (expr[pos] === '+' || expr[pos] === '-')) {
+      const op = expr[pos++];
+      const right = parseMulDiv();
+      if (right === null) return null;
+      left = op === '+' ? left + right : left - right;
+    }
+    return left;
+  };
+  const result = parseAddSub();
+  return pos === expr.length ? result : null;
+};
+
 const evalExpr = (expr: string): string => {
   const cleaned = expr.replace(/\s/g, '');
   if (!cleaned) return '';
   if (!/^[0-9+\-*/.]+$/.test(cleaned)) return expr;
-  try {
-    // eslint-disable-next-line no-new-func
-    const result = new Function(`return ${cleaned}`)() as number;
-    if (typeof result === 'number' && isFinite(result)) return String(Math.round(result * 100) / 100);
-  } catch {}
+  const result = safeCalcExpr(cleaned);
+  if (result !== null && isFinite(result)) return String(Math.round(result * 100) / 100);
   return expr;
 };
 
