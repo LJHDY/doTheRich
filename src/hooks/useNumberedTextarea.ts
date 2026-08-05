@@ -34,12 +34,10 @@ export function useNumberedTextarea(
       if (!el) return;
 
       if (e.key === 'Enter') {
+        // IME 조합 완료 전 Enter(isComposing=true)는 무시 — 글자 확정만 처리되도록 브라우저에 위임
+        if (e.nativeEvent.isComposing) return;
         e.preventDefault();
-        // IME 조합 중 selectionStart는 조합 문자의 시작을 가리키지만
-        // selectionEnd는 조합 문자 이후를 가리키므로, selectionEnd 기준으로 분할해야
-        // 조합 중인 글자가 다음 줄로 넘어가는 버그를 막을 수 있음
         const splitAt = el.selectionEnd;
-        // el.value 사용: cursor position(DOM 기준)과 문자열 인덱스의 일관성 보장
         const text = el.value;
         const linesBeforeCursor = text.substring(0, splitAt).split('\n');
         const nextNum = linesBeforeCursor.length + 1;
