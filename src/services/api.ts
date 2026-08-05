@@ -426,6 +426,7 @@ export const getComparisonById = async (id: number): Promise<Comparison> => {
 export const createComparison = async (body: {
   complexId1: number; complexId2: number;
   memo?: string; valueRating?: string; priceNote?: string; conclusion?: string;
+  selectedComplexId?: number;
 }): Promise<Comparison> => {
   const { data } = await api.post<Comparison>('/api/comparisons', body);
   return data;
@@ -434,7 +435,7 @@ export const createComparison = async (body: {
 /** 비교 평가 부분 수정 — PATCH /api/comparisons/:id */
 export const updateComparison = async (
   id: number,
-  body: { memo?: string; valueRating?: string; priceNote?: string; conclusion?: string }
+  body: { memo?: string; valueRating?: string; priceNote?: string; conclusion?: string; selectedComplexId?: number | null }
 ): Promise<Comparison> => {
   const { data } = await api.patch<Comparison>(`/api/comparisons/${id}`, body);
   return data;
@@ -443,6 +444,18 @@ export const updateComparison = async (
 /** 비교 평가 삭제 (사진 CASCADE) — DELETE /api/comparisons/:id */
 export const deleteComparison = async (id: number): Promise<void> => {
   await api.delete(`/api/comparisons/${id}`);
+};
+
+/** 비교평가에서 가장 많이 선정된 단지 — GET /api/comparisons/most-selected
+ *  선정 단지 없으면 404 → null 반환 */
+export const getMostSelectedComplex = async (): Promise<{ complexId: number; complexName: string; selectedCount: number } | null> => {
+  try {
+    const { data } = await api.get<{ complexId: number; complexName: string; selectedCount: number }>('/api/comparisons/most-selected');
+    return data;
+  } catch (e: any) {
+    if (e?.response?.status === 404) return null;
+    throw e;
+  }
 };
 
 /** 비교 평가 사진 업로드 — POST /api/comparisons/:id/photos (multipart) */

@@ -139,6 +139,8 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
   const [valueRating, setValueRating] = useState('');
   const [priceNote, setPriceNote] = useState('');
   const [conclusion, setConclusion] = useState('');
+  // 최종 선정 단지 PK (null = 미선택)
+  const [selectedComplexId, setSelectedComplexId] = useState<number | null>(null);
 
   // 로컬 미리보기 사진 목록 (저장 전)
   const [localPhotos, setLocalPhotos] = useState<LocalPhoto[]>([]);
@@ -166,10 +168,12 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
         setValueRating(found.valueRating ?? '');
         setPriceNote(found.priceNote ?? '');
         setConclusion(found.conclusion ?? '');
+        setSelectedComplexId(found.selectedComplexId ?? null);
         onComparisonChange(found);
       } else {
         setComparison(null);
         setMemo(''); setValueRating(''); setPriceNote(''); setConclusion('');
+        setSelectedComplexId(null);
         onComparisonChange(null);
       }
     } catch {
@@ -223,6 +227,7 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
           valueRating: valueRating || undefined,
           priceNote: priceNote || undefined,
           conclusion: conclusion || undefined,
+          selectedComplexId: selectedComplexId ?? null,
         });
       } else {
         saved = await createComparison({
@@ -232,6 +237,7 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
           valueRating: valueRating || undefined,
           priceNote: priceNote || undefined,
           conclusion: conclusion || undefined,
+          selectedComplexId: selectedComplexId ?? undefined,
         });
       }
 
@@ -290,6 +296,7 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
       await deleteComparison(comparison.id);
       setComparison(null);
       setMemo(''); setValueRating(''); setPriceNote(''); setConclusion('');
+      setSelectedComplexId(null);
       setLocalPhotos([]);
       onComparisonChange(null);
     } catch {
@@ -437,11 +444,44 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
             </div>
 
             {/* 결론 */}
-            <div style={{ marginBottom: '16px' }}>
+            <div style={{ marginBottom: '12px' }}>
               <label style={labelStyle}>결론</label>
               <textarea value={conclusion} onChange={e => setConclusion(e.target.value)}
                 placeholder="예: A단지 최종 선택"
                 style={{ ...textareaStyle, minHeight: '56px' }} />
+            </div>
+
+            {/* 선정 단지 — 두 단지 중 최종 선택 */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={labelStyle}>선정 단지</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[complex1, complex2].map(cx => {
+                  const isSelected = selectedComplexId === cx.id;
+                  return (
+                    <button
+                      key={cx.id}
+                      onClick={() => setSelectedComplexId(isSelected ? null : cx.id)}
+                      style={{
+                        flex: 1, padding: '8px 6px', fontSize: '11px', fontWeight: 700,
+                        border: `2px solid ${isSelected ? '#f9ab00' : '#dadce0'}`,
+                        borderRadius: '8px', cursor: 'pointer', textAlign: 'center',
+                        backgroundColor: isSelected ? '#fef9e7' : '#fff',
+                        color: isSelected ? '#b07d00' : '#5f6368',
+                        transition: 'all 0.15s',
+                        wordBreak: 'keep-all', lineHeight: 1.4,
+                      }}
+                    >
+                      {isSelected && <span style={{ marginRight: '3px' }}>👑</span>}
+                      {cx.complexName}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedComplexId && (
+                <div style={{ fontSize: '10px', color: '#9e9e9e', marginTop: '4px', textAlign: 'center' }}>
+                  버튼을 다시 누르면 선택 해제됩니다
+                </div>
+              )}
             </div>
 
             {/* 저장 버튼 — 로컬 사진 있으면 개수 표시 */}

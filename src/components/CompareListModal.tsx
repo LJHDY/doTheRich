@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ApartmentComplex, Comparison, formatPrice } from '../types';
-import { getComparisons } from '../services/api';
+import { getComparisons, getMostSelectedComplex } from '../services/api';
 
 interface CompareListModalProps {
   complexes: ApartmentComplex[];
@@ -39,14 +39,18 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
   const [showComparisons, setShowComparisons] = useState(false);
   const [comparisons, setComparisons] = useState<Comparison[]>([]);
   const [loadingComparisons, setLoadingComparisons] = useState(false);
+  const [mostSelected, setMostSelected] = useState<{ complexId: number; complexName: string; selectedCount: number } | null>(null);
 
-  // 조회 버튼 클릭 시 비교평가 목록 로드
+  // 조회 버튼 클릭 시 비교평가 목록 + 최다 선정 단지 동시 로드
   useEffect(() => {
     if (!showComparisons) return;
     setLoadingComparisons(true);
-    getComparisons()
-      .then(setComparisons)
-      .catch(() => setComparisons([]))
+    Promise.all([
+      getComparisons(),
+      getMostSelectedComplex(),
+    ])
+      .then(([list, ms]) => { setComparisons(list); setMostSelected(ms); })
+      .catch(() => { setComparisons([]); setMostSelected(null); })
       .finally(() => setLoadingComparisons(false));
   }, [showComparisons]);
 
@@ -196,48 +200,75 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                 저장된 비교평가가 없습니다.
               </div>
             ) : (
-              comparisons.map(c => (
-                <div
-                  key={c.id}
-                  onClick={() => {
-                    onSelectComparison(c.complexId1, c.complexId2);
-                    onClose();
-                  }}
-                  style={{
-                    padding: '12px 16px', borderBottom: '1px solid #f5f5f5',
-                    cursor: 'pointer', transition: 'background-color 0.1s',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}
-                >
-                  {/* 단지 vs 단지 */}
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#202124', marginBottom: '4px' }}>
-                    {c.complexName1}
-                    <span style={{ color: '#9e9e9e', margin: '0 6px', fontWeight: 400 }}>vs</span>
-                    {c.complexName2}
+              <>
+                {/* 최다 선정 단지 배너 */}
+                {mostSelected && (
+                  <div style={{
+                    margin: '12px 12px 8px',
+                    padding: '10px 14px',
+                    backgroundColor: '#fffbea',
+                    border: '1.5px solid #f9ab00',
+                    borderRadius: '10px',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: '10px', color: '#b07d00', fontWeight: 600, marginBottom: '4px' }}>
+                      비교평가 최다 선정
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#b07d00' }}>
+                      👑 {mostSelected.complexName} 👑
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#c49000', marginTop: '3px' }}>
+                      총 {mostSelected.selectedCount}회 선정
+                    </div>
                   </div>
-                  {/* 결론 미리보기 */}
-                  {c.conclusion && (
-                    <div style={{ fontSize: '11px', color: '#34a853', fontWeight: 600, marginBottom: '2px' }}>
-                      → {c.conclusion}
+                )}
+
+                {comparisons.map(c => (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      onSelectComparison(c.complexId1, c.complexId2);
+                      onClose();
+                    }}
+                    style={{
+                      padding: '12px 16px', borderBottom: '1px solid #f5f5f5',
+                      cursor: 'pointer', transition: 'background-color 0.1s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                  >
+                    {/* 단지 vs 단지 — 선정 단지에 왕관 표시 */}
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#202124', marginBottom: '4px' }}>
+                      {c.selectedComplexId === c.complexId1 && <span style={{ marginRight: '3px' }}>👑</span>}
+                      {c.complexName1}
+                      <span style={{ color: '#9e9e9e', margin: '0 6px', fontWeight: 400 }}>vs</span>
+                      {c.selectedComplexId === c.complexId2 && <span style={{ marginRight: '3px' }}>👑</span>}
+                      {c.complexName2}
                     </div>
-                  )}
-                  {/* 가치평가 미리보기 */}
-                  {c.valueRating && !c.conclusion && (
-                    <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '2px' }}>
-                      {c.valueRating}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {c.photos.length > 0 && (
-                      <span style={{ fontSize: '10px', color: '#9e9e9e' }}>📷 {c.photos.length}장</span>
+                    {/* 결론 미리보기 */}
+                    {c.conclusion && (
+                      <div style={{ fontSize: '11px', color: '#34a853', fontWeight: 600, marginBottom: '2px' }}>
+                        → {c.conclusion}
+                      </div>
                     )}
-                    <span style={{ fontSize: '10px', color: '#bdbdbd' }}>
-                      {new Date(c.createdAt).toLocaleDateString('ko-KR')}
-                    </span>
+                    {/* 가치평가 미리보기 */}
+                    {c.valueRating && !c.conclusion && (
+                      <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '2px' }}>
+                        {c.valueRating}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {c.photos.length > 0 && (
+                        <span style={{ fontSize: '10px', color: '#9e9e9e' }}>📷 {c.photos.length}장</span>
+                      )}
+                      <span style={{ fontSize: '10px', color: '#bdbdbd' }}>
+                        {new Date(c.createdAt).toLocaleDateString('ko-KR')}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+
+              </>
             )
           ) : (
             // 단지 선택 목록

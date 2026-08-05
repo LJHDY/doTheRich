@@ -87,9 +87,10 @@ export interface Comparison {
   complexName2: string;
   memo?: string;
   thumbnailUrl?: string;
-  valueRating?: string;  // 가치 평가
-  priceNote?: string;    // 가격 비교 평가
-  conclusion?: string;   // 결론
+  valueRating?: string;        // 가치 평가
+  priceNote?: string;          // 가격 비교 평가
+  conclusion?: string;         // 결론
+  selectedComplexId?: number;  // 최종 선정 단지 PK
   createdAt: string;
   photos: ComparisonPhoto[];
 }

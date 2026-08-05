@@ -546,6 +546,9 @@ ChecklistResultItem { id, templateId, itemName, visitType, displayOrder, rating:
   - 분위기/단지/매물 임장 visit_type별 그룹핑
   - "항목 관리" 버튼 → 탭 기반 템플릿 CRUD (추가·수정·삭제, 삭제 시 단지 결과 CASCADE)
   - 백엔드: `checklist_template`/`complex_checklist_result` 테이블 + 관련 API 6개
+- [x] 선정 단지(selected_complex_id) — ComparisonEvalPanel 결론 아래 두 단지 선택 버튼(👑 강조), 저장 시 PK 전송
+  - CompareListModal 저장된 비교평가 목록에서 선정 단지 이름 앞 👑 표시
+  - `Comparison` 타입에 `selectedComplexId` 추가, `createComparison`/`updateComparison` API 파라미터 포함
 
 ## 미완성 / TODO
 
