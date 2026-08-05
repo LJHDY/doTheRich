@@ -5,6 +5,12 @@ import {
   uploadComparisonPhoto, updateComparisonPhotoMemo, deleteComparisonPhoto,
 } from '../services/api';
 
+const DISTRICT_GRADES = [
+  { label: '상급지', color: '#ea4335', districts: ['강남구', '서초구', '용산구', '송파구', '성동구', '광진구', '마포구', '양천구'] },
+  { label: '중급지', color: '#f9ab00', districts: ['강동구', '동작구', '영등포구', '중구', '종로구'] },
+  { label: '하급지', color: '#1a73e8', districts: ['서대문구', '강서구', '동대문구', '성북구', '관악구', '은평구', '구로구', '노원구', '중랑구', '강북구', '금천구', '도봉구'] },
+];
+
 interface ComparisonEvalPanelProps {
   complex1: ApartmentComplex;
   complex2: ApartmentComplex;
@@ -127,6 +133,7 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [gradeTooltip, setGradeTooltip] = useState(false);
 
   const [memo, setMemo] = useState('');
   const [valueRating, setValueRating] = useState('');
@@ -299,8 +306,61 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
       {/* 헤더 */}
-      <div style={{ padding: '12px 14px', backgroundColor: '#34a853', color: '#fff', flexShrink: 0 }}>
-        <div style={{ fontSize: '10px', opacity: 0.9, marginBottom: '3px' }}>비교 평가</div>
+      <div style={{ padding: '12px 14px', backgroundColor: '#34a853', color: '#fff', flexShrink: 0, position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+          <span style={{ fontSize: '10px', opacity: 0.9 }}>비교 평가</span>
+          {/* 상급지/중급지/하급지 등급표 tooltip */}
+          <div style={{ position: 'relative', display: 'inline-flex' }}>
+            <button
+              onMouseEnter={() => setGradeTooltip(true)}
+              onMouseLeave={() => setGradeTooltip(false)}
+              style={{
+                background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: '50%',
+                width: '16px', height: '16px', cursor: 'pointer', color: '#fff',
+                fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: 0, lineHeight: 1,
+              }}
+            >ⓘ</button>
+            {gradeTooltip && (
+              <div style={{
+                position: 'absolute', top: '20px', left: 0, zIndex: 1000,
+                backgroundColor: '#fff', border: '1px solid #dadce0', borderRadius: '8px',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)', padding: '10px 12px',
+                width: '180px', color: '#202124',
+              }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: '8px', color: '#344054' }}>서울 입지 등급</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', border: '1px solid #dadce0' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f1f3f4' }}>
+                      <th style={{ padding: '3px 6px', border: '1px solid #dadce0', fontWeight: 700, color: '#344054', width: '52px', textAlign: 'center', fontSize: '10px' }}>등급</th>
+                      <th style={{ padding: '3px 6px', border: '1px solid #dadce0', fontWeight: 700, color: '#344054', textAlign: 'center', fontSize: '10px' }}>구</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DISTRICT_GRADES.flatMap(({ label, color, districts }) =>
+                      districts.map((d, i) => (
+                        <tr key={`${label}-${d}`}>
+                          {i === 0 && (
+                            <td rowSpan={districts.length} style={{
+                              padding: '3px 4px', border: '1px solid #dadce0',
+                              textAlign: 'center', verticalAlign: 'middle',
+                            }}>
+                              <span style={{
+                                display: 'inline-block', padding: '1px 5px', borderRadius: '8px',
+                                backgroundColor: color, color: '#fff', fontWeight: 700, fontSize: '9px', whiteSpace: 'nowrap',
+                              }}>{label}</span>
+                            </td>
+                          )}
+                          <td style={{ padding: '2px 8px', border: '1px solid #dadce0', color: '#344054', fontSize: '10px' }}>{d}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
         <div style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.4 }}>
           {complex1.complexName}
           <span style={{ opacity: 0.8, margin: '0 5px' }}>vs</span>
