@@ -173,6 +173,33 @@ const App: React.FC = () => {
     setRouteName(route.name);
   };
 
+  // 로고 클릭 — 페이지 전체 새로고침
+  const handleGoHome = () => {
+    window.location.reload();
+    return;
+    setSelectedComplex(null);
+    setListModalRange(null);
+    setFavoriteListOpen(false);
+    setMyComplexListOpen(false);
+    setLivingZoneOpen(false);
+    setAffordOpen(false);
+    setCompareOpen(false);
+    setCompareIds([]);
+    setCompareMode('normal');
+    setFilterOpen(false);
+    setActiveFilters(EMPTY_FILTERS);
+    setFilterResetKey(k => k + 1);
+    setMobileMenuOpen(false);
+    setRoadViewOpen(false);
+    setRoutePanelOpen(false);
+    setMobileRouteView('list');
+    setActiveRouteIds(new Set());
+    setIsDrawingRoute(false);
+    setEditingRouteId(null);
+    setDrawingPoints([]);
+    setRouteName('');
+  };
+
   // 패널 닫기 — 지도의 경로·그리기 상태 모두 초기화
   const handleClosRoutePanel = () => {
     setRoutePanelOpen(false);
@@ -331,8 +358,8 @@ const App: React.FC = () => {
           <>
             {/* 모바일 Row1: 로고 + 단지수 + 활성 뱃지 + ☰ 메뉴 버튼 */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', height: '48px', gap: '6px' }}>
-              <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain', flexShrink: 0 }} />
-              <span style={{ fontSize: '14px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>DoTheRich</span>
+              <img src="/do_the_rich.png" alt="DoTheRich" onClick={handleGoHome} style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain', flexShrink: 0, cursor: 'pointer' }} />
+              <span onClick={handleGoHome} style={{ fontSize: '14px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap', cursor: 'pointer' }}>DoTheRich</span>
               <span style={{ fontSize: '11px', color: '#80868b', whiteSpace: 'nowrap' }}>
                 {loading ? '' : `${complexes.length}개`}
               </span>
@@ -463,7 +490,7 @@ const App: React.FC = () => {
             {/* 데스크탑 Row 1: 로고 + 검색 + 주요 버튼 */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', height: '48px', gap: '8px' }}>
               {/* 로고 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <div onClick={handleGoHome} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, cursor: 'pointer' }}>
                 <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '30px', height: '30px', borderRadius: '8px', objectFit: 'contain' }} />
                 <span style={{ fontSize: '15px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>DoTheRich</span>
               </div>
