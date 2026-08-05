@@ -225,6 +225,14 @@ export const updateVisitType = async (complexId: number, visitType: string): Pro
   await api.patch(`/api/complexes/${complexId}/visit-type`, { visitType });
 };
 
+/** 재개발 정보 수정 — PATCH /api/complexes/:id/redevelop-info */
+export const updateRedevelopInfo = async (
+  complexId: number,
+  data: { redevelopType: string | null; redevelopStage: string | null }
+): Promise<void> => {
+  await api.patch(`/api/complexes/${complexId}/redevelop-info`, data);
+};
+
 /** 기본 정보 수정 — PATCH /api/complexes/:id/basic-info */
 export const updateComplexBasicInfo = async (
   complexId: number,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType } from '../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -381,6 +381,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [localVisitType, setLocalVisitType] = useState(complex?.visitType || 'NONE');
   const [visitTypeSaving, setVisitTypeSaving] = useState(false);
 
+  // 재개발 정보 인라인 편집 상태
+  const [editingRedevelop, setEditingRedevelop] = useState(false);
+  const [localRedevelopType, setLocalRedevelopType] = useState(complex?.redevelopType ?? '');
+  const [localRedevelopStage, setLocalRedevelopStage] = useState(complex?.redevelopStage ?? '');
+  const [redevelopSaving, setRedevelopSaving] = useState(false);
+
   // 참고가 평형 탭 선택 상태 — priceHistories 로드 후 첫 번째 areaType으로 초기화
   const [selectedRefTab, setSelectedRefTab] = useState<string>('');
 
@@ -524,6 +530,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       onRadiusToggle?.(null);
       setEditingVisitType(false);
       setLocalVisitType(complex.visitType || 'NONE');
+      setEditingRedevelop(false);
+      setLocalRedevelopType(complex.redevelopType ?? '');
+      setLocalRedevelopStage(complex.redevelopStage ?? '');
       // 기본 정보·참고가 탭·편집 상태도 초기화 — 다른 단지 선택 시 폼 닫기
       setEditingBasicInfo(false);
       setSelectedRefTab('');
@@ -1402,7 +1411,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         ? existing.transferLines.split(' ➡️ ').filter(Boolean)
         : (existing?.transferCount != null
             ? Array(existing.transferCount + 1).fill('')
-            : []);
+            : ['']);
       // 직선거리: 기존 저장값 우선, 없으면 좌표로 계산
       const destCoordEntry = DESTINATION_COORDS[dest];
       const distanceKm = existing?.distanceKm
@@ -1413,7 +1422,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         destination: dest,
         minutes: existing?.minutes != null ? String(existing.minutes) : '',
         transportType: existing?.transportType || '지하철',
-        transferCount: existing?.transferCount != null ? String(existing.transferCount) : '',
+        transferCount: existing?.transferCount != null ? String(existing.transferCount) : '0',
         transferLines,
         distanceKm,
       };
@@ -2246,6 +2255,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         type="number"
                         placeholder="환승"
                         value={row.transferCount}
+                        min={0}
                         onChange={e => handleCommuteTransferCountChange(i, e.target.value)}
                         style={{ ...editInputStyle, width: '46px', flexShrink: 0 }}
                       />
@@ -2939,66 +2949,151 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           )}
         </div>
 
-        {/* 재개발 정보 */}
-        {complex.redevelopType && (
+        {/* 재개발 정보 — 데이터 있거나 편집 중일 때 표시 */}
+        {(complex.redevelopType || editingRedevelop) && (
           <div style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', marginBottom: '8px' }}>재개발 정보</h3>
-            <InfoRow label="유형" value={REDEVELOP_TYPE_LABELS[complex.redevelopType]} />
-            {/* 진행단계 — ? 아이콘 호버 시 각 단계 설명 tooltip 표시 */}
-            {complex.redevelopStage && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, marginRight: '8px' }}>
-                  <span style={{ fontSize: '12px', color: '#80868b' }}>진행단계</span>
-                  <div
-                    style={{ position: 'relative', display: 'inline-flex' }}
-                    onMouseEnter={() => setShowStageTooltip(true)}
-                    onMouseLeave={() => setShowStageTooltip(false)}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>재개발 정보</h3>
+              {!editingRedevelop && (
+                <button
+                  onClick={() => setEditingRedevelop(true)}
+                  style={{ fontSize: '12px', padding: '3px 8px', border: '1px solid #34a853', color: '#34a853', borderRadius: '4px', backgroundColor: '#fff', cursor: 'pointer' }}
+                >수정</button>
+              )}
+            </div>
+
+            {editingRedevelop ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {/* 유형 셀렉트 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', color: '#80868b', width: '52px', flexShrink: 0 }}>유형</span>
+                  <select
+                    value={localRedevelopType}
+                    onChange={e => setLocalRedevelopType(e.target.value)}
+                    style={{ ...editInputStyle, flex: 1 }}
                   >
-                    <div style={{
-                      width: '14px', height: '14px', borderRadius: '50%',
-                      backgroundColor: '#dadce0', color: '#5f6368',
-                      fontSize: '10px', fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: 'default', lineHeight: 1,
-                    }}>?</div>
-                    {showStageTooltip && (
-                      <div style={{
-                        position: 'absolute', bottom: '120%', left: 0, zIndex: 20,
-                        backgroundColor: '#3c4043', color: '#fff',
-                        fontSize: '11px', lineHeight: 1.7,
-                        padding: '8px 10px', borderRadius: '6px',
-                        width: '280px',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-                        pointerEvents: 'none',
-                      }}>
-                        {([
-                          ['①', '정비구역 지정', '지방자치단체가 지역의 노후도, 기반시설 부족 여부 등을 종합적으로 판단해 사업 구역 지정'],
-                          ['②', '추진위원회 구성 및 승인', '조합 설립을 위한 준비 조직을 구성하여 지자체의 승인을 받음'],
-                          ['③', '조합 설립 인가', '토지 및 건물 소유자로부터 법정 동의율을 확보하여 조합 설립 인가를 받음'],
-                          ['④', '사업시행인가', '조합이 수립한 건축계획, 이주 계획 등을 지자체가 최종 승인'],
-                          ['⑤', '관리처분인가', '조합원의 자산 평가, 분양 계획, 추가 분담금 등을 최종 확정'],
-                          ['⑥', '이주·철거 및 착공', '거주자의 이주가 완료되면 기존 건물을 철거하고 공사 시작'],
-                          ['⑦', '준공 및 입주', '공사가 완료되면 준공 인가를 거쳐 입주 시작'],
-                        ] as const).map(([num, title, desc]) => (
-                          <div key={num} style={{ marginBottom: '4px' }}>
-                            <span style={{ fontWeight: 700 }}>{num} {title}</span><br />
-                            <span style={{ color: '#bdbdbd', fontSize: '10px' }}>{desc}</span>
-                          </div>
-                        ))}
-                        <div style={{
-                          position: 'absolute', top: '100%', left: '7px',
-                          borderWidth: '5px', borderStyle: 'solid',
-                          borderColor: '#3c4043 transparent transparent transparent',
-                        }} />
-                      </div>
-                    )}
-                  </div>
+                    <option value="">없음</option>
+                    <option value="REDEVELOPMENT">재개발</option>
+                    <option value="RECONSTRUCTION">재건축</option>
+                    <option value="REMODELING">리모델링</option>
+                  </select>
                 </div>
-                <span style={{ fontSize: '13px', color: '#202124', textAlign: 'right' }}>
-                  {REDEVELOP_STAGE_LABELS[complex.redevelopStage]}
-                </span>
+                {/* 진행단계 셀렉트 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', color: '#80868b', width: '52px', flexShrink: 0 }}>진행단계</span>
+                  <select
+                    value={localRedevelopStage}
+                    onChange={e => setLocalRedevelopStage(e.target.value)}
+                    style={{ ...editInputStyle, flex: 1 }}
+                  >
+                    <option value="">없음</option>
+                    <option value="INITIAL">① 정비구역 지정</option>
+                    <option value="COMMITTEE">② 추진위원회 구성</option>
+                    <option value="ASSOCIATION">③ 조합 설립 인가</option>
+                    <option value="APPROVAL">④ 사업시행인가</option>
+                    <option value="MGMT_APPROVAL">⑤ 관리처분인가</option>
+                    <option value="RELOCATION">⑥ 이주·철거 및 착공</option>
+                    <option value="COMPLETION">⑦ 준공 및 입주</option>
+                  </select>
+                </div>
+                {/* 저장·취소 */}
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    onClick={async () => {
+                      setRedevelopSaving(true);
+                      try {
+                        await updateRedevelopInfo(complex.id, {
+                          redevelopType: localRedevelopType || null,
+                          redevelopStage: localRedevelopStage || null,
+                        });
+                        onComplexUpdate?.({ ...complex, redevelopType: localRedevelopType || undefined, redevelopStage: localRedevelopStage || undefined });
+                        setEditingRedevelop(false);
+                      } catch { }
+                      finally { setRedevelopSaving(false); }
+                    }}
+                    disabled={redevelopSaving}
+                    style={{ padding: '6px 12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: redevelopSaving ? 'not-allowed' : 'pointer', opacity: redevelopSaving ? 0.7 : 1 }}
+                  >{redevelopSaving ? '저장 중...' : '저장'}</button>
+                  <button
+                    onClick={() => { setLocalRedevelopType(complex.redevelopType ?? ''); setLocalRedevelopStage(complex.redevelopStage ?? ''); setEditingRedevelop(false); }}
+                    disabled={redevelopSaving}
+                    style={{ padding: '6px 12px', border: '1px solid #dadce0', borderRadius: '6px', fontSize: '12px', backgroundColor: '#fff', cursor: 'pointer' }}
+                  >취소</button>
+                </div>
               </div>
+            ) : (
+              <>
+                <InfoRow label="유형" value={REDEVELOP_TYPE_LABELS[complex.redevelopType!]} />
+                {/* 진행단계 — ? 아이콘 호버 시 각 단계 설명 tooltip 표시 */}
+                {complex.redevelopStage && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, marginRight: '8px' }}>
+                      <span style={{ fontSize: '12px', color: '#80868b' }}>진행단계</span>
+                      <div
+                        style={{ position: 'relative', display: 'inline-flex' }}
+                        onMouseEnter={() => setShowStageTooltip(true)}
+                        onMouseLeave={() => setShowStageTooltip(false)}
+                      >
+                        <div style={{
+                          width: '14px', height: '14px', borderRadius: '50%',
+                          backgroundColor: '#dadce0', color: '#5f6368',
+                          fontSize: '10px', fontWeight: 700,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: 'default', lineHeight: 1,
+                        }}>?</div>
+                        {showStageTooltip && (
+                          <div style={{
+                            position: 'absolute', bottom: '120%', left: 0, zIndex: 20,
+                            backgroundColor: '#3c4043', color: '#fff',
+                            fontSize: '11px', lineHeight: 1.7,
+                            padding: '8px 10px', borderRadius: '6px',
+                            width: '280px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                            pointerEvents: 'none',
+                          }}>
+                            {([
+                              ['①', '정비구역 지정', '지방자치단체가 지역의 노후도, 기반시설 부족 여부 등을 종합적으로 판단해 사업 구역 지정'],
+                              ['②', '추진위원회 구성 및 승인', '조합 설립을 위한 준비 조직을 구성하여 지자체의 승인을 받음'],
+                              ['③', '조합 설립 인가', '토지 및 건물 소유자로부터 법정 동의율을 확보하여 조합 설립 인가를 받음'],
+                              ['④', '사업시행인가', '조합이 수립한 건축계획, 이주 계획 등을 지자체가 최종 승인'],
+                              ['⑤', '관리처분인가', '조합원의 자산 평가, 분양 계획, 추가 분담금 등을 최종 확정'],
+                              ['⑥', '이주·철거 및 착공', '거주자의 이주가 완료되면 기존 건물을 철거하고 공사 시작'],
+                              ['⑦', '준공 및 입주', '공사가 완료되면 준공 인가를 거쳐 입주 시작'],
+                            ] as const).map(([num, title, desc]) => (
+                              <div key={num} style={{ marginBottom: '4px' }}>
+                                <span style={{ fontWeight: 700 }}>{num} {title}</span><br />
+                                <span style={{ color: '#bdbdbd', fontSize: '10px' }}>{desc}</span>
+                              </div>
+                            ))}
+                            <div style={{
+                              position: 'absolute', top: '100%', left: '7px',
+                              borderWidth: '5px', borderStyle: 'solid',
+                              borderColor: '#3c4043 transparent transparent transparent',
+                            }} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '13px', color: '#202124', textAlign: 'right' }}>
+                      {REDEVELOP_STAGE_LABELS[complex.redevelopStage]}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
+          </div>
+        )}
+        {/* 재개발 정보 없을 때 추가 버튼 */}
+        {!complex.redevelopType && !editingRedevelop && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>재개발 정보</h3>
+              <button
+                onClick={() => setEditingRedevelop(true)}
+                style={{ fontSize: '12px', padding: '3px 8px', border: '1px solid #34a853', color: '#34a853', borderRadius: '4px', backgroundColor: '#fff', cursor: 'pointer' }}
+              >+ 추가</button>
+            </div>
+            <p style={{ fontSize: '12px', color: '#9aa0a6', margin: 0 }}>재개발·재건축·리모델링 정보가 없습니다.</p>
           </div>
         )}
 

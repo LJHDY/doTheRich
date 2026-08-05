@@ -296,7 +296,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
       const distanceKm = dest && initialData.latitude && initialData.longitude
         ? parseFloat(haversineKm(initialData.latitude, initialData.longitude, dest.lat, dest.lng).toFixed(2))
         : undefined;
-      return { destination: d, minutes: '', transportType: '지하철', transferCount: '', transferLines: [], distanceKm };
+      return { destination: d, minutes: '', transportType: '지하철', transferCount: '0', transferLines: [''], distanceKm };
     })
   );
   const [schoolInfos, setSchoolInfos] = useState<SchoolRow[]>([]);
@@ -511,7 +511,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
 
   // ── 출퇴근 시간 ─────────────────────────────────────────────────
   const addCommute = () =>
-    setCommuteTimes(prev => [...prev, { destination: '', minutes: '', transportType: '지하철', transferCount: '', transferLines: [] }]);
+    setCommuteTimes(prev => [...prev, { destination: '', minutes: '', transportType: '지하철', transferCount: '0', transferLines: [''] }]);
 
   const removeCommute = (i: number) =>
     setCommuteTimes(prev => prev.filter((_, idx) => idx !== i));
@@ -1100,7 +1100,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                 <input type="number" placeholder="분" value={row.minutes}
                   onChange={e => updateCommute(i, { minutes: e.target.value })}
                   style={{ ...inputStyle, width: '52px', flexShrink: 0 }} />
-                <input type="number" placeholder="환승" value={row.transferCount}
+                <input type="number" placeholder="환승" value={row.transferCount} min={0}
                   onChange={e => handleCommuteTransferCountChange(i, e.target.value)}
                   style={{ ...inputStyle, width: '46px', flexShrink: 0 }} />
                 <select value={row.transportType} onChange={e => updateCommute(i, { transportType: e.target.value })}
