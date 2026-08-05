@@ -115,11 +115,23 @@ const LocalPhotoCard: React.FC<{
   </div>
 );
 
+// value가 바뀔 때마다 scrollHeight에 맞게 높이 자동 조절
+const useAutoResize = (value: string) => {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return ref;
+};
+
 const textareaStyle: React.CSSProperties = {
   width: '100%', padding: '8px', fontSize: '12px', lineHeight: 1.6,
-  border: '1px solid #dadce0', borderRadius: '6px', resize: 'vertical',
+  border: '1px solid #dadce0', borderRadius: '6px', resize: 'none',
   outline: 'none', color: '#202124', fontFamily: 'inherit',
-  boxSizing: 'border-box', minHeight: '72px',
+  boxSizing: 'border-box', minHeight: '72px', overflow: 'hidden',
 };
 
 const labelStyle: React.CSSProperties = {
@@ -141,6 +153,12 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
   const [conclusion, setConclusion] = useState('');
   // 최종 선정 단지 PK (null = 미선택)
   const [selectedComplexId, setSelectedComplexId] = useState<number | null>(null);
+
+  // 각 textarea의 자동 높이 조절 ref
+  const valueRatingRef = useAutoResize(valueRating);
+  const priceNoteRef = useAutoResize(priceNote);
+  const memoRef = useAutoResize(memo);
+  const conclusionRef = useAutoResize(conclusion);
 
   // 로컬 미리보기 사진 목록 (저장 전)
   const [localPhotos, setLocalPhotos] = useState<LocalPhoto[]>([]);
@@ -425,28 +443,28 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
             {/* 가치 평가 */}
             <div style={{ marginBottom: '12px' }}>
               <label style={labelStyle}>가치 평가</label>
-              <textarea value={valueRating} onChange={e => setValueRating(e.target.value)}
+              <textarea ref={valueRatingRef} value={valueRating} onChange={e => setValueRating(e.target.value)}
                 placeholder="예: A단지 우위 (역세권, 학군)" style={textareaStyle} />
             </div>
 
             {/* 가격 비교 평가 */}
             <div style={{ marginBottom: '12px' }}>
               <label style={labelStyle}>가격 비교 평가</label>
-              <textarea value={priceNote} onChange={e => setPriceNote(e.target.value)}
+              <textarea ref={priceNoteRef} value={priceNote} onChange={e => setPriceNote(e.target.value)}
                 placeholder="예: A단지가 약 2억 저렴" style={textareaStyle} />
             </div>
 
             {/* 메모 */}
             <div style={{ marginBottom: '12px' }}>
               <label style={labelStyle}>메모</label>
-              <textarea value={memo} onChange={e => setMemo(e.target.value)}
+              <textarea ref={memoRef} value={memo} onChange={e => setMemo(e.target.value)}
                 placeholder="비교 메모 작성..." style={textareaStyle} />
             </div>
 
             {/* 결론 */}
             <div style={{ marginBottom: '12px' }}>
               <label style={labelStyle}>결론</label>
-              <textarea value={conclusion} onChange={e => setConclusion(e.target.value)}
+              <textarea ref={conclusionRef} value={conclusion} onChange={e => setConclusion(e.target.value)}
                 placeholder="예: A단지 최종 선택"
                 style={{ ...textareaStyle, minHeight: '56px' }} />
             </div>
