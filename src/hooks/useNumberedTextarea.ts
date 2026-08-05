@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 /**
  * 메모 textarea에 번호 목록 자동 서식 적용
@@ -11,6 +11,13 @@ export function useNumberedTextarea(
   onChange: (v: string) => void
 ) {
   const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
 
   const onFocus = useCallback(() => {
     if (value.trim()) return; // 이미 내용 있으면 건드리지 않음

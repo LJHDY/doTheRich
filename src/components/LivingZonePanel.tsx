@@ -391,13 +391,13 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                           onFocus={numberedMemo.onFocus}
                           onKeyDown={numberedMemo.onKeyDown}
                           onBlur={numberedMemo.onBlur}
-                          rows={4}
                           autoFocus
                           style={{
                             width: '100%', boxSizing: 'border-box',
                             border: '1px solid #1a73e8', borderRadius: '6px',
                             padding: '7px 9px', fontSize: '12px', outline: 'none',
-                            resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6,
+                            resize: 'none', overflow: 'hidden',
+                            fontFamily: 'inherit', lineHeight: 1.6,
                             backgroundColor: '#fff',
                           }}
                         />

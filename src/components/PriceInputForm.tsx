@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PriceHistoryRequest } from '../types';
 
 interface PriceInputFormProps {
@@ -129,6 +129,13 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
 
   const [recordDate, setRecordDate] = useState<string>(today);
   const [memo, setMemo] = useState<string>('');
+  const memoRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = memoRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [memo]);
   const [updateSheet, setUpdateSheet] = useState<boolean>(true);
 
   const [loading, setLoading] = useState<boolean>(false);
@@ -363,11 +370,11 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
         <div style={{ marginBottom: '10px' }}>
           <label style={labelStyle}>메모</label>
           <textarea
+            ref={memoRef}
             placeholder="추가 메모를 입력하세요"
             value={memo}
             onChange={e => setMemo(e.target.value)}
-            rows={2}
-            style={{ ...inputStyle, resize: 'none', fontFamily: 'inherit' }}
+            style={{ ...inputStyle, resize: 'none', overflow: 'hidden', fontFamily: 'inherit' }}
           />
         </div>
 

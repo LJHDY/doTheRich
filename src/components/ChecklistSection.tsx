@@ -47,12 +47,20 @@ const CheckItemRow: React.FC<CheckItemRowProps> = ({ item, complexId, onChange }
   const [memoOpen, setMemoOpen] = useState(!!(item.memo));
   const [saving, setSaving] = useState(false);
   const memoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const memoRef = useRef<HTMLTextAreaElement>(null);
 
   // item 변경 시 로컬 memo 동기화
   useEffect(() => {
     setMemo(item.memo ?? '');
     setMemoOpen(!!(item.memo));
   }, [item.templateId, item.memo]); // eslint-disable-line
+
+  useEffect(() => {
+    const el = memoRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [memo]);
 
   // 평가 버튼 클릭: 같은 버튼 재클릭 시 체크 해제
   const handleRating = async (rating: string) => {
@@ -132,16 +140,17 @@ const CheckItemRow: React.FC<CheckItemRowProps> = ({ item, complexId, onChange }
       {/* 메모 textarea */}
       {memoOpen && (
         <textarea
+          ref={memoRef}
           value={memo}
           onChange={handleMemoChange}
           placeholder="메모 입력..."
-          rows={2}
           style={{
             marginTop: '4px', marginLeft: '0',
             width: '100%', boxSizing: 'border-box',
             fontSize: '11px', padding: '4px 6px',
             border: '1px solid #dadce0', borderRadius: '4px',
-            resize: 'vertical', fontFamily: 'inherit', color: '#344054',
+            resize: 'none', overflow: 'hidden',
+            fontFamily: 'inherit', color: '#344054',
           }}
         />
       )}

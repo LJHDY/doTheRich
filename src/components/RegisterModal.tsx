@@ -1465,8 +1465,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             onFocus={memoHook.onFocus}
             onKeyDown={memoHook.onKeyDown}
             onBlur={memoHook.onBlur}
-            rows={3}
-            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+            style={{ ...inputStyle, resize: 'none', overflow: 'hidden', fontFamily: 'inherit' }}
           />
 
           {/* 사진 */}
