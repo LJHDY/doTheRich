@@ -372,12 +372,14 @@ export interface PropertyVisitResultItem {
 export interface PropertyVisit {
   id: number;
   complexId: number;
-  visitDate?: string;    // "2024-01-15"
-  agentName?: string;    // 부동산 이름
+  visitDate?: string;     // "2024-01-15"
+  agentName?: string;     // 부동산 이름
+  officePhone?: string;   // 부동산 연락처
+  mobilePhone?: string;   // 휴대전화 연락처
   dong?: string;
   hosu?: string;
-  areaType?: string;     // 평형 (예: "전용 59")
-  price?: number;        // 제안 금액 (원 단위)
+  areaType?: string;      // 평형 (예: "전용 59")
+  price?: number;         // 제안 금액 (원 단위)
   memo?: string;
   createdAt: string;
   results: PropertyVisitResultItem[];

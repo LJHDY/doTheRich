@@ -571,7 +571,7 @@ export const getPropertyVisits = async (complexId: number): Promise<PropertyVisi
 /** 매물 임장 기록 추가 — POST /api/complexes/:id/property-visits */
 export const createPropertyVisit = async (
   complexId: number,
-  req: { visitDate?: string; agentName?: string; dong?: string; hosu?: string; areaType?: string; price?: number; memo?: string }
+  req: { visitDate?: string; agentName?: string; officePhone?: string; mobilePhone?: string; dong?: string; hosu?: string; areaType?: string; price?: number; memo?: string }
 ): Promise<PropertyVisit> => {
   const { data } = await api.post<PropertyVisit>(`/api/complexes/${complexId}/property-visits`, req);
   return data;
@@ -581,7 +581,7 @@ export const createPropertyVisit = async (
 export const updatePropertyVisit = async (
   complexId: number,
   visitId: number,
-  req: { visitDate?: string; agentName?: string; dong?: string; hosu?: string; areaType?: string; price?: number; memo?: string }
+  req: { visitDate?: string; agentName?: string; officePhone?: string; mobilePhone?: string; dong?: string; hosu?: string; areaType?: string; price?: number; memo?: string }
 ): Promise<PropertyVisit> => {
   const { data } = await api.patch<PropertyVisit>(`/api/complexes/${complexId}/property-visits/${visitId}`, req);
   return data;

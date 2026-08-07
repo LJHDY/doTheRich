@@ -33,6 +33,8 @@ interface Props {
 interface VisitFormState {
   visitDate: string;
   agentName: string;
+  officePhone: string;
+  mobilePhone: string;
   dong: string;
   hosu: string;
   areaType: string;
@@ -41,7 +43,7 @@ interface VisitFormState {
 }
 
 const EMPTY_FORM: VisitFormState = {
-  visitDate: '', agentName: '', dong: '', hosu: '', areaType: '', price: '', memo: '',
+  visitDate: '', agentName: '', officePhone: '', mobilePhone: '', dong: '', hosu: '', areaType: '', price: '', memo: '',
 };
 
 const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) => {
@@ -182,6 +184,8 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     setForm({
       visitDate: v.visitDate || '',
       agentName: v.agentName || '',
+      officePhone: v.officePhone || '',
+      mobilePhone: v.mobilePhone || '',
       dong: v.dong || '',
       hosu: v.hosu || '',
       areaType: v.areaType || '',
@@ -199,6 +203,8 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
       const req = {
         visitDate: form.visitDate || undefined,
         agentName: form.agentName || undefined,
+        officePhone: form.officePhone || undefined,
+        mobilePhone: form.mobilePhone || undefined,
         dong: form.dong || undefined,
         hosu: form.hosu || undefined,
         areaType: form.areaType || undefined,
@@ -316,6 +322,8 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                   {[
                     { label: '방문일', key: 'visitDate', type: 'date', placeholder: '' },
                     { label: '부동산', key: 'agentName', type: 'text', placeholder: '담당 부동산명' },
+                    { label: '부동산 연락처', key: 'officePhone', type: 'tel', placeholder: '예: 02-1234-5678' },
+                    { label: '휴대전화 연락처', key: 'mobilePhone', type: 'tel', placeholder: '예: 010-1234-5678' },
                     { label: '동', key: 'dong', type: 'text', placeholder: '예: 101동' },
                     { label: '호수', key: 'hosu', type: 'text', placeholder: '예: 1501호' },
                     { label: '평형', key: 'areaType', type: 'text', placeholder: '예: 전용 59' },
@@ -453,6 +461,17 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                             </span>
                           )}
                         </div>
+                        {/* 셋째 줄: 연락처 */}
+                        {(visit.officePhone || visit.mobilePhone) && (
+                          <div style={{ display: 'flex', gap: '10px', marginTop: '2px' }}>
+                            {visit.officePhone && (
+                              <span style={{ fontSize: '11px', color: '#5f6368' }}>📞 {visit.officePhone}</span>
+                            )}
+                            {visit.mobilePhone && (
+                              <span style={{ fontSize: '11px', color: '#5f6368' }}>📱 {visit.mobilePhone}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       {/* 수정/삭제 버튼 */}
                       <button
