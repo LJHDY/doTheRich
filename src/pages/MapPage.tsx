@@ -4,7 +4,7 @@ import { loadDistrictGeoJson, getFeatureName } from '../utils/districtGeoJson';
 import { haversineMeters } from '../utils/geo';
 
 // 저장된 경로마다 순환 사용할 색상 팔레트
-const ROUTE_COLORS = ['#F08080', '#7DC8A0', '#BA8BD8', '#FFBE76', '#89CFF0', '#C8A882', '#80DEEA', '#90A4AE'];
+const ROUTE_COLORS = ['#e53935', '#43a047', '#8e24aa', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
 
 // p1 → p2 방향의 방위각 (도, 북=0, 시계방향)
 function calcBearing(p1: RoutePoint, p2: RoutePoint): number {
