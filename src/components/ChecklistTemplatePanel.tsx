@@ -13,13 +13,6 @@ const VISIT_TYPES = [
 
 type VisitTypeKey = 'ATMOSPHERE' | 'COMPLEX' | 'PROPERTY';
 
-const RATING_LABELS: Record<string, string> = { UPPER: '상', MIDDLE: '중', LOWER: '하' };
-const RATING_COLORS: Record<string, { bg: string; text: string }> = {
-  UPPER:  { bg: '#ea4335', text: '#fff' },
-  MIDDLE: { bg: '#f9ab00', text: '#fff' },
-  LOWER:  { bg: '#1a73e8', text: '#fff' },
-};
-
 interface Props {
   onClose: () => void;
 }
