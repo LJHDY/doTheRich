@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChecklistResultItem } from '../types';
 import {
-  getChecklistTemplates, createChecklistTemplate, deleteChecklistTemplate,
+  createChecklistTemplate, deleteChecklistTemplate,
   getComplexChecklist, upsertChecklistResult,
 } from '../services/api';
 
