@@ -166,18 +166,23 @@ RoutePoint { lat: number; lng: number }
 // 저장된 지도 경로
 MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 
+// 체크리스트 입력 유형 — 항목별 저장 방식 결정
+ChecklistInputType = 'RATING' | 'OX' | 'TEXT'
+ChecklistRating = 'UPPER' | 'MIDDLE' | 'LOWER' | 'O' | 'X' | null
+
 // 체크리스트 템플릿 항목
-ChecklistTemplate { id, visitType: 'ATMOSPHERE'|'COMPLEX'|'PROPERTY', category?: string, itemName, displayOrder }
+ChecklistTemplate { id, visitType: 'ATMOSPHERE'|'COMPLEX'|'PROPERTY', category?: string, itemName, displayOrder, inputType?: ChecklistInputType }
 // category: 카테고리 그룹 (null=미분류). 분위기=[직장/교통/학군/환경], 매물=[거실/베란다/방/주방/기타] 등 사용자 정의
+// inputType: RATING=상중하(default), OX=O/X 버튼, TEXT=자유 텍스트 입력
 
 // 단지 체크 결과 (미체크 항목도 rating=null로 포함)
-ChecklistResultItem { id, templateId, itemName, visitType, category?, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null, memo: string|null }
+ChecklistResultItem { id, templateId, itemName, visitType, category?, displayOrder, inputType?: ChecklistInputType, rating: ChecklistRating, memo: string|null }
 
 // 생활권 분위기 체크 결과 (ATMOSPHERE 타입 템플릿만 포함)
-ZoneChecklistResultItem { id, templateId, itemName, category?, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null, memo: string|null }
+ZoneChecklistResultItem { id, templateId, itemName, category?, displayOrder, inputType?: ChecklistInputType, rating: ChecklistRating, memo: string|null }
 
 // 매물 임장 체크리스트 결과 (PROPERTY 타입 템플릿 기준)
-PropertyVisitResultItem { id, templateId, itemName, category?, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null }
+PropertyVisitResultItem { id, templateId, itemName, category?, displayOrder, inputType?: ChecklistInputType, rating: ChecklistRating, memo?: string|null }
 
 // 매물 임장 기록 1건 (부동산·동호수·평형·금액 + 체크리스트 results 배열 포함)
 PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone?, dong?, hosu?, areaType?, price?, memo?, createdAt, results: PropertyVisitResultItem[] }
@@ -397,26 +402,30 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
   - 카테고리 헤더 + 항목 목록 + 항목 추가 입력 (카테고리별)
   - 카테고리 추가: 하단 입력창 → 로컬 pendingCats 상태로 관리 (첫 항목 추가 시 DB 반영)
   - 카테고리 삭제: 해당 카테고리 모든 항목 일괄 deleteChecklistTemplate (confirm 후)
-  - 항목 수정: ✏ 버튼 → 인라인 편집 (Enter 저장, Esc 취소)
+  - 항목 추가 시 **입력 유형 선택** (상중하/O/X/텍스트 세그먼트 토글) — `InputTypeToggle` 인라인 컴포넌트
+  - 항목 수정: ✏ 버튼 → 인라인 편집 (Enter 저장, Esc 취소) + 입력 유형 변경 가능
+  - 기존 항목에 inputType 배지 표시 (상중하=파랑, O/X=초록, 텍스트=주황)
   - 항목 삭제: × 버튼 → confirm 후 삭제
   - `category` 없는 항목은 "미분류" 그룹으로 표시 (카테고리 삭제 버튼 없음)
 
 ### `ChecklistModal.tsx`
 - 단지 체크리스트 모달 (600px, 86vh)
-- **분위기/단지 탭**: 기존 방식 — 카테고리별 그룹 헤더, 상/중/하 즉시 저장, 하단 항목 추가 입력
-- **매물 탭**: 매물 임장 기록 카드 UI (완전 재설계)
+- **분위기/단지 탭**: 카테고리별 그룹 헤더, `renderItemInput(item)` 헬퍼로 inputType별 렌더링
+  - RATING: 상/중/하 버튼 즉시 저장
+  - OX: O(초록)/X(빨강) 버튼 즉시 저장 (rating 필드 활용)
+  - TEXT: 텍스트 input, blur/Enter 시 저장 (memo 필드 활용, `localTexts` 로컬 상태)
+- **매물 탭**: 매물 임장 기록 카드 UI, `renderVisitItemInput(visit, item)` 헬퍼 동일 방식
   - `getPropertyVisits(complexId)`로 기록 목록 로드 (탭 전환 시 로드)
   - "+ 새 매물 기록 추가" 버튼 → 인라인 폼 (방문일·부동산·동·호수·평형·금액만원·메모)
   - 카드 헤더: 부동산명, 동호수, 평형 배지, 금액, 날짜, 체크N/M — 클릭으로 펼침/닫힘
-  - 펼침 시 PROPERTY 체크리스트 카테고리별 그룹 + 상/중/하 즉시 저장
   - 카드별 ✏ 수정 / × 삭제 버튼 (수정 시 기존 results 유지)
-  - 저장: POST → 신규 카드 추가 + 자동 펼침 / PATCH → 기존 카드 헤더 갱신 (results 유지)
   - 금액 입력은 만원 단위 (화면 표시는 `formatPrice`로 억 단위)
 
 ### `LivingZonePanel.tsx`
 - 생활권 카드 펼칠 때 `getZoneChecklist(zoneId)`로 분위기 체크리스트 로드
 - **분위기 체크리스트 섹션**: "포함 단지" 섹션 아래에 표시
-  - 카테고리별 그룹핑, 상/중/하 평가 버튼 (즉시 PATCH 저장)
+  - 카테고리별 그룹핑, inputType별 렌더링 (상중하/OX/텍스트)
+  - OX: OX_COLORS 기반 O/X 버튼, TEXT: input blur/Enter 저장 (`zoneLocalTexts` 로컬 상태)
   - 체크리스트 없으면 섹션 미표시
 
 ### `CommuteGradeBadge.tsx`
@@ -604,6 +613,12 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
 - [x] 선정 단지(selected_complex_id) — ComparisonEvalPanel 결론 아래 두 단지 선택 버튼(👑 강조), 저장 시 PK 전송
   - CompareListModal 저장된 비교평가 목록에서 선정 단지 이름 앞 👑 표시
   - `Comparison` 타입에 `selectedComplexId` 추가, `createComparison`/`updateComparison` API 파라미터 포함
+- [x] 체크리스트 입력 유형 3종 지원 (상중하/O×X/텍스트)
+  - `ChecklistInputType = 'RATING' | 'OX' | 'TEXT'`, `ChecklistRating` 확장 타입 추가
+  - ChecklistTemplatePanel: 항목 추가/수정 시 InputTypeToggle 세그먼트 버튼으로 유형 선택
+  - ChecklistModal: `renderItemInput` / `renderVisitItemInput` 헬퍼로 분위기·단지·매물 탭 전체 지원
+  - LivingZonePanel: 분위기 체크리스트 OX/텍스트 렌더링 추가 (`zoneLocalTexts` 상태)
+  - OX → rating 필드 저장, 텍스트 → memo 필드 저장 (백엔드 `input_type` 컬럼 + `DEFAULT 'RATING'` 마이그레이션)
 
 ## 미완성 / TODO
 
