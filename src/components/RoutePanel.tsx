@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { MapRoute } from '../types';
 import { haversineMeters } from '../utils/geo';
 
@@ -13,6 +13,29 @@ function calcRouteStats(points: { lat: number; lng: number }[]): { km: string; m
 }
 
 const ROUTE_COLORS = ['#e53935', '#43a047', '#8e24aa', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
+
+// 경로 포인트를 GPX XML 문자열로 변환 후 .gpx 파일로 다운로드
+function downloadGpx(route: MapRoute) {
+  const trkpts = route.points
+    .map(p => `      <trkpt lat="${p.lat}" lon="${p.lng}" />`)
+    .join('\n');
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="DoTheRich" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>${route.name}</name>
+    <trkseg>
+${trkpts}
+    </trkseg>
+  </trk>
+</gpx>`;
+  const blob = new Blob([xml], { type: 'application/gpx+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${route.name}.gpx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 interface RoutePanelProps {
   routes: MapRoute[];
@@ -165,7 +188,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                   >×</button>
                 </div>
 
-                {/* 수정 버튼 — 활성화된 경로에서만 표시 */}
+                {/* 수정·GPX 버튼 — 활성화된 경로에서만 표시 */}
                 {isActive && !isDrawingRoute && (
                   <div style={{ padding: '0 16px 10px', display: 'flex', gap: '6px' }}>
                     <button
@@ -176,6 +199,15 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                         backgroundColor: '#e8f0fe', color: '#1a73e8', cursor: 'pointer',
                       }}
                     >✏ 경로 수정</button>
+                    <button
+                      onClick={e => { e.stopPropagation(); downloadGpx(route); }}
+                      style={{
+                        padding: '5px 12px', fontSize: '12px', fontWeight: 600,
+                        border: '1px solid #0b8043', borderRadius: '6px',
+                        backgroundColor: '#e6f4ea', color: '#0b8043', cursor: 'pointer',
+                      }}
+                      title="GPX 파일 다운로드"
+                    >↓ GPX</button>
                   </div>
                 )}
 
