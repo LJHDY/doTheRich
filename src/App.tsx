@@ -204,9 +204,23 @@ const App: React.FC = () => {
   };
 
   // 직전 점 삭제 (undo)
-  const handleUndoLastPoint = () => {
+  const handleUndoLastPoint = useCallback(() => {
     setDrawingPoints(prev => prev.slice(0, -1));
-  };
+  }, []);
+
+  // 경로 그리기 중 Backspace → 직전 점 삭제 (input/textarea에 포커스 없을 때만)
+  useEffect(() => {
+    if (!isDrawingRoute) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Backspace') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+      e.preventDefault();
+      handleUndoLastPoint();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isDrawingRoute, handleUndoLastPoint]);
 
   // 경로 저장 — 신규면 POST, 수정이면 PATCH
   const handleSaveRoute = async () => {
