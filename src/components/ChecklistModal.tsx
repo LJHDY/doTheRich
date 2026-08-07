@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChecklistResultItem } from '../types';
 import {
   createChecklistTemplate, deleteChecklistTemplate,
@@ -27,7 +27,6 @@ interface Props {
 }
 
 const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) => {
-  // getComplexChecklist는 전체 템플릿(미체크 포함)을 반환 — 단일 상태로 관리
   const [items, setItems] = useState<ChecklistResultItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<VisitTypeKey>('ATMOSPHERE');
@@ -50,15 +49,43 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
 
   useEffect(() => { load(); }, [load]);
 
-  // 현재 탭의 항목 목록 (displayOrder 정렬)
-  const tabItems = items
-    .filter(i => i.visitType === activeTab)
-    .sort((a, b) => a.displayOrder - b.displayOrder);
+  const tabItems = useMemo(() =>
+    items
+      .filter(i => i.visitType === activeTab)
+      .sort((a, b) => a.displayOrder - b.displayOrder),
+    [items, activeTab]
+  );
 
-  // 체크된 항목이 하나라도 있으면 결과 존재 = 삭제 버튼 비표시
+  // 카테고리 순서 — 항목 등장 순서 유지, 미분류는 맨 뒤
+  const orderedCategories = useMemo(() => {
+    const seen = new Map<string, true>();
+    const order: string[] = [];
+    for (const i of tabItems) {
+      const cat = i.category || '';
+      if (!seen.has(cat)) { seen.set(cat, true); order.push(cat); }
+    }
+    const nocat = order.indexOf('');
+    if (nocat !== -1 && nocat !== order.length - 1) {
+      order.splice(nocat, 1);
+      order.push('');
+    }
+    return order;
+  }, [tabItems]);
+
+  const itemsByCategory = useMemo(() => {
+    const map = new Map<string, ChecklistResultItem[]>();
+    for (const i of tabItems) {
+      const cat = i.category || '';
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(i);
+    }
+    return map;
+  }, [tabItems]);
+
+  // 체크된 항목이 하나라도 있으면 삭제 버튼 비표시
   const hasAnyRating = items.some(i => i.rating !== null);
 
-  // 상/중/하 선택 — 동일 버튼 재클릭 시 해제, 즉시 저장
+  // 상/중/하 선택 — 동일 버튼 재클릭 시 해제
   const handleRate = async (templateId: number, rating: string) => {
     const current = items.find(i => i.templateId === templateId)?.rating ?? null;
     const newRating = current === rating ? null : rating;
@@ -68,7 +95,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     } catch { }
   };
 
-  // 새 항목 추가 — 전역 템플릿 생성 후 items에 반영
+  // 새 항목 추가 (카테고리 없이)
   const handleAdd = async () => {
     const name = newItemName.trim();
     if (!name || adding) return;
@@ -79,6 +106,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
       setItems(prev => [...prev, {
         id: 0, templateId: created.id, itemName: created.itemName,
         visitType: created.visitType as VisitTypeKey,
+        category: created.category,
         displayOrder: created.displayOrder, rating: null, memo: null,
       }]);
       setNewItemName('');
@@ -86,7 +114,6 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     finally { setAdding(false); }
   };
 
-  // 항목 삭제 — 체크 결과가 없을 때만 표시 (전역 템플릿 삭제)
   const handleDelete = async (templateId: number, itemName: string) => {
     if (!window.confirm(`"${itemName}" 항목을 삭제하면 모든 단지의 해당 체크 결과도 삭제됩니다.`)) return;
     try {
@@ -105,7 +132,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     >
       <div style={{
         backgroundColor: '#fff', borderRadius: '14px',
-        width: '540px', maxWidth: 'calc(100vw - 32px)',
+        width: '560px', maxWidth: 'calc(100vw - 32px)',
         maxHeight: '82vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 8px 40px rgba(0,0,0,0.22)',
       }}>
@@ -123,7 +150,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', color: '#80868b', padding: 0, lineHeight: 1 }}>×</button>
         </div>
 
-        {/* 타입 탭 */}
+        {/* visitType 탭 */}
         <div style={{ display: 'flex', gap: '6px', padding: '12px 22px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
           {VISIT_TYPES.map(vt => {
             const tabRated = items.filter(i => i.visitType === vt.key && i.rating !== null).length;
@@ -149,60 +176,80 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
           })}
         </div>
 
-        {/* 항목 목록 */}
+        {/* 항목 목록 (카테고리별 그룹) */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px 22px' }}>
           {loading ? (
             <p style={{ color: '#9aa0a6', fontSize: '13px', padding: '12px 0' }}>불러오는 중...</p>
           ) : tabItems.length === 0 ? (
             <p style={{ color: '#9aa0a6', fontSize: '13px', padding: '12px 0' }}>
-              이 유형의 항목이 없습니다. 아래에서 추가하거나 헤더의 "체크리스트" 버튼을 이용하세요.
+              이 유형의 항목이 없습니다. 헤더의 "체크리스트" 버튼으로 항목을 추가하세요.
             </p>
           ) : (
-            tabItems.map(item => {
-              const rating = item.rating ?? null;
+            orderedCategories.map(cat => {
+              const catItems = itemsByCategory.get(cat) || [];
+              if (catItems.length === 0) return null;
+              const catLabel = cat || '미분류';
+              const catRated = catItems.filter(i => i.rating !== null).length;
               return (
-                <div key={item.templateId} style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '9px 0', borderBottom: '1px solid #f0f0f0',
-                }}>
-                  <span style={{ flex: 1, fontSize: '13px', color: '#202124', lineHeight: 1.4 }}>
-                    {item.itemName}
-                  </span>
-                  {/* 상/중/하 버튼 */}
-                  {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
-                    const active = rating === r;
-                    const col = RATING_COLORS[r];
+                <div key={cat} style={{ marginBottom: '14px' }}>
+                  {/* 카테고리 헤더 — 카테고리가 1개뿐이면 헤더 생략 */}
+                  {orderedCategories.length > 1 && (
+                    <div style={{
+                      fontSize: '11px', fontWeight: 700, color: '#5f6368',
+                      padding: '5px 0 4px', borderBottom: '1.5px solid #e8eaed',
+                      marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px',
+                    }}>
+                      {catLabel}
+                      <span style={{ fontWeight: 400, color: '#bdbdbd' }}>{catRated}/{catItems.length}</span>
+                    </div>
+                  )}
+
+                  {catItems.map(item => {
+                    const rating = item.rating ?? null;
                     return (
-                      <button key={r} onClick={() => handleRate(item.templateId, r)}
-                        style={{
-                          width: '36px', height: '30px',
-                          border: `1.5px solid ${active ? col.bg : '#dadce0'}`,
-                          borderRadius: '7px',
-                          backgroundColor: active ? col.bg : '#fff',
-                          color: active ? col.color : '#5f6368',
-                          fontSize: '12px', fontWeight: active ? 700 : 400,
-                          cursor: 'pointer', transition: 'all 0.12s',
-                        }}>
-                        {RATING_LABELS[r]}
-                      </button>
+                      <div key={item.templateId} style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '8px 0', borderBottom: '1px solid #f5f5f5',
+                      }}>
+                        <span style={{ flex: 1, fontSize: '13px', color: '#202124', lineHeight: 1.4 }}>
+                          {item.itemName}
+                        </span>
+                        {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
+                          const active = rating === r;
+                          const col = RATING_COLORS[r];
+                          return (
+                            <button key={r} onClick={() => handleRate(item.templateId, r)}
+                              style={{
+                                width: '36px', height: '30px',
+                                border: `1.5px solid ${active ? col.bg : '#dadce0'}`,
+                                borderRadius: '7px',
+                                backgroundColor: active ? col.bg : '#fff',
+                                color: active ? col.color : '#5f6368',
+                                fontSize: '12px', fontWeight: active ? 700 : 400,
+                                cursor: 'pointer', transition: 'all 0.12s',
+                              }}>
+                              {RATING_LABELS[r]}
+                            </button>
+                          );
+                        })}
+                        {!hasAnyRating && (
+                          <button onClick={() => handleDelete(item.templateId, item.itemName)}
+                            style={{
+                              border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff',
+                              color: '#ea4335', fontSize: '14px', padding: '2px 7px',
+                              cursor: 'pointer', lineHeight: 1, flexShrink: 0,
+                            }}>×</button>
+                        )}
+                      </div>
                     );
                   })}
-                  {/* 삭제 — 아직 체크 결과가 없을 때만 표시 */}
-                  {!hasAnyRating && (
-                    <button onClick={() => handleDelete(item.templateId, item.itemName)}
-                      style={{
-                        border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff',
-                        color: '#ea4335', fontSize: '14px', padding: '2px 7px',
-                        cursor: 'pointer', lineHeight: 1, flexShrink: 0,
-                      }}>×</button>
-                  )}
                 </div>
               );
             })
           )}
         </div>
 
-        {/* 항목 추가 */}
+        {/* 항목 추가 (카테고리 없음) */}
         <div style={{ padding: '12px 22px', borderTop: '1px solid #f0f0f0', display: 'flex', gap: '8px', flexShrink: 0 }}>
           <input
             value={newItemName}

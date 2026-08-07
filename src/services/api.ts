@@ -18,6 +18,7 @@ import {
   ComparisonPhoto,
   ChecklistTemplate,
   ChecklistResultItem,
+  ZoneChecklistResultItem,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -293,6 +294,30 @@ export const getLivingZones = async (district?: string): Promise<LivingZone[]> =
   return data;
 };
 
+/** 특정 단지가 포함된 생활권 목록 조회 — GET /api/living-zones?complexId=X */
+export const getComplexLivingZones = async (complexId: number): Promise<LivingZone[]> => {
+  const { data } = await api.get<LivingZone[]>('/api/living-zones', { params: { complexId } });
+  return data;
+};
+
+/** 생활권 분위기 체크리스트 조회 — GET /api/living-zones/:id/checklists */
+export const getZoneChecklist = async (zoneId: number): Promise<ZoneChecklistResultItem[]> => {
+  const { data } = await api.get<ZoneChecklistResultItem[]>(`/api/living-zones/${zoneId}/checklists`);
+  return data;
+};
+
+/** 생활권 체크 결과 upsert — PATCH /api/living-zones/:id/checklists/:templateId */
+export const upsertZoneChecklistResult = async (
+  zoneId: number,
+  templateId: number,
+  req: { rating?: string | null; memo?: string | null }
+): Promise<ZoneChecklistResultItem> => {
+  const { data } = await api.patch<ZoneChecklistResultItem>(
+    `/api/living-zones/${zoneId}/checklists/${templateId}`, req
+  );
+  return data;
+};
+
 /** 생활권 등록 — POST /api/living-zones */
 export const createLivingZone = async (body: { district: string; name: string; memo?: string }): Promise<LivingZone> => {
   const { data } = await api.post<LivingZone>('/api/living-zones', body);
@@ -493,7 +518,7 @@ export const getChecklistTemplates = async (visitType?: string): Promise<Checkli
 
 /** 체크리스트 템플릿 추가 — POST /api/checklists/templates */
 export const createChecklistTemplate = async (
-  req: { visitType: string; itemName: string; displayOrder?: number }
+  req: { visitType: string; category?: string; itemName: string; displayOrder?: number }
 ): Promise<ChecklistTemplate> => {
   const { data } = await api.post<ChecklistTemplate>('/api/checklists/templates', req);
   return data;

@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ApartmentComplex, LivingZone } from '../types';
+import { ApartmentComplex, LivingZone, ZoneChecklistResultItem } from '../types';
 import {
   getLivingZones, createLivingZone, updateLivingZoneMemo,
   addComplexesToZone, removeComplexFromZone, deleteLivingZone,
+  getZoneChecklist, upsertZoneChecklistResult,
 } from '../services/api';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import ZonePhotoModal from './ZonePhotoModal';
+
+const RATING_LABELS: Record<string, string> = { UPPER: '상', MIDDLE: '중', LOWER: '하' };
+const RATING_COLORS: Record<string, { bg: string; color: string }> = {
+  UPPER:  { bg: '#ea4335', color: '#fff' },
+  MIDDLE: { bg: '#f9ab00', color: '#fff' },
+  LOWER:  { bg: '#1a73e8', color: '#fff' },
+};
 
 interface Props {
   complexes: ApartmentComplex[];
@@ -45,6 +53,10 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
   // 사진 모달 — 열린 생활권 id 저장
   const [photoZone, setPhotoZone] = useState<{ id: number; name: string } | null>(null);
 
+  // 생활권별 분위기 체크리스트 (zoneId → items)
+  const [zoneChecklists, setZoneChecklists] = useState<Record<number, ZoneChecklistResultItem[]>>({});
+  const [checklistLoading, setChecklistLoading] = useState<Record<number, boolean>>({});
+
   // 메모 자동번호 훅 — 메모 textarea에 적용
   const numberedMemo = useNumberedTextarea(memoText, setMemoText);
 
@@ -79,9 +91,34 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
   const toggleExpand = (id: number) => {
     setExpandedIds(prev => {
       const next = new Set(Array.from(prev));
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        // 처음 펼칠 때 분위기 체크리스트 로드
+        if (!zoneChecklists[id] && !checklistLoading[id]) {
+          setChecklistLoading(p => ({ ...p, [id]: true }));
+          getZoneChecklist(id)
+            .then(items => setZoneChecklists(p => ({ ...p, [id]: items })))
+            .catch(() => {})
+            .finally(() => setChecklistLoading(p => ({ ...p, [id]: false })));
+        }
+      }
       return next;
     });
+  };
+
+  const handleZoneRate = async (zoneId: number, templateId: number, rating: string) => {
+    const currentItems = zoneChecklists[zoneId] || [];
+    const current = currentItems.find(i => i.templateId === templateId)?.rating ?? null;
+    const newRating = current === rating ? null : rating;
+    try {
+      const updated = await upsertZoneChecklistResult(zoneId, templateId, { rating: newRating, memo: null });
+      setZoneChecklists(prev => ({
+        ...prev,
+        [zoneId]: (prev[zoneId] || []).map(i => i.templateId === templateId ? { ...i, rating: updated.rating } : i),
+      }));
+    } catch {}
   };
 
   const handleCreate = async () => {
@@ -564,6 +601,77 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                       </div>
                     )}
                   </div>
+
+                  {/* 분위기 체크리스트 섹션 */}
+                  {(() => {
+                    const clItems = zoneChecklists[zone.id] || [];
+                    const clLoading = checklistLoading[zone.id];
+                    if (clLoading) return (
+                      <div style={{ marginTop: '14px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#5f6368', marginBottom: '5px' }}>분위기 체크리스트</div>
+                        <div style={{ fontSize: '12px', color: '#bdbdbd' }}>불러오는 중...</div>
+                      </div>
+                    );
+                    if (clItems.length === 0) return null;
+                    // 카테고리 그룹핑
+                    const catOrder: string[] = [];
+                    const catMap = new Map<string, ZoneChecklistResultItem[]>();
+                    for (const ci of [...clItems].sort((a, b) => a.displayOrder - b.displayOrder)) {
+                      const cat = ci.category || '';
+                      if (!catOrder.includes(cat)) catOrder.push(cat);
+                      if (!catMap.has(cat)) catMap.set(cat, []);
+                      catMap.get(cat)!.push(ci);
+                    }
+                    const nocatIdx = catOrder.indexOf('');
+                    if (nocatIdx !== -1 && nocatIdx !== catOrder.length - 1) {
+                      catOrder.splice(nocatIdx, 1); catOrder.push('');
+                    }
+                    const ratedCount = clItems.filter(i => i.rating !== null).length;
+                    return (
+                      <div style={{ marginTop: '14px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>
+                          분위기 체크리스트
+                          <span style={{ fontWeight: 400, color: '#bdbdbd', marginLeft: '5px' }}>{ratedCount}/{clItems.length}</span>
+                        </div>
+                        {catOrder.map(cat => {
+                          const catItems = catMap.get(cat) || [];
+                          return (
+                            <div key={cat} style={{ marginBottom: '8px' }}>
+                              {catOrder.length > 1 && (
+                                <div style={{ fontSize: '10px', fontWeight: 700, color: '#9aa0a6', marginBottom: '3px' }}>
+                                  {cat || '미분류'}
+                                </div>
+                              )}
+                              {catItems.map(ci => (
+                                <div key={ci.templateId} style={{
+                                  display: 'flex', alignItems: 'center', gap: '5px',
+                                  padding: '5px 0', borderBottom: '1px solid #f5f5f5',
+                                }}>
+                                  <span style={{ flex: 1, fontSize: '12px', color: '#202124' }}>{ci.itemName}</span>
+                                  {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
+                                    const active = ci.rating === r;
+                                    const col = RATING_COLORS[r];
+                                    return (
+                                      <button key={r} onClick={() => handleZoneRate(zone.id, ci.templateId, r)}
+                                        style={{
+                                          width: '30px', height: '24px', fontSize: '11px',
+                                          fontWeight: active ? 700 : 400,
+                                          border: `1px solid ${active ? col.bg : '#dadce0'}`,
+                                          borderRadius: '5px',
+                                          backgroundColor: active ? col.bg : '#fff',
+                                          color: active ? col.color : '#5f6368',
+                                          cursor: 'pointer',
+                                        }}>{RATING_LABELS[r]}</button>
+                                    );
+                                  })}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

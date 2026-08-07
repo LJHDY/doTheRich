@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo } from '../services/api';
+import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, LivingZone, ZoneChecklistResultItem } from '../types';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, getComplexLivingZones, getZoneChecklist, upsertZoneChecklistResult } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -425,6 +425,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [checklistRatedCount, setChecklistRatedCount] = useState(0);
   const [checklistTotalCount, setChecklistTotalCount] = useState(0);
+  // 생활권 분위기 체크리스트 상태 — 단지가 속한 생활권의 분위기 체크리스트 표시
+  const [complexZones, setComplexZones] = useState<LivingZone[]>([]);
+  const [zoneChecklists, setZoneChecklists] = useState<Record<number, ZoneChecklistResultItem[]>>({});
   // 지하철 편집 상태 — 기존·신규 행 통합 배열 + 삭제 예약 ID 목록
   const [editingSubway, setEditingSubway] = useState(false);
   const [subwayRows, setSubwayRows] = useState<SubwayEditRow[]>([]);
@@ -557,9 +560,20 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       loadPriceHistories(complex.id);
       // 체크리스트 요약 로드 — 체크된 항목 수 / 전체 항목 수 파악
       setChecklistOpen(false);
+      setComplexZones([]);
+      setZoneChecklists({});
       getComplexChecklist(complex.id).then(results => {
         setChecklistRatedCount(results.filter(r => r.rating !== null).length);
         setChecklistTotalCount(results.length);
+      }).catch(() => {});
+      // 단지가 속한 생활권 조회 → 생활권별 분위기 체크리스트 로드
+      getComplexLivingZones(complex.id).then(zones => {
+        setComplexZones(zones);
+        zones.forEach(zone => {
+          getZoneChecklist(zone.id)
+            .then(items => setZoneChecklists(prev => ({ ...prev, [zone.id]: items })))
+            .catch(() => {});
+        });
       }).catch(() => {});
     }
   }, [complex, loadPriceHistories, onRadiusToggle]);
@@ -3162,6 +3176,96 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             </div>
           )}
         </div>
+
+        {/* 생활권 분위기 체크리스트 — 단지가 속한 생활권이 있을 때만 표시 */}
+        {complexZones.map(zone => {
+          const clItems = zoneChecklists[zone.id];
+          if (!clItems || clItems.length === 0) return null;
+
+          // 카테고리 그룹핑 (displayOrder 정렬 후)
+          const catOrder: string[] = [];
+          const catMap = new Map<string, ZoneChecklistResultItem[]>();
+          for (const ci of [...clItems].sort((a, b) => a.displayOrder - b.displayOrder)) {
+            const cat = ci.category || '';
+            if (!catOrder.includes(cat)) catOrder.push(cat);
+            if (!catMap.has(cat)) catMap.set(cat, []);
+            catMap.get(cat)!.push(ci);
+          }
+          const nocatIdx = catOrder.indexOf('');
+          if (nocatIdx !== -1 && nocatIdx !== catOrder.length - 1) {
+            catOrder.splice(nocatIdx, 1); catOrder.push('');
+          }
+          const ratedCount = clItems.filter(i => i.rating !== null).length;
+
+          const handleZoneRate = async (templateId: number, rating: string) => {
+            const current = clItems.find(i => i.templateId === templateId)?.rating ?? null;
+            const newRating = current === rating ? null : rating;
+            try {
+              const updated = await upsertZoneChecklistResult(zone.id, templateId, { rating: newRating, memo: null });
+              setZoneChecklists(prev => ({
+                ...prev,
+                [zone.id]: (prev[zone.id] || []).map(i => i.templateId === templateId ? { ...i, rating: updated.rating } : i),
+              }));
+            } catch {}
+          };
+
+          return (
+            <div key={zone.id} style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>
+                  생활권 분위기
+                  <span style={{ fontSize: '11px', fontWeight: 400, color: '#9aa0a6', marginLeft: '5px' }}>{zone.name}</span>
+                  <span style={{ fontSize: '12px', color: '#9aa0a6', marginLeft: '6px', fontWeight: 400 }}>
+                    {ratedCount}/{clItems.length}
+                  </span>
+                </h3>
+              </div>
+              {catOrder.map(cat => {
+                const catItems = catMap.get(cat) || [];
+                return (
+                  <div key={cat} style={{ marginBottom: '6px' }}>
+                    {catOrder.length > 1 && (
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#9aa0a6', marginBottom: '3px' }}>
+                        {cat || '미분류'}
+                      </div>
+                    )}
+                    {catItems.map(ci => (
+                      <div key={ci.templateId} style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        padding: '6px 0', borderBottom: '1px solid #f5f5f5',
+                      }}>
+                        <span style={{ flex: 1, fontSize: '13px', color: '#202124' }}>{ci.itemName}</span>
+                        {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
+                          const active = ci.rating === r;
+                          const colors: Record<string, { bg: string; color: string }> = {
+                            UPPER: { bg: '#ea4335', color: '#fff' },
+                            MIDDLE: { bg: '#f9ab00', color: '#fff' },
+                            LOWER: { bg: '#1a73e8', color: '#fff' },
+                          };
+                          const col = colors[r];
+                          return (
+                            <button key={r} onClick={() => handleZoneRate(ci.templateId, r)}
+                              style={{
+                                width: '34px', height: '28px', fontSize: '12px',
+                                fontWeight: active ? 700 : 400,
+                                border: `1.5px solid ${active ? col.bg : '#dadce0'}`,
+                                borderRadius: '6px',
+                                backgroundColor: active ? col.bg : '#fff',
+                                color: active ? col.color : '#5f6368',
+                                cursor: 'pointer',
+                              }}>
+                              {r === 'UPPER' ? '상' : r === 'MIDDLE' ? '중' : '하'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
 
         {/* 체크리스트 */}
         <div style={{ marginBottom: '16px' }}>

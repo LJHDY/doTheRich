@@ -330,6 +330,7 @@ export const isFiltersActive = (f: ActiveFilters): boolean =>
 export interface ChecklistTemplate {
   id: number;
   visitType: string;    // ATMOSPHERE | COMPLEX | PROPERTY
+  category?: string;   // 카테고리 그룹 (null=미분류)
   itemName: string;
   displayOrder: number;
 }
@@ -340,6 +341,18 @@ export interface ChecklistResultItem {
   templateId: number;
   itemName: string;
   visitType: string;    // ATMOSPHERE | COMPLEX | PROPERTY
+  category?: string;   // 카테고리 그룹
+  displayOrder: number;
+  rating: 'UPPER' | 'MIDDLE' | 'LOWER' | null;
+  memo: string | null;
+}
+
+/** 생활권 분위기 체크 결과 — 미체크 항목도 rating=null로 포함 */
+export interface ZoneChecklistResultItem {
+  id: number;
+  templateId: number;
+  itemName: string;
+  category?: string;
   displayOrder: number;
   rating: 'UPPER' | 'MIDDLE' | 'LOWER' | null;
   memo: string | null;

@@ -167,10 +167,14 @@ RoutePoint { lat: number; lng: number }
 MapRoute { id: number; name: string; points: RoutePoint[]; createdAt: string }
 
 // 체크리스트 템플릿 항목
-ChecklistTemplate { id, visitType: 'ATMOSPHERE'|'COMPLEX'|'PROPERTY', itemName, displayOrder }
+ChecklistTemplate { id, visitType: 'ATMOSPHERE'|'COMPLEX'|'PROPERTY', category?: string, itemName, displayOrder }
+// category: 카테고리 그룹 (null=미분류). 분위기=[직장/교통/학군/환경], 매물=[거실/베란다/방/주방/기타] 등 사용자 정의
 
 // 단지 체크 결과 (미체크 항목도 rating=null로 포함)
-ChecklistResultItem { id, templateId, itemName, visitType, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null, memo: string|null }
+ChecklistResultItem { id, templateId, itemName, visitType, category?, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null, memo: string|null }
+
+// 생활권 분위기 체크 결과 (ATMOSPHERE 타입 템플릿만 포함)
+ZoneChecklistResultItem { id, templateId, itemName, category?, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null, memo: string|null }
 ```
 
 ### 유틸 함수
@@ -225,6 +229,9 @@ ChecklistResultItem { id, templateId, itemName, visitType, displayOrder, rating:
 | DELETE | `/api/checklists/templates/:id` | 템플릿 항목 삭제 (연결 결과 CASCADE, 204) |
 | GET | `/api/complexes/:id/checklists` | 단지 체크 결과 조회 (미체크 항목도 포함, visitType 필터 가능) |
 | PATCH | `/api/complexes/:id/checklists/:templateId` | 체크 결과 upsert — `{ rating?, memo? }` (rating/memo 모두 null이면 결과 행 삭제) |
+| GET | `/api/living-zones?complexId=X` | 특정 단지가 포함된 생활권 목록 조회 |
+| GET | `/api/living-zones/:id/checklists` | 생활권 분위기 체크리스트 조회 (ATMOSPHERE 템플릿, 미체크 포함) |
+| PATCH | `/api/living-zones/:id/checklists/:templateId` | 생활권 체크 결과 upsert — `{ rating?, memo? }` |
 
 ---
 
@@ -373,17 +380,30 @@ ChecklistResultItem { id, templateId, itemName, visitType, displayOrder, rating:
 - ComplexInfoPanel과 동일한 등급 로직·레이블 맵 내장 (`calcSchoolGrade`, `calcInfraGrade`, `GRADE_COLORS`, `Tag` 등)
 - 닫기(×) 버튼 → 비교 목록 제거 + 체크박스 해제
 
-### `ChecklistSection.tsx`
-- `complexId` prop만 받아 독립적으로 동작하는 체크리스트 섹션 (ComplexInfoPanel 내부 사용)
-- 마운트 시 `getComplexChecklist` + `getChecklistTemplates` 병렬 조회
-- **체크 항목 행**: 항목명 + 💬 메모 토글 버튼 + 상/중/하 버튼 (클릭 시 PATCH upsert, 동일 버튼 재클릭=해제)
-  - 메모: 0.8초 debounce 자동저장, 열려 있는 메모가 있으면 기본 펼침
-- **그룹핑**: visitType별 그룹 (분위기/단지/매물 임장), display_order 정렬
-- **항목 관리** 버튼: 토글로 `TemplateManager` 패널 열기
-  - 탭(분위기/단지/매물) 선택 → 해당 visit_type 항목 CRUD
-  - 추가·수정(Enter 저장, Escape 취소)·삭제(confirm 확인)
-  - 템플릿 변경 시 items 배열 실시간 동기화 (삭제=제거, 추가=미체크 행 삽입)
-- 헤더에 체크된 항목 수 / 전체 항목 수 표시 (`3/7` 형식)
+### `ChecklistTemplatePanel.tsx`
+- 헤더 "체크리스트" 버튼 클릭 시 우측 사이드패널 (300px)
+- visitType 탭(분위기/단지/매물) + **카테고리 2레벨 UI**
+  - 카테고리 헤더 + 항목 목록 + 항목 추가 입력 (카테고리별)
+  - 카테고리 추가: 하단 입력창 → 로컬 pendingCats 상태로 관리 (첫 항목 추가 시 DB 반영)
+  - 카테고리 삭제: 해당 카테고리 모든 항목 일괄 deleteChecklistTemplate (confirm 후)
+  - 항목 수정: ✏ 버튼 → 인라인 편집 (Enter 저장, Esc 취소)
+  - 항목 삭제: × 버튼 → confirm 후 삭제
+  - `category` 없는 항목은 "미분류" 그룹으로 표시 (카테고리 삭제 버튼 없음)
+
+### `ChecklistModal.tsx`
+- 단지 체크리스트 모달 (540px, 82vh)
+- visitType 탭 + 카테고리별 그룹 헤더 → 항목 상/중/하 평가
+- `getComplexChecklist`로 전체 템플릿+결과 단일 조회 (미체크 포함)
+- 카테고리 그룹이 1개면 헤더 생략, 복수면 섹션 헤더 + rated/total 표시
+- 동일 버튼 재클릭 = 해제, 즉시 PATCH upsert 저장
+- `hasAnyRating`이 false일 때만 항목별 삭제 버튼 표시
+- 하단 "항목 추가" 입력은 카테고리 없이 추가 (템플릿 패널에서 카테고리 관리 권장)
+
+### `LivingZonePanel.tsx`
+- 생활권 카드 펼칠 때 `getZoneChecklist(zoneId)`로 분위기 체크리스트 로드
+- **분위기 체크리스트 섹션**: "포함 단지" 섹션 아래에 표시
+  - 카테고리별 그룹핑, 상/중/하 평가 버튼 (즉시 PATCH 저장)
+  - 체크리스트 없으면 섹션 미표시
 
 ### `CommuteGradeBadge.tsx`
 - `commuteTimes` 받아서 S/A/B/C 배지 렌더링
@@ -540,12 +560,21 @@ ChecklistResultItem { id, templateId, itemName, visitType, displayOrder, rating:
 - [x] 현재 위치 버튼 좌상단 이동 — 모바일 경로 목록 버튼에 가려지지 않도록 (top: 12px, left: 12px)
 - [x] CompareCard 유해시설 섹션 추가 + distanceKm 표시 — ComplexInfoPanel과 표시 내용 완전 동기화
 - [x] areaType별 시세 기록 전체 삭제 — ComplexInfoPanel 참고가 탭 선택 시 "삭제" 버튼 표시, 확인 후 `DELETE /api/complexes/:id/price-history/area-type/:areaType` (백엔드: 빈 history 자동 정리)
-- [x] 임장 체크리스트 — `ChecklistSection` 컴포넌트, ComplexInfoPanel 임장유형 섹션 다음에 표시
-  - 단지별 체크리스트 조회/평가 (상/중/하 버튼, 동일 버튼 재클릭=해제)
-  - 메모 💬 버튼으로 항목별 메모 textarea 토글, 0.8초 debounce 자동저장
-  - 분위기/단지/매물 임장 visit_type별 그룹핑
-  - "항목 관리" 버튼 → 탭 기반 템플릿 CRUD (추가·수정·삭제, 삭제 시 단지 결과 CASCADE)
-  - 백엔드: `checklist_template`/`complex_checklist_result` 테이블 + 관련 API 6개
+- [x] 임장 체크리스트 전면 개편
+  - **전역 템플릿 패널** (`ChecklistTemplatePanel`): 헤더 "체크리스트" 버튼 → 사이드패널
+    - 분위기/단지/매물 탭 + **카테고리 2레벨** 구조 (카테고리 → 항목)
+    - 카테고리 추가/삭제, 항목 추가/수정/삭제 (Enter 저장, Esc 취소)
+    - 미분류 항목은 "미분류" 그룹으로 자동 분류
+    - `ChecklistTemplate.category` 필드 추가 (백엔드: `VARCHAR(100)` + idempotent ALTER TABLE)
+  - **단지 체크 모달** (`ChecklistModal`): ComplexInfoPanel 내 버튼으로 모달 열기
+    - 카테고리별 그룹핑 표시, 상/중/하 즉시 저장, 동일 버튼 재클릭=해제
+  - **생활권 분위기 체크리스트**: 생활권(LivingZonePanel) 내 분위기 체크리스트 섹션
+    - 생활권 펼칠 때 ATMOSPHERE 템플릿 로드 + 카테고리별 그룹핑
+    - `living_zone_checklist_result` 테이블 + API 2개 (GET/PATCH)
+  - **ComplexInfoPanel 생활권 분위기 섹션**: 단지가 속한 생활권의 분위기 체크리스트 표시
+    - 단지 선택 시 `GET /api/living-zones?complexId=X`로 소속 생활권 조회
+    - 각 생활권의 분위기 체크리스트 표시 + 인라인 평가 (상/중/하)
+  - 백엔드: `checklist_template.category` 컬럼, `living_zone_checklist_result` 테이블
 - [x] 선정 단지(selected_complex_id) — ComparisonEvalPanel 결론 아래 두 단지 선택 버튼(👑 강조), 저장 시 PK 전송
   - CompareListModal 저장된 비교평가 목록에서 선정 단지 이름 앞 👑 표시
   - `Comparison` 타입에 `selectedComplexId` 추가, `createComparison`/`updateComparison` API 파라미터 포함
