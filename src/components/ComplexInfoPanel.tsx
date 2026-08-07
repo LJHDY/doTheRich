@@ -1998,6 +1998,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   onFocus={memoHook.onFocus}
                   onKeyDown={memoHook.onKeyDown}
                   onBlur={memoHook.onBlur}
+                  onCompositionEnd={memoHook.onCompositionEnd}
                   style={{
                     width: '100%', padding: '6px 8px', fontSize: '13px',
                     border: '1px solid #1a73e8', borderRadius: '6px',

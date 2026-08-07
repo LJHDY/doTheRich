@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChecklistResultItem, PropertyVisit } from '../types';
+import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import {
   createChecklistTemplate, deleteChecklistTemplate,
   getComplexChecklist, upsertChecklistResult,
@@ -85,6 +86,12 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
   const [editingVisitId, setEditingVisitId] = useState<number | null>(null);
   const [form, setForm] = useState<VisitFormState>(EMPTY_FORM);
   const [formSaving, setFormSaving] = useState(false);
+
+  // 매물 메모 번호목록 훅 — form.memo 연동
+  const handleMemoChange = useCallback((v: string) => {
+    setForm(prev => ({ ...prev, memo: v }));
+  }, []);
+  const memoTextarea = useNumberedTextarea(form.memo, handleMemoChange);
 
   const loadAtmosphere = useCallback(async () => {
     setLoading(true);
@@ -373,21 +380,25 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                     </div>
                   ))}
                 </div>
+                {/* 구분선 — 부동산/매물 정보와 메모 경계 */}
+                <hr style={{ border: 'none', borderTop: '1px solid #e8eaed', margin: '4px 0 10px' }} />
                 <div style={{ marginBottom: '10px' }}>
                   <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>메모</div>
                   <textarea
-                    ref={autoResize}
+                    ref={memoTextarea.ref}
                     value={form.memo}
-                    onChange={e => {
-                      setForm(prev => ({ ...prev, memo: e.target.value }));
-                      autoResize(e.target);
-                    }}
+                    onChange={e => handleMemoChange(e.target.value)}
+                    onFocus={memoTextarea.onFocus}
+                    onKeyDown={memoTextarea.onKeyDown}
+                    onBlur={memoTextarea.onBlur}
+                    onCompositionEnd={memoTextarea.onCompositionEnd}
                     placeholder="메모..."
                     rows={2}
                     style={{
                       width: '100%', fontSize: '12px', padding: '5px 8px',
                       border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
                       boxSizing: 'border-box', resize: 'none', overflow: 'hidden',
+                      fontFamily: 'inherit',
                     }}
                   />
                 </div>

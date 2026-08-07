@@ -1587,6 +1587,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             onFocus={memoHook.onFocus}
             onKeyDown={memoHook.onKeyDown}
             onBlur={memoHook.onBlur}
+            onCompositionEnd={memoHook.onCompositionEnd}
             style={{ ...inputStyle, resize: 'none', overflow: 'hidden', fontFamily: 'inherit' }}
           />
 

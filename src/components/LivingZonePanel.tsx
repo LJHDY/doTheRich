@@ -428,6 +428,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                           onFocus={numberedMemo.onFocus}
                           onKeyDown={numberedMemo.onKeyDown}
                           onBlur={numberedMemo.onBlur}
+                          onCompositionEnd={numberedMemo.onCompositionEnd}
                           autoFocus
                           style={{
                             width: '100%', boxSizing: 'border-box',

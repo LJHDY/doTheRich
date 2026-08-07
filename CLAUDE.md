@@ -180,7 +180,7 @@ ZoneChecklistResultItem { id, templateId, itemName, category?, displayOrder, rat
 PropertyVisitResultItem { id, templateId, itemName, category?, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null }
 
 // 매물 임장 기록 1건 (부동산·동호수·평형·금액 + 체크리스트 results 배열 포함)
-PropertyVisit { id, complexId, visitDate?, agentName?, dong?, hosu?, areaType?, price?, memo?, createdAt, results: PropertyVisitResultItem[] }
+PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone?, dong?, hosu?, areaType?, price?, memo?, createdAt, results: PropertyVisitResultItem[] }
 ```
 
 ### 유틸 함수
@@ -497,7 +497,9 @@ PropertyVisit { id, complexId, visitDate?, agentName?, dong?, hosu?, areaType?, 
 - [x] 입지 등급 배지 (S/A/B/C) — 공통 컴포넌트
 - [x] favicon + 로고 이미지
 - [x] Vercel(프론트) + Railway(백엔드+MySQL) 배포
-- [x] 메모 textarea 번호 목록 자동 서식 (`useNumberedTextarea` 훅, RegisterModal·ComplexInfoPanel 공통 적용)
+- [x] 메모 textarea 번호 목록 자동 서식 (`useNumberedTextarea` 훅, RegisterModal·ComplexInfoPanel·LivingZonePanel·ChecklistModal 매물 메모 공통 적용)
+  - IME Enter 버그 수정: `isComposing=true` 시 기본 줄바꿈 차단 → `pendingEnterRef` → `onCompositionEnd`에서 처리 (윗줄 글자 복사 방지)
+  - `onCompositionEnd` 핸들러 추가, 모든 사용처에 연결
 - [x] RegisterModal 학군 정보 섹션 (네이버 검색 + 도보거리 자동 계산, 학교유형·학업성취도·전교생수)
 - [x] RegisterModal 주변 인프라 섹션 (유형 셀렉트 key 전송, 네이버 검색 + 도보거리 자동 계산)
 - [x] RegisterModal 재개발·재건축·리모델링 섹션 (유형 체크박스 + 진행단계 셀렉트)
