@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChecklistResultItem } from '../types';
+import { ChecklistResultItem, PropertyVisit } from '../types';
 import {
   createChecklistTemplate, deleteChecklistTemplate,
   getComplexChecklist, upsertChecklistResult,
+  getPropertyVisits, createPropertyVisit, updatePropertyVisit, deletePropertyVisit,
+  upsertPropertyVisitResult,
 } from '../services/api';
+import { formatPrice } from '../types';
 
 const VISIT_TYPES = [
   { key: 'ATMOSPHERE' as const, label: '분위기' },
@@ -26,6 +29,21 @@ interface Props {
   onClose: () => void;
 }
 
+// 매물 임장 추가/편집 폼 상태
+interface VisitFormState {
+  visitDate: string;
+  agentName: string;
+  dong: string;
+  hosu: string;
+  areaType: string;
+  price: string; // 입력은 문자열로
+  memo: string;
+}
+
+const EMPTY_FORM: VisitFormState = {
+  visitDate: '', agentName: '', dong: '', hosu: '', areaType: '', price: '', memo: '',
+};
+
 const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) => {
   const [items, setItems] = useState<ChecklistResultItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,12 +51,20 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
   const [newItemName, setNewItemName] = useState('');
   const [adding, setAdding] = useState(false);
 
-  const load = useCallback(async () => {
+  // 매물 임장 기록 상태
+  const [visits, setVisits] = useState<PropertyVisit[]>([]);
+  const [visitsLoading, setVisitsLoading] = useState(false);
+  const [expandedVisitId, setExpandedVisitId] = useState<number | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingVisitId, setEditingVisitId] = useState<number | null>(null);
+  const [form, setForm] = useState<VisitFormState>(EMPTY_FORM);
+  const [formSaving, setFormSaving] = useState(false);
+
+  const loadAtmosphere = useCallback(async () => {
     setLoading(true);
     try {
       const results = await getComplexChecklist(complexId);
       setItems(results);
-      // 체크된 항목이 있는 첫 번째 타입 탭으로 초기화
       const firstRatedType = VISIT_TYPES.find(vt =>
         results.some(r => r.visitType === vt.key && r.rating !== null)
       );
@@ -47,8 +73,21 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     finally { setLoading(false); }
   }, [complexId]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadVisits = useCallback(async () => {
+    setVisitsLoading(true);
+    try {
+      const vs = await getPropertyVisits(complexId);
+      setVisits(vs);
+    } catch { }
+    finally { setVisitsLoading(false); }
+  }, [complexId]);
 
+  useEffect(() => { loadAtmosphere(); }, [loadAtmosphere]);
+  useEffect(() => {
+    if (activeTab === 'PROPERTY') loadVisits();
+  }, [activeTab, loadVisits]);
+
+  // 분위기/단지 탭용 — 현재 탭 항목
   const tabItems = useMemo(() =>
     items
       .filter(i => i.visitType === activeTab)
@@ -56,7 +95,6 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     [items, activeTab]
   );
 
-  // 카테고리 순서 — 항목 등장 순서 유지, 미분류는 맨 뒤
   const orderedCategories = useMemo(() => {
     const seen = new Map<string, true>();
     const order: string[] = [];
@@ -82,10 +120,8 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     return map;
   }, [tabItems]);
 
-  // 체크된 항목이 하나라도 있으면 삭제 버튼 비표시
   const hasAnyRating = items.some(i => i.rating !== null);
 
-  // 상/중/하 선택 — 동일 버튼 재클릭 시 해제
   const handleRate = async (templateId: number, rating: string) => {
     const current = items.find(i => i.templateId === templateId)?.rating ?? null;
     const newRating = current === rating ? null : rating;
@@ -95,7 +131,6 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     } catch { }
   };
 
-  // 새 항목 추가 (카테고리 없이)
   const handleAdd = async () => {
     const name = newItemName.trim();
     if (!name || adding) return;
@@ -122,8 +157,89 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     } catch { }
   };
 
+  // 매물 임장 기록 핸들러
+
+  const handleVisitRate = async (visit: PropertyVisit, templateId: number, rating: string) => {
+    const current = visit.results.find(r => r.templateId === templateId)?.rating ?? null;
+    const newRating = current === rating ? null : rating;
+    try {
+      const updated = await upsertPropertyVisitResult(complexId, visit.id, templateId, { rating: newRating });
+      setVisits(prev => prev.map(v => {
+        if (v.id !== visit.id) return v;
+        const results = v.results.map(r => r.templateId === templateId ? { ...r, rating: updated.rating } : r);
+        return { ...v, results };
+      }));
+    } catch { }
+  };
+
+  const openAddForm = () => {
+    setForm(EMPTY_FORM);
+    setEditingVisitId(null);
+    setShowAddForm(true);
+  };
+
+  const openEditForm = (v: PropertyVisit) => {
+    setForm({
+      visitDate: v.visitDate || '',
+      agentName: v.agentName || '',
+      dong: v.dong || '',
+      hosu: v.hosu || '',
+      areaType: v.areaType || '',
+      price: v.price ? String(Math.round(v.price / 10000)) : '', // 만원 단위 입력
+      memo: v.memo || '',
+    });
+    setEditingVisitId(v.id);
+    setShowAddForm(true);
+  };
+
+  const handleFormSave = async () => {
+    if (formSaving) return;
+    setFormSaving(true);
+    try {
+      const req = {
+        visitDate: form.visitDate || undefined,
+        agentName: form.agentName || undefined,
+        dong: form.dong || undefined,
+        hosu: form.hosu || undefined,
+        areaType: form.areaType || undefined,
+        price: form.price ? Number(form.price) * 10000 : undefined, // 만원 → 원
+        memo: form.memo || undefined,
+      };
+      if (editingVisitId) {
+        const updated = await updatePropertyVisit(complexId, editingVisitId, req);
+        setVisits(prev => prev.map(v => v.id === editingVisitId ? { ...updated, results: v.results } : v));
+      } else {
+        const created = await createPropertyVisit(complexId, req);
+        setVisits(prev => [created, ...prev]);
+        setExpandedVisitId(created.id);
+      }
+      setShowAddForm(false);
+      setEditingVisitId(null);
+    } catch { }
+    finally { setFormSaving(false); }
+  };
+
+  const handleDeleteVisit = async (visitId: number) => {
+    if (!window.confirm('이 매물 기록을 삭제합니다. 체크리스트 결과도 함께 삭제됩니다.')) return;
+    try {
+      await deletePropertyVisit(complexId, visitId);
+      setVisits(prev => prev.filter(v => v.id !== visitId));
+      if (expandedVisitId === visitId) setExpandedVisitId(null);
+    } catch { }
+  };
+
   const checkedCount = items.filter(i => i.rating !== null).length;
   const totalCount = items.length;
+
+  const btnStyle = (active: boolean, col: { bg: string; color: string }): React.CSSProperties => ({
+    width: '32px', height: '26px',
+    border: `1.5px solid ${active ? col.bg : '#dadce0'}`,
+    borderRadius: '6px',
+    backgroundColor: active ? col.bg : '#fff',
+    color: active ? col.color : '#5f6368',
+    fontSize: '11px', fontWeight: active ? 700 : 400,
+    cursor: 'pointer', transition: 'all 0.12s', flexShrink: 0,
+  });
 
   return (
     <div
@@ -132,8 +248,8 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     >
       <div style={{
         backgroundColor: '#fff', borderRadius: '14px',
-        width: '560px', maxWidth: 'calc(100vw - 32px)',
-        maxHeight: '82vh', display: 'flex', flexDirection: 'column',
+        width: '600px', maxWidth: 'calc(100vw - 32px)',
+        maxHeight: '86vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 8px 40px rgba(0,0,0,0.22)',
       }}>
         {/* 헤더 */}
@@ -156,6 +272,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
             const tabRated = items.filter(i => i.visitType === vt.key && i.rating !== null).length;
             const tabTotal = items.filter(i => i.visitType === vt.key).length;
             const isActive = activeTab === vt.key;
+            const visitCount = vt.key === 'PROPERTY' ? visits.length : null;
             return (
               <button key={vt.key} onClick={() => setActiveTab(vt.key)}
                 style={{
@@ -166,111 +283,348 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                   color: isActive ? '#fff' : '#5f6368',
                 }}>
                 {vt.label}
-                {tabTotal > 0 && (
-                  <span style={{ marginLeft: '4px', fontSize: '10px', opacity: isActive ? 0.85 : 0.65 }}>
-                    {tabRated}/{tabTotal}
-                  </span>
+                {vt.key === 'PROPERTY' ? (
+                  visitCount !== null && visitCount > 0 && (
+                    <span style={{ marginLeft: '4px', fontSize: '10px', opacity: isActive ? 0.85 : 0.65 }}>{visitCount}건</span>
+                  )
+                ) : (
+                  tabTotal > 0 && (
+                    <span style={{ marginLeft: '4px', fontSize: '10px', opacity: isActive ? 0.85 : 0.65 }}>
+                      {tabRated}/{tabTotal}
+                    </span>
+                  )
                 )}
               </button>
             );
           })}
         </div>
 
-        {/* 항목 목록 (카테고리별 그룹) */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 22px' }}>
-          {loading ? (
-            <p style={{ color: '#9aa0a6', fontSize: '13px', padding: '12px 0' }}>불러오는 중...</p>
-          ) : tabItems.length === 0 ? (
-            <p style={{ color: '#9aa0a6', fontSize: '13px', padding: '12px 0' }}>
-              이 유형의 항목이 없습니다. 헤더의 "체크리스트" 버튼으로 항목을 추가하세요.
-            </p>
-          ) : (
-            orderedCategories.map(cat => {
-              const catItems = itemsByCategory.get(cat) || [];
-              if (catItems.length === 0) return null;
-              const catLabel = cat || '미분류';
-              const catRated = catItems.filter(i => i.rating !== null).length;
-              return (
-                <div key={cat} style={{ marginBottom: '14px' }}>
-                  {/* 카테고리 헤더 — 카테고리가 1개뿐이면 헤더 생략 */}
-                  {orderedCategories.length > 1 && (
-                    <div style={{
-                      fontSize: '11px', fontWeight: 700, color: '#5f6368',
-                      padding: '5px 0 4px', borderBottom: '1.5px solid #e8eaed',
-                      marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px',
-                    }}>
-                      {catLabel}
-                      <span style={{ fontWeight: 400, color: '#bdbdbd' }}>{catRated}/{catItems.length}</span>
+        {/* 본문 */}
+        {activeTab === 'PROPERTY' ? (
+          /* 매물 임장 탭 */
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 22px' }}>
+            {/* 추가 폼 */}
+            {showAddForm && (
+              <div style={{
+                border: '1.5px solid #1a73e8', borderRadius: '10px',
+                padding: '14px 16px', marginBottom: '14px', backgroundColor: '#f8fbff',
+              }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a73e8', marginBottom: '10px' }}>
+                  {editingVisitId ? '매물 기록 수정' : '새 매물 기록 추가'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  {[
+                    { label: '방문일', key: 'visitDate', type: 'date', placeholder: '' },
+                    { label: '부동산', key: 'agentName', type: 'text', placeholder: '담당 부동산명' },
+                    { label: '동', key: 'dong', type: 'text', placeholder: '예: 101동' },
+                    { label: '호수', key: 'hosu', type: 'text', placeholder: '예: 1501호' },
+                    { label: '평형', key: 'areaType', type: 'text', placeholder: '예: 전용 59' },
+                    { label: '금액(만원)', key: 'price', type: 'number', placeholder: '예: 90000' },
+                  ].map(({ label, key, type, placeholder }) => (
+                    <div key={key}>
+                      <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>{label}</div>
+                      <input
+                        type={type}
+                        value={(form as any)[key]}
+                        onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+                        placeholder={placeholder}
+                        style={{
+                          width: '100%', fontSize: '12px', padding: '5px 8px',
+                          border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', boxSizing: 'border-box',
+                        }}
+                      />
                     </div>
-                  )}
+                  ))}
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>메모</div>
+                  <textarea
+                    value={form.memo}
+                    onChange={e => setForm(prev => ({ ...prev, memo: e.target.value }))}
+                    placeholder="메모..."
+                    rows={2}
+                    style={{
+                      width: '100%', fontSize: '12px', padding: '5px 8px',
+                      border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
+                      boxSizing: 'border-box', resize: 'vertical',
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setShowAddForm(false); setEditingVisitId(null); }}
+                    style={{ padding: '6px 14px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>취소</button>
+                  <button onClick={handleFormSave} disabled={formSaving}
+                    style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '6px', backgroundColor: '#1a73e8', color: '#fff', cursor: 'pointer' }}>
+                    {formSaving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              </div>
+            )}
 
-                  {catItems.map(item => {
-                    const rating = item.rating ?? null;
-                    return (
-                      <div key={item.templateId} style={{
+            {/* 추가 버튼 */}
+            {!showAddForm && (
+              <button onClick={openAddForm}
+                style={{
+                  width: '100%', padding: '8px', fontSize: '12px', fontWeight: 600,
+                  border: '1.5px dashed #1a73e8', borderRadius: '8px',
+                  background: '#f8fbff', color: '#1a73e8', cursor: 'pointer', marginBottom: '12px',
+                }}>
+                + 새 매물 기록 추가
+              </button>
+            )}
+
+            {/* 매물 카드 목록 */}
+            {visitsLoading ? (
+              <p style={{ color: '#9aa0a6', fontSize: '13px' }}>불러오는 중...</p>
+            ) : visits.length === 0 ? (
+              <p style={{ color: '#9aa0a6', fontSize: '13px', textAlign: 'center', padding: '24px 0' }}>
+                아직 기록된 매물 임장이 없습니다.<br />
+                위 버튼으로 방문한 매물을 추가하세요.
+              </p>
+            ) : (
+              visits.map(visit => {
+                const isExpanded = expandedVisitId === visit.id;
+                const ratedCount = visit.results.filter(r => r.rating !== null).length;
+                const totalTemplates = visit.results.length;
+
+                // 카테고리 그룹핑
+                const catOrder: string[] = [];
+                const catSeen = new Set<string>();
+                for (const r of visit.results) {
+                  const cat = r.category || '';
+                  if (!catSeen.has(cat)) { catSeen.add(cat); catOrder.push(cat); }
+                }
+                const nocat = catOrder.indexOf('');
+                if (nocat !== -1 && nocat !== catOrder.length - 1) {
+                  catOrder.splice(nocat, 1); catOrder.push('');
+                }
+                const catMap = new Map<string, typeof visit.results>();
+                for (const r of visit.results) {
+                  const cat = r.category || '';
+                  if (!catMap.has(cat)) catMap.set(cat, []);
+                  catMap.get(cat)!.push(r);
+                }
+
+                return (
+                  <div key={visit.id} style={{
+                    border: '1px solid #e8eaed', borderRadius: '10px',
+                    marginBottom: '10px', overflow: 'hidden',
+                  }}>
+                    {/* 카드 헤더 — 클릭 시 펼침/닫힘 */}
+                    <div
+                      onClick={() => setExpandedVisitId(isExpanded ? null : visit.id)}
+                      style={{
+                        padding: '10px 14px', cursor: 'pointer', userSelect: 'none',
+                        backgroundColor: isExpanded ? '#f8fbff' : '#fff',
                         display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '8px 0', borderBottom: '1px solid #f5f5f5',
-                      }}>
-                        <span style={{ flex: 1, fontSize: '13px', color: '#202124', lineHeight: 1.4 }}>
-                          {item.itemName}
-                        </span>
-                        {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
-                          const active = rating === r;
-                          const col = RATING_COLORS[r];
-                          return (
-                            <button key={r} onClick={() => handleRate(item.templateId, r)}
-                              style={{
-                                width: '36px', height: '30px',
-                                border: `1.5px solid ${active ? col.bg : '#dadce0'}`,
-                                borderRadius: '7px',
-                                backgroundColor: active ? col.bg : '#fff',
-                                color: active ? col.color : '#5f6368',
-                                fontSize: '12px', fontWeight: active ? 700 : 400,
-                                cursor: 'pointer', transition: 'all 0.12s',
-                              }}>
-                              {RATING_LABELS[r]}
-                            </button>
-                          );
-                        })}
-                        {!hasAnyRating && (
-                          <button onClick={() => handleDelete(item.templateId, item.itemName)}
-                            style={{
-                              border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff',
-                              color: '#ea4335', fontSize: '14px', padding: '2px 7px',
-                              cursor: 'pointer', lineHeight: 1, flexShrink: 0,
-                            }}>×</button>
+                      }}
+                    >
+                      <span style={{ fontSize: '12px', color: isExpanded ? '#1a73e8' : '#5f6368', flexShrink: 0 }}>
+                        {isExpanded ? '▲' : '▼'}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {/* 첫째 줄: 부동산·동/호수 */}
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#202124', marginBottom: '3px' }}>
+                          {visit.agentName || '(부동산 미입력)'}
+                          {(visit.dong || visit.hosu) && (
+                            <span style={{ fontWeight: 400, color: '#5f6368', marginLeft: '8px' }}>
+                              {[visit.dong, visit.hosu].filter(Boolean).join(' ')}
+                            </span>
+                          )}
+                        </div>
+                        {/* 둘째 줄: 평형·금액·날짜 */}
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          {visit.areaType && (
+                            <span style={{ fontSize: '11px', backgroundColor: '#e8f0fe', color: '#1a73e8', borderRadius: '4px', padding: '1px 6px' }}>
+                              {visit.areaType}
+                            </span>
+                          )}
+                          {visit.price != null && (
+                            <span style={{ fontSize: '11px', color: '#202124', fontWeight: 600 }}>
+                              {formatPrice(visit.price)}
+                            </span>
+                          )}
+                          {visit.visitDate && (
+                            <span style={{ fontSize: '11px', color: '#9aa0a6' }}>{visit.visitDate}</span>
+                          )}
+                          {totalTemplates > 0 && (
+                            <span style={{ fontSize: '10px', color: '#9aa0a6', marginLeft: 'auto' }}>
+                              체크 {ratedCount}/{totalTemplates}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {/* 수정/삭제 버튼 */}
+                      <button
+                        onClick={e => { e.stopPropagation(); openEditForm(visit); }}
+                        style={{ border: '1px solid #dadce0', borderRadius: '5px', background: '#fff', color: '#5f6368', fontSize: '11px', padding: '3px 7px', cursor: 'pointer', flexShrink: 0 }}
+                      >✏</button>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDeleteVisit(visit.id); }}
+                        style={{ border: '1px solid #fadbd8', borderRadius: '5px', background: '#fff', color: '#ea4335', fontSize: '11px', padding: '3px 7px', cursor: 'pointer', flexShrink: 0 }}
+                      >×</button>
+                    </div>
+
+                    {/* 메모 */}
+                    {visit.memo && !isExpanded && (
+                      <div style={{ padding: '0 14px 8px', fontSize: '11px', color: '#5f6368', whiteSpace: 'pre-wrap' }}>{visit.memo}</div>
+                    )}
+
+                    {/* 체크리스트 펼침 영역 */}
+                    {isExpanded && (
+                      <div style={{ padding: '8px 14px 14px', borderTop: '1px solid #f0f0f0' }}>
+                        {visit.memo && (
+                          <div style={{ fontSize: '11px', color: '#5f6368', backgroundColor: '#f9f9f9', borderRadius: '6px', padding: '6px 10px', marginBottom: '10px', whiteSpace: 'pre-wrap' }}>
+                            {visit.memo}
+                          </div>
+                        )}
+                        {totalTemplates === 0 ? (
+                          <p style={{ fontSize: '12px', color: '#9aa0a6' }}>
+                            체크리스트 항목이 없습니다. 헤더의 "체크리스트" 버튼에서 매물 항목을 추가하세요.
+                          </p>
+                        ) : (
+                          catOrder.map(cat => {
+                            const catItems = catMap.get(cat) || [];
+                            if (catItems.length === 0) return null;
+                            const catLabel = cat || '미분류';
+                            return (
+                              <div key={cat} style={{ marginBottom: '10px' }}>
+                                {/* 카테고리가 2개 이상일 때만 헤더 표시 */}
+                                {catOrder.length > 1 && (
+                                  <div style={{
+                                    fontSize: '10px', fontWeight: 700, color: '#5f6368',
+                                    padding: '3px 0 4px', borderBottom: '1px solid #e8eaed',
+                                    marginBottom: '4px', letterSpacing: '0.3px',
+                                  }}>
+                                    {catLabel}
+                                  </div>
+                                )}
+                                {catItems.map(item => {
+                                  const rating = item.rating ?? null;
+                                  return (
+                                    <div key={item.templateId} style={{
+                                      display: 'flex', alignItems: 'center', gap: '6px',
+                                      padding: '5px 0', borderBottom: '1px solid #f5f5f5',
+                                    }}>
+                                      <span style={{ flex: 1, fontSize: '12px', color: '#202124' }}>{item.itemName}</span>
+                                      {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => (
+                                        <button key={r}
+                                          onClick={() => handleVisitRate(visit, item.templateId, r)}
+                                          style={btnStyle(rating === r, RATING_COLORS[r])}>
+                                          {RATING_LABELS[r]}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              );
-            })
-          )}
-        </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          /* 분위기/단지 탭 */
+          <>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 22px' }}>
+              {loading ? (
+                <p style={{ color: '#9aa0a6', fontSize: '13px', padding: '12px 0' }}>불러오는 중...</p>
+              ) : tabItems.length === 0 ? (
+                <p style={{ color: '#9aa0a6', fontSize: '13px', padding: '12px 0' }}>
+                  이 유형의 항목이 없습니다. 헤더의 "체크리스트" 버튼으로 항목을 추가하세요.
+                </p>
+              ) : (
+                orderedCategories.map(cat => {
+                  const catItems = itemsByCategory.get(cat) || [];
+                  if (catItems.length === 0) return null;
+                  const catLabel = cat || '미분류';
+                  const catRated = catItems.filter(i => i.rating !== null).length;
+                  return (
+                    <div key={cat} style={{ marginBottom: '14px' }}>
+                      {orderedCategories.length > 1 && (
+                        <div style={{
+                          fontSize: '11px', fontWeight: 700, color: '#5f6368',
+                          padding: '5px 0 4px', borderBottom: '1.5px solid #e8eaed',
+                          marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px',
+                        }}>
+                          {catLabel}
+                          <span style={{ fontWeight: 400, color: '#bdbdbd' }}>{catRated}/{catItems.length}</span>
+                        </div>
+                      )}
+                      {catItems.map(item => {
+                        const rating = item.rating ?? null;
+                        return (
+                          <div key={item.templateId} style={{
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            padding: '8px 0', borderBottom: '1px solid #f5f5f5',
+                          }}>
+                            <span style={{ flex: 1, fontSize: '13px', color: '#202124', lineHeight: 1.4 }}>
+                              {item.itemName}
+                            </span>
+                            {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
+                              const active = rating === r;
+                              const col = RATING_COLORS[r];
+                              return (
+                                <button key={r} onClick={() => handleRate(item.templateId, r)}
+                                  style={{
+                                    width: '36px', height: '30px',
+                                    border: `1.5px solid ${active ? col.bg : '#dadce0'}`,
+                                    borderRadius: '7px',
+                                    backgroundColor: active ? col.bg : '#fff',
+                                    color: active ? col.color : '#5f6368',
+                                    fontSize: '12px', fontWeight: active ? 700 : 400,
+                                    cursor: 'pointer', transition: 'all 0.12s',
+                                  }}>
+                                  {RATING_LABELS[r]}
+                                </button>
+                              );
+                            })}
+                            {!hasAnyRating && (
+                              <button onClick={() => handleDelete(item.templateId, item.itemName)}
+                                style={{
+                                  border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff',
+                                  color: '#ea4335', fontSize: '14px', padding: '2px 7px',
+                                  cursor: 'pointer', lineHeight: 1, flexShrink: 0,
+                                }}>×</button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })
+              )}
+            </div>
 
-        {/* 항목 추가 (카테고리 없음) */}
-        <div style={{ padding: '12px 22px', borderTop: '1px solid #f0f0f0', display: 'flex', gap: '8px', flexShrink: 0 }}>
-          <input
-            value={newItemName}
-            onChange={e => setNewItemName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAdd(); }}
-            placeholder="항목 추가... (Enter)"
-            style={{
-              flex: 1, fontSize: '13px', padding: '7px 10px',
-              border: '1px solid #dadce0', borderRadius: '8px', outline: 'none',
-            }}
-          />
-          <button
-            onClick={handleAdd}
-            disabled={!newItemName.trim() || adding}
-            style={{
-              padding: '7px 16px', fontSize: '13px', fontWeight: 600, border: 'none', borderRadius: '8px',
-              backgroundColor: newItemName.trim() ? '#1a73e8' : '#f1f3f4',
-              color: newItemName.trim() ? '#fff' : '#9aa0a6',
-              cursor: newItemName.trim() ? 'pointer' : 'not-allowed',
-            }}>추가</button>
-        </div>
+            {/* 항목 추가 (분위기/단지 탭용) */}
+            <div style={{ padding: '12px 22px', borderTop: '1px solid #f0f0f0', display: 'flex', gap: '8px', flexShrink: 0 }}>
+              <input
+                value={newItemName}
+                onChange={e => setNewItemName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAdd(); }}
+                placeholder="항목 추가... (Enter)"
+                style={{
+                  flex: 1, fontSize: '13px', padding: '7px 10px',
+                  border: '1px solid #dadce0', borderRadius: '8px', outline: 'none',
+                }}
+              />
+              <button
+                onClick={handleAdd}
+                disabled={!newItemName.trim() || adding}
+                style={{
+                  padding: '7px 16px', fontSize: '13px', fontWeight: 600, border: 'none', borderRadius: '8px',
+                  backgroundColor: newItemName.trim() ? '#1a73e8' : '#f1f3f4',
+                  color: newItemName.trim() ? '#fff' : '#9aa0a6',
+                  cursor: newItemName.trim() ? 'pointer' : 'not-allowed',
+                }}>추가</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -175,6 +175,12 @@ ChecklistResultItem { id, templateId, itemName, visitType, category?, displayOrd
 
 // 생활권 분위기 체크 결과 (ATMOSPHERE 타입 템플릿만 포함)
 ZoneChecklistResultItem { id, templateId, itemName, category?, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null, memo: string|null }
+
+// 매물 임장 체크리스트 결과 (PROPERTY 타입 템플릿 기준)
+PropertyVisitResultItem { id, templateId, itemName, category?, displayOrder, rating: 'UPPER'|'MIDDLE'|'LOWER'|null }
+
+// 매물 임장 기록 1건 (부동산·동호수·평형·금액 + 체크리스트 results 배열 포함)
+PropertyVisit { id, complexId, visitDate?, agentName?, dong?, hosu?, areaType?, price?, memo?, createdAt, results: PropertyVisitResultItem[] }
 ```
 
 ### 유틸 함수
@@ -232,6 +238,11 @@ ZoneChecklistResultItem { id, templateId, itemName, category?, displayOrder, rat
 | GET | `/api/living-zones?complexId=X` | 특정 단지가 포함된 생활권 목록 조회 |
 | GET | `/api/living-zones/:id/checklists` | 생활권 분위기 체크리스트 조회 (ATMOSPHERE 템플릿, 미체크 포함) |
 | PATCH | `/api/living-zones/:id/checklists/:templateId` | 생활권 체크 결과 upsert — `{ rating?, memo? }` |
+| GET | `/api/complexes/:id/property-visits` | 매물 임장 기록 목록 (created_at 내림차순, PROPERTY 템플릿 결과 포함) |
+| POST | `/api/complexes/:id/property-visits` | 매물 임장 기록 추가 (201) — `PropertyVisitRequest` |
+| PATCH | `/api/complexes/:id/property-visits/:visitId` | 매물 임장 기록 수정 — `PropertyVisitRequest` |
+| DELETE | `/api/complexes/:id/property-visits/:visitId` | 매물 임장 기록 삭제 (결과 CASCADE, 204) |
+| PATCH | `/api/complexes/:id/property-visits/:visitId/checklists/:templateId` | 매물 체크 결과 upsert — `{ rating? }` |
 
 ---
 
@@ -391,13 +402,16 @@ ZoneChecklistResultItem { id, templateId, itemName, category?, displayOrder, rat
   - `category` 없는 항목은 "미분류" 그룹으로 표시 (카테고리 삭제 버튼 없음)
 
 ### `ChecklistModal.tsx`
-- 단지 체크리스트 모달 (540px, 82vh)
-- visitType 탭 + 카테고리별 그룹 헤더 → 항목 상/중/하 평가
-- `getComplexChecklist`로 전체 템플릿+결과 단일 조회 (미체크 포함)
-- 카테고리 그룹이 1개면 헤더 생략, 복수면 섹션 헤더 + rated/total 표시
-- 동일 버튼 재클릭 = 해제, 즉시 PATCH upsert 저장
-- `hasAnyRating`이 false일 때만 항목별 삭제 버튼 표시
-- 하단 "항목 추가" 입력은 카테고리 없이 추가 (템플릿 패널에서 카테고리 관리 권장)
+- 단지 체크리스트 모달 (600px, 86vh)
+- **분위기/단지 탭**: 기존 방식 — 카테고리별 그룹 헤더, 상/중/하 즉시 저장, 하단 항목 추가 입력
+- **매물 탭**: 매물 임장 기록 카드 UI (완전 재설계)
+  - `getPropertyVisits(complexId)`로 기록 목록 로드 (탭 전환 시 로드)
+  - "+ 새 매물 기록 추가" 버튼 → 인라인 폼 (방문일·부동산·동·호수·평형·금액만원·메모)
+  - 카드 헤더: 부동산명, 동호수, 평형 배지, 금액, 날짜, 체크N/M — 클릭으로 펼침/닫힘
+  - 펼침 시 PROPERTY 체크리스트 카테고리별 그룹 + 상/중/하 즉시 저장
+  - 카드별 ✏ 수정 / × 삭제 버튼 (수정 시 기존 results 유지)
+  - 저장: POST → 신규 카드 추가 + 자동 펼침 / PATCH → 기존 카드 헤더 갱신 (results 유지)
+  - 금액 입력은 만원 단위 (화면 표시는 `formatPrice`로 억 단위)
 
 ### `LivingZonePanel.tsx`
 - 생활권 카드 펼칠 때 `getZoneChecklist(zoneId)`로 분위기 체크리스트 로드
@@ -575,6 +589,16 @@ ZoneChecklistResultItem { id, templateId, itemName, category?, displayOrder, rat
     - 단지 선택 시 `GET /api/living-zones?complexId=X`로 소속 생활권 조회
     - 각 생활권의 분위기 체크리스트 표시 + 인라인 평가 (상/중/하)
   - 백엔드: `checklist_template.category` 컬럼, `living_zone_checklist_result` 테이블
+- [x] 매물 임장 기록 기능 (`PropertyVisit`)
+  - **ChecklistModal "매물" 탭** 재설계 — 단순 항목 목록 → 매물 단위 기록 카드 UI
+    - 카드 헤더: 부동산명·동호수·평형·금액·날짜, 클릭 시 체크리스트 펼침/닫힘
+    - 추가/수정 폼: 방문일·부동산·동·호수·평형·금액(만원)·메모 6개 필드
+    - 카드별 체크리스트: PROPERTY 템플릿 기준, 카테고리별 그룹핑, 상/중/하 즉시 저장
+    - 삭제: confirm 후 cascade 삭제
+  - 새 타입: `PropertyVisit`, `PropertyVisitResultItem` (`src/types/index.ts`)
+  - 새 API 함수: `getPropertyVisits`, `createPropertyVisit`, `updatePropertyVisit`, `deletePropertyVisit`, `upsertPropertyVisitResult` (`src/services/api.ts`)
+  - 백엔드: `property_visit` / `property_visit_result` 테이블, 스키마·서비스·라우터 추가
+    - API: `GET/POST /api/complexes/:id/property-visits`, `PATCH/DELETE /api/complexes/:id/property-visits/:visitId`, `PATCH .../checklists/:templateId`
 - [x] 선정 단지(selected_complex_id) — ComparisonEvalPanel 결론 아래 두 단지 선택 버튼(👑 강조), 저장 시 PK 전송
   - CompareListModal 저장된 비교평가 목록에서 선정 단지 이름 앞 👑 표시
   - `Comparison` 타입에 `selectedComplexId` 추가, `createComparison`/`updateComparison` API 파라미터 포함

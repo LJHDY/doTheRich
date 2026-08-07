@@ -358,6 +358,31 @@ export interface ZoneChecklistResultItem {
   memo: string | null;
 }
 
+/** 매물 임장 체크리스트 결과 — 미평가 항목도 rating=null로 포함 */
+export interface PropertyVisitResultItem {
+  id: number;
+  templateId: number;
+  itemName: string;
+  category?: string;
+  displayOrder: number;
+  rating: 'UPPER' | 'MIDDLE' | 'LOWER' | null;
+}
+
+/** 매물 임장 기록 — 부동산·동호수·평형·제안가 단위 1건 */
+export interface PropertyVisit {
+  id: number;
+  complexId: number;
+  visitDate?: string;    // "2024-01-15"
+  agentName?: string;    // 부동산 이름
+  dong?: string;
+  hosu?: string;
+  areaType?: string;     // 평형 (예: "전용 59")
+  price?: number;        // 제안 금액 (원 단위)
+  memo?: string;
+  createdAt: string;
+  results: PropertyVisitResultItem[];
+}
+
 export interface RoutePoint {
   lat: number;
   lng: number;

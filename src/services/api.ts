@@ -19,6 +19,8 @@ import {
   ChecklistTemplate,
   ChecklistResultItem,
   ZoneChecklistResultItem,
+  PropertyVisit,
+  PropertyVisitResultItem,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -556,6 +558,49 @@ export const upsertChecklistResult = async (
 ): Promise<ChecklistResultItem> => {
   const { data } = await api.patch<ChecklistResultItem>(
     `/api/complexes/${complexId}/checklists/${templateId}`, req
+  );
+  return data;
+};
+
+/** 매물 임장 기록 목록 조회 — GET /api/complexes/:id/property-visits */
+export const getPropertyVisits = async (complexId: number): Promise<PropertyVisit[]> => {
+  const { data } = await api.get<PropertyVisit[]>(`/api/complexes/${complexId}/property-visits`);
+  return data;
+};
+
+/** 매물 임장 기록 추가 — POST /api/complexes/:id/property-visits */
+export const createPropertyVisit = async (
+  complexId: number,
+  req: { visitDate?: string; agentName?: string; dong?: string; hosu?: string; areaType?: string; price?: number; memo?: string }
+): Promise<PropertyVisit> => {
+  const { data } = await api.post<PropertyVisit>(`/api/complexes/${complexId}/property-visits`, req);
+  return data;
+};
+
+/** 매물 임장 기록 수정 — PATCH /api/complexes/:id/property-visits/:visitId */
+export const updatePropertyVisit = async (
+  complexId: number,
+  visitId: number,
+  req: { visitDate?: string; agentName?: string; dong?: string; hosu?: string; areaType?: string; price?: number; memo?: string }
+): Promise<PropertyVisit> => {
+  const { data } = await api.patch<PropertyVisit>(`/api/complexes/${complexId}/property-visits/${visitId}`, req);
+  return data;
+};
+
+/** 매물 임장 기록 삭제 — DELETE /api/complexes/:id/property-visits/:visitId */
+export const deletePropertyVisit = async (complexId: number, visitId: number): Promise<void> => {
+  await api.delete(`/api/complexes/${complexId}/property-visits/${visitId}`);
+};
+
+/** 매물 임장 체크 결과 upsert — PATCH /api/complexes/:id/property-visits/:visitId/checklists/:templateId */
+export const upsertPropertyVisitResult = async (
+  complexId: number,
+  visitId: number,
+  templateId: number,
+  req: { rating?: string | null }
+): Promise<PropertyVisitResultItem> => {
+  const { data } = await api.patch<PropertyVisitResultItem>(
+    `/api/complexes/${complexId}/property-visits/${visitId}/checklists/${templateId}`, req
   );
   return data;
 };
