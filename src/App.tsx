@@ -355,7 +355,8 @@ const App: React.FC = () => {
       {/* 헤더 — 데스크탑: 1줄 56px / 모바일: 2줄 (Row1 로고+버튼, Row2 검색+필터) */}
       <header ref={headerRef} style={{
         backgroundColor: '#fff', borderBottom: '1px solid #e8eaed',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.08)', flexShrink: 0, zIndex: 10,
+        borderTop: '3px solid #89CFF0',
+        boxShadow: '0 1px 6px rgba(137,207,240,0.15)', flexShrink: 0, zIndex: 10,
         ...(isMobile ? {} : {
           display: 'flex', flexDirection: 'column',
         }),
@@ -365,7 +366,7 @@ const App: React.FC = () => {
             {/* 모바일 Row1: 로고 + 단지수 + 활성 뱃지 + ☰ 메뉴 버튼 */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', height: '48px', gap: '6px' }}>
               <img src="/do_the_rich.png" alt="DoTheRich" onClick={handleGoHome} style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'contain', flexShrink: 0, cursor: 'pointer' }} />
-              <span onClick={handleGoHome} style={{ fontSize: '14px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap', cursor: 'pointer' }}>DoTheRich</span>
+              <span onClick={handleGoHome} style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap', cursor: 'pointer' }}>DoTheRich</span>
               <span style={{ fontSize: '11px', color: '#80868b', whiteSpace: 'nowrap' }}>
                 {loading ? '' : `${complexes.length}개`}
               </span>
@@ -480,7 +481,7 @@ const App: React.FC = () => {
               <SearchBar onSelect={handleSearchSelect} fluid />
             </div>
             {/* 모바일 Row3: 금액대 필터 */}
-            <div style={{ padding: '0 10px 8px' }}>
+            <div style={{ padding: '0 10px 8px', borderTop: '1px solid #d4edfb', backgroundColor: '#f0f8fd' }}>
               <PriceRangeFilter
                 key={filterResetKey}
                 priceRanges={priceRanges}
@@ -498,7 +499,7 @@ const App: React.FC = () => {
               {/* 로고 */}
               <div onClick={handleGoHome} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, cursor: 'pointer' }}>
                 <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '30px', height: '30px', borderRadius: '8px', objectFit: 'contain' }} />
-                <span style={{ fontSize: '15px', fontWeight: 700, color: '#202124', whiteSpace: 'nowrap' }}>DoTheRich</span>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap' }}>DoTheRich</span>
               </div>
               <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
               {/* 검색바 — fluid로 flex:1 영역 전체 사용 */}
@@ -572,7 +573,7 @@ const App: React.FC = () => {
             {/* 데스크탑 Row 2: 금액대 + 지도 도구 버튼 */}
             <div style={{
               display: 'flex', alignItems: 'center', padding: '0 12px', height: '36px', gap: '6px',
-              borderTop: '1px solid #f0f0f0', backgroundColor: '#fafafa',
+              borderTop: '1px solid #d4edfb', backgroundColor: '#f0f8fd',
             }}>
               {/* 금액대 필터 */}
               <PriceRangeFilter
