@@ -40,7 +40,7 @@ const INFRA_TYPE_LABELS: Record<string, string> = {
   DEPARTMENT_STORE: '백화점', MART: '마트', HOSPITAL: '병원', ETC: '기타',
 };
 const GRADE_COLORS: Record<string, string> = {
-  S: '#ea4335', A: '#f9ab00', B: '#34a853', C: '#1a73e8',
+  S: '#F08080', A: '#FFD97D', B: '#7DC8A0', C: '#89CFF0',
 };
 
 const formatCount = (n: number): string =>
@@ -58,10 +58,10 @@ const calcSchoolGrade = (
     .map(s => s.achievementScore!);
   if (scores.length === 0) return null;
   const best = Math.max(...scores);
-  if (best >= 95) return { grade: 'S', color: '#ea4335' };
-  if (best >= 90) return { grade: 'A', color: '#f9ab00' };
-  if (best >= 85) return { grade: 'B', color: '#34a853' };
-  return { grade: 'C', color: '#1a73e8' };
+  if (best >= 95) return { grade: 'S', color: '#F08080' };
+  if (best >= 90) return { grade: 'A', color: '#FFD97D' };
+  if (best >= 85) return { grade: 'B', color: '#7DC8A0' };
+  return { grade: 'C', color: '#4BAAD4' };
 };
 
 // 인프라 등급 — 인프라 없어도 항상 반환
@@ -70,10 +70,10 @@ const calcInfraGrade = (
 ): { grade: 'S' | 'A' | 'B' | 'C'; color: string } => {
   const deptCount = infraInfos.filter(i => i.infraType === 'DEPARTMENT_STORE').length;
   const martCount = infraInfos.filter(i => i.infraType === 'MART').length;
-  if (deptCount >= 2) return { grade: 'S', color: '#ea4335' };
-  if (deptCount >= 1) return { grade: 'A', color: '#f9ab00' };
-  if (martCount >= 1) return { grade: 'B', color: '#34a853' };
-  return { grade: 'C', color: '#1a73e8' };
+  if (deptCount >= 2) return { grade: 'S', color: '#F08080' };
+  if (deptCount >= 1) return { grade: 'A', color: '#FFD97D' };
+  if (martCount >= 1) return { grade: 'B', color: '#7DC8A0' };
+  return { grade: 'C', color: '#4BAAD4' };
 };
 
 // 인라인 뱃지 — 학교유형·인프라유형 등 짧은 분류 태그
@@ -85,8 +85,8 @@ const Tag: React.FC<{ label: string; color?: string }> = ({ label, color = '#5f6
   }}>{label}</span>
 );
 
-const SALE_COLORS = ['#1a73e8', '#4285f4', '#185abc', '#669df6'];
-const JEONSE_COLORS = ['#ea4335', '#c62828', '#ef5350', '#e57373'];
+const SALE_COLORS = ['#89CFF0', '#4285f4', '#185abc', '#669df6'];
+const JEONSE_COLORS = ['#F08080', '#c62828', '#ef5350', '#e57373'];
 
 // 같은 날짜 기록이 여러 개일 때 하나의 row로 병합 — ComplexInfoPanel과 동일
 const buildChartData = (histories: PriceHistory[]): { rows: ChartDataRow[]; series: ChartSeries[] } => {
@@ -217,8 +217,8 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
       {/* 헤더 — 파란 배경, 단지명/가격/닫기 */}
       <div style={{
         padding: '12px 14px',
-        backgroundColor: '#1a73e8',
-        color: '#fff',
+        backgroundColor: '#89CFF0',
+        color: '#1a3a5c',
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -257,7 +257,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
             <div style={{ fontSize: '18px', fontWeight: 700 }}>{formatPrice(complex.price)}</div>
           ) : null}
           {/* 즐겨찾기 — 읽기 전용 */}
-          {complex.isFavorite && <span style={{ fontSize: '18px', color: '#f9ab00', lineHeight: 1 }}>★</span>}
+          {complex.isFavorite && <span style={{ fontSize: '18px', color: '#FFD97D', lineHeight: 1 }}>★</span>}
         </div>
       </div>
 
@@ -296,7 +296,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                       style={{
                         fontSize: '10px', fontWeight: 600,
                         padding: '2px 8px', borderRadius: '10px', cursor: 'pointer', border: 'none',
-                        backgroundColor: activeTab === at ? '#1a73e8' : '#e8eaed',
+                        backgroundColor: activeTab === at ? '#89CFF0' : '#e8eaed',
                         color: activeTab === at ? '#fff' : '#5f6368',
                       }}
                     >{at}</button>
@@ -433,10 +433,10 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                       <span style={{ marginLeft: '3px', fontSize: '9px', color: '#b0b8c1' }}>{ct.distanceKm}km</span>
                     )}
                   </div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a73e8' }}>{ct.minutes}분</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#4BAAD4' }}>{ct.minutes}분</div>
                   {ct.transferCount != null && (
                     <div style={{ marginTop: '3px' }}>
-                      <div style={{ fontSize: '9px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', fontWeight: ct.transferCount === 0 ? 600 : 400 }}>
+                      <div style={{ fontSize: '9px', color: ct.transferCount === 0 ? '#7DC8A0' : '#80868b', fontWeight: ct.transferCount === 0 ? 600 : 400 }}>
                         {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
                       </div>
                       {ct.transferLines && (
@@ -444,7 +444,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                           {ct.transferLines.split(' ➡️ ').map((line, i, arr) => (
                             <span key={i}>
                               <span style={{ fontWeight: 600 }}>{line}</span>
-                              {i < arr.length - 1 && <span style={{ color: '#fbbc04', margin: '0 1px' }}> ➡ </span>}
+                              {i < arr.length - 1 && <span style={{ color: '#FFE082', margin: '0 1px' }}> ➡ </span>}
                             </span>
                           ))}
                         </div>
@@ -478,7 +478,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <Tag
                     label={SCHOOL_TYPE_LABELS[s.schoolType] ?? s.schoolType}
-                    color={s.schoolType === 'MIDDLE' ? '#1a73e8' : '#34a853'}
+                    color={s.schoolType === 'MIDDLE' ? '#89CFF0' : '#7DC8A0'}
                   />
                   <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124', flex: 1 }}>{s.schoolName}</span>
                   {s.walkingMinutes != null && (
@@ -516,7 +516,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           {complex.infraInfos && complex.infraInfos.length > 0 ? (
             complex.infraInfos.map((inf: InfraInfo) => (
               <div key={inf.id} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <Tag label={INFRA_TYPE_LABELS[inf.infraType] ?? inf.infraType} color='#f9ab00' />
+                <Tag label={INFRA_TYPE_LABELS[inf.infraType] ?? inf.infraType} color='#FFD97D' />
                 <span style={{ fontSize: '12px', color: '#202124', flex: 1 }}>{inf.infraName}</span>
                 {inf.distance != null && (
                   <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>도보 {inf.distance}분</span>
@@ -537,7 +537,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                 {(h.macroCategory || h.subCategory) && (
                   <div style={{ display: 'flex', gap: '3px', marginBottom: '2px', flexWrap: 'wrap' }}>
                     {h.macroCategory && (
-                      <span style={{ fontSize: '9px', background: '#fce8e6', color: '#c5221f', borderRadius: '4px', padding: '1px 5px', fontWeight: 600 }}>
+                      <span style={{ fontSize: '9px', background: '#FFE8E8', color: '#E06060', borderRadius: '4px', padding: '1px 5px', fontWeight: 600 }}>
                         {h.macroCategory}
                       </span>
                     )}
@@ -627,7 +627,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>임장 유형</h4>
           <div style={{
             display: 'inline-block', padding: '3px 10px', borderRadius: '10px',
-            backgroundColor: '#e8f0fe', color: '#1a73e8', fontSize: '12px', fontWeight: 600,
+            backgroundColor: '#D4EFFC', color: '#4BAAD4', fontSize: '12px', fontWeight: 600,
           }}>
             {VISIT_TYPE_LABELS[complex.visitType ?? 'NONE'] ?? complex.visitType ?? '임장X'}
           </div>
@@ -651,10 +651,10 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                     WebkitAppearance: 'none',
                     MozAppearance: 'none',
                     border: '1.5px solid',
-                    borderColor: selectedAreaType ? '#1a73e8' : '#d2d5da',
+                    borderColor: selectedAreaType ? '#89CFF0' : '#d2d5da',
                     borderRadius: '14px',
-                    backgroundColor: selectedAreaType ? '#e8f0fe' : '#f8f9fa',
-                    color: selectedAreaType ? '#1a73e8' : '#5f6368',
+                    backgroundColor: selectedAreaType ? '#D4EFFC' : '#f8f9fa',
+                    color: selectedAreaType ? '#89CFF0' : '#5f6368',
                     fontSize: '11px',
                     fontWeight: 600,
                     padding: '3px 22px 3px 8px',
@@ -669,7 +669,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                 </select>
                 <svg
                   viewBox="0 0 24 24" fill="none"
-                  stroke={selectedAreaType ? '#1a73e8' : '#9e9e9e'}
+                  stroke={selectedAreaType ? '#89CFF0' : '#9e9e9e'}
                   strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
                   style={{
                     position: 'absolute', right: '6px', top: '50%',
@@ -755,13 +755,13 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                               <span style={{ fontWeight: 600, color: '#202124' }}>{formatPrice(item.price)}</span>
                               {delta !== null && delta !== 0 && rate !== null && (
-                                <span style={{ fontSize: '9px', fontWeight: 700, color: delta > 0 ? '#c5221f' : '#1a73e8' }}>
+                                <span style={{ fontSize: '9px', fontWeight: 700, color: delta > 0 ? '#E06060' : '#89CFF0' }}>
                                   {delta > 0 ? '▲' : '▼'} {formatPrice(Math.abs(delta))} ({delta > 0 ? '+' : ''}{rate.toFixed(1)}%)
                                 </span>
                               )}
                             </div>
                             {item.jeonseRate != null && (
-                              <span style={{ fontSize: '10px', color: '#1a73e8' }}>전세율 {item.jeonseRate.toFixed(0)}%</span>
+                              <span style={{ fontSize: '10px', color: '#4BAAD4' }}>전세율 {item.jeonseRate.toFixed(0)}%</span>
                             )}
                           </div>
                           {(item.kbPrice || item.askingPrice || item.highestPrice || item.lowestPrice || item.tenYearChangeAmount || item.tenYearChangeRate != null) && (

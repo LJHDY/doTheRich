@@ -100,8 +100,8 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
             {!showComparisons && (
               <span style={{
                 fontSize: '11px', fontWeight: 700,
-                color: selectedIds.length > 0 ? '#1a73e8' : '#9e9e9e',
-                backgroundColor: selectedIds.length > 0 ? '#e8f0fe' : '#f5f5f5',
+                color: selectedIds.length > 0 ? '#89CFF0' : '#9e9e9e',
+                backgroundColor: selectedIds.length > 0 ? '#D4EFFC' : '#f5f5f5',
                 padding: '2px 7px', borderRadius: '10px',
               }}>
                 {selectedIds.length}/{compareMode === 'evaluation' ? 2 : 3}
@@ -117,9 +117,9 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                 }}
                 style={{
                   ...btnBase,
-                  borderColor: compareMode === 'evaluation' ? '#34a853' : '#dadce0',
+                  borderColor: compareMode === 'evaluation' ? '#7DC8A0' : '#dadce0',
                   backgroundColor: compareMode === 'evaluation' ? '#e6f4ea' : '#fff',
-                  color: compareMode === 'evaluation' ? '#34a853' : '#9e9e9e',
+                  color: compareMode === 'evaluation' ? '#7DC8A0' : '#9e9e9e',
                 }}
               >
                 {compareMode === 'evaluation' ? '✓ 비교평가' : '비교평가'}
@@ -130,9 +130,9 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                 onClick={() => setShowComparisons(v => !v)}
                 style={{
                   ...btnBase,
-                  borderColor: showComparisons ? '#1a73e8' : '#dadce0',
-                  backgroundColor: showComparisons ? '#e8f0fe' : '#fff',
-                  color: showComparisons ? '#1a73e8' : '#9e9e9e',
+                  borderColor: showComparisons ? '#89CFF0' : '#dadce0',
+                  backgroundColor: showComparisons ? '#D4EFFC' : '#fff',
+                  color: showComparisons ? '#89CFF0' : '#9e9e9e',
                 }}
               >
                 조회
@@ -143,9 +143,9 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                 onClick={() => setFavoritesOnly(v => !v)}
                 style={{
                   ...btnBase,
-                  borderColor: favoritesOnly ? '#f9ab00' : '#dadce0',
+                  borderColor: favoritesOnly ? '#FFD97D' : '#dadce0',
                   backgroundColor: favoritesOnly ? '#fef9e7' : '#fff',
-                  color: favoritesOnly ? '#f9ab00' : '#9e9e9e',
+                  color: favoritesOnly ? '#FFD97D' : '#9e9e9e',
                 }}
               >★ 즐겨찾기</button>
             </div>
@@ -172,8 +172,8 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                     appearance: 'none', WebkitAppearance: 'none',
                     fontSize: '12px', padding: '5px 24px 5px 10px',
                     border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
-                    backgroundColor: selectedRange ? '#e8f0fe' : '#fff',
-                    color: selectedRange ? '#1a73e8' : '#5f6368', cursor: 'pointer',
+                    backgroundColor: selectedRange ? '#D4EFFC' : '#fff',
+                    color: selectedRange ? '#89CFF0' : '#5f6368', cursor: 'pointer',
                   }}
                 >
                   <option value="">전체 금액대</option>
@@ -247,7 +247,7 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                     </div>
                     {/* 결론 미리보기 */}
                     {c.conclusion && (
-                      <div style={{ fontSize: '11px', color: '#34a853', fontWeight: 600, marginBottom: '2px' }}>
+                      <div style={{ fontSize: '11px', color: '#7DC8A0', fontWeight: 600, marginBottom: '2px' }}>
                         → {c.conclusion}
                       </div>
                     )}
@@ -287,7 +287,7 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '10px 16px', borderBottom: '1px solid #f5f5f5',
-                      backgroundColor: isSelected ? '#e8f0fe' : '#fff',
+                      backgroundColor: isSelected ? '#D4EFFC' : '#fff',
                       cursor: 'pointer', transition: 'background-color 0.1s',
                     }}
                   >
@@ -298,12 +298,12 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                         <span style={{
                           fontSize: '10px', fontWeight: 700, color: '#fff',
-                          backgroundColor: '#1a73e8', borderRadius: '10px', padding: '1px 6px',
+                          backgroundColor: '#89CFF0', borderRadius: '10px', padding: '1px 6px',
                         }}>{displayRange}</span>
                         {matchingAts.map(at => (
                           <span key={at} style={{
-                            fontSize: '10px', fontWeight: 600, color: '#1a73e8',
-                            backgroundColor: '#e8f0fe', borderRadius: '10px', padding: '1px 6px',
+                            fontSize: '10px', fontWeight: 600, color: '#4BAAD4',
+                            backgroundColor: '#D4EFFC', borderRadius: '10px', padding: '1px 6px',
                           }}>{at.replace(/^전용\s*/, '')}</span>
                         ))}
                         <span style={{ fontSize: '11px', color: '#80868b' }}>
@@ -316,7 +316,7 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                       checked={isSelected}
                       onChange={() => onToggle(c.id)}
                       onClick={e => e.stopPropagation()}
-                      style={{ width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0, marginLeft: '12px', accentColor: '#1a73e8' }}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0, marginLeft: '12px', accentColor: '#89CFF0' }}
                     />
                   </div>
                 );

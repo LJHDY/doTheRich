@@ -19,13 +19,13 @@ type VisitTypeKey = 'ATMOSPHERE' | 'COMPLEX' | 'PROPERTY';
 
 const RATING_LABELS: Record<string, string> = { UPPER: '상', MIDDLE: '중', LOWER: '하' };
 const RATING_COLORS: Record<string, { bg: string; color: string }> = {
-  UPPER:  { bg: '#ea4335', color: '#fff' },
-  MIDDLE: { bg: '#f9ab00', color: '#fff' },
-  LOWER:  { bg: '#1a73e8', color: '#fff' },
+  UPPER:  { bg: '#F08080', color: '#fff' },
+  MIDDLE: { bg: '#FFD97D', color: '#6b4400' },
+  LOWER:  { bg: '#89CFF0', color: '#1a3a5c' },
 };
 const OX_COLORS: Record<string, { bg: string; color: string }> = {
-  O: { bg: '#0f9d58', color: '#fff' },
-  X: { bg: '#ea4335', color: '#fff' },
+  O: { bg: '#7DC8A0', color: '#1a5030' },
+  X: { bg: '#F08080', color: '#fff' },
 };
 
 interface Props {
@@ -415,9 +415,9 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
               <button key={vt.key} onClick={() => setActiveTab(vt.key)}
                 style={{
                   padding: '6px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                  border: '1.5px solid', borderColor: isActive ? '#1a73e8' : '#dadce0',
+                  border: '1.5px solid', borderColor: isActive ? '#89CFF0' : '#dadce0',
                   borderRadius: '16px',
-                  backgroundColor: isActive ? '#1a73e8' : '#fff',
+                  backgroundColor: isActive ? '#89CFF0' : '#fff',
                   color: isActive ? '#fff' : '#5f6368',
                 }}>
                 {vt.label}
@@ -447,7 +447,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                 border: '1.5px solid #1a73e8', borderRadius: '10px',
                 padding: '14px 16px', marginBottom: '14px', backgroundColor: '#f8fbff',
               }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a73e8', marginBottom: '10px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#4BAAD4', marginBottom: '10px' }}>
                   {editingVisitId ? '매물 기록 수정' : '새 매물 기록 추가'}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
@@ -506,7 +506,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                   <button onClick={() => { setShowAddForm(false); setEditingVisitId(null); }}
                     style={{ padding: '6px 14px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>취소</button>
                   <button onClick={handleFormSave} disabled={formSaving}
-                    style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '6px', backgroundColor: '#1a73e8', color: '#fff', cursor: 'pointer' }}>
+                    style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '6px', backgroundColor: '#89CFF0', color: '#1a3a5c', cursor: 'pointer' }}>
                     {formSaving ? '저장 중...' : '저장'}
                   </button>
                 </div>
@@ -519,7 +519,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                 style={{
                   width: '100%', padding: '8px', fontSize: '12px', fontWeight: 600,
                   border: '1.5px dashed #1a73e8', borderRadius: '8px',
-                  background: '#f8fbff', color: '#1a73e8', cursor: 'pointer', marginBottom: '12px',
+                  background: '#f8fbff', color: '#4BAAD4', cursor: 'pointer', marginBottom: '12px',
                 }}>
                 + 새 매물 기록 추가
               </button>
@@ -571,7 +571,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                         display: 'flex', alignItems: 'center', gap: '8px',
                       }}
                     >
-                      <span style={{ fontSize: '12px', color: isExpanded ? '#1a73e8' : '#5f6368', flexShrink: 0 }}>
+                      <span style={{ fontSize: '12px', color: isExpanded ? '#89CFF0' : '#5f6368', flexShrink: 0 }}>
                         {isExpanded ? '▲' : '▼'}
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -585,7 +585,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                           {visit.areaType && (
-                            <span style={{ fontSize: '11px', backgroundColor: '#e8f0fe', color: '#1a73e8', borderRadius: '4px', padding: '1px 6px' }}>
+                            <span style={{ fontSize: '11px', backgroundColor: '#D4EFFC', color: '#4BAAD4', borderRadius: '4px', padding: '1px 6px' }}>
                               {displayArea(visit.areaType)}
                             </span>
                           )}
@@ -616,7 +616,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                       >✏</button>
                       <button
                         onClick={e => { e.stopPropagation(); handleDeleteVisit(visit.id); }}
-                        style={{ border: '1px solid #fadbd8', borderRadius: '5px', background: '#fff', color: '#ea4335', fontSize: '11px', padding: '3px 7px', cursor: 'pointer', flexShrink: 0 }}
+                        style={{ border: '1px solid #fadbd8', borderRadius: '5px', background: '#fff', color: '#F08080', fontSize: '11px', padding: '3px 7px', cursor: 'pointer', flexShrink: 0 }}
                       >×</button>
                     </div>
 
@@ -714,7 +714,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                             <button onClick={() => handleDelete(item.templateId, item.itemName)}
                               style={{
                                 border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff',
-                                color: '#ea4335', fontSize: '14px', padding: '2px 7px',
+                                color: '#F08080', fontSize: '14px', padding: '2px 7px',
                                 cursor: 'pointer', lineHeight: 1, flexShrink: 0,
                               }}>×</button>
                           )}
@@ -743,7 +743,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                 disabled={!newItemName.trim() || adding}
                 style={{
                   padding: '7px 16px', fontSize: '13px', fontWeight: 600, border: 'none', borderRadius: '8px',
-                  backgroundColor: newItemName.trim() ? '#1a73e8' : '#f1f3f4',
+                  backgroundColor: newItemName.trim() ? '#89CFF0' : '#f1f3f4',
                   color: newItemName.trim() ? '#fff' : '#9aa0a6',
                   cursor: newItemName.trim() ? 'pointer' : 'not-allowed',
                 }}>추가</button>

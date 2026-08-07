@@ -207,8 +207,8 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
 
       {error && (
         <div style={{
-          padding: '7px 10px', marginBottom: '10px', backgroundColor: '#fce8e6',
-          borderRadius: '6px', color: '#c5221f', fontSize: '12px',
+          padding: '7px 10px', marginBottom: '10px', backgroundColor: '#FFE8E8',
+          borderRadius: '6px', color: '#E06060', fontSize: '12px',
         }}>
           {error}
         </div>
@@ -296,7 +296,7 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
                   <button
                     type="button"
                     onClick={() => removePriceRow(i)}
-                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#c5221f', fontSize: '16px', padding: 0 }}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#E06060', fontSize: '16px', padding: 0 }}
                   >×</button>
                 ) : (
                   <span />
@@ -361,7 +361,7 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
             style={{
               border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
               borderRadius: '5px', padding: '4px 12px', fontSize: '11px',
-              color: '#1a73e8', marginBottom: '8px',
+              color: '#4BAAD4', marginBottom: '8px',
             }}
           >+ 행 추가</button>
         </div>
@@ -397,7 +397,7 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
             type="submit" disabled={loading}
             style={{
               flex: 1, padding: '9px', fontSize: '13px', fontWeight: 600,
-              backgroundColor: loading ? '#9e9e9e' : '#1a73e8',
+              backgroundColor: loading ? '#9e9e9e' : '#89CFF0',
               color: '#fff', border: 'none', borderRadius: '6px',
               cursor: loading ? 'not-allowed' : 'pointer',
             }}

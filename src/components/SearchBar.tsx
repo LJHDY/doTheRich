@@ -107,7 +107,7 @@ const SearchBar: React.FC<Props> = ({ onSelect, fluid }) => {
         />
         {loading && (
           <div style={{ width: '14px', height: '14px', border: '2px solid #dadce0',
-            borderTopColor: '#1a73e8', borderRadius: '50%', animation: 'spin 0.6s linear infinite',
+            borderTopColor: '#89CFF0', borderRadius: '50%', animation: 'spin 0.6s linear infinite',
             flexShrink: 0 }} />
         )}
         {query && !loading && (

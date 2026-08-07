@@ -8,9 +8,9 @@ import {
 
 const RATING_LABELS: Record<string, string> = { UPPER: '상', MIDDLE: '중', LOWER: '하' };
 const RATING_COLORS: Record<string, { bg: string; color: string }> = {
-  UPPER:  { bg: '#ea4335', color: '#fff' },
-  MIDDLE: { bg: '#f9ab00', color: '#fff' },
-  LOWER:  { bg: '#1a73e8', color: '#fff' },
+  UPPER:  { bg: '#F08080', color: '#fff' },
+  MIDDLE: { bg: '#FFD97D', color: '#6b4400' },
+  LOWER:  { bg: '#89CFF0', color: '#1a3a5c' },
 };
 
 // ── 항목 행 — rating + memo 상태 개별 관리 ────────────────────────────────────
@@ -100,7 +100,7 @@ const CheckItemRow: React.FC<CheckItemRowProps> = ({
             />
             <button
               onClick={onEditSave}
-              style={{ fontSize: '11px', padding: '2px 8px', border: 'none', borderRadius: '4px', backgroundColor: '#1a73e8', color: '#fff', cursor: 'pointer' }}
+              style={{ fontSize: '11px', padding: '2px 8px', border: 'none', borderRadius: '4px', backgroundColor: '#89CFF0', color: '#1a3a5c', cursor: 'pointer' }}
             >저장</button>
             <button
               onClick={onEditCancel}
@@ -121,7 +121,7 @@ const CheckItemRow: React.FC<CheckItemRowProps> = ({
               title="메모"
               style={{
                 border: 'none', background: 'none', cursor: 'pointer',
-                fontSize: '12px', color: memo ? '#1a73e8' : '#bdbdbd', padding: '2px',
+                fontSize: '12px', color: memo ? '#89CFF0' : '#bdbdbd', padding: '2px',
               }}
             >💬</button>
 
@@ -165,7 +165,7 @@ const CheckItemRow: React.FC<CheckItemRowProps> = ({
               title="항목 삭제"
               style={{
                 border: '1px solid #dadce0', borderRadius: '4px',
-                backgroundColor: '#fff', color: '#ea4335',
+                backgroundColor: '#fff', color: '#F08080',
                 fontSize: '12px', padding: '2px 5px', cursor: 'pointer', lineHeight: 1,
               }}
             >×</button>
@@ -337,7 +337,7 @@ const ChecklistSection: React.FC<ChecklistSectionProps> = ({ complexId }) => {
               style={{
                 fontSize: '12px', padding: '5px 12px',
                 border: 'none', borderRadius: '6px',
-                backgroundColor: newItemName.trim() ? '#1a73e8' : '#f1f3f4',
+                backgroundColor: newItemName.trim() ? '#89CFF0' : '#f1f3f4',
                 color: newItemName.trim() ? '#fff' : '#9aa0a6',
                 cursor: newItemName.trim() ? 'pointer' : 'not-allowed',
                 fontWeight: 600,

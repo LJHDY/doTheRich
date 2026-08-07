@@ -10,13 +10,13 @@ import ZonePhotoModal from './ZonePhotoModal';
 
 const RATING_LABELS: Record<string, string> = { UPPER: '상', MIDDLE: '중', LOWER: '하' };
 const RATING_COLORS: Record<string, { bg: string; color: string }> = {
-  UPPER:  { bg: '#ea4335', color: '#fff' },
-  MIDDLE: { bg: '#f9ab00', color: '#fff' },
-  LOWER:  { bg: '#1a73e8', color: '#fff' },
+  UPPER:  { bg: '#F08080', color: '#fff' },
+  MIDDLE: { bg: '#FFD97D', color: '#6b4400' },
+  LOWER:  { bg: '#89CFF0', color: '#1a3a5c' },
 };
 const OX_COLORS: Record<string, { bg: string; color: string }> = {
-  O: { bg: '#0f9d58', color: '#fff' },
-  X: { bg: '#ea4335', color: '#fff' },
+  O: { bg: '#7DC8A0', color: '#1a5030' },
+  X: { bg: '#F08080', color: '#fff' },
 };
 
 interface Props {
@@ -215,7 +215,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
     }}>
       {/* 헤더 */}
       <div style={{
-        padding: '0 16px', height: '56px', backgroundColor: '#1a73e8', color: '#fff',
+        padding: '0 16px', height: '56px', backgroundColor: '#89CFF0', color: '#1a3a5c',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
       }}>
         <span style={{ fontSize: '15px', fontWeight: 700 }}>생활권</span>
@@ -258,8 +258,8 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
           onClick={() => setShowCreateForm(v => !v)}
           style={{
             padding: '5px 10px', fontSize: '12px', fontWeight: 600,
-            backgroundColor: showCreateForm ? '#e8f0fe' : '#1a73e8',
-            color: showCreateForm ? '#1a73e8' : '#fff',
+            backgroundColor: showCreateForm ? '#D4EFFC' : '#89CFF0',
+            color: showCreateForm ? '#89CFF0' : '#fff',
             border: '1px solid #1a73e8', borderRadius: '6px',
             cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
           }}
@@ -319,7 +319,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
               disabled={creating || !newName.trim() || !newDistrict.trim()}
               style={{
                 padding: '5px 10px', fontSize: '12px', fontWeight: 600,
-                backgroundColor: '#1a73e8', color: '#fff',
+                backgroundColor: '#89CFF0', color: '#1a3a5c',
                 border: 'none', borderRadius: '6px', cursor: 'pointer',
                 opacity: creating || !newName.trim() || !newDistrict.trim() ? 0.5 : 1,
               }}
@@ -381,8 +381,8 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <span style={{
-                      fontSize: '10px', fontWeight: 700, color: '#1a73e8',
-                      backgroundColor: '#e8f0fe', borderRadius: '8px', padding: '1px 6px',
+                      fontSize: '10px', fontWeight: 700, color: '#4BAAD4',
+                      backgroundColor: '#D4EFFC', borderRadius: '8px', padding: '1px 6px',
                     }}>{zone.district}</span>
                     <span style={{ fontSize: '11px', color: '#9e9e9e' }}>단지 {zone.complexes.length}개</span>
                     {zone.memo && (
@@ -406,10 +406,10 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                   {/* 삭제 확인 or 삭제 버튼 */}
                   {isDeletingZone ? (
                     <>
-                      <span style={{ fontSize: '11px', color: '#c5221f', whiteSpace: 'nowrap' }}>삭제?</span>
+                      <span style={{ fontSize: '11px', color: '#E06060', whiteSpace: 'nowrap' }}>삭제?</span>
                       <button
                         onClick={() => handleDeleteZone(zone.id)}
-                        style={{ fontSize: '11px', fontWeight: 700, color: '#fff', backgroundColor: '#c5221f', border: 'none', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}
+                        style={{ fontSize: '11px', fontWeight: 700, color: '#fff', backgroundColor: '#E06060', border: 'none', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer' }}
                       >확인</button>
                       <button
                         onClick={() => setDeleteConfirmId(null)}
@@ -437,7 +437,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                       {!isEditingMemo && (
                         <button
                           onClick={() => { setEditingMemoId(zone.id); setMemoText(zone.memo || ''); }}
-                          style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px', color: '#1a73e8', padding: 0 }}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px', color: '#4BAAD4', padding: 0 }}
                         >✏</button>
                       )}
                     </div>
@@ -469,7 +469,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                           <button
                             onClick={() => handleMemoSave(zone.id)}
                             disabled={memoSaving}
-                            style={{ padding: '4px 9px', fontSize: '11px', fontWeight: 600, backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+                            style={{ padding: '4px 9px', fontSize: '11px', fontWeight: 600, backgroundColor: '#89CFF0', color: '#1a3a5c', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
                           >{memoSaving ? '저장 중...' : '저장'}</button>
                         </div>
                       </div>
@@ -500,7 +500,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                           onClick={() => openCheckbox(zone)}
                           style={{
                             border: 'none', background: 'none', cursor: 'pointer',
-                            fontSize: '11px', fontWeight: 600, color: '#1a73e8', padding: 0,
+                            fontSize: '11px', fontWeight: 600, color: '#4BAAD4', padding: 0,
                           }}
                         >{zone.complexes.length > 0 ? '단지 수정' : '+ 단지 추가'}</button>
                       )}
@@ -530,7 +530,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                                   {full?.priceRange && (
                                     <span style={{
                                       marginLeft: '6px', fontSize: '10px', fontWeight: 700,
-                                      color: '#1a73e8', backgroundColor: '#e8f0fe',
+                                      color: '#4BAAD4', backgroundColor: '#D4EFFC',
                                       borderRadius: '8px', padding: '1px 5px',
                                     }}>{full.priceRange}</span>
                                   )}
@@ -571,7 +571,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                                     type="checkbox"
                                     checked={checked}
                                     onChange={() => togglePending(c.id)}
-                                    style={{ width: '15px', height: '15px', accentColor: '#1a73e8', flexShrink: 0, cursor: 'pointer' }}
+                                    style={{ width: '15px', height: '15px', accentColor: '#89CFF0', flexShrink: 0, cursor: 'pointer' }}
                                   />
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: '12px', fontWeight: checked ? 700 : 600, color: '#202124' }}>
@@ -580,7 +580,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                                     {c.priceRange && (
                                       <span style={{
                                         fontSize: '10px', fontWeight: 700,
-                                        color: '#1a73e8', backgroundColor: '#e8f0fe',
+                                        color: '#4BAAD4', backgroundColor: '#D4EFFC',
                                         borderRadius: '8px', padding: '1px 5px',
                                       }}>{c.priceRange}</span>
                                     )}
@@ -614,7 +614,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                               disabled={checkboxSaving}
                               style={{
                                 padding: '4px 10px', fontSize: '11px', fontWeight: 600,
-                                backgroundColor: '#1a73e8', color: '#fff',
+                                backgroundColor: '#89CFF0', color: '#1a3a5c',
                                 border: 'none', borderRadius: '5px', cursor: 'pointer',
                                 opacity: checkboxSaving ? 0.6 : 1,
                               }}

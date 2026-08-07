@@ -133,8 +133,8 @@ const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: '14px', fontWeight: 700, color: '#202124', flexShrink: 0 }}>{title}</span>
             <span style={{
-              fontSize: '12px', fontWeight: 600, color: '#1a73e8',
-              backgroundColor: '#e8f0fe', borderRadius: '12px', padding: '2px 10px', flexShrink: 0,
+              fontSize: '12px', fontWeight: 600, color: '#4BAAD4',
+              backgroundColor: '#D4EFFC', borderRadius: '12px', padding: '2px 10px', flexShrink: 0,
             }}>{sorted.length}개</span>
             {/* 단지명 검색 입력 */}
             <input
@@ -225,7 +225,7 @@ const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose
                                 {displayRange && (
                                   <span style={{
                                     fontSize: '10px', fontWeight: 700, color: '#fff',
-                                    backgroundColor: '#1a73e8', borderRadius: '10px',
+                                    backgroundColor: '#89CFF0', borderRadius: '10px',
                                     padding: '1px 6px', flexShrink: 0,
                                   }}>{displayRange}</span>
                                 )}
@@ -241,7 +241,7 @@ const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose
 
                             {/* 오른쪽: 평형별 가격 + 날짜 */}
                             <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
-                              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a73e8' }}>
+                              <div style={{ fontSize: '14px', fontWeight: 700, color: '#4BAAD4' }}>
                                 {displayPrice ? formatPrice(displayPrice) : '-'}
                               </div>
                               <div style={{ fontSize: '10px', color: '#9e9e9e', marginTop: '1px' }}>

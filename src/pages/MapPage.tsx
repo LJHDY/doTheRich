@@ -4,7 +4,7 @@ import { loadDistrictGeoJson, getFeatureName } from '../utils/districtGeoJson';
 import { haversineMeters } from '../utils/geo';
 
 // 저장된 경로마다 순환 사용할 색상 팔레트
-const ROUTE_COLORS = ['#e53935', '#43a047', '#8e24aa', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
+const ROUTE_COLORS = ['#F08080', '#7DC8A0', '#BA8BD8', '#FFBE76', '#89CFF0', '#C8A882', '#80DEEA', '#90A4AE'];
 
 // p1 → p2 방향의 방위각 (도, 북=0, 시계방향)
 function calcBearing(p1: RoutePoint, p2: RoutePoint): number {
@@ -85,7 +85,7 @@ const MapPage: React.FC<MapPageProps> = ({
     mapInstanceRef.current = map;
     infoWindowRef.current = new window.naver.maps.InfoWindow({
       anchorSkew: true,
-      borderColor: '#1a73e8',
+      borderColor: '#89CFF0',
       borderWidth: 2,
     });
 
@@ -141,15 +141,17 @@ const MapPage: React.FC<MapPageProps> = ({
 
       // 가격 기준 색상 구분: 선택=보라, 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=검정
       const bgColor = isSelected
-        ? '#6a0dad'
-        : priceUk === null ? '#1a73e8'
-        : priceUk < 10 ? '#1a73e8'
-        : priceUk < 15 ? '#f9ab00'
-        : priceUk < 20 ? '#c5221f'
-        : '#202124';
+        ? '#BA8BD8'
+        : priceUk === null ? '#89CFF0'
+        : priceUk < 10 ? '#89CFF0'
+        : priceUk < 15 ? '#FFD97D'
+        : priceUk < 20 ? '#E06060'
+        : '#607d8b';
 
       // 글자 수에 따라 폰트 크기 조정
       const fontSize = !label || label.length <= 2 ? 9 : label.length <= 4 ? 8 : 7;
+      // 밝은 파스텔 배경에서는 다크 텍스트로 가독성 확보
+      const textColor = (bgColor === '#89CFF0' || bgColor === '#FFD97D') ? '#1a3a5c' : '#fff';
 
       // XSS 방지: 단지명의 HTML 특수문자 이스케이프
       const safeName = complex.complexName
@@ -159,7 +161,7 @@ const MapPage: React.FC<MapPageProps> = ({
 
       // 임장 유형별 테두리 색상 — NONE(미입력 포함)은 흰색
       const VISIT_BORDER: Record<string, string> = {
-        ATMOSPHERE: '#97C459', COMPLEX: '#639922', LISTING: '#3B6D11',
+        ATMOSPHERE: '#A8D8A0', COMPLEX: '#7DC8A0', LISTING: '#5AAF84',
       };
       const visitBorder = VISIT_BORDER[complex.visitType ?? ''] ?? '#ffffff';
 
@@ -176,8 +178,8 @@ const MapPage: React.FC<MapPageProps> = ({
                   <polygon points="${starPath}" fill="${bgColor}" stroke="${visitBorder}" stroke-width="3.5" stroke-linejoin="round"/>
                 </svg>
                 <div style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);
-                            color:#fff;font-weight:800;font-size:${fontSize}px;letter-spacing:-0.3px;
-                            text-shadow:0 1px 1px rgba(0,0,0,0.15);white-space:nowrap;pointer-events:none;">
+                            color:${textColor};font-weight:800;font-size:${fontSize}px;letter-spacing:-0.3px;
+                            text-shadow:0 1px 1px rgba(0,0,0,0.08);white-space:nowrap;pointer-events:none;">
                   ${label}
                 </div>
               </div>
@@ -194,7 +196,7 @@ const MapPage: React.FC<MapPageProps> = ({
                onmouseout="window.__mkTipHide();">
             <div style="position:relative;width:30px;height:30px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.22));">
               <div style="position:absolute;inset:0;background:${bgColor};border:2px solid ${visitBorder};border-radius:50% 50% 50% 4px;transform:rotate(-45deg);box-shadow:inset 0 1px 0 rgba(255,255,255,0.35);"></div>
-              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:${fontSize}px;letter-spacing:-0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.15);">${label}</div>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:${textColor};font-weight:800;font-size:${fontSize}px;letter-spacing:-0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.08);">${label}</div>
             </div>
           </div>
         `,
@@ -355,9 +357,9 @@ const MapPage: React.FC<MapPageProps> = ({
     overlayMarkersRef.current.forEach(m => m.setMap(null));
     overlayMarkersRef.current = [];
 
-    const SCHOOL_COLORS: Record<string, string> = { MIDDLE: '#1a73e8', ELEMENTARY: '#34a853' };
+    const SCHOOL_COLORS: Record<string, string> = { MIDDLE: '#89CFF0', ELEMENTARY: '#7DC8A0' };
     const INFRA_COLORS: Record<string, string> = {
-      DEPARTMENT_STORE: '#9c27b0', MART: '#ff9800', HOSPITAL: '#f44336', ETC: '#607d8b',
+      DEPARTMENT_STORE: '#BA8BD8', MART: '#FFBE76', HOSPITAL: '#F08080', ETC: '#90A4AE',
     };
     const INFRA_LABELS: Record<string, string> = {
       DEPARTMENT_STORE: '백화점', MART: '마트', HOSPITAL: '병원', ETC: '기타',
@@ -371,7 +373,7 @@ const MapPage: React.FC<MapPageProps> = ({
       const isSchool = om.markerType === 'school';
       const isHazard = om.markerType === 'hazard';
       const bgColor = isSchool
-        ? (SCHOOL_COLORS[om.subType ?? ''] ?? '#34a853')
+        ? (SCHOOL_COLORS[om.subType ?? ''] ?? '#7DC8A0')
         : (INFRA_COLORS[om.subType ?? ''] ?? '#607d8b');
 
       let content: string;
@@ -447,9 +449,9 @@ const MapPage: React.FC<MapPageProps> = ({
       map: mapInstanceRef.current,
       center: new window.naver.maps.LatLng(radiusCenter.lat, radiusCenter.lng),
       radius: 2000,
-      fillColor: '#1a73e8',
+      fillColor: '#89CFF0',
       fillOpacity: 0.07,
-      strokeColor: '#1a73e8',
+      strokeColor: '#89CFF0',
       strokeOpacity: 0.5,
       strokeWeight: 2,
       strokeStyle: 'shortdash',
@@ -497,9 +499,9 @@ const MapPage: React.FC<MapPageProps> = ({
           const polygon = new window.naver.maps.Polygon({
             map,
             paths,
-            fillColor: '#1a73e8',
+            fillColor: '#89CFF0',
             fillOpacity: 0.07,
-            strokeColor: '#1a73e8',
+            strokeColor: '#89CFF0',
             strokeOpacity: 0.75,
             strokeWeight: 2.5,
             clickable: false, // 마우스 이벤트 미차단 — 경로 그리기와 충돌 방지
@@ -634,7 +636,7 @@ const MapPage: React.FC<MapPageProps> = ({
         position: new window.naver.maps.LatLng(p.lat, p.lng),
         map,
         icon: {
-          content: `<div style="width:10px;height:10px;border-radius:50%;background:${i === pts.length - 1 ? '#c5221f' : '#1a73e8'};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
+          content: `<div style="width:10px;height:10px;border-radius:50%;background:${i === pts.length - 1 ? '#E06060' : '#89CFF0'};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
           anchor: new window.naver.maps.Point(5, 5),
         },
         zIndex: 20,
@@ -646,7 +648,7 @@ const MapPage: React.FC<MapPageProps> = ({
     if (pts.length < 2) return;
     drawingPolylineRef.current = new window.naver.maps.Polyline({
       path: pts.map(p => new window.naver.maps.LatLng(p.lat, p.lng)),
-      strokeColor: '#1a73e8',
+      strokeColor: '#89CFF0',
       strokeWeight: 3,
       strokeOpacity: 0.9,
       strokeStyle: 'shortdash',

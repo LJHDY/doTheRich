@@ -6,9 +6,9 @@ import {
 } from '../services/api';
 
 const DISTRICT_GRADES = [
-  { label: '상급지', color: '#ea4335', districts: ['강남구', '서초구', '용산구', '송파구', '성동구', '광진구', '마포구', '양천구'] },
-  { label: '중급지', color: '#f9ab00', districts: ['강동구', '동작구', '영등포구', '중구', '종로구'] },
-  { label: '하급지', color: '#1a73e8', districts: ['서대문구', '강서구', '동대문구', '성북구', '관악구', '은평구', '구로구', '노원구', '중랑구', '강북구', '금천구', '도봉구'] },
+  { label: '상급지', color: '#F08080', districts: ['강남구', '서초구', '용산구', '송파구', '성동구', '광진구', '마포구', '양천구'] },
+  { label: '중급지', color: '#FFD97D', districts: ['강동구', '동작구', '영등포구', '중구', '종로구'] },
+  { label: '하급지', color: '#4BAAD4', districts: ['서대문구', '강서구', '동대문구', '성북구', '관악구', '은평구', '구로구', '노원구', '중랑구', '강북구', '금천구', '도봉구'] },
 ];
 
 interface ComparisonEvalPanelProps {
@@ -63,7 +63,7 @@ const SavedPhotoCard: React.FC<{
             padding: '4px 8px', border: '1px solid #e8eaed', borderRadius: '4px',
             outline: 'none', color: '#202124',
           }}
-          onFocus={e => (e.target.style.borderColor = '#1a73e8')}
+          onFocus={e => (e.target.style.borderColor = '#89CFF0')}
         />
       </div>
     </div>
@@ -85,8 +85,8 @@ const LocalPhotoCard: React.FC<{
       {/* 저장 전 표시 배지 */}
       <span style={{
         position: 'absolute', top: '6px', left: '6px',
-        fontSize: '9px', fontWeight: 700, color: '#fff',
-        backgroundColor: '#1a73e8', padding: '2px 6px', borderRadius: '8px',
+        fontSize: '9px', fontWeight: 700, color: '#1a3a5c',
+        backgroundColor: '#89CFF0', padding: '2px 6px', borderRadius: '8px',
       }}>미저장</span>
       <button
         onClick={onRemove}
@@ -108,7 +108,7 @@ const LocalPhotoCard: React.FC<{
           padding: '4px 8px', border: '1px solid #e8eaed', borderRadius: '4px',
           outline: 'none', color: '#202124',
         }}
-        onFocus={e => (e.target.style.borderColor = '#1a73e8')}
+        onFocus={e => (e.target.style.borderColor = '#89CFF0')}
         onBlur={e => (e.target.style.borderColor = '#e8eaed')}
       />
     </div>
@@ -331,7 +331,7 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
       {/* 헤더 */}
-      <div style={{ padding: '12px 14px', backgroundColor: '#34a853', color: '#fff', flexShrink: 0, position: 'relative' }}>
+      <div style={{ padding: '12px 14px', backgroundColor: '#7DC8A0', color: '#fff', flexShrink: 0, position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
           <span style={{ fontSize: '10px', opacity: 0.9 }}>비교 평가</span>
           {/* 상급지/중급지/하급지 등급표 tooltip */}
@@ -406,7 +406,7 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
                   사진{totalPhotos > 0 && <span style={{ fontWeight: 400, color: '#9e9e9e', marginLeft: '4px' }}>({totalPhotos})</span>}
                 </span>
                 <label style={{
-                  fontSize: '11px', fontWeight: 600, color: '#1a73e8', cursor: 'pointer',
+                  fontSize: '11px', fontWeight: 600, color: '#4BAAD4', cursor: 'pointer',
                   padding: '3px 10px', border: '1px solid #1a73e8', borderRadius: '10px',
                 }}>
                   + 추가
@@ -481,7 +481,7 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
                       onClick={() => setSelectedComplexId(isSelected ? null : cx.id)}
                       style={{
                         flex: 1, padding: '8px 6px', fontSize: '11px', fontWeight: 700,
-                        border: `2px solid ${isSelected ? '#f9ab00' : '#dadce0'}`,
+                        border: `2px solid ${isSelected ? '#FFD97D' : '#dadce0'}`,
                         borderRadius: '8px', cursor: 'pointer', textAlign: 'center',
                         backgroundColor: isSelected ? '#fef9e7' : '#fff',
                         color: isSelected ? '#b07d00' : '#5f6368',
@@ -506,8 +506,8 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
             <button
               onClick={handleSave} disabled={saving}
               style={{
-                width: '100%', padding: '10px', backgroundColor: '#1a73e8',
-                color: '#fff', border: 'none', borderRadius: '8px',
+                width: '100%', padding: '10px', backgroundColor: '#89CFF0',
+                color: '#1a3a5c', border: 'none', borderRadius: '8px',
                 fontSize: '13px', fontWeight: 700,
                 cursor: saving ? 'not-allowed' : 'pointer',
                 opacity: saving ? 0.7 : 1, marginBottom: '8px',
@@ -526,7 +526,7 @@ const ComparisonEvalPanel: React.FC<ComparisonEvalPanelProps> = ({
                 onClick={handleDeleteComparison}
                 style={{
                   width: '100%', padding: '8px', backgroundColor: 'transparent',
-                  color: '#ea4335', border: '1px solid #ea4335', borderRadius: '8px',
+                  color: '#F08080', border: '1px solid #ea4335', borderRadius: '8px',
                   fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                 }}
               >

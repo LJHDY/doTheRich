@@ -21,7 +21,7 @@ const VISIT_TO_CHECKLIST: Record<string, ChecklistTypeKey> = {
 };
 
 const CL_RATING_LABELS: Record<string, string> = { UPPER: '상', MIDDLE: '중', LOWER: '하' };
-const CL_RATING_COLORS: Record<string, string> = { UPPER: '#ea4335', MIDDLE: '#f9ab00', LOWER: '#1a73e8' };
+const CL_RATING_COLORS: Record<string, string> = { UPPER: '#F08080', MIDDLE: '#FFD97D', LOWER: '#89CFF0' };
 
 export interface RegisterInitialData {
   complexName: string;
@@ -261,7 +261,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 const sectionTitle: React.CSSProperties = {
-  fontSize: '12px', fontWeight: 700, color: '#1a73e8',
+  fontSize: '12px', fontWeight: 700, color: '#4BAAD4',
   borderBottom: '1px solid #e8eaed', paddingBottom: '6px', marginBottom: '12px',
 };
 
@@ -828,7 +828,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             <button
               type="button"
               onClick={() => setIsFavorite(prev => !prev)}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, color: isFavorite ? '#f9ab00' : '#dadce0' }}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, color: isFavorite ? '#FFD97D' : '#dadce0' }}
             >★</button>
             {/* 임장용 체크박스 — 체크 시 매매가 유효성 검사 생략 */}
             <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginLeft: '4px' }}>
@@ -836,9 +836,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                 type="checkbox"
                 checked={isFieldVisitOnly}
                 onChange={e => setIsFieldVisitOnly(e.target.checked)}
-                style={{ width: '14px', height: '14px', accentColor: '#1a73e8', cursor: 'pointer' }}
+                style={{ width: '14px', height: '14px', accentColor: '#89CFF0', cursor: 'pointer' }}
               />
-              <span style={{ fontSize: '12px', color: isFieldVisitOnly ? '#1a73e8' : '#80868b', fontWeight: isFieldVisitOnly ? 600 : 400 }}>임장용</span>
+              <span style={{ fontSize: '12px', color: isFieldVisitOnly ? '#89CFF0' : '#80868b', fontWeight: isFieldVisitOnly ? 600 : 400 }}>임장용</span>
             </label>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#80868b', padding: 0 }}>×</button>
@@ -939,7 +939,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                   onChange={e => updatePriceRow(i, { priceRange: e.target.value })}
                 />
                 {priceInfos.length > 1 ? (
-                  <button onClick={() => removePriceRow(i)} style={iconBtn('#c5221f')}>×</button>
+                  <button onClick={() => removePriceRow(i)} style={iconBtn('#E06060')}>×</button>
                 ) : (
                   <span />
                 )}
@@ -1004,7 +1004,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           <div style={{ marginBottom: '20px' }}>
             <button onClick={addPriceRow} style={{
               border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
-              borderRadius: '6px', padding: '6px 14px', fontSize: '12px', color: '#1a73e8',
+              borderRadius: '6px', padding: '6px 14px', fontSize: '12px', color: '#4BAAD4',
             }}>+ 행 추가</button>
           </div>
 
@@ -1065,7 +1065,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                     style={{ ...inputStyle, flex: 1 }} />
                   <button onClick={() => handleStationLookup(i)}
                     disabled={row.fetching || !row.stationName.trim()}
-                    style={actionBtn('#1a73e8', row.fetching || !row.stationName.trim())}>
+                    style={actionBtn('#89CFF0', row.fetching || !row.stationName.trim())}>
                     {row.fetching ? '...' : '조회'}
                   </button>
                 </div>
@@ -1086,14 +1086,14 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                 <input type="number" placeholder="분" value={row.walkingMinutes}
                   onChange={e => updateSubway(i, { walkingMinutes: e.target.value })}
                   style={{ ...inputStyle, width: '80px', flexShrink: 0 }} />
-                <button onClick={() => removeSubway(i)} style={iconBtn('#c5221f')}>×</button>
+                <button onClick={() => removeSubway(i)} style={iconBtn('#E06060')}>×</button>
               </div>
             </div>
           ))}
           <button onClick={addSubway} style={{
             border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
             borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
-            color: '#1a73e8', marginBottom: '20px',
+            color: '#4BAAD4', marginBottom: '20px',
           }}>+ 역 추가</button>
 
           {/* 출퇴근 시간 — 카드 스타일로 목적지별 행 표시 */}
@@ -1133,7 +1133,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                     );
                   }}
                   disabled={!DESTINATION_COORDS[row.destination]}
-                  style={actionBtn('#34a853', !DESTINATION_COORDS[row.destination])}
+                  style={actionBtn('#7DC8A0', !DESTINATION_COORDS[row.destination])}
                   title="네이버 지도에서 경로 확인"
                 >
                   지도
@@ -1152,7 +1152,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                   style={{ ...inputStyle, flex: 1, minWidth: '70px' }}>
                   {['지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
                 </select>
-                <button onClick={() => removeCommute(i)} style={iconBtn('#c5221f')}>×</button>
+                <button onClick={() => removeCommute(i)} style={iconBtn('#E06060')}>×</button>
               </div>
 
               {/* Line 3: 환승 노선 입력 (환승 횟수 > 0 일 때만 표시) */}
@@ -1163,7 +1163,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                     {row.transferLines.map((line, j) => (
                       <React.Fragment key={j}>
                         {/* 두 번째 칸부터 ➡️ 이모지 구분자 표시 */}
-                        {j > 0 && <span style={{ color: '#f9ab00', fontWeight: 700 }}>➡️</span>}
+                        {j > 0 && <span style={{ color: '#FFD97D', fontWeight: 700 }}>➡️</span>}
                         <input
                           placeholder={`노선${j + 1}`}
                           value={line}
@@ -1184,7 +1184,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           <button onClick={addCommute} style={{
             border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
             borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
-            color: '#1a73e8', marginBottom: '20px',
+            color: '#4BAAD4', marginBottom: '20px',
           }}>+ 항목 추가</button>
 
           {/* 학군 정보 */}
@@ -1205,7 +1205,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                     <button
                       onClick={() => handleSchoolSearch(i)}
                       disabled={row.fetching || !row.schoolName.trim()}
-                      style={actionBtn('#1a73e8', row.fetching || !row.schoolName.trim())}
+                      style={actionBtn('#89CFF0', row.fetching || !row.schoolName.trim())}
                     >{row.fetching ? '...' : '조회'}</button>
                   </div>
                   {/* 검색 결과 드롭다운 */}
@@ -1239,7 +1239,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                   <option value="ELEMENTARY">초등학교</option>
                   <option value="MIDDLE">중학교</option>
                 </select>
-                <button onClick={() => removeSchool(i)} style={iconBtn('#c5221f')}>×</button>
+                <button onClick={() => removeSchool(i)} style={iconBtn('#E06060')}>×</button>
               </div>
 
               {/* 선택된 학교 주소 표시 */}
@@ -1287,7 +1287,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           <button onClick={addSchool} style={{
             border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
             borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
-            color: '#1a73e8', marginBottom: '20px',
+            color: '#4BAAD4', marginBottom: '20px',
           }}>+ 학교 추가</button>
 
           {/* 주변 인프라 */}
@@ -1324,7 +1324,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                     <button
                       onClick={() => handleInfraSearch(i)}
                       disabled={row.fetching || !row.infraName.trim()}
-                      style={actionBtn('#1a73e8', row.fetching || !row.infraName.trim())}
+                      style={actionBtn('#89CFF0', row.fetching || !row.infraName.trim())}
                     >{row.fetching ? '...' : '조회'}</button>
                   </div>
                   {/* 검색 결과 드롭다운 */}
@@ -1354,14 +1354,14 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                   value={row.distance}
                   onChange={e => updateInfra(i, { distance: e.target.value })}
                   style={inputStyle} />
-                <button onClick={() => removeInfra(i)} style={{ ...iconBtn('#c5221f'), marginTop: '8px' }}>×</button>
+                <button onClick={() => removeInfra(i)} style={{ ...iconBtn('#E06060'), marginTop: '8px' }}>×</button>
               </div>
             </div>
           ))}
           <button onClick={addInfra} style={{
             border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
             borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
-            color: '#1a73e8', marginBottom: '20px',
+            color: '#4BAAD4', marginBottom: '20px',
           }}>+ 인프라 추가</button>
 
           {/* 유해시설 */}
@@ -1378,7 +1378,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
               {/* 자동 감지된 항목: 매크로 카테고리 > 세부 카테고리 배지 */}
               {row.macroCategory && (
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '3px' }}>
-                  <span style={{ fontSize: '10px', background: '#fce8e6', color: '#c5221f', borderRadius: '4px', padding: '1px 6px', fontWeight: 600 }}>
+                  <span style={{ fontSize: '10px', background: '#FFE8E8', color: '#E06060', borderRadius: '4px', padding: '1px 6px', fontWeight: 600 }}>
                     {row.macroCategory}
                   </span>
                   {row.subCategory && (
@@ -1402,7 +1402,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                     <button
                       onClick={() => handleHazardSearch(i)}
                       disabled={row.fetching || !row.hazardName.trim()}
-                      style={actionBtn('#c5221f', row.fetching || !row.hazardName.trim())}
+                      style={actionBtn('#E06060', row.fetching || !row.hazardName.trim())}
                     >{row.fetching ? '...' : '조회'}</button>
                   </div>
                   {row.showDropdown && row.searchResults.length > 0 && (
@@ -1430,14 +1430,14 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                   value={row.distance}
                   onChange={e => updateHazard(i, { distance: e.target.value })}
                   style={inputStyle} />
-                <button onClick={() => removeHazard(i)} style={{ ...iconBtn('#c5221f'), marginTop: '8px' }}>×</button>
+                <button onClick={() => removeHazard(i)} style={{ ...iconBtn('#E06060'), marginTop: '8px' }}>×</button>
               </div>
             </div>
           ))}
           <button onClick={addHazard} style={{
             border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
             borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
-            color: '#c5221f', marginBottom: '20px',
+            color: '#E06060', marginBottom: '20px',
           }}>+ 유해시설 추가</button>
 
           {/* 재개발/재건축/리모델링 여부 */}
@@ -1449,7 +1449,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                 type="checkbox"
                 checked={form.redevelopType !== ''}
                 onChange={e => set('redevelopType', e.target.checked ? 'REDEVELOPMENT' : '')}
-                style={{ width: '16px', height: '16px', accentColor: '#1a73e8', cursor: 'pointer' }}
+                style={{ width: '16px', height: '16px', accentColor: '#89CFF0', cursor: 'pointer' }}
               />
               <span style={{ fontSize: '13px', color: '#202124' }}>재개발/재건축/리모델링 해당</span>
             </label>
@@ -1514,9 +1514,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                     style={{
                       padding: '5px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                       border: '1.5px solid',
-                      borderColor: checklistType === ct.key ? '#1a73e8' : '#dadce0',
+                      borderColor: checklistType === ct.key ? '#89CFF0' : '#dadce0',
                       borderRadius: '14px',
-                      backgroundColor: checklistType === ct.key ? '#1a73e8' : '#fff',
+                      backgroundColor: checklistType === ct.key ? '#89CFF0' : '#fff',
                       color: checklistType === ct.key ? '#fff' : '#5f6368',
                     }}
                   >{ct.label}</button>
@@ -1627,7 +1627,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
                       style={{
                         position: 'absolute', top: '-6px', right: '-6px',
                         width: '18px', height: '18px', borderRadius: '50%',
-                        backgroundColor: '#c5221f', color: '#fff', border: 'none',
+                        backgroundColor: '#E06060', color: '#fff', border: 'none',
                         cursor: 'pointer', fontSize: '10px', display: 'flex',
                         alignItems: 'center', justifyContent: 'center', lineHeight: 1,
                       }}
@@ -1644,15 +1644,15 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           padding: '16px 24px', borderTop: '1px solid #e8eaed',
           display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', flexShrink: 0,
         }}>
-          {error && <span style={{ fontSize: '12px', color: '#c5221f', marginRight: 'auto' }}>{error}</span>}
+          {error && <span style={{ fontSize: '12px', color: '#E06060', marginRight: 'auto' }}>{error}</span>}
           <button onClick={onClose} style={{
             padding: '8px 20px', borderRadius: '6px', border: '1px solid #dadce0',
             background: '#fff', cursor: 'pointer', fontSize: '13px', color: '#5f6368',
           }}>취소</button>
           <button onClick={handleSubmit} disabled={submitting} style={{
             padding: '8px 20px', borderRadius: '6px', border: 'none',
-            backgroundColor: submitting ? '#a8c7fa' : '#1a73e8',
-            color: '#fff', cursor: submitting ? 'not-allowed' : 'pointer',
+            backgroundColor: submitting ? '#b8dff5' : '#89CFF0',
+            color: '#1a3a5c', cursor: submitting ? 'not-allowed' : 'pointer',
             fontSize: '13px', fontWeight: 600,
           }}>{submitting ? '등록 중...' : '등록'}</button>
         </div>

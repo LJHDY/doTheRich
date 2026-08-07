@@ -453,10 +453,10 @@ export const calcCommuteGrade = (
   const siccheong = commuteTimes.find(ct => ct.destination === '시청');
   const yeouido   = commuteTimes.find(ct => ct.destination === '여의도');
 
-  if (gangnam && gangnam.minutes <= 30) return { grade: 'S', color: '#ea4335' };
+  if (gangnam && gangnam.minutes <= 30) return { grade: 'S', color: '#F08080' };
   const cityUnder30 = (siccheong && siccheong.minutes <= 30) || (yeouido && yeouido.minutes <= 30);
-  if (cityUnder30 || (gangnam && gangnam.minutes <= 60)) return { grade: 'A', color: '#f9ab00' };
+  if (cityUnder30 || (gangnam && gangnam.minutes <= 60)) return { grade: 'A', color: '#FFD97D' };
   const cityUnder60 = (siccheong && siccheong.minutes <= 60) || (yeouido && yeouido.minutes <= 60);
-  if (cityUnder60) return { grade: 'B', color: '#34a853' };
-  return { grade: 'C', color: '#1a73e8' };
+  if (cityUnder60) return { grade: 'B', color: '#7DC8A0' };
+  return { grade: 'C', color: '#89CFF0' };
 };

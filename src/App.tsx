@@ -372,22 +372,22 @@ const App: React.FC = () => {
               {/* 활성 기능 뱃지 — 어떤 패널이 열려있는지 한눈에 표시 */}
               <div style={{ flex: 1, display: 'flex', gap: '4px', flexWrap: 'nowrap', overflow: 'hidden' }}>
                 {compareIds.length > 0 && (
-                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#1a73e8', backgroundColor: '#e8f0fe', padding: '2px 6px', borderRadius: '8px', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#4BAAD4', backgroundColor: '#D4EFFC', padding: '2px 6px', borderRadius: '8px', whiteSpace: 'nowrap' }}>
                     비교 {compareIds.length}
                   </span>
                 )}
-                {livingZoneOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#1a73e8', backgroundColor: '#e8f0fe', padding: '2px 6px', borderRadius: '8px' }}>생활권</span>}
-                {routePanelOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#0b8043', backgroundColor: '#e6f4ea', padding: '2px 6px', borderRadius: '8px' }}>경로</span>}
-                {affordOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#0b8043', backgroundColor: '#e6f4ea', padding: '2px 6px', borderRadius: '8px' }}>대출</span>}
+                {livingZoneOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#4BAAD4', backgroundColor: '#D4EFFC', padding: '2px 6px', borderRadius: '8px' }}>생활권</span>}
+                {routePanelOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#5AAF84', backgroundColor: '#e6f4ea', padding: '2px 6px', borderRadius: '8px' }}>경로</span>}
+                {affordOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#5AAF84', backgroundColor: '#e6f4ea', padding: '2px 6px', borderRadius: '8px' }}>대출</span>}
               </div>
               {/* 햄버거 버튼 */}
               <button
                 onClick={() => setMobileMenuOpen(v => !v)}
                 style={{
                   padding: '6px 10px', fontSize: '18px', lineHeight: 1,
-                  border: '1px solid', borderColor: mobileMenuOpen ? '#1a73e8' : '#dadce0',
-                  borderRadius: '8px', backgroundColor: mobileMenuOpen ? '#e8f0fe' : '#fff',
-                  color: mobileMenuOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', flexShrink: 0,
+                  border: '1px solid', borderColor: mobileMenuOpen ? '#89CFF0' : '#dadce0',
+                  borderRadius: '8px', backgroundColor: mobileMenuOpen ? '#D4EFFC' : '#fff',
+                  color: mobileMenuOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', flexShrink: 0,
                 }}
                 aria-label="메뉴"
               >☰</button>
@@ -409,27 +409,27 @@ const App: React.FC = () => {
                   {
                     label: isFiltersActive(activeFilters) ? `필터 ${filteredComplexes.length}/${complexes.length}` : '필터',
                     active: filterOpen || isFiltersActive(activeFilters),
-                    activeColor: '#8e24aa', activeBg: '#f3e5f5',
+                    activeColor: '#BA8BD8', activeBg: '#f3e5f5',
                     onClick: () => { setFilterOpen(v => !v); setMobileMenuOpen(false); },
                   },
                   {
                     label: '내 단지', active: myComplexListOpen,
-                    activeColor: '#1a73e8', activeBg: '#e8f0fe',
+                    activeColor: '#2a6090', activeBg: '#D4EFFC',
                     onClick: () => { setMyComplexListOpen(v => !v); setMobileMenuOpen(false); },
                   },
                   {
                     label: '★ 즐겨찾기', active: favoriteListOpen,
-                    activeColor: '#f9ab00', activeBg: '#fef9e7',
+                    activeColor: '#FFD97D', activeBg: '#fef9e7',
                     onClick: () => { setFavoriteListOpen(v => !v); setMobileMenuOpen(false); },
                   },
                   {
                     label: '경로', active: routePanelOpen,
-                    activeColor: '#0b8043', activeBg: '#e6f4ea',
+                    activeColor: '#5AAF84', activeBg: '#e6f4ea',
                     onClick: () => { routePanelOpen ? handleClosRoutePanel() : setRoutePanelOpen(true); setMobileMenuOpen(false); },
                   },
                   {
                     label: '생활권', active: livingZoneOpen,
-                    activeColor: '#1a73e8', activeBg: '#e8f0fe',
+                    activeColor: '#2a6090', activeBg: '#D4EFFC',
                     onClick: () => {
                       const next = !livingZoneOpen;
                       setLivingZoneOpen(next);
@@ -439,7 +439,7 @@ const App: React.FC = () => {
                   },
                   {
                     label: '대출', active: affordOpen,
-                    activeColor: '#0b8043', activeBg: '#e6f4ea',
+                    activeColor: '#5AAF84', activeBg: '#e6f4ea',
                     onClick: () => {
                       const next = !affordOpen;
                       setAffordOpen(next);
@@ -449,13 +449,13 @@ const App: React.FC = () => {
                   },
                   {
                     label: '로드뷰', active: roadViewOpen,
-                    activeColor: '#0b8043', activeBg: '#e6f4ea',
+                    activeColor: '#5AAF84', activeBg: '#e6f4ea',
                     onClick: () => { setRoadViewOpen(v => !v); setMobileMenuOpen(false); },
                   },
                   {
                     label: compareIds.length > 0 ? `비교 ${compareIds.length}` : '비교하기',
                     active: compareOpen || compareIds.length > 0,
-                    activeColor: '#1a73e8', activeBg: '#e8f0fe',
+                    activeColor: '#2a6090', activeBg: '#D4EFFC',
                     onClick: () => { setCompareOpen(prev => !prev); setMobileMenuOpen(false); },
                   },
                 ] as { label: string; active: boolean; activeColor: string; activeBg: string; onClick: () => void }[]).map(item => (
@@ -511,9 +511,9 @@ const App: React.FC = () => {
                 onClick={() => setMyComplexListOpen(v => !v)}
                 style={{
                   padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: myComplexListOpen ? '#1a73e8' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: myComplexListOpen ? '#e8f0fe' : '#fff',
-                  color: myComplexListOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  border: '1px solid', borderColor: myComplexListOpen ? '#89CFF0' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: myComplexListOpen ? '#D4EFFC' : '#fff',
+                  color: myComplexListOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >내 단지</button>
               {/* 필터 */}
@@ -522,10 +522,10 @@ const App: React.FC = () => {
                 style={{
                   padding: '4px 10px', fontSize: '12px', fontWeight: 600,
                   border: '1px solid',
-                  borderColor: filterOpen || isFiltersActive(activeFilters) ? '#8e24aa' : '#dadce0',
+                  borderColor: filterOpen || isFiltersActive(activeFilters) ? '#BA8BD8' : '#dadce0',
                   borderRadius: '6px',
                   backgroundColor: filterOpen || isFiltersActive(activeFilters) ? '#f3e5f5' : '#fff',
-                  color: filterOpen || isFiltersActive(activeFilters) ? '#8e24aa' : '#5f6368',
+                  color: filterOpen || isFiltersActive(activeFilters) ? '#BA8BD8' : '#5f6368',
                   cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                   display: 'flex', alignItems: 'center', gap: '5px',
                 }}
@@ -533,7 +533,7 @@ const App: React.FC = () => {
                 <span>필터</span>
                 {isFiltersActive(activeFilters) && (
                   <span style={{
-                    backgroundColor: '#8e24aa', color: '#fff', borderRadius: '8px',
+                    backgroundColor: '#BA8BD8', color: '#fff', borderRadius: '8px',
                     fontSize: '10px', fontWeight: 700, padding: '1px 5px',
                   }}>
                     {filteredComplexes.length}/{complexes.length}
@@ -545,9 +545,9 @@ const App: React.FC = () => {
                 onClick={() => setFavoriteListOpen(v => !v)}
                 style={{
                   padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: favoriteListOpen ? '#f9ab00' : '#dadce0',
+                  border: '1px solid', borderColor: favoriteListOpen ? '#FFD97D' : '#dadce0',
                   borderRadius: '6px', backgroundColor: favoriteListOpen ? '#fef9e7' : '#fff',
-                  color: favoriteListOpen ? '#f9ab00' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  color: favoriteListOpen ? '#a07600' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >★ 즐겨찾기</button>
               {/* 비교하기 */}
@@ -556,10 +556,10 @@ const App: React.FC = () => {
                 style={{
                   padding: '4px 10px', fontSize: '12px', fontWeight: 600,
                   border: '1px solid',
-                  borderColor: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#dadce0',
+                  borderColor: compareOpen || compareIds.length > 0 ? '#89CFF0' : '#dadce0',
                   borderRadius: '6px',
-                  backgroundColor: compareOpen || compareIds.length > 0 ? '#e8f0fe' : '#fff',
-                  color: compareOpen || compareIds.length > 0 ? '#1a73e8' : '#5f6368',
+                  backgroundColor: compareOpen || compareIds.length > 0 ? '#D4EFFC' : '#fff',
+                  color: compareOpen || compareIds.length > 0 ? '#2a6090' : '#5f6368',
                   cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >{compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}</button>
@@ -589,9 +589,9 @@ const App: React.FC = () => {
                 onClick={() => setRoadViewOpen(v => !v)}
                 style={{
                   padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: roadViewOpen ? '#0b8043' : '#dadce0',
+                  border: '1px solid', borderColor: roadViewOpen ? '#5AAF84' : '#dadce0',
                   borderRadius: '6px', backgroundColor: roadViewOpen ? '#e6f4ea' : '#fff',
-                  color: roadViewOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  color: roadViewOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >로드뷰</button>
               {/* 구 경계 */}
@@ -601,7 +601,7 @@ const App: React.FC = () => {
                 onClick={() => setChecklistPanelOpen(v => !v)}
                 style={{
                   padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: checklistPanelOpen ? '#f9ab00' : '#dadce0',
+                  border: '1px solid', borderColor: checklistPanelOpen ? '#FFD97D' : '#dadce0',
                   borderRadius: '6px', backgroundColor: checklistPanelOpen ? '#fef9e7' : '#fff',
                   color: checklistPanelOpen ? '#b07d00' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
@@ -611,9 +611,9 @@ const App: React.FC = () => {
                 onClick={() => setRoutePanelOpen(v => !v)}
                 style={{
                   padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: routePanelOpen ? '#0b8043' : '#dadce0',
+                  border: '1px solid', borderColor: routePanelOpen ? '#5AAF84' : '#dadce0',
                   borderRadius: '6px', backgroundColor: routePanelOpen ? '#e6f4ea' : '#fff',
-                  color: routePanelOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  color: routePanelOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >경로</button>
               {/* 생활권 */}
@@ -625,9 +625,9 @@ const App: React.FC = () => {
                 }}
                 style={{
                   padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: livingZoneOpen ? '#1a73e8' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: livingZoneOpen ? '#e8f0fe' : '#fff',
-                  color: livingZoneOpen ? '#1a73e8' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  border: '1px solid', borderColor: livingZoneOpen ? '#89CFF0' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: livingZoneOpen ? '#D4EFFC' : '#fff',
+                  color: livingZoneOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >생활권</button>
               {/* 대출분석 */}
@@ -639,9 +639,9 @@ const App: React.FC = () => {
                 }}
                 style={{
                   padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: affordOpen ? '#0b8043' : '#dadce0',
+                  border: '1px solid', borderColor: affordOpen ? '#5AAF84' : '#dadce0',
                   borderRadius: '6px', backgroundColor: affordOpen ? '#e6f4ea' : '#fff',
-                  color: affordOpen ? '#0b8043' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  color: affordOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >대출분석</button>
               {/* 시세 수집 */}
@@ -663,7 +663,7 @@ const App: React.FC = () => {
       {/* 에러 배너 */}
       {error && (
         <div style={{
-          padding: '10px 16px', backgroundColor: '#fce8e6', color: '#c5221f',
+          padding: '10px 16px', backgroundColor: '#FFE8E8', color: '#E06060',
           fontSize: '13px', borderBottom: '1px solid #f5c6c6', flexShrink: 0,
         }}>
           {error}
@@ -698,7 +698,7 @@ const App: React.FC = () => {
                     alignItems: 'center', justifyContent: 'center',
                     gap: '10px', cursor: 'pointer',
                     backgroundColor: '#f0faf3', borderRight: '1px solid #ceead6',
-                    color: '#34a853',
+                    color: '#7DC8A0',
                   }}
                 >
                   <div style={{ fontSize: '36px', color: '#a8d5b5' }}>+</div>
@@ -871,7 +871,7 @@ const App: React.FC = () => {
           style={{
             position: 'fixed', bottom: '24px', right: '16px', zIndex: 500,
             padding: '10px 16px', fontSize: '13px', fontWeight: 600,
-            backgroundColor: '#0b8043', color: '#fff',
+            backgroundColor: '#5AAF84', color: '#fff',
             border: 'none', borderRadius: '20px', cursor: 'pointer',
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
             display: 'flex', alignItems: 'center', gap: '6px',
@@ -898,8 +898,8 @@ const App: React.FC = () => {
             disabled={drawingPoints.length === 0}
             style={{
               padding: '6px 10px', fontSize: '12px', fontWeight: 600,
-              backgroundColor: drawingPoints.length === 0 ? '#f1f3f4' : '#fce8e6',
-              color: drawingPoints.length === 0 ? '#bdbdbd' : '#c5221f',
+              backgroundColor: drawingPoints.length === 0 ? '#f1f3f4' : '#FFE8E8',
+              color: drawingPoints.length === 0 ? '#bdbdbd' : '#E06060',
               border: 'none', borderRadius: '8px',
               cursor: drawingPoints.length === 0 ? 'not-allowed' : 'pointer',
               whiteSpace: 'nowrap',
@@ -923,8 +923,8 @@ const App: React.FC = () => {
             disabled={drawingPoints.length < 2 || !routeName.trim()}
             style={{
               padding: '6px 14px', fontSize: '13px', fontWeight: 600,
-              backgroundColor: drawingPoints.length < 2 || !routeName.trim() ? '#f1f3f4' : '#1a73e8',
-              color: drawingPoints.length < 2 || !routeName.trim() ? '#9e9e9e' : '#fff',
+              backgroundColor: drawingPoints.length < 2 || !routeName.trim() ? '#f1f3f4' : '#89CFF0',
+              color: drawingPoints.length < 2 || !routeName.trim() ? '#9e9e9e' : '#1a3a5c',
               border: 'none', borderRadius: '8px',
               cursor: drawingPoints.length < 2 || !routeName.trim() ? 'not-allowed' : 'pointer',
               whiteSpace: 'nowrap',
@@ -948,7 +948,7 @@ const App: React.FC = () => {
           style={{
             position: 'fixed', bottom: '24px', right: '24px', zIndex: 400,
             padding: '10px 18px', fontSize: '13px', fontWeight: 600,
-            backgroundColor: '#c5221f', color: '#fff',
+            backgroundColor: '#E06060', color: '#fff',
             border: 'none', borderRadius: '20px', cursor: 'pointer',
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
           }}

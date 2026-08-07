@@ -15,8 +15,8 @@ type VisitTypeKey = 'ATMOSPHERE' | 'COMPLEX' | 'PROPERTY';
 
 // 입력 유형 정의
 const INPUT_TYPES: { key: ChecklistInputType; label: string; color: string }[] = [
-  { key: 'RATING', label: '상중하', color: '#1a73e8' },
-  { key: 'OX',     label: 'O/X',   color: '#0f9d58' },
+  { key: 'RATING', label: '상중하', color: '#4BAAD4' },
+  { key: 'OX',     label: 'O/X',   color: '#5AAF84' },
   { key: 'TEXT',   label: '텍스트', color: '#e37400' },
 ];
 
@@ -213,9 +213,9 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
             <button key={vt.key} onClick={() => { setActiveTab(vt.key); setPendingCats([]); }}
               style={{
                 padding: '5px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                border: '1.5px solid', borderColor: isActive ? '#1a73e8' : '#dadce0',
+                border: '1.5px solid', borderColor: isActive ? '#89CFF0' : '#dadce0',
                 borderRadius: '14px',
-                backgroundColor: isActive ? '#1a73e8' : '#fff',
+                backgroundColor: isActive ? '#89CFF0' : '#fff',
                 color: isActive ? '#fff' : '#5f6368',
               }}>
               {vt.label}
@@ -250,7 +250,7 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
                 </span>
                 {cat !== '' && (
                   <button onClick={() => handleDeleteCategory(cat)}
-                    style={{ border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff', color: '#ea4335', fontSize: '10px', padding: '2px 6px', cursor: 'pointer' }}>
+                    style={{ border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff', color: '#F08080', fontSize: '10px', padding: '2px 6px', cursor: 'pointer' }}>
                     카테고리 삭제
                   </button>
                 )}
@@ -273,7 +273,7 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
                       />
                       <InputTypeToggle value={editingType} onChange={setEditingType} />
                       <button onClick={() => handleEditSave(t.id)}
-                        style={{ fontSize: '11px', padding: '3px 7px', border: 'none', borderRadius: '4px', backgroundColor: '#1a73e8', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>저장</button>
+                        style={{ fontSize: '11px', padding: '3px 7px', border: 'none', borderRadius: '4px', backgroundColor: '#89CFF0', color: '#1a3a5c', cursor: 'pointer', whiteSpace: 'nowrap' }}>저장</button>
                       <button onClick={() => setEditingId(null)}
                         style={{ fontSize: '11px', padding: '3px 7px', border: '1px solid #dadce0', borderRadius: '4px', backgroundColor: '#fff', cursor: 'pointer' }}>취소</button>
                     </>
@@ -287,7 +287,7 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
                       <button onClick={() => { setEditingId(t.id); setEditingName(t.itemName); setEditingType((t.inputType || 'RATING') as ChecklistInputType); }}
                         style={{ border: '1px solid #dadce0', borderRadius: '4px', background: '#fff', color: '#80868b', fontSize: '11px', padding: '2px 5px', cursor: 'pointer' }}>✏</button>
                       <button onClick={() => handleDeleteItem(t.id, t.itemName)}
-                        style={{ border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff', color: '#ea4335', fontSize: '11px', padding: '2px 5px', cursor: 'pointer' }}>×</button>
+                        style={{ border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff', color: '#F08080', fontSize: '11px', padding: '2px 5px', cursor: 'pointer' }}>×</button>
                     </>
                   )}
                 </div>
@@ -321,7 +321,7 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
                     disabled={!newItemVal.trim() || saving}
                     style={{
                       padding: '4px 9px', fontSize: '11px', fontWeight: 600, border: 'none', borderRadius: '5px',
-                      backgroundColor: newItemVal.trim() ? '#1a73e8' : '#f1f3f4',
+                      backgroundColor: newItemVal.trim() ? '#89CFF0' : '#f1f3f4',
                       color: newItemVal.trim() ? '#fff' : '#9aa0a6',
                       cursor: newItemVal.trim() ? 'pointer' : 'not-allowed',
                     }}>추가</button>
@@ -351,7 +351,7 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
             disabled={!newCatName.trim()}
             style={{
               padding: '6px 12px', fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '6px',
-              backgroundColor: newCatName.trim() ? '#1a73e8' : '#f1f3f4',
+              backgroundColor: newCatName.trim() ? '#89CFF0' : '#f1f3f4',
               color: newCatName.trim() ? '#fff' : '#9aa0a6',
               cursor: newCatName.trim() ? 'pointer' : 'not-allowed',
             }}>추가</button>

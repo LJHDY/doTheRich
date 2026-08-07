@@ -12,7 +12,7 @@ function calcRouteStats(points: { lat: number; lng: number }[]): { km: string; m
   };
 }
 
-const ROUTE_COLORS = ['#e53935', '#43a047', '#8e24aa', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
+const ROUTE_COLORS = ['#e53935', '#43a047', '#BA8BD8', '#fb8c00', '#039be5', '#6d4c41', '#00acc1', '#546e7a'];
 
 // 경로 포인트를 GPX XML 문자열로 변환 후 .gpx 파일로 다운로드
 function downloadGpx(route: MapRoute) {
@@ -129,7 +129,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
               style={{
                 padding: '4px 10px', fontSize: '12px', fontWeight: 600,
                 border: '1px solid #0b8043', borderRadius: '6px',
-                backgroundColor: '#e6f4ea', color: '#0b8043', cursor: 'pointer',
+                backgroundColor: '#e6f4ea', color: '#5AAF84', cursor: 'pointer',
               }}
             >지도 보기</button>
           )}
@@ -147,10 +147,10 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
           disabled={isDrawingRoute}
           style={{
             width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600,
-            border: '1px dashed', borderColor: isDrawingRoute ? '#9e9e9e' : '#1a73e8',
+            border: '1px dashed', borderColor: isDrawingRoute ? '#9e9e9e' : '#89CFF0',
             borderRadius: '8px', cursor: isDrawingRoute ? 'not-allowed' : 'pointer',
-            backgroundColor: isDrawingRoute && editingRouteId === null ? '#f5f5f5' : '#e8f0fe',
-            color: isDrawingRoute && editingRouteId === null ? '#9e9e9e' : '#1a73e8',
+            backgroundColor: isDrawingRoute && editingRouteId === null ? '#f5f5f5' : '#D4EFFC',
+            color: isDrawingRoute && editingRouteId === null ? '#9e9e9e' : '#89CFF0',
           }}
         >
           {isDrawingRoute && editingRouteId === null ? '그리는 중... (지도를 클릭하세요)' : '+ 신규 경로 그리기'}
@@ -168,10 +168,10 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
           disabled={isDrawingRoute}
           style={{
             width: '100%', padding: '8px', fontSize: '13px', fontWeight: 600,
-            border: '1px solid', borderColor: isDrawingRoute ? '#9e9e9e' : '#0b8043',
+            border: '1px solid', borderColor: isDrawingRoute ? '#9e9e9e' : '#5AAF84',
             borderRadius: '8px', cursor: isDrawingRoute ? 'not-allowed' : 'pointer',
             backgroundColor: isDrawingRoute ? '#f5f5f5' : '#e6f4ea',
-            color: isDrawingRoute ? '#9e9e9e' : '#0b8043',
+            color: isDrawingRoute ? '#9e9e9e' : '#5AAF84',
           }}
         >↑ GPX 불러오기</button>
       </div>
@@ -253,7 +253,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                       style={{
                         padding: '5px 12px', fontSize: '12px', fontWeight: 600,
                         border: '1px solid #1a73e8', borderRadius: '6px',
-                        backgroundColor: '#e8f0fe', color: '#1a73e8', cursor: 'pointer',
+                        backgroundColor: '#D4EFFC', color: '#4BAAD4', cursor: 'pointer',
                       }}
                     >✏ 경로 수정</button>
                     <button
@@ -261,7 +261,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                       style={{
                         padding: '5px 12px', fontSize: '12px', fontWeight: 600,
                         border: '1px solid #0b8043', borderRadius: '6px',
-                        backgroundColor: '#e6f4ea', color: '#0b8043', cursor: 'pointer',
+                        backgroundColor: '#e6f4ea', color: '#5AAF84', cursor: 'pointer',
                       }}
                       title="GPX 파일 다운로드"
                     >↓ GPX</button>
@@ -272,7 +272,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                 {isEditing && (
                   <div style={{
                     padding: '6px 16px 10px',
-                    fontSize: '12px', color: '#0b8043', fontWeight: 600,
+                    fontSize: '12px', color: '#5AAF84', fontWeight: 600,
                   }}>
                     ✎ 수정 중 — 지도를 클릭해 점을 추가하세요
                   </div>

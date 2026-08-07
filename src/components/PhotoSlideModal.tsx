@@ -202,8 +202,8 @@ const PhotoSlideModal: React.FC<PhotoSlideModalProps> = ({ complexId, complexNam
             title="현재 사진 삭제"
             disabled={!hasPhotos}
             style={{
-              background: 'none', border: `1px solid ${hasPhotos ? '#c5221f' : '#555'}`,
-              color: hasPhotos ? '#c5221f' : '#555',
+              background: 'none', border: `1px solid ${hasPhotos ? '#E06060' : '#555'}`,
+              color: hasPhotos ? '#E06060' : '#555',
               cursor: hasPhotos ? 'pointer' : 'default',
               borderRadius: '8px', padding: '7px 16px',
               display: 'flex', alignItems: 'center', gap: '6px',
@@ -217,8 +217,8 @@ const PhotoSlideModal: React.FC<PhotoSlideModalProps> = ({ complexId, complexNam
           <label
             title="사진 추가"
             style={{
-              background: 'none', border: `1px solid ${uploading ? '#555' : '#34a853'}`,
-              color: uploading ? '#555' : '#34a853',
+              background: 'none', border: `1px solid ${uploading ? '#555' : '#7DC8A0'}`,
+              color: uploading ? '#555' : '#7DC8A0',
               cursor: uploading ? 'not-allowed' : 'pointer',
               borderRadius: '8px', padding: '7px 16px',
               display: 'flex', alignItems: 'center', gap: '6px',
@@ -256,7 +256,7 @@ const PhotoSlideModal: React.FC<PhotoSlideModalProps> = ({ complexId, complexNam
                   onClick={handleDelete}
                   disabled={deleting}
                   style={{
-                    padding: '8px 22px', backgroundColor: '#c5221f', color: '#fff',
+                    padding: '8px 22px', backgroundColor: '#E06060', color: '#fff',
                     border: 'none', borderRadius: '6px',
                     cursor: deleting ? 'not-allowed' : 'pointer',
                     fontSize: '13px', fontWeight: 600, opacity: deleting ? 0.7 : 1,

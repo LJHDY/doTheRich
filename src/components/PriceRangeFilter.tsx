@@ -20,10 +20,10 @@ const selectStyle = (active: boolean): React.CSSProperties => ({
   WebkitAppearance: 'none',
   MozAppearance: 'none',
   border: '1.5px solid',
-  borderColor: active ? '#1a73e8' : '#d2d5da',
+  borderColor: active ? '#89CFF0' : '#d2d5da',
   borderRadius: '16px',
-  backgroundColor: active ? '#e8f0fe' : '#fff',
-  color: active ? '#1a73e8' : '#4a4f54',
+  backgroundColor: active ? '#D4EFFC' : '#fff',
+  color: active ? '#89CFF0' : '#4a4f54',
   fontSize: '12px',
   fontWeight: 600,
   padding: '3px 24px 3px 10px',
@@ -40,7 +40,7 @@ const selectStyle = (active: boolean): React.CSSProperties => ({
 const DropdownArrow: React.FC<{ active: boolean }> = ({ active }) => (
   <svg
     viewBox="0 0 24 24" fill="none"
-    stroke={active ? '#1a73e8' : '#9e9e9e'}
+    stroke={active ? '#89CFF0' : '#9e9e9e'}
     strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
     style={{
       position: 'absolute', right: '10px', top: '50%',

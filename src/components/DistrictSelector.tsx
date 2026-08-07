@@ -40,10 +40,10 @@ const DistrictSelector: React.FC<Props> = ({ value, onChange }) => {
       style={{
         fontSize: '12px',
         padding: '4px 6px',
-        border: `1px solid ${active ? '#1a73e8' : '#dadce0'}`,
+        border: `1px solid ${active ? '#89CFF0' : '#dadce0'}`,
         borderRadius: '6px',
-        backgroundColor: active ? '#e8f0fe' : '#fff',
-        color: active ? '#1a73e8' : '#5f6368',
+        backgroundColor: active ? '#D4EFFC' : '#fff',
+        color: active ? '#89CFF0' : '#5f6368',
         cursor: 'pointer',
         flexShrink: 0,
         maxWidth: '110px',

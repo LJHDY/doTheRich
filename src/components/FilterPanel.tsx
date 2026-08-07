@@ -104,7 +104,7 @@ const STRUCT_LABELS: Record<string, string> = {
   STAIRCASE: '계단식', CORRIDOR: '복도식', MIXED: '혼합',
 };
 const GRADE_COLORS: Record<string, string> = {
-  S: '#ea4335', A: '#f9ab00', B: '#34a853', C: '#1a73e8',
+  S: '#F08080', A: '#FFD97D', B: '#7DC8A0', C: '#89CFF0',
 };
 
 // ── 단일 단지에 대해 필터 적용 ────────────────────────────────────────────────
@@ -161,9 +161,9 @@ const Chip: React.FC<{
     style={{
       padding: '4px 10px', fontSize: '12px', fontWeight: active ? 700 : 500,
       borderRadius: '14px', cursor: 'pointer', transition: 'all 0.12s',
-      border: `1.5px solid ${active ? (color ?? '#1a73e8') : '#dadce0'}`,
-      backgroundColor: active ? (color ? color + '18' : '#e8f0fe') : '#fff',
-      color: active ? (color ?? '#1a73e8') : '#5f6368',
+      border: `1.5px solid ${active ? (color ?? '#89CFF0') : '#dadce0'}`,
+      backgroundColor: active ? (color ? color + '18' : '#D4EFFC') : '#fff',
+      color: active ? (color ?? '#89CFF0') : '#5f6368',
     }}
   >{label}</button>
 );
@@ -271,7 +271,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           {activeCount > 0 && (
             <span style={{
               fontSize: '11px', fontWeight: 700, color: '#fff',
-              backgroundColor: '#1a73e8', borderRadius: '10px', padding: '2px 7px',
+              backgroundColor: '#89CFF0', borderRadius: '10px', padding: '2px 7px',
             }}>{activeCount}</span>
           )}
         </div>
@@ -280,7 +280,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             <button
               onClick={() => onChange(EMPTY_FILTERS)}
               style={{
-                fontSize: '12px', fontWeight: 600, color: '#c5221f',
+                fontSize: '12px', fontWeight: 600, color: '#E06060',
                 background: 'none', border: '1px solid #f5c6c6',
                 borderRadius: '6px', padding: '4px 10px', cursor: 'pointer',
               }}
@@ -302,7 +302,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             <input type="checkbox" checked={filters.isFavoriteOnly}
               onChange={e => upd({ isFavoriteOnly: e.target.checked })}
               style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
-            <span style={{ fontSize: '13px', fontWeight: 600, color: '#f9ab00' }}>★ 즐겨찾기만</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#FFD97D' }}>★ 즐겨찾기만</span>
           </label>
         </div>
 
@@ -431,7 +431,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 key={r}
                 label={r === '200이상' ? '200%+' : `${r}%`}
                 active={filters.changeRateRanges.includes(r)}
-                color='#34a853'
+                color='#7DC8A0'
                 onClick={() => upd({ changeRateRanges: toggle(filters.changeRateRanges, r) })}
               />
             ))}
@@ -493,7 +493,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '6px' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
-                        {c.isFavorite && <span style={{ color: '#f9ab00', fontSize: '12px' }}>★</span>}
+                        {c.isFavorite && <span style={{ color: '#FFD97D', fontSize: '12px' }}>★</span>}
                         <span style={{ fontSize: '13px', fontWeight: 700, color: '#202124', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {c.complexName}
                         </span>
@@ -504,7 +504,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                         {c.unitCount && <span>{c.unitCount.toLocaleString()}세대</span>}
                         {c.jeonseRate != null && <span>전세율 {c.jeonseRate}%</span>}
                         {c.tenYearChangeRate != null && (
-                          <span style={{ color: c.tenYearChangeRate >= 0 ? '#34a853' : '#1a73e8', fontWeight: 600 }}>
+                          <span style={{ color: c.tenYearChangeRate >= 0 ? '#7DC8A0' : '#89CFF0', fontWeight: 600 }}>
                             {c.tenYearChangeRate >= 0 ? '+' : ''}{c.tenYearChangeRate}%
                           </span>
                         )}
@@ -512,7 +512,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       {c.priceRange && (
-                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#1a73e8' }}>{c.priceRange}</div>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#4BAAD4' }}>{c.priceRange}</div>
                       )}
                       {/* 등급 배지 한 줄 */}
                       <div style={{ display: 'flex', gap: '3px', justifyContent: 'flex-end', marginTop: '3px' }}>

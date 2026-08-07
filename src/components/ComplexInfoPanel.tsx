@@ -225,10 +225,10 @@ const calcSchoolGrade = (
     .map(s => s.achievementScore!);
   if (scores.length === 0) return null;
   const best = Math.max(...scores);
-  if (best >= 95) return { grade: 'S', color: '#ea4335' };
-  if (best >= 90) return { grade: 'A', color: '#f9ab00' };
-  if (best >= 85) return { grade: 'B', color: '#34a853' };
-  return { grade: 'C', color: '#1a73e8' };
+  if (best >= 95) return { grade: 'S', color: '#F08080' };
+  if (best >= 90) return { grade: 'A', color: '#FFD97D' };
+  if (best >= 85) return { grade: 'B', color: '#7DC8A0' };
+  return { grade: 'C', color: '#4BAAD4' };
 };
 
 // 인프라 등급 — 백화점 2개↑=S, 1개=A, 대형마트 1개↑=B, 그외=C / 인프라 없어도 항상 표시
@@ -237,10 +237,10 @@ const calcInfraGrade = (
 ): { grade: 'S' | 'A' | 'B' | 'C'; color: string } => {
   const deptCount = infraInfos.filter(i => i.infraType === 'DEPARTMENT_STORE').length;
   const martCount = infraInfos.filter(i => i.infraType === 'MART').length;
-  if (deptCount >= 2) return { grade: 'S', color: '#ea4335' };
-  if (deptCount >= 1) return { grade: 'A', color: '#f9ab00' };
-  if (martCount >= 1) return { grade: 'B', color: '#34a853' };
-  return { grade: 'C', color: '#1a73e8' };
+  if (deptCount >= 2) return { grade: 'S', color: '#F08080' };
+  if (deptCount >= 1) return { grade: 'A', color: '#FFD97D' };
+  if (martCount >= 1) return { grade: 'B', color: '#7DC8A0' };
+  return { grade: 'C', color: '#4BAAD4' };
 };
 
 // 인라인 뱃지 — 학교유형·인프라유형 등 짧은 분류 태그 표시용
@@ -254,7 +254,7 @@ const Tag: React.FC<{ label: string; color?: string }> = ({ label, color = '#5f6
 
 // S/A/B/C 등급 → 색상 매핑 (직장밀도·학군·인프라 공통)
 const GRADE_COLORS: Record<string, string> = {
-  S: '#ea4335', A: '#f9ab00', B: '#34a853', C: '#1a73e8',
+  S: '#F08080', A: '#FFD97D', B: '#7DC8A0', C: '#89CFF0',
 };
 
 // 만 단위 축약 (240689 → "24만", 9500 → "9,500")
@@ -262,7 +262,7 @@ const formatCount = (n: number): string =>
   n >= 10000 ? `${Math.round(n / 10000)}만` : n.toLocaleString();
 
 // 매매가: 파란 계열 / 전세가: 빨간 계열 — 평형 수만큼 순환 사용
-const SALE_COLORS = ['#1a73e8', '#4285f4', '#185abc', '#669df6'];
+const SALE_COLORS = ['#89CFF0', '#4285f4', '#185abc', '#669df6'];
 
 // RegisterModal과 동일한 참고가 자동계산 헬퍼
 const evalExpr = (expr: string): string => {
@@ -289,7 +289,7 @@ const calcTenYear = (expr: string): { amount: string; rate: string } => {
   }
   return { amount: evalExpr(expr), rate: '' };
 };
-const JEONSE_COLORS = ['#ea4335', '#c62828', '#ef5350', '#e57373'];
+const JEONSE_COLORS = ['#F08080', '#c62828', '#ef5350', '#e57373'];
 
 // PriceHistory 배열을 recharts용 다중 시리즈 데이터로 변환
 const buildChartData = (
@@ -1583,9 +1583,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       <div
         style={{
           padding: '16px',
-          borderBottom: '1px solid #e8eaed',
-          backgroundColor: '#1a73e8',
-          color: '#fff',
+          borderBottom: '1px solid #b8e0f5',
+          backgroundColor: '#89CFF0',
+          color: '#1a3a5c',
           flexShrink: 0,
         }}
       >
@@ -1676,7 +1676,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             {/* 즐겨찾기 버튼 — 노란별(활성)/회색별(비활성), 낙관적 업데이트 */}
             <button
               onClick={handleToggleFavorite}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: 0, color: isFavorite ? '#f9ab00' : 'rgba(255,255,255,0.4)', flexShrink: 0 }}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: 0, color: isFavorite ? '#FFD97D' : 'rgba(255,255,255,0.4)', flexShrink: 0 }}
             >★</button>
             {/* 사진 보기 버튼 — 가격 없는 단지(임장용 등)도 항상 표시 */}
             <button
@@ -1749,7 +1749,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               ))}
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                 <button onClick={saveBasicInfo} disabled={basicInfoSaving}
-                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: basicInfoSaving ? 'not-allowed' : 'pointer', opacity: basicInfoSaving ? 0.7 : 1 }}>
+                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#89CFF0', color: '#1a3a5c', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: basicInfoSaving ? 'not-allowed' : 'pointer', opacity: basicInfoSaving ? 0.7 : 1 }}>
                   {basicInfoSaving ? '저장 중...' : '저장'}
                 </button>
                 <button onClick={() => setEditingBasicInfo(false)} disabled={basicInfoSaving}
@@ -1782,7 +1782,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 style={{
                   padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
                   cursor: 'pointer', border: 'none',
-                  backgroundColor: selectedRefTab === at ? '#1a73e8' : '#f1f3f4',
+                  backgroundColor: selectedRefTab === at ? '#89CFF0' : '#f1f3f4',
                   color: selectedRefTab === at ? '#fff' : '#5f6368',
                 }}
               >
@@ -1797,7 +1797,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   setRefPriceForm({ areaType: '', priceUk: '', jeonseUk: '', kbPriceUk: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' });
                   setEditingRefPrice(true);
                 }}
-                style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: '1px dashed #1a73e8', backgroundColor: 'transparent', color: '#1a73e8' }}
+                style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: '1px dashed #1a73e8', backgroundColor: 'transparent', color: '#4BAAD4' }}
                 title="평형 추가"
               >+ 평형</button>
             )}
@@ -1812,7 +1812,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 <button
                   onClick={() => handleDeleteAreaType(selectedRefTab)}
                   disabled={deletingAreaType}
-                  style={{ border: '1px solid #c5221f', background: 'none', cursor: deletingAreaType ? 'not-allowed' : 'pointer', fontSize: '11px', color: '#c5221f', padding: '2px 8px', borderRadius: '6px', opacity: deletingAreaType ? 0.5 : 1 }}
+                  style={{ border: '1px solid #c5221f', background: 'none', cursor: deletingAreaType ? 'not-allowed' : 'pointer', fontSize: '11px', color: '#E06060', padding: '2px 8px', borderRadius: '6px', opacity: deletingAreaType ? 0.5 : 1 }}
                   title="이 평형 시세 기록 전체 삭제"
                 >{deletingAreaType ? '...' : '삭제'}</button>
               </div>
@@ -1940,7 +1940,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 <button
                   onClick={saveRefPrice}
                   disabled={refPriceSaving}
-                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: refPriceSaving ? 'not-allowed' : 'pointer', opacity: refPriceSaving ? 0.7 : 1 }}
+                  style={{ flex: 1, padding: '6px 0', backgroundColor: '#89CFF0', color: '#1a3a5c', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: refPriceSaving ? 'not-allowed' : 'pointer', opacity: refPriceSaving ? 0.7 : 1 }}
                 >
                   {refPriceSaving ? '저장 중...' : '저장'}
                 </button>
@@ -2008,7 +2008,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   }}
                 />
                 {memoError && (
-                  <div style={{ fontSize: '12px', color: '#c5221f', marginTop: '4px' }}>{memoError}</div>
+                  <div style={{ fontSize: '12px', color: '#E06060', marginTop: '4px' }}>{memoError}</div>
                 )}
                 <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
                   <button
@@ -2016,7 +2016,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     disabled={memoSaving}
                     style={{
                       flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600,
-                      backgroundColor: memoSaving ? '#9e9e9e' : '#1a73e8',
+                      backgroundColor: memoSaving ? '#9e9e9e' : '#89CFF0',
                       color: '#fff', border: 'none', borderRadius: '5px', cursor: memoSaving ? 'not-allowed' : 'pointer',
                     }}
                   >
@@ -2092,10 +2092,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               style={{
                 padding: '4px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                 border: '1px solid',
-                borderColor: checklistRatedCount > 0 ? '#1a73e8' : '#34a853',
+                borderColor: checklistRatedCount > 0 ? '#89CFF0' : '#7DC8A0',
                 borderRadius: '6px',
-                backgroundColor: checklistRatedCount > 0 ? '#e8f0fe' : '#e6f4ea',
-                color: checklistRatedCount > 0 ? '#1a73e8' : '#0b8043',
+                backgroundColor: checklistRatedCount > 0 ? '#D4EFFC' : '#e6f4ea',
+                color: checklistRatedCount > 0 ? '#89CFF0' : '#5AAF84',
               }}
             >
               {checklistRatedCount > 0 ? '체크리스트 보기' : '체크리스트 작성'}
@@ -2170,15 +2170,15 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                       style={{
                         padding: '4px 10px', fontSize: '12px', fontWeight: 600,
                         border: '1px solid #1a73e8', borderRadius: '6px',
-                        backgroundColor: row.fetching || !row.stationName.trim() ? '#f1f3f4' : '#e8f0fe',
-                        color: row.fetching || !row.stationName.trim() ? '#9e9e9e' : '#1a73e8',
+                        backgroundColor: row.fetching || !row.stationName.trim() ? '#f1f3f4' : '#D4EFFC',
+                        color: row.fetching || !row.stationName.trim() ? '#9e9e9e' : '#89CFF0',
                         cursor: row.fetching || !row.stationName.trim() ? 'not-allowed' : 'pointer',
                         whiteSpace: 'nowrap', flexShrink: 0,
                       }}
                     >{row.fetching ? '조회 중' : '조회'}</button>
                     <button
                       onClick={() => removeSubwayRow(row.localId)}
-                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', color: '#c5221f', flexShrink: 0, padding: 0 }}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', color: '#E06060', flexShrink: 0, padding: 0 }}
                     >×</button>
                   </div>
                   {/* 호선 + 도보(분) */}
@@ -2213,14 +2213,14 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               {/* + 역 추가 */}
               <button
                 onClick={addSubwayRow}
-                style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, border: '1px dashed #1a73e8', borderRadius: '6px', backgroundColor: 'transparent', color: '#1a73e8', cursor: 'pointer', marginBottom: '8px' }}
+                style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, border: '1px dashed #1a73e8', borderRadius: '6px', backgroundColor: 'transparent', color: '#4BAAD4', cursor: 'pointer', marginBottom: '8px' }}
               >+ 역 추가</button>
               {/* 저장·취소 */}
               <div style={{ display: 'flex', gap: '6px' }}>
                 <button
                   onClick={saveSubway}
                   disabled={savingSubway}
-                  style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingSubway ? '#9e9e9e' : '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', cursor: savingSubway ? 'not-allowed' : 'pointer' }}
+                  style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingSubway ? '#9e9e9e' : '#89CFF0', color: '#fff', border: 'none', borderRadius: '6px', cursor: savingSubway ? 'not-allowed' : 'pointer' }}
                 >{savingSubway ? '저장 중...' : '저장'}</button>
                 <button
                   onClick={cancelEditSubway}
@@ -2307,7 +2307,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         style={{
                           padding: '3px 8px', fontSize: '11px', fontWeight: 600,
                           border: '1px solid #34a853', borderRadius: '6px',
-                          backgroundColor: '#e6f4ea', color: '#0b8043',
+                          backgroundColor: '#e6f4ea', color: '#5AAF84',
                           cursor: 'pointer', flexShrink: 0,
                         }}
                         title="네이버 지도에서 대중교통 경로 확인"
@@ -2349,7 +2349,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                           {row.transferLines.map((line, j) => (
                             <React.Fragment key={j}>
                               {/* 두 번째 칸부터 ➡️ 이모지 구분자 표시 */}
-                              {j > 0 && <span style={{ color: '#f9ab00', fontWeight: 700, margin: '0 2px' }}>➡️</span>}
+                              {j > 0 && <span style={{ color: '#FFD97D', fontWeight: 700, margin: '0 2px' }}>➡️</span>}
                               <input
                                 placeholder={`노선${j + 1}`}
                                 value={line}
@@ -2375,7 +2375,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   style={{
                     padding: '6px 14px', fontSize: '12px', fontWeight: 600,
                     border: '1px solid #1a73e8', borderRadius: '6px',
-                    backgroundColor: '#e8f0fe', color: '#1a73e8', cursor: 'pointer',
+                    backgroundColor: '#D4EFFC', color: '#4BAAD4', cursor: 'pointer',
                   }}
                 >{savingCommute ? '저장 중…' : '저장'}</button>
                 <button
@@ -2406,10 +2406,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         <span style={{ marginLeft: '3px', fontSize: '10px', color: '#b0b8c1' }}>{ct.distanceKm}km</span>
                       )}
                     </div>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a73e8' }}>{ct.minutes}분</div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#4BAAD4' }}>{ct.minutes}분</div>
                     {ct.transferCount != null && (
                       <div style={{ marginTop: '3px' }}>
-                        <div style={{ fontSize: '10px', color: ct.transferCount === 0 ? '#34a853' : '#80868b', fontWeight: ct.transferCount === 0 ? 600 : 400 }}>
+                        <div style={{ fontSize: '10px', color: ct.transferCount === 0 ? '#7DC8A0' : '#80868b', fontWeight: ct.transferCount === 0 ? 600 : 400 }}>
                           {ct.transferCount === 0 ? '직통' : `환승 ${ct.transferCount}회`}
                         </div>
                         {ct.transferLines && (
@@ -2417,7 +2417,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                             {ct.transferLines.split(' ➡️ ').map((line, i, arr) => (
                               <span key={i}>
                                 <span style={{ fontWeight: 600 }}>{line}</span>
-                                {i < arr.length - 1 && <span style={{ color: '#fbbc04', margin: '0 1px' }}> ➡ </span>}
+                                {i < arr.length - 1 && <span style={{ color: '#FFE082', margin: '0 1px' }}> ➡ </span>}
                               </span>
                             ))}
                           </div>
@@ -2449,7 +2449,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             })()}
             {!editingSchool && (
               <button onClick={startAddSchool}
-                style={{ border: '1px dashed #1a73e8', background: 'none', cursor: 'pointer', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: '#1a73e8', marginLeft: 'auto' }}>
+                style={{ border: '1px dashed #1a73e8', background: 'none', cursor: 'pointer', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: '#4BAAD4', marginLeft: 'auto' }}>
                 + 추가
               </button>
             )}
@@ -2537,7 +2537,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button onClick={saveEditingSchool} disabled={editingSchool.saving}
-                        style={{ flex: 1, padding: '7px', fontSize: '12px', fontWeight: 600, backgroundColor: editingSchool.saving ? '#9e9e9e' : '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                        style={{ flex: 1, padding: '7px', fontSize: '12px', fontWeight: 600, backgroundColor: editingSchool.saving ? '#9e9e9e' : '#89CFF0', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
                         {editingSchool.saving ? '저장 중...' : '저장'}
                       </button>
                       <button onClick={() => setEditingSchool(null)}
@@ -2552,7 +2552,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Tag
                         label={SCHOOL_TYPE_LABELS[s.schoolType] ?? s.schoolType}
-                        color={s.schoolType === 'MIDDLE' ? '#1a73e8' : '#34a853'}
+                        color={s.schoolType === 'MIDDLE' ? '#89CFF0' : '#7DC8A0'}
                       />
                       <span style={{ fontSize: '13px', fontWeight: 600, color: '#202124', flex: 1 }}>{s.schoolName}</span>
                       {s.walkingMinutes != null && (
@@ -2564,7 +2564,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         title="수정">✏</button>
                       {/* 삭제 버튼 */}
                       <button onClick={() => handleDeleteSchool(s.id)}
-                        style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#c5221f', padding: '0 2px', flexShrink: 0 }}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#E06060', padding: '0 2px', flexShrink: 0 }}
                         title="삭제">🗑</button>
                     </div>
                     {(s.achievementScore != null || s.totalStudents != null) && (
@@ -2586,9 +2586,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             {newSchoolRows.map((row, idx) => (
               <div key={row.localId} style={{ border: '1px dashed #1a73e8', borderRadius: '8px', padding: '10px', marginTop: '6px', backgroundColor: '#f8fbff' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#1a73e8' }}>추가 {idx + 1}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#4BAAD4' }}>추가 {idx + 1}</span>
                   <button onClick={() => removeNewSchoolRow(row.localId)}
-                    style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '16px' }}>×</button>
+                    style={{ border: 'none', background: 'none', color: '#E06060', cursor: 'pointer', fontSize: '16px' }}>×</button>
                 </div>
                 {/* 검색 행 */}
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
@@ -2659,7 +2659,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             {newSchoolRows.length > 0 && (
               <div style={{ marginTop: '8px' }}>
                 <button onClick={saveNewSchools} disabled={savingNewSchools}
-                  style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewSchools ? '#9e9e9e' : '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                  style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewSchools ? '#9e9e9e' : '#89CFF0', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
                   {savingNewSchools ? '저장 중...' : `${newSchoolRows.length}건 저장`}
                 </button>
               </div>
@@ -2754,7 +2754,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 ) : (
                   /* 일반 표시 행 — 수정(✏)·삭제(🗑) 버튼 표시 */
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
-                    <Tag label={INFRA_TYPE_LABELS[inf.infraType] ?? inf.infraType} color='#f9ab00' />
+                    <Tag label={INFRA_TYPE_LABELS[inf.infraType] ?? inf.infraType} color='#FFD97D' />
                     <span style={{ fontSize: '13px', color: '#202124', flex: 1 }}>{inf.infraName}</span>
                     {inf.distance != null && (
                       <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0 }}>도보 {inf.distance}분</span>
@@ -2765,7 +2765,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                       title="수정">✏</button>
                     {/* 삭제 버튼 */}
                     <button onClick={() => handleDeleteInfra(inf.id)}
-                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#c5221f', padding: '0 2px', flexShrink: 0 }}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#E06060', padding: '0 2px', flexShrink: 0 }}
                       title="삭제">🗑</button>
                   </div>
                 )}
@@ -2778,7 +2778,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '12px', fontWeight: 600, color: '#e37400' }}>추가 {idx + 1}</span>
                   <button onClick={() => removeNewInfraRow(row.localId)}
-                    style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '16px' }}>×</button>
+                    style={{ border: 'none', background: 'none', color: '#E06060', cursor: 'pointer', fontSize: '16px' }}>×</button>
                 </div>
                 {/* 유형 + 이름 검색 행 */}
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
@@ -2844,7 +2844,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>유해시설</h3>
             {!editingHazard && (
               <button onClick={startAddHazard}
-                style={{ border: '1px dashed #c5221f', background: 'none', cursor: 'pointer', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: '#c5221f', marginLeft: 'auto' }}>
+                style={{ border: '1px dashed #c5221f', background: 'none', cursor: 'pointer', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: '#E06060', marginLeft: 'auto' }}>
                 + 추가
               </button>
             )}
@@ -2900,7 +2900,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   </div>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button onClick={saveEditingHazard} disabled={editingHazard.saving}
-                      style={{ flex: 1, padding: '7px', fontSize: '12px', fontWeight: 600, backgroundColor: editingHazard.saving ? '#9e9e9e' : '#c5221f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                      style={{ flex: 1, padding: '7px', fontSize: '12px', fontWeight: 600, backgroundColor: editingHazard.saving ? '#9e9e9e' : '#E06060', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
                       {editingHazard.saving ? '저장 중...' : '저장'}
                     </button>
                     <button onClick={() => setEditingHazard(null)}
@@ -2916,7 +2916,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     {/* 카테고리 배지 (백엔드에 저장된 경우만 표시) */}
                     {h.macroCategory && (
                       <div style={{ display: 'flex', gap: '4px', marginBottom: '2px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '10px', background: '#fce8e6', color: '#c5221f', borderRadius: '4px', padding: '1px 6px', fontWeight: 600 }}>
+                        <span style={{ fontSize: '10px', background: '#FFE8E8', color: '#E06060', borderRadius: '4px', padding: '1px 6px', fontWeight: 600 }}>
                           {h.macroCategory}
                         </span>
                         {h.subCategory && (
@@ -2935,7 +2935,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#80868b', padding: '0 2px', flexShrink: 0 }}
                     title="수정">✏</button>
                   <button onClick={() => handleDeleteHazard(h.id)}
-                    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#c5221f', padding: '0 2px', flexShrink: 0 }}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#E06060', padding: '0 2px', flexShrink: 0 }}
                     title="삭제">🗑</button>
                 </div>
               )}
@@ -2947,10 +2947,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             <div key={row.localId} style={{ border: '1px dashed #c5221f', borderRadius: '8px', padding: '10px', marginTop: '6px', backgroundColor: '#fff8f7' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#c5221f' }}>추가 {idx + 1}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#E06060' }}>추가 {idx + 1}</span>
                   {/* 자동 감지 항목 카테고리 배지 */}
                   {row.macroCategory && (
-                    <span style={{ fontSize: '10px', background: '#fce8e6', color: '#c5221f', borderRadius: '4px', padding: '1px 6px', fontWeight: 600 }}>
+                    <span style={{ fontSize: '10px', background: '#FFE8E8', color: '#E06060', borderRadius: '4px', padding: '1px 6px', fontWeight: 600 }}>
                       {row.macroCategory}
                     </span>
                   )}
@@ -2961,7 +2961,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   )}
                 </div>
                 <button onClick={() => removeNewHazardRow(row.localId)}
-                  style={{ border: 'none', background: 'none', color: '#c5221f', cursor: 'pointer', fontSize: '16px' }}>×</button>
+                  style={{ border: 'none', background: 'none', color: '#E06060', cursor: 'pointer', fontSize: '16px' }}>×</button>
               </div>
               <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
                 <input
@@ -3007,7 +3007,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           {newHazardRows.length > 0 && !loadingHazardSuggestions && (
             <div style={{ marginTop: '8px', display: 'flex', gap: '6px' }}>
               <button onClick={saveNewHazards} disabled={savingNewHazards}
-                style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewHazards ? '#9e9e9e' : '#c5221f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                style={{ flex: 1, padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewHazards ? '#9e9e9e' : '#E06060', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
                 {savingNewHazards ? '저장 중...' : `${newHazardRows.length}건 저장`}
               </button>
               <button onClick={() => setNewHazardRows([])}
@@ -3018,7 +3018,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           )}
           {/* 자동 조회 로딩 인디케이터 */}
           {loadingHazardSuggestions && (
-            <div style={{ fontSize: '12px', color: '#c5221f', paddingTop: '4px' }}>주변 유해시설 조회 중...</div>
+            <div style={{ fontSize: '12px', color: '#E06060', paddingTop: '4px' }}>주변 유해시설 조회 중...</div>
           )}
         </div>
 
@@ -3030,7 +3030,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               {!editingRedevelop && (
                 <button
                   onClick={() => setEditingRedevelop(true)}
-                  style={{ fontSize: '12px', padding: '3px 8px', border: '1px solid #34a853', color: '#34a853', borderRadius: '4px', backgroundColor: '#fff', cursor: 'pointer' }}
+                  style={{ fontSize: '12px', padding: '3px 8px', border: '1px solid #34a853', color: '#7DC8A0', borderRadius: '4px', backgroundColor: '#fff', cursor: 'pointer' }}
                 >수정</button>
               )}
             </div>
@@ -3085,7 +3085,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                       finally { setRedevelopSaving(false); }
                     }}
                     disabled={redevelopSaving}
-                    style={{ padding: '6px 12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: redevelopSaving ? 'not-allowed' : 'pointer', opacity: redevelopSaving ? 0.7 : 1 }}
+                    style={{ padding: '6px 12px', backgroundColor: '#89CFF0', color: '#1a3a5c', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: redevelopSaving ? 'not-allowed' : 'pointer', opacity: redevelopSaving ? 0.7 : 1 }}
                   >{redevelopSaving ? '저장 중...' : '저장'}</button>
                   <button
                     onClick={() => { setLocalRedevelopType(complex.redevelopType ?? ''); setLocalRedevelopStage(complex.redevelopStage ?? ''); setEditingRedevelop(false); }}
@@ -3163,7 +3163,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>재개발 정보</h3>
               <button
                 onClick={() => setEditingRedevelop(true)}
-                style={{ fontSize: '12px', padding: '3px 8px', border: '1px solid #34a853', color: '#34a853', borderRadius: '4px', backgroundColor: '#fff', cursor: 'pointer' }}
+                style={{ fontSize: '12px', padding: '3px 8px', border: '1px solid #34a853', color: '#7DC8A0', borderRadius: '4px', backgroundColor: '#fff', cursor: 'pointer' }}
               >+ 추가</button>
             </div>
             <p style={{ fontSize: '12px', color: '#9aa0a6', margin: 0 }}>재개발·재건축·리모델링 정보가 없습니다.</p>
@@ -3205,7 +3205,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   }
                 }}
                 disabled={visitTypeSaving}
-                style={{ padding: '6px 12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: visitTypeSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', opacity: visitTypeSaving ? 0.7 : 1 }}
+                style={{ padding: '6px 12px', backgroundColor: '#89CFF0', color: '#1a3a5c', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: visitTypeSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', opacity: visitTypeSaving ? 0.7 : 1 }}
               >
                 {visitTypeSaving ? '저장 중...' : '저장'}
               </button>
@@ -3218,7 +3218,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           ) : (
             <div style={{
               display: 'inline-block', padding: '4px 12px', borderRadius: '12px',
-              backgroundColor: '#e8f0fe', color: '#1a73e8', fontSize: '13px', fontWeight: 600,
+              backgroundColor: '#D4EFFC', color: '#4BAAD4', fontSize: '13px', fontWeight: 600,
             }}>
               {VISIT_TYPE_LABELS[complex.visitType ?? 'NONE'] ?? VISIT_TYPE_LABELS['NONE']}
             </div>
@@ -3286,9 +3286,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
                           const active = ci.rating === r;
                           const colors: Record<string, { bg: string; color: string }> = {
-                            UPPER: { bg: '#ea4335', color: '#fff' },
-                            MIDDLE: { bg: '#f9ab00', color: '#fff' },
-                            LOWER: { bg: '#1a73e8', color: '#fff' },
+                            UPPER: { bg: '#F08080', color: '#fff' },
+                            MIDDLE: { bg: '#FFD97D', color: '#6b4400' },
+                            LOWER: { bg: '#89CFF0', color: '#1a3a5c' },
                           };
                           const col = colors[r];
                           return (
@@ -3327,7 +3327,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   style={{
                     fontSize: '12px',
                     fontWeight: 600,
-                    color: priceChange >= 0 ? '#c5221f' : '#137333',
+                    color: priceChange >= 0 ? '#E06060' : '#137333',
                   }}
                 >
                   {priceChange >= 0 ? '+' : ''}{formatPrice(Math.abs(priceChange))}
@@ -3344,10 +3344,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                       WebkitAppearance: 'none',
                       MozAppearance: 'none',
                       border: '1.5px solid',
-                      borderColor: selectedAreaType ? '#1a73e8' : '#d2d5da',
+                      borderColor: selectedAreaType ? '#89CFF0' : '#d2d5da',
                       borderRadius: '14px',
-                      backgroundColor: selectedAreaType ? '#e8f0fe' : '#f8f9fa',
-                      color: selectedAreaType ? '#1a73e8' : '#5f6368',
+                      backgroundColor: selectedAreaType ? '#D4EFFC' : '#f8f9fa',
+                      color: selectedAreaType ? '#89CFF0' : '#5f6368',
                       fontSize: '12px',
                       fontWeight: 600,
                       padding: '4px 26px 4px 10px',
@@ -3366,7 +3366,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   </select>
                   <svg
                     viewBox="0 0 24 24" fill="none"
-                    stroke={selectedAreaType ? '#1a73e8' : '#9e9e9e'}
+                    stroke={selectedAreaType ? '#89CFF0' : '#9e9e9e'}
                     strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
                     style={{
                       position: 'absolute', right: '8px', top: '50%',
@@ -3480,14 +3480,14 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                               {delta !== null && delta !== 0 && rate !== null && (
                                 <span style={{
                                   fontSize: '10px', fontWeight: 700,
-                                  color: delta > 0 ? '#c5221f' : '#1a73e8',
+                                  color: delta > 0 ? '#E06060' : '#89CFF0',
                                 }}>
                                   {delta > 0 ? '▲' : '▼'} {formatPrice(Math.abs(delta))} ({delta > 0 ? '+' : ''}{rate.toFixed(1)}%)
                                 </span>
                               )}
                             </div>
                             {item.jeonseRate != null && (
-                              <span style={{ fontSize: '11px', color: '#1a73e8' }}>전세가율 {item.jeonseRate.toFixed(0)}%</span>
+                              <span style={{ fontSize: '11px', color: '#4BAAD4' }}>전세가율 {item.jeonseRate.toFixed(0)}%</span>
                             )}
                           </div>
                           {/* 참고가 — 값이 있는 항목만 표시 */}
@@ -3538,7 +3538,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               width: '100%',
               padding: '12px',
               backgroundColor: '#fff',
-              color: '#1a73e8',
+              color: '#4BAAD4',
               border: '2px dashed #1a73e8',
               borderRadius: '8px',
               fontSize: '14px',
@@ -3555,8 +3555,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         {/* 단지 삭제 — 실수 방지를 위해 2단계 확인 */}
         <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px', marginBottom: '16px' }}>
           {deleteConfirm ? (
-            <div style={{ backgroundColor: '#fce8e6', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ fontSize: '13px', color: '#c5221f', fontWeight: 600, marginBottom: '8px' }}>
+            <div style={{ backgroundColor: '#FFE8E8', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '13px', color: '#E06060', fontWeight: 600, marginBottom: '8px' }}>
                 정말 삭제하시겠습니까?
               </div>
               <div style={{ fontSize: '12px', color: '#80868b', marginBottom: '10px' }}>
@@ -3568,7 +3568,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   disabled={deleting}
                   style={{
                     flex: 1, padding: '8px', fontSize: '13px', fontWeight: 600,
-                    backgroundColor: deleting ? '#9e9e9e' : '#c5221f',
+                    backgroundColor: deleting ? '#9e9e9e' : '#E06060',
                     color: '#fff', border: 'none', borderRadius: '6px',
                     cursor: deleting ? 'not-allowed' : 'pointer',
                   }}
@@ -3593,7 +3593,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               onClick={() => setDeleteConfirm(true)}
               style={{
                 width: '100%', padding: '10px', fontSize: '13px',
-                backgroundColor: '#fff', color: '#c5221f',
+                backgroundColor: '#fff', color: '#E06060',
                 border: '1px solid #c5221f', borderRadius: '8px', cursor: 'pointer',
               }}
             >

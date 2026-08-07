@@ -8,7 +8,7 @@ interface Props {
   isMobile?: boolean; // 모바일 풀스크린 오버레이 모드
 }
 
-const HEADER_COLOR = '#0b8043';
+const HEADER_COLOR = '#5AAF84';
 
 // 원리금균등상환 기준 DSR 40%로 빌릴 수 있는 최대 대출액 (원 단위)
 function calcDsrMaxLoan(incomeManwon: number, ratePercent: number, loanYears: number): number {
@@ -69,7 +69,7 @@ const AnalysisBlock: React.FC<{ label: string; a: Analysis }> = ({ label, a }) =
       ].map(row => (
         <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: '#9e9e9e' }}>{row.label}</span>
-          <span style={{ fontWeight: row.highlight ? 700 : 400, color: row.highlight ? '#1a73e8' : '#202124' }}>
+          <span style={{ fontWeight: row.highlight ? 700 : 400, color: row.highlight ? '#89CFF0' : '#202124' }}>
             {row.value}
           </span>
         </div>
@@ -78,8 +78,8 @@ const AnalysisBlock: React.FC<{ label: string; a: Analysis }> = ({ label, a }) =
     <div style={{ height: '1px', backgroundColor: a.canBuy ? '#a8d5b5' : '#f5c6c6', margin: '7px 0' }} />
     <div style={{ textAlign: 'right', fontSize: '12px', fontWeight: 700 }}>
       {a.canBuy
-        ? <span style={{ color: '#0b8043' }}>✓ 구매 가능</span>
-        : <span style={{ color: '#c5221f' }}>× {fmt(a.shortage)} 부족</span>}
+        ? <span style={{ color: '#5AAF84' }}>✓ 구매 가능</span>
+        : <span style={{ color: '#E06060' }}>× {fmt(a.shortage)} 부족</span>}
     </div>
   </div>
 );
@@ -223,14 +223,14 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
     }
     return a.canBuy ? (
       <span style={{
-        fontSize: '10px', fontWeight: 700, color: '#0b8043',
+        fontSize: '10px', fontWeight: 700, color: '#5AAF84',
         backgroundColor: '#e6f4ea', borderRadius: '6px', padding: '1px 6px',
         whiteSpace: 'nowrap',
       }}>{prefix} ✓</span>
     ) : (
       <span style={{
-        fontSize: '10px', fontWeight: 700, color: '#c5221f',
-        backgroundColor: '#fce8e6', borderRadius: '6px', padding: '1px 6px',
+        fontSize: '10px', fontWeight: 700, color: '#E06060',
+        backgroundColor: '#FFE8E8', borderRadius: '6px', padding: '1px 6px',
         whiteSpace: 'nowrap',
       }}>{prefix} △{fmt(a.shortage)}</span>
     );
@@ -287,7 +287,7 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
               <span style={{ color: '#5f6368' }}>DSR 40% 최대 대출</span>
-              <span style={{ fontWeight: 700, color: '#0b8043' }}>{fmt(dsrMax)}</span>
+              <span style={{ fontWeight: 700, color: '#5AAF84' }}>{fmt(dsrMax)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
               <span style={{ color: '#5f6368' }}>현금 보유액</span>
@@ -296,17 +296,17 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
             <div style={{ height: '1px', backgroundColor: '#a8d5b5', margin: '6px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
               <span style={{ color: '#5f6368' }}>매매가 기준 가능</span>
-              <span style={{ fontWeight: 700, color: '#0b8043' }}>{okCountPrice} / {affordMap.size}개</span>
+              <span style={{ fontWeight: 700, color: '#5AAF84' }}>{okCountPrice} / {affordMap.size}개</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
               <span style={{ color: '#5f6368' }}>KB시세 기준 가능</span>
-              <span style={{ fontWeight: 700, color: '#0b8043' }}>
+              <span style={{ fontWeight: 700, color: '#5AAF84' }}>
                 {loadingHistories ? '—' : `${okCountKb} / ${affordMapKb.size}개`}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#5f6368' }}>호가 기준 가능</span>
-              <span style={{ fontWeight: 700, color: '#0b8043' }}>
+              <span style={{ fontWeight: 700, color: '#5AAF84' }}>
                 {loadingHistories ? '—' : `${okCountAsking} / ${affordMapAsking.size}개`}
               </span>
             </div>
@@ -331,7 +331,7 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
           backgroundColor: '#fafffe', flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#0b8043' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#5AAF84' }}>
               {selectedComplex.complexName}
             </span>
             <button onClick={() => setSelectedId(null)} style={{
