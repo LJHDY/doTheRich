@@ -29,6 +29,30 @@ interface Props {
   onClose: () => void;
 }
 
+// 전화번호 자동 포맷 — 숫자만 추출 후 길이·앞자리 기준 구분
+const formatPhone = (val: string): string => {
+  const d = val.replace(/\D/g, '');
+  if (d.length === 8)  return d.replace(/(\d{4})(\d{4})/, '$1-$2');
+  if (d.length === 10) return d.startsWith('02')
+    ? d.replace(/(\d{2})(\d{4})(\d{4})/, '$1-$2-$3')
+    : d.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+  if (d.length === 11) return d.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+  return val; // 해당 없는 길이는 그대로
+};
+
+// 동·호수 표시 포맷 — 이미 접미사가 있으면 그대로
+const displayDong  = (v?: string) => v ? (v.endsWith('동') ? v : v + '동') : '';
+const displayHosu  = (v?: string) => v ? (v.endsWith('호') || v.endsWith('호수') ? v : v + '호') : '';
+// 평형 표시 포맷 — 이미 "전용"으로 시작하면 그대로
+const displayArea  = (v?: string) => v ? (v.startsWith('전용') ? v : '전용 ' + v) : '';
+
+// textarea 높이를 내용에 맞게 자동 조절
+const autoResize = (el: HTMLTextAreaElement | null) => {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+};
+
 // 매물 임장 추가/편집 폼 상태
 interface VisitFormState {
   visitDate: string;
@@ -319,22 +343,27 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                   {editingVisitId ? '매물 기록 수정' : '새 매물 기록 추가'}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                  {[
-                    { label: '방문일', key: 'visitDate', type: 'date', placeholder: '' },
-                    { label: '부동산', key: 'agentName', type: 'text', placeholder: '담당 부동산명' },
-                    { label: '부동산 연락처', key: 'officePhone', type: 'tel', placeholder: '예: 02-1234-5678' },
-                    { label: '휴대전화 연락처', key: 'mobilePhone', type: 'tel', placeholder: '예: 010-1234-5678' },
-                    { label: '동', key: 'dong', type: 'text', placeholder: '예: 101동' },
-                    { label: '호수', key: 'hosu', type: 'text', placeholder: '예: 1501호' },
-                    { label: '평형', key: 'areaType', type: 'text', placeholder: '예: 전용 59' },
-                    { label: '금액(만원)', key: 'price', type: 'number', placeholder: '예: 90000' },
-                  ].map(({ label, key, type, placeholder }) => (
+                  {([
+                    { label: '방문일',         key: 'visitDate',   type: 'date',   placeholder: '' },
+                    { label: '부동산',         key: 'agentName',   type: 'text',   placeholder: '담당 부동산명' },
+                    { label: '부동산 연락처',   key: 'officePhone', type: 'tel',    placeholder: '예: 02-1234-5678' },
+                    { label: '휴대전화 연락처', key: 'mobilePhone', type: 'tel',    placeholder: '예: 010-1234-5678' },
+                    { label: '동',             key: 'dong',        type: 'text',   placeholder: '예: 101 (동 자동추가)' },
+                    { label: '호수',           key: 'hosu',        type: 'text',   placeholder: '예: 1501 (호 자동추가)' },
+                    { label: '평형',           key: 'areaType',    type: 'text',   placeholder: '예: 59 (전용 자동추가)' },
+                    { label: '금액(만원)',      key: 'price',       type: 'number', placeholder: '예: 90000' },
+                  ] as const).map(({ label, key, type, placeholder }) => (
                     <div key={key}>
                       <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>{label}</div>
                       <input
                         type={type}
                         value={(form as any)[key]}
-                        onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+                        onChange={e => {
+                          const v = e.target.value;
+                          // 연락처는 입력 즉시 포맷 적용
+                          const next = (key === 'officePhone' || key === 'mobilePhone') ? formatPhone(v) : v;
+                          setForm(prev => ({ ...prev, [key]: next }));
+                        }}
                         placeholder={placeholder}
                         style={{
                           width: '100%', fontSize: '12px', padding: '5px 8px',
@@ -347,14 +376,18 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                 <div style={{ marginBottom: '10px' }}>
                   <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>메모</div>
                   <textarea
+                    ref={autoResize}
                     value={form.memo}
-                    onChange={e => setForm(prev => ({ ...prev, memo: e.target.value }))}
+                    onChange={e => {
+                      setForm(prev => ({ ...prev, memo: e.target.value }));
+                      autoResize(e.target);
+                    }}
                     placeholder="메모..."
                     rows={2}
                     style={{
                       width: '100%', fontSize: '12px', padding: '5px 8px',
                       border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
-                      boxSizing: 'border-box', resize: 'vertical',
+                      boxSizing: 'border-box', resize: 'none', overflow: 'hidden',
                     }}
                   />
                 </div>
@@ -436,7 +469,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                           {visit.agentName || '(부동산 미입력)'}
                           {(visit.dong || visit.hosu) && (
                             <span style={{ fontWeight: 400, color: '#5f6368', marginLeft: '8px' }}>
-                              {[visit.dong, visit.hosu].filter(Boolean).join(' ')}
+                              {[displayDong(visit.dong), displayHosu(visit.hosu)].filter(Boolean).join(' ')}
                             </span>
                           )}
                         </div>
@@ -444,7 +477,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                           {visit.areaType && (
                             <span style={{ fontSize: '11px', backgroundColor: '#e8f0fe', color: '#1a73e8', borderRadius: '4px', padding: '1px 6px' }}>
-                              {visit.areaType}
+                              {displayArea(visit.areaType)}
                             </span>
                           )}
                           {visit.price != null && (
