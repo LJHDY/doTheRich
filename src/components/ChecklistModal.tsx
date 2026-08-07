@@ -521,9 +521,9 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                       >×</button>
                     </div>
 
-                    {/* 메모 */}
+                    {/* 메모 — 카드 접힌 상태에서 구분선 아래 표시 */}
                     {visit.memo && !isExpanded && (
-                      <div style={{ padding: '0 14px 8px', fontSize: '11px', color: '#5f6368', whiteSpace: 'pre-wrap' }}>{visit.memo}</div>
+                      <div style={{ borderTop: '1px solid #f0f0f0', padding: '8px 14px', fontSize: '11px', color: '#5f6368', whiteSpace: 'pre-wrap' }}>{visit.memo}</div>
                     )}
 
                     {/* 체크리스트 펼침 영역 */}
