@@ -47,13 +47,6 @@ const displayHosu  = (v?: string) => v ? (v.endsWith('호') || v.endsWith('호�
 // 평형 표시 포맷 — 이미 "전용"으로 시작하면 그대로
 const displayArea  = (v?: string) => v ? (v.startsWith('전용') ? v : '전용 ' + v) : '';
 
-// textarea 높이를 내용에 맞게 자동 조절
-const autoResize = (el: HTMLTextAreaElement | null) => {
-  if (!el) return;
-  el.style.height = 'auto';
-  el.style.height = el.scrollHeight + 'px';
-};
-
 // 매물 임장 추가/편집 폼 상태
 interface VisitFormState {
   visitDate: string;
