@@ -520,7 +520,7 @@ export const getChecklistTemplates = async (visitType?: string): Promise<Checkli
 
 /** 체크리스트 템플릿 추가 — POST /api/checklists/templates */
 export const createChecklistTemplate = async (
-  req: { visitType: string; category?: string; itemName: string; displayOrder?: number }
+  req: { visitType: string; category?: string; itemName: string; displayOrder?: number; inputType?: string }
 ): Promise<ChecklistTemplate> => {
   const { data } = await api.post<ChecklistTemplate>('/api/checklists/templates', req);
   return data;
@@ -528,7 +528,7 @@ export const createChecklistTemplate = async (
 
 /** 체크리스트 템플릿 수정 — PATCH /api/checklists/templates/:id */
 export const updateChecklistTemplate = async (
-  id: number, req: { itemName?: string; displayOrder?: number }
+  id: number, req: { itemName?: string; displayOrder?: number; inputType?: string }
 ): Promise<ChecklistTemplate> => {
   const { data } = await api.patch<ChecklistTemplate>(`/api/checklists/templates/${id}`, req);
   return data;
@@ -597,7 +597,7 @@ export const upsertPropertyVisitResult = async (
   complexId: number,
   visitId: number,
   templateId: number,
-  req: { rating?: string | null }
+  req: { rating?: string | null; memo?: string | null }
 ): Promise<PropertyVisitResultItem> => {
   const { data } = await api.patch<PropertyVisitResultItem>(
     `/api/complexes/${complexId}/property-visits/${visitId}/checklists/${templateId}`, req

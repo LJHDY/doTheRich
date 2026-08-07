@@ -326,6 +326,9 @@ export const isFiltersActive = (f: ActiveFilters): boolean =>
   f.jeonseRateRanges.length > 0 || f.changeRateRanges.length > 0;
 
 /** 경로 좌표 점 */
+/** 체크리스트 입력 유형 */
+export type ChecklistInputType = 'RATING' | 'OX' | 'TEXT';
+
 /** 체크리스트 템플릿 항목 — 백엔드 ChecklistTemplateDto와 1:1 매핑 */
 export interface ChecklistTemplate {
   id: number;
@@ -333,7 +336,11 @@ export interface ChecklistTemplate {
   category?: string;   // 카테고리 그룹 (null=미분류)
   itemName: string;
   displayOrder: number;
+  inputType?: ChecklistInputType;  // RATING(상중하) | OX | TEXT
 }
+
+/** 체크 평가값 타입 */
+export type ChecklistRating = 'UPPER' | 'MIDDLE' | 'LOWER' | 'O' | 'X' | null;
 
 /** 단지 체크 결과 — 미체크 항목도 rating=null로 포함 */
 export interface ChecklistResultItem {
@@ -343,7 +350,8 @@ export interface ChecklistResultItem {
   visitType: string;    // ATMOSPHERE | COMPLEX | PROPERTY
   category?: string;   // 카테고리 그룹
   displayOrder: number;
-  rating: 'UPPER' | 'MIDDLE' | 'LOWER' | null;
+  inputType?: ChecklistInputType;
+  rating: ChecklistRating;
   memo: string | null;
 }
 
@@ -354,7 +362,8 @@ export interface ZoneChecklistResultItem {
   itemName: string;
   category?: string;
   displayOrder: number;
-  rating: 'UPPER' | 'MIDDLE' | 'LOWER' | null;
+  inputType?: ChecklistInputType;
+  rating: ChecklistRating;
   memo: string | null;
 }
 
@@ -365,7 +374,9 @@ export interface PropertyVisitResultItem {
   itemName: string;
   category?: string;
   displayOrder: number;
-  rating: 'UPPER' | 'MIDDLE' | 'LOWER' | null;
+  inputType?: ChecklistInputType;
+  rating: ChecklistRating;
+  memo?: string | null;  // TEXT 타입 입력값
 }
 
 /** 매물 임장 기록 — 부동산·동호수·평형·제안가 단위 1건 */

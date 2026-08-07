@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChecklistTemplate } from '../types';
+import { ChecklistTemplate, ChecklistInputType } from '../types';
 import {
   getChecklistTemplates, createChecklistTemplate,
   updateChecklistTemplate, deleteChecklistTemplate,
@@ -13,6 +13,22 @@ const VISIT_TYPES = [
 
 type VisitTypeKey = 'ATMOSPHERE' | 'COMPLEX' | 'PROPERTY';
 
+// 입력 유형 정의
+const INPUT_TYPES: { key: ChecklistInputType; label: string; color: string }[] = [
+  { key: 'RATING', label: '상중하', color: '#1a73e8' },
+  { key: 'OX',     label: 'O/X',   color: '#0f9d58' },
+  { key: 'TEXT',   label: '텍스트', color: '#e37400' },
+];
+
+const inputTypeBadge = (type: ChecklistInputType | undefined): React.CSSProperties => {
+  const t = INPUT_TYPES.find(x => x.key === (type || 'RATING')) || INPUT_TYPES[0];
+  return {
+    fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px',
+    backgroundColor: t.color + '1a', color: t.color, border: `1px solid ${t.color}44`,
+    flexShrink: 0,
+  };
+};
+
 interface Props {
   onClose: () => void;
 }
@@ -23,18 +39,20 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
 
   // 카테고리 추가 입력
   const [newCatName, setNewCatName] = useState('');
-  // 카테고리별 항목 추가 입력 (key: category, '' = 미분류)
+  // 카테고리별 항목 추가 입력값 (key: category)
   const [newItemInputs, setNewItemInputs] = useState<Record<string, string>>({});
-  // 항목 편집 (id → 편집 중인 이름)
+  // 카테고리별 신규 항목 입력 유형 (key: category, 기본값 RATING)
+  const [newItemTypes, setNewItemTypes] = useState<Record<string, ChecklistInputType>>({});
+  // 항목 편집
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [editingType, setEditingType] = useState<ChecklistInputType>('RATING');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getChecklistTemplates().then(setTemplates).catch(() => {});
   }, []);
 
-  // 현재 탭 항목, displayOrder 오름차순 정렬
   const tabItems = useMemo(() =>
     templates
       .filter(t => t.visitType === activeTab)
@@ -42,7 +60,6 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
     [templates, activeTab]
   );
 
-  // 카테고리 순서 — 항목의 첫 번째 등장 순서 유지, 미분류는 맨 뒤
   const orderedCategories = useMemo(() => {
     const seen = new Map<string, true>();
     const order: string[] = [];
@@ -50,7 +67,6 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
       const cat = t.category || '';
       if (!seen.has(cat)) { seen.set(cat, true); order.push(cat); }
     }
-    // 미분류 항상 맨 뒤로 이동
     const nocat = order.indexOf('');
     if (nocat !== -1 && nocat !== order.length - 1) {
       order.splice(nocat, 1);
@@ -69,7 +85,6 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
     return map;
   }, [tabItems]);
 
-  // 새 카테고리 추가 — 아직 DB에는 저장하지 않고, 첫 항목 추가 시 같이 저장
   const [pendingCats, setPendingCats] = useState<string[]>([]);
 
   const allCategories = useMemo(() => {
@@ -106,16 +121,17 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
     if (!name || saving) return;
     setSaving(true);
     try {
+      const inputType = newItemTypes[cat] || 'RATING';
       const maxOrder = (itemsByCategory.get(cat) || []).reduce((m, t) => Math.max(m, t.displayOrder), -1);
       const created = await createChecklistTemplate({
         visitType: activeTab,
         category: cat || undefined,
         itemName: name,
         displayOrder: maxOrder + 1,
+        inputType,
       });
       setTemplates(prev => [...prev, created]);
       setNewItemInputs(prev => ({ ...prev, [cat]: '' }));
-      // 첫 항목이 추가됐으면 pendingCats에서 제거
       setPendingCats(prev => prev.filter(c => c !== cat));
     } catch {}
     setSaving(false);
@@ -125,7 +141,7 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
     if (!editingName.trim() || saving) return;
     setSaving(true);
     try {
-      const updated = await updateChecklistTemplate(id, { itemName: editingName.trim() });
+      const updated = await updateChecklistTemplate(id, { itemName: editingName.trim(), inputType: editingType });
       setTemplates(prev => prev.map(t => t.id === id ? updated : t));
       setEditingId(null);
     } catch {}
@@ -151,6 +167,27 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
     display: 'flex', alignItems: 'center', gap: '5px',
     padding: '5px 0', borderBottom: '1px solid #f5f5f5',
   };
+
+  // 입력 유형 토글 버튼 (작은 세그먼트)
+  const InputTypeToggle: React.FC<{
+    value: ChecklistInputType;
+    onChange: (v: ChecklistInputType) => void;
+  }> = ({ value, onChange }) => (
+    <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+      {INPUT_TYPES.map(t => (
+        <button key={t.key} onClick={() => onChange(t.key)}
+          style={{
+            padding: '2px 6px', fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+            border: `1px solid ${value === t.key ? t.color : '#dadce0'}`,
+            borderRadius: '3px',
+            backgroundColor: value === t.key ? t.color : '#fff',
+            color: value === t.key ? '#fff' : '#5f6368',
+          }}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div style={{
@@ -201,6 +238,7 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
           const isPending = pendingCats.includes(cat);
           const label = cat || '미분류';
           const newItemVal = newItemInputs[cat] || '';
+          const newItemType = newItemTypes[cat] || 'RATING';
 
           return (
             <div key={cat} style={{ marginBottom: '14px' }}>
@@ -210,7 +248,6 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
                   {label}
                   <span style={{ fontWeight: 400, color: '#9aa0a6', marginLeft: '4px' }}>({catItems.length})</span>
                 </span>
-                {/* 미분류 카테고리는 삭제 버튼 없음 */}
                 {cat !== '' && (
                   <button onClick={() => handleDeleteCategory(cat)}
                     style={{ border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff', color: '#ea4335', fontSize: '10px', padding: '2px 6px', cursor: 'pointer' }}>
@@ -234,6 +271,7 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
                         autoFocus
                         style={{ flex: 1, fontSize: '12px', padding: '3px 6px', border: '1px solid #1a73e8', borderRadius: '4px', outline: 'none' }}
                       />
+                      <InputTypeToggle value={editingType} onChange={setEditingType} />
                       <button onClick={() => handleEditSave(t.id)}
                         style={{ fontSize: '11px', padding: '3px 7px', border: 'none', borderRadius: '4px', backgroundColor: '#1a73e8', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>저장</button>
                       <button onClick={() => setEditingId(null)}
@@ -242,7 +280,11 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
                   ) : (
                     <>
                       <span style={{ flex: 1, fontSize: '12px', color: '#202124' }}>{t.itemName}</span>
-                      <button onClick={() => { setEditingId(t.id); setEditingName(t.itemName); }}
+                      {/* 입력 유형 배지 */}
+                      <span style={inputTypeBadge(t.inputType)}>
+                        {INPUT_TYPES.find(x => x.key === (t.inputType || 'RATING'))?.label}
+                      </span>
+                      <button onClick={() => { setEditingId(t.id); setEditingName(t.itemName); setEditingType((t.inputType || 'RATING') as ChecklistInputType); }}
                         style={{ border: '1px solid #dadce0', borderRadius: '4px', background: '#fff', color: '#80868b', fontSize: '11px', padding: '2px 5px', cursor: 'pointer' }}>✏</button>
                       <button onClick={() => handleDeleteItem(t.id, t.itemName)}
                         style={{ border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff', color: '#ea4335', fontSize: '11px', padding: '2px 5px', cursor: 'pointer' }}>×</button>
@@ -255,27 +297,35 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
                 <div style={{ fontSize: '11px', color: '#bdbdbd', padding: '4px 0' }}>아래에서 항목을 추가하세요.</div>
               )}
 
-              {/* 항목 추가 입력 */}
-              <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
-                <input
-                  value={newItemVal}
-                  onChange={e => setNewItemInputs(prev => ({ ...prev, [cat]: e.target.value }))}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAddItem(cat); }}
-                  placeholder="항목 추가... (Enter)"
-                  style={{
-                    flex: 1, fontSize: '11px', padding: '4px 7px',
-                    border: '1px solid #dadce0', borderRadius: '5px', outline: 'none',
-                  }}
-                />
-                <button
-                  onClick={() => handleAddItem(cat)}
-                  disabled={!newItemVal.trim() || saving}
-                  style={{
-                    padding: '4px 9px', fontSize: '11px', fontWeight: 600, border: 'none', borderRadius: '5px',
-                    backgroundColor: newItemVal.trim() ? '#1a73e8' : '#f1f3f4',
-                    color: newItemVal.trim() ? '#fff' : '#9aa0a6',
-                    cursor: newItemVal.trim() ? 'pointer' : 'not-allowed',
-                  }}>추가</button>
+              {/* 항목 추가 — 입력 유형 토글 + 이름 입력 */}
+              <div style={{ marginTop: '6px' }}>
+                <div style={{ marginBottom: '4px' }}>
+                  <InputTypeToggle
+                    value={newItemType}
+                    onChange={v => setNewItemTypes(prev => ({ ...prev, [cat]: v }))}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <input
+                    value={newItemVal}
+                    onChange={e => setNewItemInputs(prev => ({ ...prev, [cat]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAddItem(cat); }}
+                    placeholder="항목 추가... (Enter)"
+                    style={{
+                      flex: 1, fontSize: '11px', padding: '4px 7px',
+                      border: '1px solid #dadce0', borderRadius: '5px', outline: 'none',
+                    }}
+                  />
+                  <button
+                    onClick={() => handleAddItem(cat)}
+                    disabled={!newItemVal.trim() || saving}
+                    style={{
+                      padding: '4px 9px', fontSize: '11px', fontWeight: 600, border: 'none', borderRadius: '5px',
+                      backgroundColor: newItemVal.trim() ? '#1a73e8' : '#f1f3f4',
+                      color: newItemVal.trim() ? '#fff' : '#9aa0a6',
+                      cursor: newItemVal.trim() ? 'pointer' : 'not-allowed',
+                    }}>추가</button>
+                </div>
               </div>
             </div>
           );

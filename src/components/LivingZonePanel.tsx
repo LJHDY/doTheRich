@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ApartmentComplex, LivingZone, ZoneChecklistResultItem } from '../types';
+import { ApartmentComplex, LivingZone, ZoneChecklistResultItem, ChecklistInputType } from '../types';
 import {
   getLivingZones, createLivingZone, updateLivingZoneMemo,
   addComplexesToZone, removeComplexFromZone, deleteLivingZone,
@@ -13,6 +13,10 @@ const RATING_COLORS: Record<string, { bg: string; color: string }> = {
   UPPER:  { bg: '#ea4335', color: '#fff' },
   MIDDLE: { bg: '#f9ab00', color: '#fff' },
   LOWER:  { bg: '#1a73e8', color: '#fff' },
+};
+const OX_COLORS: Record<string, { bg: string; color: string }> = {
+  O: { bg: '#0f9d58', color: '#fff' },
+  X: { bg: '#ea4335', color: '#fff' },
 };
 
 interface Props {
@@ -56,6 +60,8 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
   // 생활권별 분위기 체크리스트 (zoneId → items)
   const [zoneChecklists, setZoneChecklists] = useState<Record<number, ZoneChecklistResultItem[]>>({});
   const [checklistLoading, setChecklistLoading] = useState<Record<number, boolean>>({});
+  // TEXT 타입 항목 로컬 입력값 ("zoneId-templateId" → text)
+  const [zoneLocalTexts, setZoneLocalTexts] = useState<Record<string, string>>({});
 
   // 메모 자동번호 훅 — 메모 textarea에 적용
   const numberedMemo = useNumberedTextarea(memoText, setMemoText);
@@ -99,7 +105,13 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
         if (!zoneChecklists[id] && !checklistLoading[id]) {
           setChecklistLoading(p => ({ ...p, [id]: true }));
           getZoneChecklist(id)
-            .then(items => setZoneChecklists(p => ({ ...p, [id]: items })))
+            .then(items => {
+              setZoneChecklists(p => ({ ...p, [id]: items }));
+              // TEXT 항목의 기존 memo 값을 로컬 상태에 초기화
+              const texts: Record<string, string> = {};
+              items.forEach(i => { if (i.memo) texts[`${id}-${i.templateId}`] = i.memo; });
+              setZoneLocalTexts(p => ({ ...p, ...texts }));
+            })
             .catch(() => {})
             .finally(() => setChecklistLoading(p => ({ ...p, [id]: false })));
         }
@@ -117,6 +129,16 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
       setZoneChecklists(prev => ({
         ...prev,
         [zoneId]: (prev[zoneId] || []).map(i => i.templateId === templateId ? { ...i, rating: updated.rating } : i),
+      }));
+    } catch {}
+  };
+
+  const handleZoneText = async (zoneId: number, templateId: number, text: string) => {
+    try {
+      const updated = await upsertZoneChecklistResult(zoneId, templateId, { rating: null, memo: text || null });
+      setZoneChecklists(prev => ({
+        ...prev,
+        [zoneId]: (prev[zoneId] || []).map(i => i.templateId === templateId ? { ...i, memo: updated.memo } : i),
       }));
     } catch {}
   };
@@ -627,7 +649,9 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                     if (nocatIdx !== -1 && nocatIdx !== catOrder.length - 1) {
                       catOrder.splice(nocatIdx, 1); catOrder.push('');
                     }
-                    const ratedCount = clItems.filter(i => i.rating !== null).length;
+                    const hasVal = (ci: ZoneChecklistResultItem) =>
+                      ci.rating !== null || (ci.memo !== null && ci.memo !== '');
+                    const ratedCount = clItems.filter(hasVal).length;
                     return (
                       <div style={{ marginTop: '14px' }}>
                         <div style={{ fontSize: '11px', fontWeight: 700, color: '#5f6368', marginBottom: '6px' }}>
@@ -643,30 +667,63 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                                   {cat || '미분류'}
                                 </div>
                               )}
-                              {catItems.map(ci => (
-                                <div key={ci.templateId} style={{
-                                  display: 'flex', alignItems: 'center', gap: '5px',
-                                  padding: '5px 0', borderBottom: '1px solid #f5f5f5',
-                                }}>
-                                  <span style={{ flex: 1, fontSize: '12px', color: '#202124' }}>{ci.itemName}</span>
-                                  {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
-                                    const active = ci.rating === r;
-                                    const col = RATING_COLORS[r];
-                                    return (
-                                      <button key={r} onClick={() => handleZoneRate(zone.id, ci.templateId, r)}
+                              {catItems.map(ci => {
+                                const inputType: ChecklistInputType = (ci.inputType || 'RATING') as ChecklistInputType;
+                                const textKey = `${zone.id}-${ci.templateId}`;
+                                return (
+                                  <div key={ci.templateId} style={{
+                                    display: 'flex', alignItems: 'center', gap: '5px',
+                                    padding: '5px 0', borderBottom: '1px solid #f5f5f5',
+                                  }}>
+                                    <span style={{ flex: 1, fontSize: '12px', color: '#202124' }}>{ci.itemName}</span>
+                                    {inputType === 'OX' && (['O', 'X'] as const).map(r => {
+                                      const active = ci.rating === r;
+                                      const col = OX_COLORS[r];
+                                      return (
+                                        <button key={r} onClick={() => handleZoneRate(zone.id, ci.templateId, r)}
+                                          style={{
+                                            width: '28px', height: '24px', fontSize: '11px',
+                                            fontWeight: active ? 700 : 400,
+                                            border: `1px solid ${active ? col.bg : '#dadce0'}`,
+                                            borderRadius: '5px',
+                                            backgroundColor: active ? col.bg : '#fff',
+                                            color: active ? col.color : '#5f6368',
+                                            cursor: 'pointer',
+                                          }}>{r}</button>
+                                      );
+                                    })}
+                                    {inputType === 'TEXT' && (
+                                      <input
+                                        value={zoneLocalTexts[textKey] ?? ''}
+                                        onChange={e => setZoneLocalTexts(prev => ({ ...prev, [textKey]: e.target.value }))}
+                                        onBlur={e => handleZoneText(zone.id, ci.templateId, e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                        placeholder="입력..."
                                         style={{
-                                          width: '30px', height: '24px', fontSize: '11px',
-                                          fontWeight: active ? 700 : 400,
-                                          border: `1px solid ${active ? col.bg : '#dadce0'}`,
-                                          borderRadius: '5px',
-                                          backgroundColor: active ? col.bg : '#fff',
-                                          color: active ? col.color : '#5f6368',
-                                          cursor: 'pointer',
-                                        }}>{RATING_LABELS[r]}</button>
-                                    );
-                                  })}
-                                </div>
-                              ))}
+                                          flex: 1, fontSize: '11px', padding: '3px 7px', maxWidth: '160px',
+                                          border: '1px solid #dadce0', borderRadius: '5px', outline: 'none',
+                                        }}
+                                      />
+                                    )}
+                                    {inputType === 'RATING' && (['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
+                                      const active = ci.rating === r;
+                                      const col = RATING_COLORS[r];
+                                      return (
+                                        <button key={r} onClick={() => handleZoneRate(zone.id, ci.templateId, r)}
+                                          style={{
+                                            width: '30px', height: '24px', fontSize: '11px',
+                                            fontWeight: active ? 700 : 400,
+                                            border: `1px solid ${active ? col.bg : '#dadce0'}`,
+                                            borderRadius: '5px',
+                                            backgroundColor: active ? col.bg : '#fff',
+                                            color: active ? col.color : '#5f6368',
+                                            cursor: 'pointer',
+                                          }}>{RATING_LABELS[r]}</button>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })}
                             </div>
                           );
                         })}

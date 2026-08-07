@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChecklistResultItem, PropertyVisit } from '../types';
+import { ChecklistResultItem, PropertyVisit, ChecklistInputType } from '../types';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import {
   createChecklistTemplate, deleteChecklistTemplate,
@@ -23,6 +23,10 @@ const RATING_COLORS: Record<string, { bg: string; color: string }> = {
   MIDDLE: { bg: '#f9ab00', color: '#fff' },
   LOWER:  { bg: '#1a73e8', color: '#fff' },
 };
+const OX_COLORS: Record<string, { bg: string; color: string }> = {
+  O: { bg: '#0f9d58', color: '#fff' },
+  X: { bg: '#ea4335', color: '#fff' },
+};
 
 interface Props {
   complexId: number;
@@ -30,7 +34,7 @@ interface Props {
   onClose: () => void;
 }
 
-// 전화번호 자동 포맷 — 숫자만 추출 후 길이·앞자리 기준 구분
+// 전화번호 자동 포맷
 const formatPhone = (val: string): string => {
   const d = val.replace(/\D/g, '');
   if (d.length === 8)  return d.replace(/(\d{4})(\d{4})/, '$1-$2');
@@ -38,30 +42,20 @@ const formatPhone = (val: string): string => {
     ? d.replace(/(\d{2})(\d{4})(\d{4})/, '$1-$2-$3')
     : d.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
   if (d.length === 11) return d.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
-  return val; // 해당 없는 길이는 그대로
+  return val;
 };
 
-// 동·호수 표시 포맷 — 이미 접미사가 있으면 그대로
 const displayDong  = (v?: string) => v ? (v.endsWith('동') ? v : v + '동') : '';
 const displayHosu  = (v?: string) => v ? (v.endsWith('호') || v.endsWith('호수') ? v : v + '호') : '';
-// 평형 표시 포맷 — 이미 "전용"으로 시작하면 그대로
 const displayArea  = (v?: string) => v ? (v.startsWith('전용') ? v : '전용 ' + v) : '';
 
-// 매물 임장 추가/편집 폼 상태
 interface VisitFormState {
-  visitDate: string;
-  agentName: string;
-  officePhone: string;
-  mobilePhone: string;
-  dong: string;
-  hosu: string;
-  areaType: string;
-  price: string; // 입력은 문자열로
-  memo: string;
+  visitDate: string; agentName: string; officePhone: string; mobilePhone: string;
+  dong: string; hosu: string; areaType: string; price: string; memo: string;
 }
-
 const EMPTY_FORM: VisitFormState = {
-  visitDate: '', agentName: '', officePhone: '', mobilePhone: '', dong: '', hosu: '', areaType: '', price: '', memo: '',
+  visitDate: '', agentName: '', officePhone: '', mobilePhone: '',
+  dong: '', hosu: '', areaType: '', price: '', memo: '',
 };
 
 const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) => {
@@ -70,6 +64,9 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
   const [activeTab, setActiveTab] = useState<VisitTypeKey>('ATMOSPHERE');
   const [newItemName, setNewItemName] = useState('');
   const [adding, setAdding] = useState(false);
+
+  // TEXT 타입 항목 로컬 입력값 (templateId → text)
+  const [localTexts, setLocalTexts] = useState<Record<number, string>>({});
 
   // 매물 임장 기록 상태
   const [visits, setVisits] = useState<PropertyVisit[]>([]);
@@ -80,7 +77,10 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
   const [form, setForm] = useState<VisitFormState>(EMPTY_FORM);
   const [formSaving, setFormSaving] = useState(false);
 
-  // 매물 메모 번호목록 훅 — form.memo 연동
+  // 매물 체크리스트 TEXT 로컬 입력값 ("visitId-templateId" → text)
+  const [visitLocalTexts, setVisitLocalTexts] = useState<Record<string, string>>({});
+
+  // 매물 메모 번호목록 훅
   const handleMemoChange = useCallback((v: string) => {
     setForm(prev => ({ ...prev, memo: v }));
   }, []);
@@ -91,8 +91,12 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     try {
       const results = await getComplexChecklist(complexId);
       setItems(results);
+      // TEXT 항목의 기존 memo 값을 로컬 상태에 초기화
+      const texts: Record<number, string> = {};
+      results.forEach(r => { if (r.memo) texts[r.templateId] = r.memo; });
+      setLocalTexts(texts);
       const firstRatedType = VISIT_TYPES.find(vt =>
-        results.some(r => r.visitType === vt.key && r.rating !== null)
+        results.some(r => r.visitType === vt.key && (r.rating !== null || r.memo))
       );
       if (firstRatedType) setActiveTab(firstRatedType.key);
     } catch { }
@@ -104,6 +108,14 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     try {
       const vs = await getPropertyVisits(complexId);
       setVisits(vs);
+      // 매물 TEXT 항목 기존 memo 초기화
+      const texts: Record<string, string> = {};
+      vs.forEach(v => {
+        v.results.forEach(r => {
+          if (r.memo) texts[`${v.id}-${r.templateId}`] = r.memo;
+        });
+      });
+      setVisitLocalTexts(texts);
     } catch { }
     finally { setVisitsLoading(false); }
   }, [complexId]);
@@ -113,11 +125,8 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     if (activeTab === 'PROPERTY') loadVisits();
   }, [activeTab, loadVisits]);
 
-  // 분위기/단지 탭용 — 현재 탭 항목
   const tabItems = useMemo(() =>
-    items
-      .filter(i => i.visitType === activeTab)
-      .sort((a, b) => a.displayOrder - b.displayOrder),
+    items.filter(i => i.visitType === activeTab).sort((a, b) => a.displayOrder - b.displayOrder),
     [items, activeTab]
   );
 
@@ -129,10 +138,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
       if (!seen.has(cat)) { seen.set(cat, true); order.push(cat); }
     }
     const nocat = order.indexOf('');
-    if (nocat !== -1 && nocat !== order.length - 1) {
-      order.splice(nocat, 1);
-      order.push('');
-    }
+    if (nocat !== -1 && nocat !== order.length - 1) { order.splice(nocat, 1); order.push(''); }
     return order;
   }, [tabItems]);
 
@@ -146,14 +152,28 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     return map;
   }, [tabItems]);
 
-  const hasAnyRating = items.some(i => i.rating !== null);
+  // 체크된 항목 수 — RATING/OX: rating !== null, TEXT: memo 있음
+  const hasValue = (i: ChecklistResultItem) =>
+    i.rating !== null || (i.memo !== null && i.memo !== '');
+  const checkedCount = items.filter(hasValue).length;
+  const totalCount = items.length;
+  const hasAnyRating = items.some(hasValue);
 
+  // ── RATING/OX 평가 저장 (분위기/단지 탭) ────────────────────────────────────
   const handleRate = async (templateId: number, rating: string) => {
     const current = items.find(i => i.templateId === templateId)?.rating ?? null;
     const newRating = current === rating ? null : rating;
     try {
       const updated = await upsertChecklistResult(complexId, templateId, { rating: newRating, memo: null });
       setItems(prev => prev.map(i => i.templateId === templateId ? { ...i, rating: updated.rating } : i));
+    } catch { }
+  };
+
+  // ── TEXT 저장 (분위기/단지 탭) ──────────────────────────────────────────────
+  const handleTextSave = async (templateId: number, text: string) => {
+    try {
+      const updated = await upsertChecklistResult(complexId, templateId, { rating: null, memo: text || null });
+      setItems(prev => prev.map(i => i.templateId === templateId ? { ...i, memo: updated.memo } : i));
     } catch { }
   };
 
@@ -168,7 +188,9 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
         id: 0, templateId: created.id, itemName: created.itemName,
         visitType: created.visitType as VisitTypeKey,
         category: created.category,
-        displayOrder: created.displayOrder, rating: null, memo: null,
+        displayOrder: created.displayOrder,
+        inputType: created.inputType as ChecklistInputType,
+        rating: null, memo: null,
       }]);
       setNewItemName('');
     } catch { }
@@ -183,37 +205,36 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     } catch { }
   };
 
-  // 매물 임장 기록 핸들러
-
+  // ── 매물 탭 체크리스트 핸들러 ────────────────────────────────────────────────
   const handleVisitRate = async (visit: PropertyVisit, templateId: number, rating: string) => {
     const current = visit.results.find(r => r.templateId === templateId)?.rating ?? null;
     const newRating = current === rating ? null : rating;
     try {
-      const updated = await upsertPropertyVisitResult(complexId, visit.id, templateId, { rating: newRating });
+      const updated = await upsertPropertyVisitResult(complexId, visit.id, templateId, { rating: newRating, memo: null });
       setVisits(prev => prev.map(v => {
         if (v.id !== visit.id) return v;
-        const results = v.results.map(r => r.templateId === templateId ? { ...r, rating: updated.rating } : r);
-        return { ...v, results };
+        return { ...v, results: v.results.map(r => r.templateId === templateId ? { ...r, rating: updated.rating } : r) };
       }));
     } catch { }
   };
 
-  const openAddForm = () => {
-    setForm(EMPTY_FORM);
-    setEditingVisitId(null);
-    setShowAddForm(true);
+  const handleVisitTextSave = async (visit: PropertyVisit, templateId: number, text: string) => {
+    try {
+      const updated = await upsertPropertyVisitResult(complexId, visit.id, templateId, { rating: null, memo: text || null });
+      setVisits(prev => prev.map(v => {
+        if (v.id !== visit.id) return v;
+        return { ...v, results: v.results.map(r => r.templateId === templateId ? { ...r, memo: updated.memo } : r) };
+      }));
+    } catch { }
   };
 
+  const openAddForm = () => { setForm(EMPTY_FORM); setEditingVisitId(null); setShowAddForm(true); };
   const openEditForm = (v: PropertyVisit) => {
     setForm({
-      visitDate: v.visitDate || '',
-      agentName: v.agentName || '',
-      officePhone: v.officePhone || '',
-      mobilePhone: v.mobilePhone || '',
-      dong: v.dong || '',
-      hosu: v.hosu || '',
-      areaType: v.areaType || '',
-      price: v.price ? String(Math.round(v.price / 10000)) : '', // 만원 단위 입력
+      visitDate: v.visitDate || '', agentName: v.agentName || '',
+      officePhone: v.officePhone || '', mobilePhone: v.mobilePhone || '',
+      dong: v.dong || '', hosu: v.hosu || '', areaType: v.areaType || '',
+      price: v.price ? String(Math.round(v.price / 10000)) : '',
       memo: v.memo || '',
     });
     setEditingVisitId(v.id);
@@ -225,14 +246,11 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     setFormSaving(true);
     try {
       const req = {
-        visitDate: form.visitDate || undefined,
-        agentName: form.agentName || undefined,
-        officePhone: form.officePhone || undefined,
-        mobilePhone: form.mobilePhone || undefined,
-        dong: form.dong || undefined,
-        hosu: form.hosu || undefined,
+        visitDate: form.visitDate || undefined, agentName: form.agentName || undefined,
+        officePhone: form.officePhone || undefined, mobilePhone: form.mobilePhone || undefined,
+        dong: form.dong || undefined, hosu: form.hosu || undefined,
         areaType: form.areaType || undefined,
-        price: form.price ? Number(form.price) * 10000 : undefined, // 만원 → 원
+        price: form.price ? Number(form.price) * 10000 : undefined,
         memo: form.memo || undefined,
       };
       if (editingVisitId) {
@@ -243,8 +261,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
         setVisits(prev => [created, ...prev]);
         setExpandedVisitId(created.id);
       }
-      setShowAddForm(false);
-      setEditingVisitId(null);
+      setShowAddForm(false); setEditingVisitId(null);
     } catch { }
     finally { setFormSaving(false); }
   };
@@ -258,11 +275,9 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     } catch { }
   };
 
-  const checkedCount = items.filter(i => i.rating !== null).length;
-  const totalCount = items.length;
-
-  const btnStyle = (active: boolean, col: { bg: string; color: string }): React.CSSProperties => ({
-    width: '32px', height: '26px',
+  // ── 입력 유형별 렌더링 헬퍼 ─────────────────────────────────────────────────
+  const btnStyle = (active: boolean, col: { bg: string; color: string }, size = 32): React.CSSProperties => ({
+    width: `${size}px`, height: '26px',
     border: `1.5px solid ${active ? col.bg : '#dadce0'}`,
     borderRadius: '6px',
     backgroundColor: active ? col.bg : '#fff',
@@ -270,6 +285,99 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     fontSize: '11px', fontWeight: active ? 700 : 400,
     cursor: 'pointer', transition: 'all 0.12s', flexShrink: 0,
   });
+
+  // 분위기/단지 탭용 체크 입력 렌더링
+  const renderItemInput = (item: ChecklistResultItem) => {
+    const inputType: ChecklistInputType = (item.inputType || 'RATING') as ChecklistInputType;
+
+    if (inputType === 'OX') {
+      return (
+        <>
+          {(['O', 'X'] as const).map(r => (
+            <button key={r} onClick={() => handleRate(item.templateId, r)}
+              style={btnStyle(item.rating === r, OX_COLORS[r], 28)}>
+              {r}
+            </button>
+          ))}
+        </>
+      );
+    }
+
+    if (inputType === 'TEXT') {
+      const key = item.templateId;
+      return (
+        <input
+          value={localTexts[key] ?? ''}
+          onChange={e => setLocalTexts(prev => ({ ...prev, [key]: e.target.value }))}
+          onBlur={e => handleTextSave(item.templateId, e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          placeholder="입력..."
+          style={{
+            flex: 1, fontSize: '11px', padding: '3px 7px', maxWidth: '180px',
+            border: '1px solid #dadce0', borderRadius: '5px', outline: 'none',
+          }}
+        />
+      );
+    }
+
+    // RATING (기본)
+    return (
+      <>
+        {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => (
+          <button key={r} onClick={() => handleRate(item.templateId, r)}
+            style={btnStyle(item.rating === r, RATING_COLORS[r])}>
+            {RATING_LABELS[r]}
+          </button>
+        ))}
+      </>
+    );
+  };
+
+  // 매물 탭용 체크 입력 렌더링
+  const renderVisitItemInput = (visit: PropertyVisit, item: { templateId: number; rating: string | null; memo?: string | null; inputType?: ChecklistInputType }) => {
+    const inputType: ChecklistInputType = (item.inputType || 'RATING') as ChecklistInputType;
+
+    if (inputType === 'OX') {
+      return (
+        <>
+          {(['O', 'X'] as const).map(r => (
+            <button key={r} onClick={() => handleVisitRate(visit, item.templateId, r)}
+              style={btnStyle(item.rating === r, OX_COLORS[r], 28)}>
+              {r}
+            </button>
+          ))}
+        </>
+      );
+    }
+
+    if (inputType === 'TEXT') {
+      const key = `${visit.id}-${item.templateId}`;
+      return (
+        <input
+          value={visitLocalTexts[key] ?? ''}
+          onChange={e => setVisitLocalTexts(prev => ({ ...prev, [key]: e.target.value }))}
+          onBlur={e => handleVisitTextSave(visit, item.templateId, e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          placeholder="입력..."
+          style={{
+            flex: 1, fontSize: '11px', padding: '3px 7px', maxWidth: '180px',
+            border: '1px solid #dadce0', borderRadius: '5px', outline: 'none',
+          }}
+        />
+      );
+    }
+
+    return (
+      <>
+        {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => (
+          <button key={r} onClick={() => handleVisitRate(visit, item.templateId, r)}
+            style={btnStyle(item.rating === r, RATING_COLORS[r])}>
+            {RATING_LABELS[r]}
+          </button>
+        ))}
+      </>
+    );
+  };
 
   return (
     <div
@@ -299,7 +407,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
         {/* visitType 탭 */}
         <div style={{ display: 'flex', gap: '6px', padding: '12px 22px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
           {VISIT_TYPES.map(vt => {
-            const tabRated = items.filter(i => i.visitType === vt.key && i.rating !== null).length;
+            const tabRated = items.filter(i => i.visitType === vt.key && hasValue(i)).length;
             const tabTotal = items.filter(i => i.visitType === vt.key).length;
             const isActive = activeTab === vt.key;
             const visitCount = vt.key === 'PROPERTY' ? visits.length : null;
@@ -360,7 +468,6 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                         value={(form as any)[key]}
                         onChange={e => {
                           const v = e.target.value;
-                          // 연락처는 입력 즉시 포맷 적용
                           const next = (key === 'officePhone' || key === 'mobilePhone') ? formatPhone(v) : v;
                           setForm(prev => ({ ...prev, [key]: next }));
                         }}
@@ -429,7 +536,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
             ) : (
               visits.map(visit => {
                 const isExpanded = expandedVisitId === visit.id;
-                const ratedCount = visit.results.filter(r => r.rating !== null).length;
+                const ratedCount = visit.results.filter(r => r.rating !== null || (r.memo && r.memo !== '')).length;
                 const totalTemplates = visit.results.length;
 
                 // 카테고리 그룹핑
@@ -455,7 +562,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                     border: '1px solid #e8eaed', borderRadius: '10px',
                     marginBottom: '10px', overflow: 'hidden',
                   }}>
-                    {/* 카드 헤더 — 클릭 시 펼침/닫힘 */}
+                    {/* 카드 헤더 */}
                     <div
                       onClick={() => setExpandedVisitId(isExpanded ? null : visit.id)}
                       style={{
@@ -468,7 +575,6 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                         {isExpanded ? '▲' : '▼'}
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        {/* 첫째 줄: 부동산·동/호수 */}
                         <div style={{ fontSize: '13px', fontWeight: 600, color: '#202124', marginBottom: '3px' }}>
                           {visit.agentName || '(부동산 미입력)'}
                           {(visit.dong || visit.hosu) && (
@@ -477,7 +583,6 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                             </span>
                           )}
                         </div>
-                        {/* 둘째 줄: 평형·금액·날짜 */}
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                           {visit.areaType && (
                             <span style={{ fontSize: '11px', backgroundColor: '#e8f0fe', color: '#1a73e8', borderRadius: '4px', padding: '1px 6px' }}>
@@ -498,19 +603,13 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                             </span>
                           )}
                         </div>
-                        {/* 셋째 줄: 연락처 */}
                         {(visit.officePhone || visit.mobilePhone) && (
                           <div style={{ display: 'flex', gap: '10px', marginTop: '2px' }}>
-                            {visit.officePhone && (
-                              <span style={{ fontSize: '11px', color: '#5f6368' }}>📞 {visit.officePhone}</span>
-                            )}
-                            {visit.mobilePhone && (
-                              <span style={{ fontSize: '11px', color: '#5f6368' }}>📱 {visit.mobilePhone}</span>
-                            )}
+                            {visit.officePhone && <span style={{ fontSize: '11px', color: '#5f6368' }}>📞 {visit.officePhone}</span>}
+                            {visit.mobilePhone && <span style={{ fontSize: '11px', color: '#5f6368' }}>📱 {visit.mobilePhone}</span>}
                           </div>
                         )}
                       </div>
-                      {/* 수정/삭제 버튼 */}
                       <button
                         onClick={e => { e.stopPropagation(); openEditForm(visit); }}
                         style={{ border: '1px solid #dadce0', borderRadius: '5px', background: '#fff', color: '#5f6368', fontSize: '11px', padding: '3px 7px', cursor: 'pointer', flexShrink: 0 }}
@@ -545,7 +644,6 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                             const catLabel = cat || '미분류';
                             return (
                               <div key={cat} style={{ marginBottom: '10px' }}>
-                                {/* 카테고리가 2개 이상일 때만 헤더 표시 */}
                                 {catOrder.length > 1 && (
                                   <div style={{
                                     fontSize: '12px', fontWeight: 700, color: '#5f6368',
@@ -555,24 +653,15 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                                     {catLabel}
                                   </div>
                                 )}
-                                {catItems.map(item => {
-                                  const rating = item.rating ?? null;
-                                  return (
-                                    <div key={item.templateId} style={{
-                                      display: 'flex', alignItems: 'center', gap: '6px',
-                                      padding: '5px 0', borderBottom: '1px solid #f5f5f5',
-                                    }}>
-                                      <span style={{ flex: 1, fontSize: '12px', color: '#202124' }}>{item.itemName}</span>
-                                      {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => (
-                                        <button key={r}
-                                          onClick={() => handleVisitRate(visit, item.templateId, r)}
-                                          style={btnStyle(rating === r, RATING_COLORS[r])}>
-                                          {RATING_LABELS[r]}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  );
-                                })}
+                                {catItems.map(item => (
+                                  <div key={item.templateId} style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '5px 0', borderBottom: '1px solid #f5f5f5',
+                                  }}>
+                                    <span style={{ flex: 1, fontSize: '12px', color: '#202124' }}>{item.itemName}</span>
+                                    {renderVisitItemInput(visit, item)}
+                                  </div>
+                                ))}
                               </div>
                             );
                           })
@@ -599,7 +688,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                   const catItems = itemsByCategory.get(cat) || [];
                   if (catItems.length === 0) return null;
                   const catLabel = cat || '미분류';
-                  const catRated = catItems.filter(i => i.rating !== null).length;
+                  const catRated = catItems.filter(hasValue).length;
                   return (
                     <div key={cat} style={{ marginBottom: '14px' }}>
                       {orderedCategories.length > 1 && (
@@ -612,45 +701,25 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                           <span style={{ fontWeight: 400, color: '#bdbdbd' }}>{catRated}/{catItems.length}</span>
                         </div>
                       )}
-                      {catItems.map(item => {
-                        const rating = item.rating ?? null;
-                        return (
-                          <div key={item.templateId} style={{
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            padding: '8px 0', borderBottom: '1px solid #f5f5f5',
-                          }}>
-                            <span style={{ flex: 1, fontSize: '13px', color: '#202124', lineHeight: 1.4 }}>
-                              {item.itemName}
-                            </span>
-                            {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
-                              const active = rating === r;
-                              const col = RATING_COLORS[r];
-                              return (
-                                <button key={r} onClick={() => handleRate(item.templateId, r)}
-                                  style={{
-                                    width: '36px', height: '30px',
-                                    border: `1.5px solid ${active ? col.bg : '#dadce0'}`,
-                                    borderRadius: '7px',
-                                    backgroundColor: active ? col.bg : '#fff',
-                                    color: active ? col.color : '#5f6368',
-                                    fontSize: '12px', fontWeight: active ? 700 : 400,
-                                    cursor: 'pointer', transition: 'all 0.12s',
-                                  }}>
-                                  {RATING_LABELS[r]}
-                                </button>
-                              );
-                            })}
-                            {!hasAnyRating && (
-                              <button onClick={() => handleDelete(item.templateId, item.itemName)}
-                                style={{
-                                  border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff',
-                                  color: '#ea4335', fontSize: '14px', padding: '2px 7px',
-                                  cursor: 'pointer', lineHeight: 1, flexShrink: 0,
-                                }}>×</button>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {catItems.map(item => (
+                        <div key={item.templateId} style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          padding: '8px 0', borderBottom: '1px solid #f5f5f5',
+                        }}>
+                          <span style={{ flex: 1, fontSize: '13px', color: '#202124', lineHeight: 1.4 }}>
+                            {item.itemName}
+                          </span>
+                          {renderItemInput(item)}
+                          {!hasAnyRating && (
+                            <button onClick={() => handleDelete(item.templateId, item.itemName)}
+                              style={{
+                                border: '1px solid #fadbd8', borderRadius: '4px', background: '#fff',
+                                color: '#ea4335', fontSize: '14px', padding: '2px 7px',
+                                cursor: 'pointer', lineHeight: 1, flexShrink: 0,
+                              }}>×</button>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   );
                 })
