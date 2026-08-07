@@ -261,6 +261,17 @@ const App: React.FC = () => {
     } catch {}
   };
 
+  // GPX 불러오기 — 파싱된 이름·좌표로 신규 경로 저장
+  const handleImportGpx = async (name: string, points: RoutePoint[]) => {
+    try {
+      const saved = await createRoute(name, points);
+      setRoutes(prev => [saved, ...prev]);
+      setActiveRouteIds(prev => new Set(Array.from(prev).concat(saved.id)));
+    } catch {
+      alert('경로 저장에 실패했습니다.');
+    }
+  };
+
   const [batchLoading, setBatchLoading] = useState(false);
 
   // 202 즉시 반환 — 백그라운드 처리이므로 성공/실패 피드백 불필요
@@ -811,6 +822,7 @@ const App: React.FC = () => {
                   onStartEdit={handleStartEditRoute}
                   onDelete={handleDeleteRoute}
                   onClose={handleClosRoutePanel}
+                  onImportGpx={handleImportGpx}
                   onShowMap={isMobile ? () => setMobileRouteView('map') : undefined}
                   isMobile={isMobile}
                 />

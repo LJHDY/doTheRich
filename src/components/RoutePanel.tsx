@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { MapRoute } from '../types';
 import { haversineMeters } from '../utils/geo';
 
@@ -47,15 +47,53 @@ interface RoutePanelProps {
   onStartEdit: (route: MapRoute) => void;
   onDelete: (id: number) => void;
   onClose: () => void;
+  onImportGpx: (name: string, points: { lat: number; lng: number }[]) => Promise<void>;
   onShowMap?: () => void; // 모바일: 지도 뷰로 전환
   isMobile?: boolean;
 }
 
 const RoutePanel: React.FC<RoutePanelProps> = ({
   routes, activeRouteIds, isDrawingRoute, editingRouteId,
-  onToggleActive, onStartDrawing, onStartEdit, onDelete, onClose, onShowMap,
+  onToggleActive, onStartDrawing, onStartEdit, onDelete, onClose, onImportGpx, onShowMap,
   isMobile = false,
 }) => {
+  const gpxInputRef = useRef<HTMLInputElement>(null);
+
+  // GPX 파일 선택 시 파싱 후 onImportGpx 호출
+  const handleGpxFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+
+    // 파싱 오류 확인
+    if (doc.querySelector('parsererror')) {
+      alert('GPX 파일을 읽을 수 없습니다.');
+      e.target.value = '';
+      return;
+    }
+
+    // 경로명: trk > name → 파일명 순으로 fallback
+    const nameEl = doc.querySelector('trk > name') ?? doc.querySelector('name');
+    const name = nameEl?.textContent?.trim() || file.name.replace(/\.gpx$/i, '');
+
+    // trkpt 우선, 없으면 wpt (웨이포인트) 사용
+    const ptEls = Array.from(doc.querySelectorAll('trkpt'));
+    const fallbackPts = ptEls.length > 0 ? ptEls : Array.from(doc.querySelectorAll('wpt'));
+    const points = fallbackPts
+      .map(el => ({ lat: parseFloat(el.getAttribute('lat') ?? ''), lng: parseFloat(el.getAttribute('lon') ?? '') }))
+      .filter(p => !isNaN(p.lat) && !isNaN(p.lng));
+
+    if (points.length < 2) {
+      alert('GPX 파일에 유효한 좌표가 2개 이상 필요합니다.');
+      e.target.value = '';
+      return;
+    }
+
+    await onImportGpx(name, points);
+    e.target.value = ''; // 같은 파일 재업로드 허용
+  };
+
   // 경로별 거리·도보시간 사전 계산 — routes가 바뀔 때만 재계산
   const routeStatsMap = useMemo(() => {
     const map = new Map<number, { km: string; minutes: number }>();
@@ -102,8 +140,8 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
         </div>
       </div>
 
-      {/* 신규 경로 그리기 버튼 */}
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
+      {/* 신규 경로 그리기 / GPX 불러오기 버튼 */}
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <button
           onClick={onStartDrawing}
           disabled={isDrawingRoute}
@@ -117,6 +155,25 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
         >
           {isDrawingRoute && editingRouteId === null ? '그리는 중... (지도를 클릭하세요)' : '+ 신규 경로 그리기'}
         </button>
+        {/* 숨겨진 파일 입력 — GPX 불러오기 버튼 클릭 시 트리거 */}
+        <input
+          ref={gpxInputRef}
+          type="file"
+          accept=".gpx"
+          style={{ display: 'none' }}
+          onChange={handleGpxFile}
+        />
+        <button
+          onClick={() => gpxInputRef.current?.click()}
+          disabled={isDrawingRoute}
+          style={{
+            width: '100%', padding: '8px', fontSize: '13px', fontWeight: 600,
+            border: '1px solid', borderColor: isDrawingRoute ? '#9e9e9e' : '#0b8043',
+            borderRadius: '8px', cursor: isDrawingRoute ? 'not-allowed' : 'pointer',
+            backgroundColor: isDrawingRoute ? '#f5f5f5' : '#e6f4ea',
+            color: isDrawingRoute ? '#9e9e9e' : '#0b8043',
+          }}
+        >↑ GPX 불러오기</button>
       </div>
 
       {/* 저장된 경로 목록 */}
