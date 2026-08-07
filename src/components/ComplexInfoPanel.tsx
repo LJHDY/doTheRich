@@ -5,7 +5,8 @@ import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
 import PhotoSlideModal from './PhotoSlideModal';
-import ChecklistSection from './ChecklistSection';
+import ChecklistModal from './ChecklistModal';
+import { getComplexChecklist } from '../services/api';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import { FACILITY_MACRO_CATEGORY, getSimplifiedCategory } from '../constants/hazardCategories';
 
@@ -420,6 +421,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [newHazardRows, setNewHazardRows] = useState<HazardAddRow[]>([]);
   const [savingNewHazards, setSavingNewHazards] = useState(false);
   const [loadingHazardSuggestions, setLoadingHazardSuggestions] = useState(false);
+  // 체크리스트 모달 상태
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [checklistRatedCount, setChecklistRatedCount] = useState(0);
+  const [checklistTotalCount, setChecklistTotalCount] = useState(0);
   // 지하철 편집 상태 — 기존·신규 행 통합 배열 + 삭제 예약 ID 목록
   const [editingSubway, setEditingSubway] = useState(false);
   const [subwayRows, setSubwayRows] = useState<SubwayEditRow[]>([]);
@@ -550,6 +555,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setEditingCommute(false);
       setCommuteRows([]);
       loadPriceHistories(complex.id);
+      // 체크리스트 요약 로드 — 체크된 항목 수 / 전체 항목 수 파악
+      setChecklistOpen(false);
+      getComplexChecklist(complex.id).then(results => {
+        setChecklistRatedCount(results.filter(r => r.rating !== null).length);
+        setChecklistTotalCount(results.length);
+      }).catch(() => {});
     }
   }, [complex, loadPriceHistories, onRadiusToggle]);
 
@@ -3153,7 +3164,51 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         </div>
 
         {/* 체크리스트 */}
-        <ChecklistSection complexId={complex.id} />
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>
+              체크리스트
+              {checklistTotalCount > 0 && (
+                <span style={{ marginLeft: '6px', fontSize: '12px', color: '#9aa0a6', fontWeight: 400 }}>
+                  {checklistRatedCount}/{checklistTotalCount}
+                </span>
+              )}
+            </h3>
+            <button
+              onClick={() => setChecklistOpen(true)}
+              style={{
+                padding: '4px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                border: '1px solid',
+                borderColor: checklistRatedCount > 0 ? '#1a73e8' : '#34a853',
+                borderRadius: '6px',
+                backgroundColor: checklistRatedCount > 0 ? '#e8f0fe' : '#e6f4ea',
+                color: checklistRatedCount > 0 ? '#1a73e8' : '#0b8043',
+              }}
+            >
+              {checklistRatedCount > 0 ? '체크리스트 보기' : '체크리스트 작성'}
+            </button>
+          </div>
+          {checklistRatedCount > 0 && (
+            <div style={{ fontSize: '12px', color: '#80868b' }}>
+              {checklistRatedCount}개 항목 체크됨 — 보기 버튼을 클릭하세요
+            </div>
+          )}
+        </div>
+        {/* 체크리스트 모달 */}
+        {checklistOpen && (
+          <ChecklistModal
+            complexId={complex.id}
+            complexName={complex.complexName}
+            onClose={() => {
+              setChecklistOpen(false);
+              // 모달 닫힌 후 카운트 갱신
+              getComplexChecklist(complex.id).then(results => {
+                setChecklistRatedCount(results.filter(r => r.rating !== null).length);
+                setChecklistTotalCount(results.length);
+              }).catch(() => {});
+            }}
+          />
+        )}
 
         {/* 시세 변동 그래프 */}
         <div style={{ marginBottom: '16px' }}>

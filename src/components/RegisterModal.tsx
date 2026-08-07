@@ -1,11 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api from '../services/api';
+import api, { getChecklistTemplates, upsertChecklistResult } from '../services/api';
 import { uploadComplexPhotos } from '../services/api';
 import { compressImages } from '../utils/imageUtils';
-import { ApartmentComplex } from '../types';
+import { ApartmentComplex, ChecklistTemplate } from '../types';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import HAZARD_LOCATIONS from '../constants/hazardLocations';
 import { FACILITY_MACRO_CATEGORY, getSimplifiedCategory } from '../constants/hazardCategories';
+
+// 체크리스트 타입 — 백엔드 visitType enum과 일치
+const CHECKLIST_TYPES = [
+  { key: 'ATMOSPHERE' as const, label: '분위기' },
+  { key: 'COMPLEX'    as const, label: '단지' },
+  { key: 'PROPERTY'  as const, label: '매물' },
+];
+type ChecklistTypeKey = 'ATMOSPHERE' | 'COMPLEX' | 'PROPERTY';
+
+// 단지 visitType → 체크리스트 타입 매핑 (LISTING → PROPERTY)
+const VISIT_TO_CHECKLIST: Record<string, ChecklistTypeKey> = {
+  ATMOSPHERE: 'ATMOSPHERE', COMPLEX: 'COMPLEX', LISTING: 'PROPERTY',
+};
+
+const CL_RATING_LABELS: Record<string, string> = { UPPER: '상', MIDDLE: '중', LOWER: '하' };
+const CL_RATING_COLORS: Record<string, string> = { UPPER: '#ea4335', MIDDLE: '#f9ab00', LOWER: '#1a73e8' };
 
 export interface RegisterInitialData {
   complexName: string;
@@ -321,6 +337,12 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   const [isFavorite, setIsFavorite] = useState(false);
   // 임장용 — 체크 시 매매가 유효성 검사 생략
   const [isFieldVisitOnly, setIsFieldVisitOnly] = useState(false);
+  // 체크리스트 — 임장용 체크 시 템플릿 로드 + 상/중/하 선택 저장
+  const [checklistTemplates, setChecklistTemplates] = useState<ChecklistTemplate[]>([]);
+  const [checklistRatings, setChecklistRatings] = useState<Record<number, string>>({});
+  const [checklistType, setChecklistType] = useState<ChecklistTypeKey>('ATMOSPHERE');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -334,6 +356,20 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
   useEffect(() => {
     setForm(prev => ({ ...prev, region: extractRegion(prev.address) }));
   }, [form.address]);
+
+  // 임장용 체크 시 전체 체크리스트 템플릿 로드
+  useEffect(() => {
+    if (!isFieldVisitOnly) { setChecklistTemplates([]); setChecklistRatings({}); return; }
+    setLoadingTemplates(true);
+    getChecklistTemplates().then(setChecklistTemplates).catch(() => {}).finally(() => setLoadingTemplates(false));
+  }, [isFieldVisitOnly]);
+
+  // visitType 변경 시 체크리스트 타입 자동 동기화
+  useEffect(() => {
+    if (form.visitType && VISIT_TO_CHECKLIST[form.visitType]) {
+      setChecklistType(VISIT_TO_CHECKLIST[form.visitType]);
+    }
+  }, [form.visitType]);
 
   // 유해시설 JSON lazy load — 좌표 있을 때만 병렬 fetch, 2km 이내 항목을 hazardInfos에 추가
   useEffect(() => {
@@ -750,6 +786,15 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           const compressed = await compressImages(photoFiles);
           await uploadComplexPhotos(created.id, compressed);
         } catch { /* 업로드 실패 무시 */ }
+      }
+      // 체크리스트 결과 저장 — 선택된 항목만 병렬 저장 (실패해도 등록은 완료)
+      const ratingEntries = Object.entries(checklistRatings).filter(([, v]) => v);
+      if (ratingEntries.length > 0 && created?.id) {
+        await Promise.allSettled(
+          ratingEntries.map(([templateId, rating]) =>
+            upsertChecklistResult(created.id, parseInt(templateId), { rating, memo: null })
+          )
+        );
       }
       onSuccess();
       onClose();
@@ -1454,6 +1499,83 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
               ))}
             </select>
           </div>
+
+          {/* 임장 체크리스트 — 임장용 체크 시 표시 */}
+          {isFieldVisitOnly && (
+            <div style={{ marginBottom: '20px' }}>
+              <div style={sectionTitle}>임장 체크리스트</div>
+              {/* 타입 탭 */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+                {CHECKLIST_TYPES.map(ct => (
+                  <button
+                    key={ct.key}
+                    type="button"
+                    onClick={() => setChecklistType(ct.key)}
+                    style={{
+                      padding: '5px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                      border: '1.5px solid',
+                      borderColor: checklistType === ct.key ? '#1a73e8' : '#dadce0',
+                      borderRadius: '14px',
+                      backgroundColor: checklistType === ct.key ? '#1a73e8' : '#fff',
+                      color: checklistType === ct.key ? '#fff' : '#5f6368',
+                    }}
+                  >{ct.label}</button>
+                ))}
+              </div>
+              {/* 항목 목록 */}
+              {loadingTemplates ? (
+                <p style={{ fontSize: '12px', color: '#9aa0a6' }}>불러오는 중...</p>
+              ) : checklistTemplates.filter(t => t.visitType === checklistType).length === 0 ? (
+                <p style={{ fontSize: '12px', color: '#9aa0a6' }}>
+                  이 유형의 항목이 없습니다. 헤더의 "체크리스트" 버튼에서 항목을 추가하세요.
+                </p>
+              ) : (
+                checklistTemplates
+                  .filter(t => t.visitType === checklistType)
+                  .sort((a, b) => a.displayOrder - b.displayOrder)
+                  .map(t => {
+                    const selected = checklistRatings[t.id];
+                    return (
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', borderBottom: '1px solid #f0f0f0' }}>
+                        <span style={{ flex: 1, fontSize: '13px', color: '#344054' }}>{t.itemName}</span>
+                        {/* 상/중/하 선택 버튼 (radio 스타일) */}
+                        {(['UPPER', 'MIDDLE', 'LOWER'] as const).map(r => {
+                          const active = selected === r;
+                          const color = CL_RATING_COLORS[r];
+                          return (
+                            <button
+                              key={r}
+                              type="button"
+                              onClick={() => setChecklistRatings(prev => ({
+                                ...prev,
+                                [t.id]: prev[t.id] === r ? '' : r,
+                              }))}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '4px',
+                                padding: '4px 10px', fontSize: '12px', fontWeight: active ? 700 : 400,
+                                border: `1.5px solid ${active ? color : '#dadce0'}`,
+                                borderRadius: '14px', cursor: 'pointer',
+                                backgroundColor: active ? color : '#fff',
+                                color: active ? '#fff' : '#5f6368',
+                                transition: 'all 0.12s',
+                              }}
+                            >
+                              <span style={{
+                                width: '10px', height: '10px', borderRadius: '50%',
+                                border: `2px solid ${active ? '#fff' : '#bdbdbd'}`,
+                                backgroundColor: active ? '#fff' : 'transparent',
+                                display: 'inline-block', flexShrink: 0,
+                              }} />
+                              {CL_RATING_LABELS[r]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          )}
 
           {/* 메모 */}
           <div style={sectionTitle}>메모</div>

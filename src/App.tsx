@@ -13,6 +13,7 @@ import RegisterModal, { RegisterInitialData } from './components/RegisterModal';
 import LivingZonePanel from './components/LivingZonePanel';
 import AffordabilityPanel from './components/AffordabilityPanel';
 import RoutePanel from './components/RoutePanel';
+import ChecklistTemplatePanel from './components/ChecklistTemplatePanel';
 import FilterPanel, { applyFilters } from './components/FilterPanel';
 import DistrictSelector from './components/DistrictSelector';
 import { useIsMobile } from './hooks/useIsMobile';
@@ -79,6 +80,8 @@ const App: React.FC = () => {
   // 필터 패널
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
+  // 체크리스트 항목 관리 패널
+  const [checklistPanelOpen, setChecklistPanelOpen] = useState(false);
 
   // 필터 적용된 단지 목록 — 지도 마커에 사용
   const filteredComplexes = useMemo(
@@ -593,6 +596,16 @@ const App: React.FC = () => {
               >로드뷰</button>
               {/* 구 경계 */}
               <DistrictSelector value={selectedDistrict} onChange={setSelectedDistrict} />
+              {/* 체크리스트 */}
+              <button
+                onClick={() => setChecklistPanelOpen(v => !v)}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid', borderColor: checklistPanelOpen ? '#f9ab00' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: checklistPanelOpen ? '#fef9e7' : '#fff',
+                  color: checklistPanelOpen ? '#b07d00' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >체크리스트</button>
               {/* 경로 */}
               <button
                 onClick={() => setRoutePanelOpen(v => !v)}
@@ -827,6 +840,10 @@ const App: React.FC = () => {
                   isMobile={isMobile}
                 />
               </div>
+            )}
+            {/* 체크리스트 항목 관리 패널 */}
+            {checklistPanelOpen && (
+              <ChecklistTemplatePanel onClose={() => setChecklistPanelOpen(false)} />
             )}
           </>
         )}
