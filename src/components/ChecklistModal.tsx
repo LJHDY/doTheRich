@@ -548,7 +548,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                                 {/* 카테고리가 2개 이상일 때만 헤더 표시 */}
                                 {catOrder.length > 1 && (
                                   <div style={{
-                                    fontSize: '10px', fontWeight: 700, color: '#5f6368',
+                                    fontSize: '12px', fontWeight: 700, color: '#5f6368',
                                     padding: '3px 0 4px', borderBottom: '1px solid #e8eaed',
                                     marginBottom: '4px', letterSpacing: '0.3px',
                                   }}>
@@ -604,7 +604,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                     <div key={cat} style={{ marginBottom: '14px' }}>
                       {orderedCategories.length > 1 && (
                         <div style={{
-                          fontSize: '11px', fontWeight: 700, color: '#5f6368',
+                          fontSize: '13px', fontWeight: 700, color: '#5f6368',
                           padding: '5px 0 4px', borderBottom: '1.5px solid #e8eaed',
                           marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px',
                         }}>
