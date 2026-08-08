@@ -29,11 +29,12 @@ interface MapPageProps {
   onRoutePointAdd?: (p: RoutePoint) => void; // 지도 클릭 시 좌표 추가 콜백
   selectedDistrict?: string | null; // 행정구역 경계 표시용 구/시 이름
   roadViewOpen?: boolean;        // 로드뷰 패널 표시 여부
+  isMobile?: boolean;            // 모바일 여부 — 마커 스타일 분기
 }
 
 const MapPage: React.FC<MapPageProps> = ({
   complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter,
-  routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict, roadViewOpen,
+  routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict, roadViewOpen, isMobile,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -128,18 +129,15 @@ const MapPage: React.FC<MapPageProps> = ({
     };
   }, []);
 
-  // 마커 아이콘 생성 — 회전 정사각형(border-radius+rotate) 핀 스타일, 호버 시 단지명 tooltip
+  // 마커 아이콘 생성 — 데스크탑: 회전 정사각형 핀 / 모바일: 단지 정보 카드
   const createMarkerIcon = useCallback(
     (complex: ApartmentComplex, isSelected: boolean) => {
       // 실제 가격을 억 단위로 변환 (천만 자리에서 반올림) — 없으면 금액대 숫자로 fallback
-      // price가 있는 평형의 최신 날짜가 다를 경우에도 백엔드가 올바른 값을 내려주므로 여기서 추가 처리 불필요
       const priceUk = complex.price
         ? Math.round(complex.price / 10000000) / 10
         : (() => { const m = complex.priceRange?.match(/^(\d+)/); return m ? parseInt(m[1]) : null; })();
-      // 가격 정보가 전혀 없으면 '?' 표시 — undefined/null이 마커에 그대로 노출되는 것 방지
-      const label = priceUk !== null ? String(priceUk) : (complex.priceRange ?? '?');
 
-      // 가격 기준 색상 구분: 선택=보라, 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=검정
+      // 가격 기준 색상 구분: 선택=보라, 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=회색
       const bgColor = isSelected
         ? '#BA8BD8'
         : priceUk === null ? '#89CFF0'
@@ -148,15 +146,62 @@ const MapPage: React.FC<MapPageProps> = ({
         : priceUk < 20 ? '#E06060'
         : '#607d8b';
 
-      // 글자 수에 따라 폰트 크기 조정
-      const fontSize = !label || label.length <= 2 ? 9 : label.length <= 4 ? 8 : 7;
-      // 밝은 파스텔 배경에서는 다크 텍스트로 가독성 확보
-      const textColor = (bgColor === '#89CFF0' || bgColor === '#FFD97D') ? '#1a3a5c' : '#fff';
-
       // XSS 방지: 단지명의 HTML 특수문자 이스케이프
       const safeName = complex.complexName
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+      // ── 모바일 카드형 마커 ──────────────────────────────────────────────────
+      if (isMobile) {
+        // 가격 표시 — 억 단위, 없으면 금액대 fallback
+        const priceDisplay = priceUk !== null ? `${priceUk}억` : (complex.priceRange ?? '-');
+        // 연식 — 숫자만 추출
+        const yearDisplay = complex.builtYear
+          ? `${String(complex.builtYear).replace(/[^0-9]/g, '')}년`
+          : '-';
+        // 세대수
+        const unitDisplay = complex.unitCount ? `${complex.unitCount}세대` : '-';
+        // 단지명 8자 초과 시 말줄임
+        const shortName = complex.complexName.length > 8
+          ? complex.complexName.slice(0, 8) + '…'
+          : complex.complexName;
+        const safeShortName = shortName
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        // bgColor를 텍스트에 쓸 때 가독성용 어두운 버전
+        const priceTextColor = bgColor === '#89CFF0' ? '#2a6090'
+          : bgColor === '#FFD97D' ? '#a07600'
+          : bgColor === '#BA8BD8' ? '#6a2a9a'
+          : bgColor;
+        const selBg = isSelected ? '#f8f4ff' : '#fff';
+        const borderWidth = isSelected ? '2px' : '1.5px';
+
+        return {
+          content: `
+            <div style="
+              background:${selBg};
+              border:${borderWidth} solid ${bgColor};
+              border-left:3px solid ${bgColor};
+              border-radius:5px;
+              padding:3px 6px 3px 5px;
+              box-shadow:0 1px 6px rgba(0,0,0,${isSelected ? '0.25' : '0.14'});
+              cursor:pointer;
+              font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+              white-space:nowrap;
+              max-width:120px;
+            ">
+              <div style="font-size:10px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;max-width:108px;">${safeShortName}</div>
+              <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}</div>
+              <div style="font-size:9px;color:#80868b;">${yearDisplay}&nbsp;·&nbsp;${unitDisplay}</div>
+            </div>
+          `,
+          // 카드 너비 약 110px, 높이 약 44px — 좌상단 기준 중심에 앵커
+          anchor: new window.naver.maps.Point(55, 22),
+        };
+      }
+
+      // ── 데스크탑 핀형 마커 ──────────────────────────────────────────────────
+      const label = priceUk !== null ? String(priceUk) : (complex.priceRange ?? '?');
+      const fontSize = !label || label.length <= 2 ? 9 : label.length <= 4 ? 8 : 7;
+      const textColor = (bgColor === '#89CFF0' || bgColor === '#FFD97D') ? '#1a3a5c' : '#fff';
       const isFav = complex.isFavorite ?? false;
 
       // 임장 유형별 테두리 색상 — NONE(미입력 포함)은 흰색
@@ -204,7 +249,7 @@ const MapPage: React.FC<MapPageProps> = ({
         anchor: new window.naver.maps.Point(15, 36),
       };
     },
-    []
+    [isMobile]
   );
 
   // 마커 diff 업데이트 — 추가/제거/변경된 것만 처리 (전체 재생성 X)
@@ -218,10 +263,9 @@ const MapPage: React.FC<MapPageProps> = ({
         c.longitude >= 124 && c.longitude <= 132
     );
 
-    // 마커 아이콘 외관을 결정하는 필드만 포함한 fingerprint
-    // selectedId·price·priceRange·isFavorite·visitType 중 하나라도 바뀌면 아이콘 재생성
+    // 마커 아이콘 외관을 결정하는 필드만 포함한 fingerprint — 하나라도 바뀌면 아이콘 재생성
     const makeFingerprint = (c: ApartmentComplex, isSelected: boolean) =>
-      `${isSelected}-${c.price}-${c.priceRange}-${c.isFavorite}-${c.visitType}`;
+      `${isSelected}-${c.price}-${c.priceRange}-${c.isFavorite}-${c.visitType}-${c.builtYear}-${c.unitCount}`;
 
     const newIdSet = new Set(validComplexes.map((c) => c.id));
 

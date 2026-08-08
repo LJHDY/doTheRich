@@ -757,6 +757,7 @@ const App: React.FC = () => {
               onRoutePointAdd={handleRoutePointAdd}
               selectedDistrict={selectedDistrict}
               roadViewOpen={roadViewOpen}
+              isMobile={isMobile}
             />
             {selectedComplex && !livingZoneOpen && (
               /* 모바일: 화면 전체를 덮는 fixed 오버레이 / 데스크탑: flex 옆 패널 */
