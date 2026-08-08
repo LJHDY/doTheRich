@@ -1001,6 +1001,25 @@ const App: React.FC = () => {
           onSuccess={loadComplexes}
         />
       )}
+
+      {/* 하단 푸터 */}
+      <footer style={{
+        flexShrink: 0,
+        height: '30px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        borderTop: '1px solid #d4edfb',
+        background: 'linear-gradient(180deg, #f0f8fd 0%, #f7fbfe 100%)',
+      }}>
+        <span style={{
+          fontFamily: "'Dancing Script', cursive",
+          fontSize: '15px',
+          fontWeight: 600,
+          color: '#4BAAD4',
+          letterSpacing: '0.3px',
+        }}>
+          For a happy future with my love, Juhae.
+        </span>
+      </footer>
     </div>
   );
 };
