@@ -132,9 +132,10 @@ const MapPage: React.FC<MapPageProps> = ({
   // 마커 아이콘 생성 — 데스크탑: 회전 정사각형 핀 / 모바일: 단지 정보 카드
   const createMarkerIcon = useCallback(
     (complex: ApartmentComplex, isSelected: boolean) => {
-      // 실제 가격을 억 단위로 변환 (천만 자리에서 반올림) — 없으면 금액대 숫자로 fallback
-      const priceUk = complex.price
-        ? Math.round(complex.price / 10000000) / 10
+      // 호가 우선, 없으면 매매가, 없으면 금액대 숫자로 fallback — 억 단위 변환
+      const basePrice = complex.askingPrice || complex.price;
+      const priceUk = basePrice
+        ? Math.round(basePrice / 10000000) / 10
         : (() => { const m = complex.priceRange?.match(/^(\d+)/); return m ? parseInt(m[1]) : null; })();
 
       // 가격 기준 색상 구분: 선택=보라, 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=회색
@@ -265,7 +266,7 @@ const MapPage: React.FC<MapPageProps> = ({
 
     // 마커 아이콘 외관을 결정하는 필드만 포함한 fingerprint — 하나라도 바뀌면 아이콘 재생성
     const makeFingerprint = (c: ApartmentComplex, isSelected: boolean) =>
-      `${isSelected}-${c.price}-${c.priceRange}-${c.isFavorite}-${c.visitType}-${c.builtYear}-${c.unitCount}`;
+      `${isSelected}-${c.price}-${c.askingPrice}-${c.priceRange}-${c.isFavorite}-${c.visitType}-${c.builtYear}-${c.unitCount}`;
 
     const newIdSet = new Set(validComplexes.map((c) => c.id));
 

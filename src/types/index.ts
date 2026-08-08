@@ -152,6 +152,7 @@ export interface ApartmentComplex {
   checkDate: string;
   builtYear: string;       // "95년"
   price: number;           // 원 단위 (첫 번째 priceItem 대표값)
+  askingPrice?: number;    // 호가 (원 단위) — 최신 시세 이력에서 집계, 지도 마커 우선 표시
   jeonsePrice?: number;    // 원 단위
   jeonseRate?: number;     // % (전세가 / 매매가 × 100)
   unitCount: number;
