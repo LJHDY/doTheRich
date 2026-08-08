@@ -626,7 +626,7 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
   - 선택 마커: `#BA8BD8` (파스텔 보라)
   - `calcCommuteGrade` 색상: S→`#F08080`, A→`#FFD97D`, B→`#7DC8A0`, C→`#89CFF0`
 - [x] 푸터 추가 — Dancing Script 필기체, "For a happy future with my love, Juhae.", 베이비블루(`#4BAAD4`)
-- [x] 모바일 지도 마커 카드형 변경 — 단지명/가격/연식/세대수 표시, `isMobile` prop 분기
+- [x] 지도 마커 카드형 통합 — 모바일·데스크탑 동일한 카드형 (단지명/가격/연식/세대수, 즐겨찾기=★ 접두사, 핀형·별형·tooltip 제거)
 - [x] 지도 마커 가격 = 호가(`askingPrice`) 우선, 없으면 매매가(`price`) fallback
   - 백엔드: `_build_price_maps()`에 SQL 쿼리 3 추가 → `asking_price_map` 반환
   - `_to_dto()` `latest_asking_price` 파라미터 추가, `ApartmentComplexDto.asking_price` 설정

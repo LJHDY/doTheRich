@@ -29,7 +29,7 @@ interface MapPageProps {
   onRoutePointAdd?: (p: RoutePoint) => void; // 지도 클릭 시 좌표 추가 콜백
   selectedDistrict?: string | null; // 행정구역 경계 표시용 구/시 이름
   roadViewOpen?: boolean;        // 로드뷰 패널 표시 여부
-  isMobile?: boolean;            // 모바일 여부 — 마커 스타일 분기
+  isMobile?: boolean;            // 모바일 여부 (현재 마커는 공통 카드형 — 예약)
 }
 
 const MapPage: React.FC<MapPageProps> = ({
@@ -90,28 +90,6 @@ const MapPage: React.FC<MapPageProps> = ({
       borderWidth: 2,
     });
 
-    // body 직속 tooltip — 지도 DOM 바깥이므로 어떤 stacking context도 영향 없음
-    const tip = document.createElement('div');
-    tip.id = '__mk_tooltip';
-    tip.style.cssText = [
-      'display:none', 'position:fixed', 'pointer-events:none',
-      'z-index:2147483647',
-      'background:rgba(33,33,33,0.85)', 'color:#fff',
-      'padding:3px 9px', 'border-radius:4px',
-      'font-size:11px', 'font-family:-apple-system,BlinkMacSystemFont,sans-serif',
-      'white-space:nowrap', 'box-shadow:0 1px 4px rgba(0,0,0,0.3)',
-      'transform:translate(-50%,calc(-100% - 6px))',
-    ].join(';');
-    document.body.appendChild(tip);
-
-    (window as any).__mkTipShow = (name: string, cx: number, cy: number) => {
-      tip.textContent = name;
-      tip.style.left = cx + 'px';
-      tip.style.top = cy + 'px';
-      tip.style.display = 'block';
-    };
-    (window as any).__mkTipHide = () => { tip.style.display = 'none'; };
-
     // cleanup에서 ref.current를 직접 읽으면 effect 종료 후 값이 달라질 수 있어 미리 캡처
     const markerMap = markerMapRef.current;
     const fingerprintMap = fingerprintMapRef.current;
@@ -123,13 +101,10 @@ const MapPage: React.FC<MapPageProps> = ({
       });
       markerMap.clear();
       fingerprintMap.clear();
-      document.body.removeChild(tip);
-      delete (window as any).__mkTipShow;
-      delete (window as any).__mkTipHide;
     };
   }, []);
 
-  // 마커 아이콘 생성 — 데스크탑: 회전 정사각형 핀 / 모바일: 단지 정보 카드
+  // 마커 아이콘 생성 — 모바일·데스크탑 동일한 카드형
   const createMarkerIcon = useCallback(
     (complex: ApartmentComplex, isSelected: boolean) => {
       // 호가 우선, 없으면 매매가, 없으면 금액대 숫자로 fallback — 억 단위 변환
@@ -147,110 +122,51 @@ const MapPage: React.FC<MapPageProps> = ({
         : priceUk < 20 ? '#E06060'
         : '#607d8b';
 
-      // XSS 방지: 단지명의 HTML 특수문자 이스케이프
-      const safeName = complex.complexName
+      const priceDisplay = priceUk !== null ? `${priceUk}억` : (complex.priceRange ?? '-');
+      const yearDisplay = complex.builtYear
+        ? `${String(complex.builtYear).replace(/[^0-9]/g, '')}년`
+        : '-';
+      const unitDisplay = complex.unitCount ? `${complex.unitCount}세대` : '-';
+      // 단지명 8자 초과 시 말줄임 + XSS 방지
+      const shortName = complex.complexName.length > 8
+        ? complex.complexName.slice(0, 8) + '…'
+        : complex.complexName;
+      const safeShortName = shortName
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-      // ── 모바일 카드형 마커 ──────────────────────────────────────────────────
-      if (isMobile) {
-        // 가격 표시 — 억 단위, 없으면 금액대 fallback
-        const priceDisplay = priceUk !== null ? `${priceUk}억` : (complex.priceRange ?? '-');
-        // 연식 — 숫자만 추출
-        const yearDisplay = complex.builtYear
-          ? `${String(complex.builtYear).replace(/[^0-9]/g, '')}년`
-          : '-';
-        // 세대수
-        const unitDisplay = complex.unitCount ? `${complex.unitCount}세대` : '-';
-        // 단지명 8자 초과 시 말줄임
-        const shortName = complex.complexName.length > 8
-          ? complex.complexName.slice(0, 8) + '…'
-          : complex.complexName;
-        const safeShortName = shortName
-          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        // bgColor를 텍스트에 쓸 때 가독성용 어두운 버전
-        const priceTextColor = bgColor === '#89CFF0' ? '#2a6090'
-          : bgColor === '#FFD97D' ? '#a07600'
-          : bgColor === '#BA8BD8' ? '#6a2a9a'
-          : bgColor;
-        const selBg = isSelected ? '#f8f4ff' : '#fff';
-        const borderWidth = isSelected ? '2px' : '1.5px';
-
-        return {
-          content: `
-            <div style="
-              background:${selBg};
-              border:${borderWidth} solid ${bgColor};
-              border-left:3px solid ${bgColor};
-              border-radius:5px;
-              padding:3px 6px 3px 5px;
-              box-shadow:0 1px 6px rgba(0,0,0,${isSelected ? '0.25' : '0.14'});
-              cursor:pointer;
-              font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-              white-space:nowrap;
-              max-width:120px;
-            ">
-              <div style="font-size:10px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;max-width:108px;">${safeShortName}</div>
-              <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}</div>
-              <div style="font-size:9px;color:#80868b;">${yearDisplay}&nbsp;·&nbsp;${unitDisplay}</div>
-            </div>
-          `,
-          // 카드 너비 약 110px, 높이 약 44px — 좌상단 기준 중심에 앵커
-          anchor: new window.naver.maps.Point(55, 22),
-        };
-      }
-
-      // ── 데스크탑 핀형 마커 ──────────────────────────────────────────────────
-      const label = priceUk !== null ? String(priceUk) : (complex.priceRange ?? '?');
-      const fontSize = !label || label.length <= 2 ? 9 : label.length <= 4 ? 8 : 7;
-      const textColor = (bgColor === '#89CFF0' || bgColor === '#FFD97D') ? '#1a3a5c' : '#fff';
-      const isFav = complex.isFavorite ?? false;
-
-      // 임장 유형별 테두리 색상 — NONE(미입력 포함)은 흰색
-      const VISIT_BORDER: Record<string, string> = {
-        ATMOSPHERE: '#A8D8A0', COMPLEX: '#7DC8A0', LISTING: '#5AAF84',
-      };
-      const visitBorder = VISIT_BORDER[complex.visitType ?? ''] ?? '#ffffff';
-
-      // 즐겨찾기 단지 — 6각별(헥사그램)+꼬리 핀 마커
-      if (isFav) {
-        const starPath = '30,4 36,17.6 50.8,16 42,28 50.8,40 36,38.4 30,63 24,38.4 9.2,40 18,28 9.2,16 24,17.6';
-        return {
-          content: `
-            <div style="position:relative;display:inline-block;cursor:pointer;"
-                 onmouseover="var r=this.getBoundingClientRect();window.__mkTipShow('${safeName}',r.left+r.width/2,r.top);"
-                 onmouseout="window.__mkTipHide();">
-              <div style="position:relative;width:43px;height:56px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.22));">
-                <svg xmlns="http://www.w3.org/2000/svg" width="43" height="56" viewBox="0 0 60 80" style="display:block;">
-                  <polygon points="${starPath}" fill="${bgColor}" stroke="${visitBorder}" stroke-width="3.5" stroke-linejoin="round"/>
-                </svg>
-                <div style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);
-                            color:${textColor};font-weight:800;font-size:${fontSize}px;letter-spacing:-0.3px;
-                            text-shadow:0 1px 1px rgba(0,0,0,0.08);white-space:nowrap;pointer-events:none;">
-                  ${label}
-                </div>
-              </div>
-            </div>
-          `,
-          anchor: new window.naver.maps.Point(22, 47),
-        };
-      }
+      // bgColor를 텍스트에 쓸 때 가독성용 어두운 버전
+      const priceTextColor = bgColor === '#89CFF0' ? '#2a6090'
+        : bgColor === '#FFD97D' ? '#a07600'
+        : bgColor === '#BA8BD8' ? '#6a2a9a'
+        : bgColor;
+      const selBg = isSelected ? '#f8f4ff' : '#fff';
+      const borderWidth = isSelected ? '2px' : '1.5px';
+      // 즐겨찾기 단지는 이름 앞 ★ 표시
+      const favPrefix = complex.isFavorite ? '★&nbsp;' : '';
 
       return {
         content: `
-          <div style="position:relative;display:inline-block;cursor:pointer;"
-               onmouseover="var r=this.getBoundingClientRect();window.__mkTipShow('${safeName}',r.left+r.width/2,r.top);"
-               onmouseout="window.__mkTipHide();">
-            <div style="position:relative;width:30px;height:30px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.22));">
-              <div style="position:absolute;inset:0;background:${bgColor};border:2px solid ${visitBorder};border-radius:50% 50% 50% 4px;transform:rotate(-45deg);box-shadow:inset 0 1px 0 rgba(255,255,255,0.35);"></div>
-              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:${textColor};font-weight:800;font-size:${fontSize}px;letter-spacing:-0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.08);">${label}</div>
-            </div>
+          <div style="
+            background:${selBg};
+            border:${borderWidth} solid ${bgColor};
+            border-left:3px solid ${bgColor};
+            border-radius:5px;
+            padding:3px 6px 3px 5px;
+            box-shadow:0 1px 6px rgba(0,0,0,${isSelected ? '0.25' : '0.14'});
+            cursor:pointer;
+            font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+            white-space:nowrap;
+            max-width:120px;
+          ">
+            <div style="font-size:10px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;max-width:108px;">${favPrefix}${safeShortName}</div>
+            <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}</div>
+            <div style="font-size:9px;color:#80868b;">${yearDisplay}&nbsp;·&nbsp;${unitDisplay}</div>
           </div>
         `,
-        // rotate(-45deg) 후 bottom-left 꼭짓점 위치: N*(1+√2)/2 = 30*1.207 ≈ 36
-        anchor: new window.naver.maps.Point(15, 36),
+        // 카드 너비 약 110px, 높이 약 44px — 좌상단 기준 중심에 앵커
+        anchor: new window.naver.maps.Point(55, 22),
       };
     },
-    [isMobile]
+    []
   );
 
   // 마커 diff 업데이트 — 추가/제거/변경된 것만 처리 (전체 재생성 X)
@@ -301,7 +217,6 @@ const MapPage: React.FC<MapPageProps> = ({
         // 클릭 핸들러는 ref를 통해 최신 데이터를 읽으므로 재생성 불필요
         const listener = window.naver.maps.Event.addListener(marker, 'click', () => {
           if (infoWindowRef.current) infoWindowRef.current.close();
-          (window as any).__mkTipHide?.();
           (window as any).__closeInfoWindow = () => infoWindowRef.current?.close();
 
           // 클릭 시점의 최신 단지 데이터 참조 (메모·즐겨찾기 등 업데이트 반영)
