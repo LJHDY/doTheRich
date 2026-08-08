@@ -140,12 +140,16 @@ const MapPage: React.FC<MapPageProps> = ({
         : bgColor;
       const selBg = isSelected ? '#f8f4ff' : '#fff';
       const borderWidth = isSelected ? '2px' : '1.5px';
-      // 즐겨찾기 단지는 이름 앞 ★ 표시
-      const favPrefix = complex.isFavorite ? '★&nbsp;' : '';
+      const isFav = complex.isFavorite ?? false;
+      // 즐겨찾기 배지 — 카드 우상단 모서리에 절대위치로 얹음
+      const favBadge = isFav
+        ? `<div style="position:absolute;top:-7px;right:-7px;width:15px;height:15px;background:#F5A623;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.28);line-height:1;">★</div>`
+        : '';
 
       return {
         content: `
           <div style="
+            position:relative;
             background:${selBg};
             border:${borderWidth} solid ${bgColor};
             border-left:3px solid ${bgColor};
@@ -157,7 +161,8 @@ const MapPage: React.FC<MapPageProps> = ({
             white-space:nowrap;
             max-width:120px;
           ">
-            <div style="font-size:10px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;max-width:108px;">${favPrefix}${safeShortName}</div>
+            ${favBadge}
+            <div style="font-size:10px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;max-width:108px;">${safeShortName}</div>
             <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}</div>
             <div style="font-size:9px;color:#80868b;">${yearDisplay}&nbsp;·&nbsp;${unitDisplay}</div>
           </div>
