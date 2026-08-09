@@ -18,9 +18,12 @@ import ChecklistTemplatePanel from './components/ChecklistTemplatePanel';
 import FilterPanel, { applyFilters } from './components/FilterPanel';
 import DistrictSelector from './components/DistrictSelector';
 import { useIsMobile } from './hooks/useIsMobile';
+import PasswordGate, { isSessionValid } from './components/PasswordGate';
 
 const App: React.FC = () => {
   const isMobile = useIsMobile();
+  // 세션 유효성 — localStorage 만료 시각 기준, 최초 렌더 시 동기 확인
+  const [unlocked, setUnlocked] = useState<boolean>(() => isSessionValid());
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(56);
 
@@ -418,6 +421,10 @@ const App: React.FC = () => {
     }));
     setSelectedComplex(updated);
   };
+
+  if (!unlocked) {
+    return <PasswordGate onUnlock={() => setUnlocked(true)} />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
