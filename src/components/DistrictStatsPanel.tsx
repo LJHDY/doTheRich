@@ -22,8 +22,13 @@ const DISTRICT_ORDER = [
   '서초구', '강남구', '송파구', '강동구',
 ];
 
-const AREA_LABELS = ['10평대', '20평대', '30평대'] as const;
 type AreaKey = '10' | '20' | '30';
+
+const AREA_LABELS: Record<AreaKey, string> = {
+  '10': '전용 33~66㎡',
+  '20': '전용 66~99㎡',
+  '30': '전용 99~132㎡',
+};
 
 type ViewMode = 'trade' | 'jeonse';
 
@@ -241,8 +246,8 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
             <thead>
               <tr style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0, zIndex: 1 }}>
                 <th style={{ ...thStyle, textAlign: 'left', width: '70px' }}>지역</th>
-                {AREA_LABELS.map(label => (
-                  <th key={label} style={thStyle}>{label}</th>
+                {(Object.entries(AREA_LABELS) as [AreaKey, string][]).map(([key, label]) => (
+                  <th key={key} style={thStyle}>{label}</th>
                 ))}
                 <th style={{ ...thStyle, color: '#9e9e9e', fontSize: '10px' }}>건수</th>
               </tr>
@@ -286,7 +291,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
           padding: '6px 12px', fontSize: '10px', color: '#9e9e9e',
           borderTop: '1px solid #f0f0f0', flexShrink: 0, textAlign: 'center',
         }}>
-          10평대 33~66m² · 20평대 66~99m² · 30평대 99~132m² · 출처: 국토교통부 실거래가
+          전용면적 기준 · 출처: 국토교통부 실거래가
         </div>
       )}
     </div>
