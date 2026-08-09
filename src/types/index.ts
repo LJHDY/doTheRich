@@ -291,6 +291,8 @@ export interface ApartmentComplexRequest {
     distance?: number;         // 거리 (미터)
     latitude?: number;
     longitude?: number;
+    macroCategory?: string;
+    subCategory?: string;
   }[];
   isFavorite?: boolean;        // 즐겨찾기 여부
 }

@@ -771,13 +771,15 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
           latitude: r.latitude ?? undefined,
           longitude: r.longitude ?? undefined,
         })),
-        // 유해시설명이 입력된 항목만 포함 — distance는 미터 단위
+        // 유해시설명이 입력된 항목 전부 포함 — 삭제(×)하지 않은 항목은 모두 저장
         hazardInfos: hazardInfos.filter(r => r.hazardName.trim()).map(r => ({
           hazardName: r.hazardName,
           hazardAddress: r.hazardAddress || undefined,
           distance: r.distance ? parseInt(r.distance) : undefined,
           latitude: r.latitude ?? undefined,
           longitude: r.longitude ?? undefined,
+          macroCategory: r.macroCategory || undefined,
+          subCategory: r.subCategory || undefined,
         })),
       });
       // 선택된 사진을 압축 후 한 번에 업로드 — 실패해도 단지 등록은 완료 상태로 처리
