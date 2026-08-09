@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DistrictStat } from '../types';
 import { getDistrictStats, collectDistrictStats } from '../services/api';
 
 interface Props {
   onClose: () => void;
+  onToast?: (msg: string, type?: 'success' | 'error') => void;
   isMobile?: boolean;
 }
 
@@ -32,14 +33,31 @@ const AREA_LABELS: Record<AreaKey, string> = {
 
 type ViewMode = 'trade' | 'jeonse';
 
-const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
+// 폴링 간격 5초, 최대 3분
+const POLL_INTERVAL_MS = 5000;
+const POLL_MAX_ATTEMPTS = 36;
+
+const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => {
   const [stats, setStats] = useState<DistrictStat[]>([]);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('trade');
-  const [collectMsg, setCollectMsg] = useState('');
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollAttemptsRef = useRef(0);
+  const collectStartRef = useRef<string>('');
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    pollAttemptsRef.current = 0;
+  }, []);
+
+  // 언마운트 시 폴링 정리
+  useEffect(() => () => stopPolling(), [stopPolling]);
 
   const load = useCallback(async (month?: string) => {
     setLoading(true);
@@ -50,8 +68,9 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
       if (!month && res.availableMonths.length > 0) {
         setSelectedMonth(res.availableMonths[0]);
       }
+      return res;
     } catch {
-      // 데이터 없을 때 빈 상태 유지
+      return null;
     } finally {
       setLoading(false);
     }
@@ -66,17 +85,48 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
 
   const handleCollect = async () => {
     setCollecting(true);
-    setCollectMsg('');
+    // 수집 시작 시각 기록 — 이보다 최신 collectedAt이 생기면 완료로 판단
+    collectStartRef.current = new Date().toISOString();
+
     try {
-      const res = await collectDistrictStats();
-      setCollectMsg(res.message);
-      // 30초 후 데이터 재조회 (백그라운드 처리 완료 예상)
-      setTimeout(() => load(), 30000);
+      await collectDistrictStats();
     } catch {
-      setCollectMsg('수집 요청에 실패했습니다.');
-    } finally {
+      onToast?.('수집 요청에 실패했습니다.', 'error');
       setCollecting(false);
+      return;
     }
+
+    // 5초마다 폴링 — collectedAt이 수집 시작 시각보다 최신이면 완료
+    stopPolling();
+    pollAttemptsRef.current = 0;
+    pollTimerRef.current = setInterval(async () => {
+      pollAttemptsRef.current += 1;
+
+      try {
+        const res = await getDistrictStats(selectedMonth || undefined);
+        const isDone = res.data.some(
+          d => d.collectedAt && d.collectedAt > collectStartRef.current
+        );
+
+        if (isDone || pollAttemptsRef.current >= POLL_MAX_ATTEMPTS) {
+          stopPolling();
+          setCollecting(false);
+          setStats(res.data);
+          setAvailableMonths(res.availableMonths);
+          if (res.availableMonths[0]) setSelectedMonth(res.availableMonths[0]);
+
+          if (isDone) {
+            onToast?.('서울 25구 시세 수집이 완료되었습니다.', 'success');
+          } else {
+            onToast?.('수집 시간이 초과되었습니다. 잠시 후 새로고침해주세요.', 'error');
+          }
+        }
+      } catch {
+        stopPolling();
+        setCollecting(false);
+        onToast?.('데이터 조회 중 오류가 발생했습니다.', 'error');
+      }
+    }, POLL_INTERVAL_MS);
   };
 
   // 지역 순서대로 정렬
@@ -199,8 +249,18 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
             backgroundColor: collecting ? '#f1f3f4' : '#D4EFFC',
             color: collecting ? '#9e9e9e' : '#2a6090',
             cursor: collecting ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+            display: 'flex', alignItems: 'center', gap: '5px',
           }}
-        >{collecting ? '수집 중...' : '시세 수집'}</button>
+        >
+          {collecting && (
+            <span style={{
+              display: 'inline-block', width: '10px', height: '10px',
+              border: '2px solid #9e9e9e', borderTopColor: 'transparent',
+              borderRadius: '50%', animation: 'dtr-spin 0.7s linear infinite',
+            }} />
+          )}
+          {collecting ? '수집 중...' : '시세 수집'}
+        </button>
 
         {/* 새로고침 */}
         <button
@@ -215,13 +275,13 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
         >↻</button>
       </div>
 
-      {/* 수집 메시지 */}
-      {collectMsg && (
+      {/* 수집 중 안내 */}
+      {collecting && (
         <div style={{
           padding: '6px 12px', fontSize: '11px', backgroundColor: '#f0f8fd',
           color: '#2a6090', borderBottom: '1px solid #d4edfb', flexShrink: 0,
         }}>
-          {collectMsg}
+          백그라운드에서 수집 중입니다. 완료되면 알림이 표시됩니다.
         </div>
       )}
 
@@ -240,9 +300,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
             </div>
           </div>
         ) : (
-          <table style={{
-            width: '100%', borderCollapse: 'collapse', fontSize: '11px',
-          }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0, zIndex: 1 }}>
                 <th style={{ ...thStyle, textAlign: 'left', width: '70px' }}>지역</th>
@@ -253,7 +311,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
               </tr>
             </thead>
             <tbody>
-              {(stats.length > 0 ? DISTRICT_ORDER.filter(d => statMap.has(d)) : []).map(district => {
+              {DISTRICT_ORDER.filter(d => statMap.has(d)).map(district => {
                 const s = statMap.get(district);
                 return (
                   <tr key={district} style={{ borderBottom: '1px solid #f0f0f0' }}>
@@ -264,8 +322,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
                         <td
                           key={area}
                           style={{
-                            ...tdStyle,
-                            textAlign: 'right',
+                            ...tdStyle, textAlign: 'right',
                             backgroundColor: cellBg(v, area),
                             color: v ? '#1a3a5c' : '#bdbdbd',
                           }}
@@ -294,6 +351,11 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
           전용면적 기준 · 출처: 국토교통부 실거래가
         </div>
       )}
+
+      {/* 스피너 애니메이션 */}
+      <style>{`
+        @keyframes dtr-spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 };

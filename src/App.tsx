@@ -103,6 +103,15 @@ const App: React.FC = () => {
   // 구별 시세 현황 패널
   const [districtStatsOpen, setDistrictStatsOpen] = useState(false);
 
+  // 전역 토스트 알림 — 수집 완료 등 일회성 메시지
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ msg, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+  }, []);
+
   // 필터 적용된 단지 목록 — 지도 마커에 사용
   const filteredComplexes = useMemo(
     () => isFiltersActive(activeFilters) ? complexes.filter(c => applyFilters(c, activeFilters)) : complexes,
@@ -940,6 +949,7 @@ const App: React.FC = () => {
               } : {}}>
                 <DistrictStatsPanel
                   onClose={() => setDistrictStatsOpen(false)}
+                  onToast={showToast}
                   isMobile={isMobile}
                 />
               </div>
@@ -1147,6 +1157,27 @@ const App: React.FC = () => {
           onSuccess={loadComplexes}
         />
       )}
+
+      {/* 전역 토스트 알림 */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: '60px', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 9999, pointerEvents: 'none',
+          backgroundColor: toast.type === 'success' ? '#1a3a5c' : '#c0392b',
+          color: '#fff', padding: '11px 20px', borderRadius: '10px',
+          fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.22)',
+          animation: 'dtr-toast-in 0.25s ease',
+        }}>
+          {toast.type === 'success' ? '✓ ' : '✕ '}{toast.msg}
+        </div>
+      )}
+      <style>{`
+        @keyframes dtr-toast-in {
+          from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+      `}</style>
 
       {/* 하단 푸터 */}
       <footer style={{
