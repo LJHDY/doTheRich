@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, LivingZone, ZoneChecklistResultItem } from '../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, getComplexLivingZones, getZoneChecklist, upsertZoneChecklistResult } from '../services/api';
+import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker } from '../types';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -425,9 +425,6 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [checklistRatedCount, setChecklistRatedCount] = useState(0);
   const [checklistTotalCount, setChecklistTotalCount] = useState(0);
-  // 생활권 분위기 체크리스트 상태 — 단지가 속한 생활권의 분위기 체크리스트 표시
-  const [complexZones, setComplexZones] = useState<LivingZone[]>([]);
-  const [zoneChecklists, setZoneChecklists] = useState<Record<number, ZoneChecklistResultItem[]>>({});
   // 지하철 편집 상태 — 기존·신규 행 통합 배열 + 삭제 예약 ID 목록
   const [editingSubway, setEditingSubway] = useState(false);
   const [subwayRows, setSubwayRows] = useState<SubwayEditRow[]>([]);
@@ -560,20 +557,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       loadPriceHistories(complex.id);
       // 체크리스트 요약 로드 — 체크된 항목 수 / 전체 항목 수 파악
       setChecklistOpen(false);
-      setComplexZones([]);
-      setZoneChecklists({});
       getComplexChecklist(complex.id).then(results => {
         setChecklistRatedCount(results.filter(r => r.rating !== null).length);
         setChecklistTotalCount(results.length);
-      }).catch(() => {});
-      // 단지가 속한 생활권 조회 → 생활권별 분위기 체크리스트 로드
-      getComplexLivingZones(complex.id).then(zones => {
-        setComplexZones(zones);
-        zones.forEach(zone => {
-          getZoneChecklist(zone.id)
-            .then(items => setZoneChecklists(prev => ({ ...prev, [zone.id]: items })))
-            .catch(() => {});
-        });
       }).catch(() => {});
     }
   }, [complex, loadPriceHistories, onRadiusToggle]);
