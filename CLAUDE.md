@@ -243,6 +243,7 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
 | GET | `/api/living-zones?complexId=X` | 특정 단지가 포함된 생활권 목록 조회 |
 | GET | `/api/living-zones/:id/checklists` | 생활권 분위기 체크리스트 조회 (ATMOSPHERE 템플릿, 미체크 포함) |
 | PATCH | `/api/living-zones/:id/checklists/:templateId` | 생활권 체크 결과 upsert — `{ rating?, memo? }` |
+| PATCH | `/api/living-zones/:id/polygon` | 생활권 구획 폴리곤 저장 — `{ polygonPoints: [{lat,lng},...] \| null }` |
 | GET | `/api/complexes/:id/property-visits` | 매물 임장 기록 목록 (created_at 내림차순, PROPERTY 템플릿 결과 포함) |
 | POST | `/api/complexes/:id/property-visits` | 매물 임장 기록 추가 (201) — `PropertyVisitRequest` |
 | PATCH | `/api/complexes/:id/property-visits/:visitId` | 매물 임장 기록 수정 — `PropertyVisitRequest` |
@@ -265,6 +266,14 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
 - `livingZoneOpen` → LivingZonePanel 표시 (ComplexInfoPanel과 상호 배타)
   - 생활권 버튼 클릭 시 selectedComplex 초기화 → ComplexInfoPanel 닫힘
   - 마커 클릭 시 `handleComplexSelect` → livingZoneOpen 닫힘
+- **생활권 구획 그리기 상태**:
+  - `isDrawingZone` — 구획 그리기 모드 (지도 클릭이 꼭지점 추가로 동작)
+  - `drawingZonePoints: RoutePoint[]` — 현재 그리는 중인 폴리곤 꼭지점 배열
+  - `targetZoneId: number | null` — 구획을 지정할 대상 생활권 ID
+  - `zonePolygons` — 저장된 구획 폴리곤 목록 (MapPage 오버레이용, LivingZonePanel이 채워줌)
+  - `handleStartZoneDrawing(zoneId)`: 구획 그리기 시작
+  - `handleConfirmZoneDrawing()`: 3개 미만 점 → alert, 내부 단지 없음 → alert, confirm 후 단지 추가 + 폴리곤 저장 병렬 처리, 완료 시 `livingZoneRefreshKey` 증가로 패널 리로드
+  - 구획 플로팅 바: 점 개수 · ↩ 삭제 · 확인(3개 이상 활성) · 취소
 - `myComplexListOpen` → ComplexListModal(전체, 단지명 검색) 오픈 (헤더 "내 단지" 버튼)
 - 검색 결과 선택 시 `fromSearch:true`로 RegisterModal 오픈
 - **경로 상태**:
@@ -290,12 +299,14 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
 - 메모 인라인 편집 (✏ 버튼 or 텍스트 클릭)
 - 단지 목록: 이름·금액대·지역 읽기전용 표시 (× 버튼 없음)
 - **단지 선택 체크박스 패널**: "단지 수정" / "+ 단지 추가" 버튼 클릭 시 펼침
-  - `zone.district === c.region` 일치 단지만 표시 (같은 지역구)
+  - ⚠️ 지역구 조건 없이 모든 단지 표시 (기존에는 `zone.district === c.region` 조건 있었으나 제거)
   - 기존 포함된 단지 미리 체크 (`pendingIds` Set 초기화)
   - 체크/해제로 추가·제거 예약, 저장 시 `Promise.all`로 일괄 반영
   - 하단 "X개 선택됨" + 취소/저장 버튼
+- **구획 그리기**: 포함 단지 섹션 헤더의 "구획 그리기" 버튼 → `onStartZoneDrawing(zoneId)` 콜백 → 지도 폴리곤 입력 모드
 - 생활권 삭제: 카드 우측 × → 2단계 확인
 - 신규 생활권 생성 후 자동 펼침
+- `onZonePolygonsChange` prop: 생활권 로드 시 폴리곤이 있는 생활권 좌표 목록을 App.tsx에 전달 → MapPage 오버레이 갱신
 
 ### `MapPage.tsx`
 - 네이버 지도 초기화 (서울 중심, zoom 12)
@@ -317,6 +328,11 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
   - `drawingPoints` 변경 시: 첫 점=빨간 Marker, 나머지=파란 Marker + 점 2개부터 `shortdash` Polyline
   - `routes` 변경 시: `ROUTE_COLORS` 팔레트 순서로 Polyline 그리기 (strokeWeight 4)
   - `routePolylinesRef` / `drawingPolylineRef` / `drawingMarkersRef`로 오버레이 수명 관리
+- **생활권 구획 그리기**:
+  - `isDrawingZone=true` 시 지도 커서 `crosshair`, 별도 클릭 리스너 등록 → `onZonePointAdd(lat, lng)` 콜백
+  - `drawingZonePoints` 변경 시: 초록 원 꼭지점 마커 + 3개 이상이면 반투명 초록 Polygon / 2개 이하면 Polyline
+  - `zonePolygons` 변경 시: 저장된 구획을 반투명 초록 `shortdash` Polygon + 생활권 이름 라벨 마커로 표시
+  - `zoneClickListenerRef` / `zonePolygonRef` / `zoneMarkersRef` / `zoneSavedPolygonsRef` / `zoneLabelMarkersRef`로 수명 관리
 
 ### `RegisterModal.tsx`
 - 섹션: 기본정보 / 가격정보 / 단지정보 / 교통정보 / 출퇴근시간 / 유해시설 / 메모
@@ -627,6 +643,14 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
   - `calcCommuteGrade` 색상: S→`#F08080`, A→`#FFD97D`, B→`#7DC8A0`, C→`#89CFF0`
 - [x] 푸터 추가 — Dancing Script 필기체, "For a happy future with my love, Juhae.", 베이비블루(`#4BAAD4`)
 - [x] 지도 마커 카드형 통합 — 모바일·데스크탑 동일한 카드형 (단지명/가격/연식/세대수, 즐겨찾기=★ 접두사, 핀형·별형·tooltip 제거)
+- [x] 생활권 구획 그리기 — 지도에서 폴리곤을 그려 내부 단지 자동 추가 + 구획 좌표 DB 저장 + 지도 오버레이 표시
+  - `src/utils/geo.ts` `pointInPolygon()` Ray casting 알고리즘 추가
+  - LivingZonePanel "구획 그리기" 버튼 → `isDrawingZone` 모드, 지도 클릭으로 꼭지점 추가
+  - 플로팅 바: 점 개수 · ↩ 삭제 · 확인(3개↑ 활성) · 취소
+  - 확인 시 폴리곤 내 단지 탐지 + `addComplexesToZone` + `updateLivingZonePolygon` 병렬 처리
+  - 저장된 구획: 생활권 패널 로드 시 `onZonePolygonsChange` → MapPage에 반투명 초록 Polygon + 이름 라벨 오버레이
+  - 단지 체크박스 목록 지역구 조건 제거 (구획 추가로 지역구 무관하게 추가 가능)
+  - 백엔드: `living_zone.polygon_points TEXT` 컬럼 (idempotent ALTER TABLE), `PATCH /api/living-zones/:id/polygon`
 - [x] 지도 마커 가격 = 호가(`askingPrice`) 우선, 없으면 매매가(`price`) fallback
   - 백엔드: `_build_price_maps()`에 SQL 쿼리 3 추가 → `asking_price_map` 반환
   - `_to_dto()` `latest_asking_price` 파라미터 추가, `ApartmentComplexDto.asking_price` 설정

@@ -331,6 +331,13 @@ export const updateLivingZoneMemo = async (id: number, memo: string): Promise<vo
   await api.patch(`/api/living-zones/${id}/memo`, { memo });
 };
 
+/** 생활권 구획 폴리곤 저장 — PATCH /api/living-zones/:id/polygon
+ *  polygonPoints: null이면 구획 초기화 */
+export const updateLivingZonePolygon = async (id: number, polygonPoints: { lat: number; lng: number }[] | null): Promise<LivingZone> => {
+  const { data } = await api.patch<LivingZone>(`/api/living-zones/${id}/polygon`, { polygonPoints });
+  return data;
+};
+
 /** 생활권에 단지 일괄 추가 — POST /api/living-zones/:id/complexes
  *  백엔드가 { complexIds: number[] } 배열을 받고 갱신된 LivingZoneDto를 반환 */
 export const addComplexesToZone = async (zoneId: number, complexIds: number[]): Promise<LivingZone> => {

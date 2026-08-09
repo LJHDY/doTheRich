@@ -23,9 +23,12 @@ interface Props {
   complexes: ApartmentComplex[];
   onClose: () => void;
   isMobile?: boolean; // 모바일 풀스크린 오버레이 모드
+  onStartZoneDrawing?: (zoneId: number) => void; // 구획 그리기 시작 — 지도에서 폴리곤 입력 모드로 전환
+  // 생활권 폴리곤 목록 — 지도 오버레이로 표시할 좌표 목록을 상위에 전달
+  onZonePolygonsChange?: (polygons: { id: number; name: string; points: { lat: number; lng: number }[] }[]) => void;
 }
 
-const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
+const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStartZoneDrawing, onZonePolygonsChange }) => {
   const [zones, setZones] = useState<LivingZone[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -71,9 +74,17 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
     try {
       const data = await getLivingZones();
       setZones(data);
+      // 폴리곤이 있는 생활권 목록을 지도 오버레이용으로 상위에 전달
+      if (onZonePolygonsChange) {
+        onZonePolygonsChange(
+          data
+            .filter(z => z.polygonPoints && z.polygonPoints.length >= 3)
+            .map(z => ({ id: z.id, name: z.name, points: z.polygonPoints! }))
+        );
+      }
     } catch {}
     setLoading(false);
-  }, []);
+  }, [onZonePolygonsChange]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -356,9 +367,8 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
           const isCheckboxOpen = checkboxZoneId === zone.id;
           const isDeletingZone = deleteConfirmId === zone.id;
 
-          // 해당 생활권 지역구와 일치하는 단지만 체크박스 목록으로 표시
-          const filteredComplexes = complexes
-            .filter(c => c.region === zone.district)
+          // 지역구 조건 없이 모든 단지 표시 — 구획 그리기로 추가 시 지역구 무관
+          const filteredComplexes = [...complexes]
             .sort((a, b) => a.complexName.localeCompare(b.complexName, 'ko'));
 
           return (
@@ -494,15 +504,28 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                       <span style={{ fontSize: '11px', fontWeight: 700, color: '#5f6368' }}>포함 단지</span>
-                      {/* 단지 추가/수정 토글 버튼 */}
+                      {/* 단지 추가/수정 토글 버튼 + 구획 그리기 버튼 */}
                       {!isCheckboxOpen && (
-                        <button
-                          onClick={() => openCheckbox(zone)}
-                          style={{
-                            border: 'none', background: 'none', cursor: 'pointer',
-                            fontSize: '11px', fontWeight: 600, color: '#4BAAD4', padding: 0,
-                          }}
-                        >{zone.complexes.length > 0 ? '단지 수정' : '+ 단지 추가'}</button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {onStartZoneDrawing && (
+                            <button
+                              onClick={() => onStartZoneDrawing(zone.id)}
+                              title="지도에서 구획을 그려 단지 자동 추가"
+                              style={{
+                                border: '1px solid #7DC8A0', background: '#f0faf3', cursor: 'pointer',
+                                fontSize: '11px', fontWeight: 600, color: '#2e7d32',
+                                padding: '2px 7px', borderRadius: '5px',
+                              }}
+                            >구획 그리기</button>
+                          )}
+                          <button
+                            onClick={() => openCheckbox(zone)}
+                            style={{
+                              border: 'none', background: 'none', cursor: 'pointer',
+                              fontSize: '11px', fontWeight: 600, color: '#4BAAD4', padding: 0,
+                            }}
+                          >{zone.complexes.length > 0 ? '단지 수정' : '+ 단지 추가'}</button>
+                        </div>
                       )}
                     </div>
 
@@ -552,7 +575,7 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile }) => {
                         <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
                           {filteredComplexes.length === 0 ? (
                             <div style={{ padding: '16px', fontSize: '12px', color: '#9e9e9e', textAlign: 'center' }}>
-                              '{zone.district}' 단지가 없습니다.
+                              등록된 단지가 없습니다.
                             </div>
                           ) : (
                             filteredComplexes.map(c => {

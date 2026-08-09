@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, ActiveFilters, EMPTY_FILTERS, isFiltersActive } from './types';
-import { getComplexes, getPriceRanges, runBatchRealEstatePrice, getRoutes, createRoute, updateRoute, deleteRoute } from './services/api';
+import { getComplexes, getPriceRanges, runBatchRealEstatePrice, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon } from './services/api';
+import { pointInPolygon } from './utils/geo';
 import MapPage from './pages/MapPage';
 import PriceRangeFilter from './components/PriceRangeFilter';
 import ComplexInfoPanel from './components/ComplexInfoPanel';
@@ -70,6 +71,16 @@ const App: React.FC = () => {
   const [isDrawingRoute, setIsDrawingRoute] = useState(false);
   const [drawingPoints, setDrawingPoints] = useState<RoutePoint[]>([]);
   const [routeName, setRouteName] = useState('');
+
+  // 생활권 구획 그리기 — 폴리곤으로 내부 단지를 탐지해 생활권에 자동 추가
+  const [isDrawingZone, setIsDrawingZone] = useState(false);
+  const [drawingZonePoints, setDrawingZonePoints] = useState<RoutePoint[]>([]);
+  const [targetZoneId, setTargetZoneId] = useState<number | null>(null);
+  const [zoneDrawingSaving, setZoneDrawingSaving] = useState(false);
+  // 구획 추가 완료 시 LivingZonePanel 데이터 리로드용 key
+  const [livingZoneRefreshKey, setLivingZoneRefreshKey] = useState(0);
+  // 생활권 패널에서 지도에 표시할 구획 폴리곤 목록 — 생활권 로드 시 패널이 채워줌
+  const [zonePolygons, setZonePolygons] = useState<{ id: number; name: string; points: RoutePoint[] }[]>([]);
 
   // 행정구역 경계 표시 — 선택한 구/시 폴리곤을 지도에 오버레이
   const [selectedDistrict, setSelectedDistrict] = useState<string | null>(null);
@@ -252,6 +263,64 @@ const App: React.FC = () => {
     setEditingRouteId(null);
     setDrawingPoints([]);
     setRouteName('');
+  };
+
+  // 생활권 구획 그리기 시작 — LivingZonePanel의 "구획 그리기" 버튼 클릭 시 호출
+  const handleStartZoneDrawing = (zoneId: number) => {
+    setTargetZoneId(zoneId);
+    setIsDrawingZone(true);
+    setDrawingZonePoints([]);
+  };
+
+  // 구획 꼭지점 추가 — 지도 클릭 시 호출
+  const handleZonePointAdd = (p: RoutePoint) => {
+    setDrawingZonePoints(prev => [...prev, p]);
+  };
+
+  // 구획 그리기 취소
+  const handleCancelZoneDrawing = () => {
+    setIsDrawingZone(false);
+    setDrawingZonePoints([]);
+    setTargetZoneId(null);
+  };
+
+  // 구획 확인 — 폴리곤 내부 단지 탐지 후 생활권에 추가
+  const handleConfirmZoneDrawing = async () => {
+    if (drawingZonePoints.length < 3) {
+      alert('구획을 완성하려면 3개 이상의 점을 찍어야 합니다.');
+      return;
+    }
+    if (targetZoneId === null) return;
+
+    // 좌표가 있는 단지 중 폴리곤 내부에 포함된 단지 탐지
+    const matched = complexes.filter(c =>
+      c.latitude && c.longitude &&
+      pointInPolygon({ lat: c.latitude, lng: c.longitude }, drawingZonePoints)
+    );
+
+    if (matched.length === 0) {
+      alert('구획 내에 저장된 단지가 없습니다.');
+      return;
+    }
+
+    if (!window.confirm(`구획 내 단지 ${matched.length}개를 생활권에 추가하시겠습니까?\n\n${matched.map(c => c.complexName).join(', ')}`)) {
+      return;
+    }
+
+    setZoneDrawingSaving(true);
+    try {
+      // 단지 추가 + 폴리곤 좌표 저장 병렬 처리
+      await Promise.all([
+        addComplexesToZone(targetZoneId, matched.map(c => c.id)),
+        updateLivingZonePolygon(targetZoneId, drawingZonePoints),
+      ]);
+      handleCancelZoneDrawing();
+      // 생활권 패널 데이터 리로드 — key 변경으로 컴포넌트 리마운트
+      setLivingZoneRefreshKey(k => k + 1);
+    } catch {
+      alert('단지 추가에 실패했습니다.');
+    }
+    setZoneDrawingSaving(false);
   };
 
   // 경로 삭제
@@ -758,6 +827,10 @@ const App: React.FC = () => {
               selectedDistrict={selectedDistrict}
               roadViewOpen={roadViewOpen}
               isMobile={isMobile}
+              isDrawingZone={isDrawingZone}
+              drawingZonePoints={drawingZonePoints}
+              onZonePointAdd={handleZonePointAdd}
+              zonePolygons={zonePolygons}
             />
             {selectedComplex && !livingZoneOpen && (
               /* 모바일: 화면 전체를 덮는 fixed 오버레이 / 데스크탑: flex 옆 패널 */
@@ -788,9 +861,12 @@ const App: React.FC = () => {
                 display: 'flex', flexDirection: 'column',
               } : {}}>
                 <LivingZonePanel
+                  key={livingZoneRefreshKey}
                   complexes={complexes}
-                  onClose={() => setLivingZoneOpen(false)}
+                  onClose={() => { setLivingZoneOpen(false); setZonePolygons([]); }}
                   isMobile={isMobile}
+                  onStartZoneDrawing={handleStartZoneDrawing}
+                  onZonePolygonsChange={setZonePolygons}
                 />
               </div>
             )}
@@ -934,6 +1010,54 @@ const App: React.FC = () => {
           >저장</button>
           <button
             onClick={handleCancelDrawing}
+            style={{
+              padding: '6px 14px', fontSize: '13px', fontWeight: 600,
+              backgroundColor: '#f1f3f4', color: '#5f6368',
+              border: 'none', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >취소</button>
+        </div>
+      )}
+
+      {/* 생활권 구획 그리기 플로팅 바 */}
+      {isDrawingZone && (
+        <div style={{
+          position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 500, display: 'flex', alignItems: 'center', gap: '8px',
+          backgroundColor: '#fff', borderRadius: '12px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          padding: '10px 16px',
+        }}>
+          <span style={{ fontSize: '13px', color: '#2e7d32', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            🗺️ 구획 {drawingZonePoints.length}개 점
+          </span>
+          <button
+            onClick={() => setDrawingZonePoints(prev => prev.slice(0, -1))}
+            disabled={drawingZonePoints.length === 0}
+            style={{
+              padding: '6px 10px', fontSize: '12px', fontWeight: 600,
+              backgroundColor: drawingZonePoints.length === 0 ? '#f1f3f4' : '#FFE8E8',
+              color: drawingZonePoints.length === 0 ? '#bdbdbd' : '#E06060',
+              border: 'none', borderRadius: '8px',
+              cursor: drawingZonePoints.length === 0 ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+            title="직전 점 삭제"
+          >↩ 삭제</button>
+          <button
+            onClick={handleConfirmZoneDrawing}
+            disabled={drawingZonePoints.length < 3 || zoneDrawingSaving}
+            style={{
+              padding: '6px 14px', fontSize: '13px', fontWeight: 600,
+              backgroundColor: drawingZonePoints.length < 3 || zoneDrawingSaving ? '#f1f3f4' : '#7DC8A0',
+              color: drawingZonePoints.length < 3 || zoneDrawingSaving ? '#9e9e9e' : '#1a3a5c',
+              border: 'none', borderRadius: '8px',
+              cursor: drawingZonePoints.length < 3 || zoneDrawingSaving ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >{zoneDrawingSaving ? '추가 중...' : '확인'}</button>
+          <button
+            onClick={handleCancelZoneDrawing}
             style={{
               padding: '6px 14px', fontSize: '13px', fontWeight: 600,
               backgroundColor: '#f1f3f4', color: '#5f6368',

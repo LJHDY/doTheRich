@@ -30,11 +30,18 @@ interface MapPageProps {
   selectedDistrict?: string | null; // 행정구역 경계 표시용 구/시 이름
   roadViewOpen?: boolean;        // 로드뷰 패널 표시 여부
   isMobile?: boolean;            // 모바일 여부 (현재 마커는 공통 카드형 — 예약)
+  // 생활권 구획 그리기 — 폴리곤으로 내부 단지 자동 탐지
+  isDrawingZone?: boolean;
+  drawingZonePoints?: RoutePoint[];
+  onZonePointAdd?: (p: RoutePoint) => void;
+  // 저장된 생활권 구획 폴리곤 목록 — 지도에 반투명 초록 오버레이로 표시
+  zonePolygons?: { id: number; name: string; points: RoutePoint[] }[];
 }
 
 const MapPage: React.FC<MapPageProps> = ({
   complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter,
   routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict, roadViewOpen, isMobile,
+  isDrawingZone, drawingZonePoints, onZonePointAdd, zonePolygons,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -55,6 +62,14 @@ const MapPage: React.FC<MapPageProps> = ({
   const panoInstanceRef = useRef<any>(null);     // naver.maps.Panorama 인스턴스
   const roadViewClickRef = useRef<any>(null);    // 로드뷰용 지도 클릭 리스너
   const onRoutePointAddRef = useRef(onRoutePointAdd);
+  // 생활권 구획 그리기 — 폴리곤 오버레이·마커·클릭 리스너 수명 관리
+  const zoneClickListenerRef = useRef<any>(null);
+  const zonePolygonRef = useRef<any>(null);
+  const zoneMarkersRef = useRef<any[]>([]);
+  const onZonePointAddRef = useRef(onZonePointAdd);
+  // 저장된 생활권 구획 폴리곤 오버레이 배열
+  const zoneSavedPolygonsRef = useRef<any[]>([]);
+  const zoneLabelMarkersRef = useRef<any[]>([]);
 
   // 마커 diff를 위한 Map — 단지 id → { marker, listenerHandle }
   const markerMapRef = useRef<Map<number, { marker: any; listener: any }>>(new Map());
@@ -67,6 +82,7 @@ const MapPage: React.FC<MapPageProps> = ({
   useEffect(() => { complexesRef.current = complexes; }, [complexes]);
   useEffect(() => { onComplexSelectRef.current = onComplexSelect; }, [onComplexSelect]);
   useEffect(() => { onRoutePointAddRef.current = onRoutePointAdd; }, [onRoutePointAdd]);
+  useEffect(() => { onZonePointAddRef.current = onZonePointAdd; }, [onZonePointAdd]);
 
   // 네이버 지도 초기화 + body 직속 tooltip div 생성
   // position:fixed를 지도 DOM 안에 두면 Naver Maps의 CSS transform 컨텍스트에 갇혀
@@ -720,6 +736,124 @@ const MapPage: React.FC<MapPageProps> = ({
     });
   }, [roadViewOpen, isDrawingRoute]);
 
+  // 저장된 생활권 구획 폴리곤 — zonePolygons 변경 시 오버레이 갱신
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.naver) return;
+    zoneSavedPolygonsRef.current.forEach(p => p.setMap(null));
+    zoneSavedPolygonsRef.current = [];
+    zoneLabelMarkersRef.current.forEach(m => m.setMap(null));
+    zoneLabelMarkersRef.current = [];
+
+    (zonePolygons ?? []).forEach(zone => {
+      if (zone.points.length < 3) return;
+      const path = zone.points.map(p => new window.naver.maps.LatLng(p.lat, p.lng));
+
+      const polygon = new window.naver.maps.Polygon({
+        paths: [path],
+        fillColor: '#7DC8A0',
+        fillOpacity: 0.12,
+        strokeColor: '#2e7d32',
+        strokeWeight: 2,
+        strokeOpacity: 0.7,
+        strokeStyle: 'shortdash',
+        map,
+        clickable: false,
+      });
+      zoneSavedPolygonsRef.current.push(polygon);
+
+      // 폴리곤 중심점에 생활권 이름 라벨 표시
+      const lats = zone.points.map(p => p.lat);
+      const lngs = zone.points.map(p => p.lng);
+      const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+      const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+      const safeZoneName = zone.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const labelMarker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(centerLat, centerLng),
+        map,
+        icon: {
+          content: `<div style="
+            background:rgba(46,125,50,0.85);color:#fff;
+            padding:3px 8px;border-radius:10px;
+            font-size:11px;font-weight:700;white-space:nowrap;
+            box-shadow:0 1px 4px rgba(0,0,0,0.2);
+            pointer-events:none;
+          ">${safeZoneName}</div>`,
+          anchor: new window.naver.maps.Point(0, 0),
+        },
+        zIndex: 12,
+        clickable: false,
+      });
+      zoneLabelMarkersRef.current.push(labelMarker);
+    });
+  }, [zonePolygons]);
+
+  // 생활권 구획 그리기 모드 — isDrawingZone 토글 시 지도 클릭 리스너 추가·제거
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.naver) return;
+    if (zoneClickListenerRef.current) {
+      window.naver.maps.Event.removeListener(zoneClickListenerRef.current);
+      zoneClickListenerRef.current = null;
+    }
+    if (!isDrawingZone) return;
+    zoneClickListenerRef.current = window.naver.maps.Event.addListener(map, 'click', (e: any) => {
+      onZonePointAddRef.current?.({ lat: e.coord.lat(), lng: e.coord.lng() });
+    });
+  }, [isDrawingZone]);
+
+  // 구획 폴리곤 렌더링 — drawingZonePoints 변경 시 마커·폴리곤 갱신
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.naver) return;
+    // 기존 오버레이 제거
+    if (zonePolygonRef.current) { zonePolygonRef.current.setMap(null); zonePolygonRef.current = null; }
+    zoneMarkersRef.current.forEach(m => m.setMap(null));
+    zoneMarkersRef.current = [];
+
+    const pts = drawingZonePoints ?? [];
+    if (pts.length === 0) return;
+
+    // 꼭지점 마커 — 초록 원
+    pts.forEach((p, i) => {
+      const isFirst = i === 0;
+      const m = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(p.lat, p.lng),
+        map,
+        icon: {
+          content: `<div style="width:10px;height:10px;border-radius:50%;background:${isFirst ? '#2e7d32' : '#7DC8A0'};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
+          anchor: new window.naver.maps.Point(5, 5),
+        },
+        zIndex: 20,
+      });
+      zoneMarkersRef.current.push(m);
+    });
+
+    // 3개 이상 점이면 폴리곤 표시, 미만이면 폴리라인만
+    if (pts.length >= 3) {
+      zonePolygonRef.current = new window.naver.maps.Polygon({
+        paths: [pts.map(p => new window.naver.maps.LatLng(p.lat, p.lng))],
+        fillColor: '#7DC8A0',
+        fillOpacity: 0.2,
+        strokeColor: '#2e7d32',
+        strokeWeight: 2.5,
+        strokeOpacity: 0.9,
+        strokeStyle: 'shortdash',
+        map,
+        clickable: false,
+      });
+    } else if (pts.length >= 2) {
+      zonePolygonRef.current = new window.naver.maps.Polyline({
+        path: pts.map(p => new window.naver.maps.LatLng(p.lat, p.lng)),
+        strokeColor: '#2e7d32',
+        strokeWeight: 2.5,
+        strokeOpacity: 0.9,
+        strokeStyle: 'shortdash',
+        map,
+      });
+    }
+  }, [drawingZonePoints]);
+
   return (
     <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 지도 + 내 위치 버튼 — 로드뷰 패널 위에 남은 공간 전부 사용 */}
@@ -731,7 +865,7 @@ const MapPage: React.FC<MapPageProps> = ({
             height: '100%',
             minHeight: '200px',
             backgroundColor: '#e8eaed',
-            cursor: isDrawingRoute ? 'crosshair' : 'default',
+            cursor: (isDrawingRoute || isDrawingZone) ? 'crosshair' : 'default',
           }}
         />
         {/* 내 위치 플로팅 버튼 — 왼쪽 상단 고정 (모바일에서 경로 목록 버튼과 겹침 방지) */}

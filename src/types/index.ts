@@ -119,6 +119,7 @@ export interface LivingZone {
   name: string;         // "봉천역 생활권"
   memo?: string;
   complexes: LivingZoneComplex[];
+  polygonPoints?: { lat: number; lng: number }[] | null; // 구획 폴리곤 좌표 배열
 }
 
 /** 지도 오버레이 마커 — 학교·인프라 위치 표시용 */
