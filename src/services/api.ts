@@ -22,9 +22,6 @@ import {
   PropertyVisit,
   PropertyVisitResultItem,
   JeonseOnlyItem,
-  DistrictStat,
-  DistrictTradeDetail,
-  DistrictStatHistory,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
