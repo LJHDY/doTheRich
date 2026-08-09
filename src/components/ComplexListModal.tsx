@@ -235,7 +235,7 @@ const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose
                                 }}>{complex.complexName}</span>
                               </div>
                               <div style={{ fontSize: '11px', color: '#80868b' }}>
-                                {[complex.builtYear, complex.region].filter(Boolean).join(' · ')}
+                                {[complex.builtYear, complex.unitCount ? `${complex.unitCount.toLocaleString()}세대` : null, complex.region].filter(Boolean).join(' · ')}
                               </div>
                             </div>
 
