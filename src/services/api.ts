@@ -629,6 +629,16 @@ export const getDistrictTradeDetails = async (
   return data;
 };
 
+/** 구별 시세 전체 이력 조회 (그래프용) — GET /api/district-stats/history */
+export const getDistrictStatsHistory = async (
+  areaKey: string, type: 'trade' | 'jeonse'
+): Promise<{ months: string[]; items: import('../types').DistrictStatHistory[] }> => {
+  const { data } = await api.get('/api/district-stats/history', {
+    params: { area_key: areaKey, type },
+  });
+  return data;
+};
+
 /** 구별 시세 수집 트리거 — POST /api/district-stats/collect (202 반환 후 백그라운드 처리) */
 export const collectDistrictStats = async (): Promise<{ message: string }> => {
   const { data } = await api.post('/api/district-stats/collect');

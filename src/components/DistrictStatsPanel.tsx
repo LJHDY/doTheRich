@@ -1,6 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { DistrictStat, DistrictTradeDetail } from '../types';
-import { getDistrictStats, collectDistrictStats, getDistrictTradeDetails } from '../services/api';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import {
+  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
+import { DistrictStat, DistrictTradeDetail, DistrictStatHistory } from '../types';
+import { getDistrictStats, collectDistrictStats, getDistrictTradeDetails, getDistrictStatsHistory } from '../services/api';
 
 interface Props {
   onClose: () => void;
@@ -39,6 +43,28 @@ const GRADE_ORDER: Record<string, number> = Object.fromEntries(
   ].map((d, i) => [d, i])
 );
 
+// 급지 그룹 정의 (ComparisonEvalPanel의 DISTRICT_GRADES와 동일)
+const DISTRICT_GRADE_GROUPS = [
+  { label: '상급지', color: '#F08080', textColor: '#c0392b',
+    districts: ['강남구', '서초구', '용산구', '송파구', '성동구', '광진구', '마포구', '양천구'] },
+  { label: '중급지', color: '#FFD97D', textColor: '#b8860b',
+    districts: ['강동구', '동작구', '영등포구', '중구', '종로구'] },
+  { label: '하급지', color: '#89CFF0', textColor: '#2a6090',
+    districts: ['서대문구', '강서구', '동대문구', '성북구', '관악구', '은평구', '구로구', '노원구', '중랑구', '강북구', '금천구', '도봉구'] },
+];
+
+// 구별 고유 색상 (급지별 색 계열)
+const DISTRICT_COLORS: Record<string, string> = {
+  강남구: '#c0392b', 서초구: '#e74c3c', 용산구: '#922b21', 송파구: '#e67e22',
+  성동구: '#d35400', 광진구: '#ca6f1e', 마포구: '#af601a', 양천구: '#935116',
+  강동구: '#b7950b', 동작구: '#d4ac0d', 영등포구: '#f1c40f', 중구: '#f39c12', 종로구: '#e67e22',
+  서대문구: '#1a5276', 강서구: '#1f618d', 동대문구: '#2471a3', 성북구: '#2e86c1',
+  관악구: '#2980b9', 은평구: '#5dade2', 구로구: '#7fb3d3', 노원구: '#85c1e9',
+  중랑구: '#a9cce3', 강북구: '#4a235a', 금천구: '#6c3483', 도봉구: '#7d3c98',
+};
+
+const ALL_DISTRICTS_ORDER = DISTRICT_GRADE_GROUPS.flatMap(g => g.districts);
+
 // 폴링 간격 5초, 최대 3분
 const POLL_INTERVAL_MS = 5000;
 const POLL_MAX_ATTEMPTS = 36;
@@ -51,6 +77,15 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
   const [collecting, setCollecting] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('trade');
   const [selectedArea, setSelectedArea] = useState<SelectedArea>('all');
+
+  // 그래프 모드 상태
+  const [graphMode, setGraphMode] = useState(false);
+  const [historyItems, setHistoryItems] = useState<DistrictStatHistory[]>([]);
+  const [historyMonths, setHistoryMonths] = useState<string[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [graphDistricts, setGraphDistricts] = useState<Set<string>>(
+    new Set(ALL_DISTRICTS_ORDER)
+  );
 
   // 실거래 상세 모달 상태
   const [detailCtx, setDetailCtx] = useState<{
@@ -218,6 +253,60 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
     }
   };
 
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const areaKey = selectedArea === 'all' ? '26' : selectedArea;
+      const res = await getDistrictStatsHistory(areaKey, viewMode === 'trade' ? 'trade' : 'jeonse');
+      setHistoryItems(res.items);
+      setHistoryMonths(res.months);
+    } catch {
+      // 오류 시 빈 상태 유지
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [selectedArea, viewMode]);
+
+  // 그래프 모드 진입 시 또는 selectedArea/viewMode 변경 시 이력 재조회
+  useEffect(() => {
+    if (graphMode) loadHistory();
+  }, [graphMode, loadHistory]);
+
+  // 그래프용 Recharts 데이터 변환
+  const chartData = useMemo(() => {
+    return historyMonths.map(month => {
+      const row: Record<string, string | number> = {
+        month: `${month.slice(0, 4)}.${month.slice(4)}`,
+      };
+      let totalCount = 0;
+      historyItems
+        .filter(d => d.month === month && graphDistricts.has(d.district))
+        .forEach(d => {
+          if (d.price != null) row[d.district] = d.price;
+          if (d.count != null) totalCount += d.count;
+        });
+      row.totalCount = totalCount;
+      return row;
+    });
+  }, [historyItems, historyMonths, graphDistricts]);
+
+  const toggleGradeGroup = (districts: string[]) => {
+    setGraphDistricts(prev => {
+      const next = new Set(prev);
+      const allOn = districts.every(d => next.has(d));
+      districts.forEach(d => allOn ? next.delete(d) : next.add(d));
+      return next;
+    });
+  };
+
+  const toggleDistrict = (district: string) => {
+    setGraphDistricts(prev => {
+      const next = new Set(prev);
+      next.has(district) ? next.delete(district) : next.add(district);
+      return next;
+    });
+  };
+
   const panelWidth = isMobile ? '100%' : '720px';
   const formatMonthLabel = (m: string) => `${m.slice(0, 4)}년 ${parseInt(m.slice(4), 10)}월`;
 
@@ -295,6 +384,19 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
         ))}
 
         <div style={{ flex: 1 }} />
+        {/* 테이블/그래프 토글 */}
+        <button
+          onClick={() => setGraphMode(m => !m)}
+          style={{
+            padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+            border: '1px solid',
+            borderColor: graphMode ? '#89CFF0' : '#dadce0',
+            borderRadius: '6px',
+            backgroundColor: graphMode ? '#D4EFFC' : '#fff',
+            color: graphMode ? '#2a6090' : '#5f6368',
+            cursor: 'pointer',
+          }}
+        >{graphMode ? '📊 테이블' : '📈 그래프'}</button>
 
         {/* 시세 수집 버튼 */}
         <button
@@ -343,7 +445,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
       )}
 
       {/* 테이블 */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      {!graphMode && <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading ? (
           <div style={{ padding: '24px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>
             불러오는 중...
@@ -424,7 +526,134 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
             </tbody>
           </table>
         )}
-      </div>
+      </div>}
+
+      {/* 그래프 뷰 */}
+      {graphMode && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* 구 필터 */}
+          <div style={{
+            padding: '8px 12px', borderBottom: '1px solid #f0f0f0',
+            flexShrink: 0,
+          }}>
+            {/* 급지 그룹 버튼 */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: '#9e9e9e', marginRight: '2px' }}>급지:</span>
+              {DISTRICT_GRADE_GROUPS.map(g => {
+                const allOn = g.districts.every(d => graphDistricts.has(d));
+                return (
+                  <button key={g.label} onClick={() => toggleGradeGroup(g.districts)} style={{
+                    padding: '2px 8px', fontSize: '11px', fontWeight: 600,
+                    border: `1px solid ${g.color}`,
+                    borderRadius: '10px',
+                    backgroundColor: allOn ? g.color : '#fff',
+                    color: allOn ? g.textColor : '#9e9e9e',
+                    cursor: 'pointer',
+                  }}>{g.label}</button>
+                );
+              })}
+              <button onClick={() => setGraphDistricts(new Set(ALL_DISTRICTS_ORDER))} style={{
+                padding: '2px 8px', fontSize: '11px', border: '1px solid #dadce0',
+                borderRadius: '10px', backgroundColor: '#fff', color: '#5f6368', cursor: 'pointer',
+              }}>전체</button>
+              <button onClick={() => setGraphDistricts(new Set())} style={{
+                padding: '2px 8px', fontSize: '11px', border: '1px solid #dadce0',
+                borderRadius: '10px', backgroundColor: '#fff', color: '#5f6368', cursor: 'pointer',
+              }}>해제</button>
+            </div>
+            {/* 개별 구 칩 */}
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+              {ALL_DISTRICTS_ORDER.map(d => {
+                const on = graphDistricts.has(d);
+                const color = DISTRICT_COLORS[d] ?? '#9e9e9e';
+                return (
+                  <button key={d} onClick={() => toggleDistrict(d)} style={{
+                    padding: '1px 7px', fontSize: '10px', fontWeight: on ? 700 : 400,
+                    border: `1px solid ${on ? color : '#e0e0e0'}`,
+                    borderRadius: '10px',
+                    backgroundColor: on ? color + '22' : '#fafafa',
+                    color: on ? color : '#bdbdbd',
+                    cursor: 'pointer',
+                  }}>{d.replace('구', '')}</button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 차트 영역 */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 4px 8px 0' }}>
+            {historyLoading ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>
+                이력 데이터 불러오는 중...
+              </div>
+            ) : historyMonths.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>
+                수집된 이력 데이터가 없습니다.
+              </div>
+            ) : (
+              <>
+                {/* 범례 */}
+                <div style={{ padding: '0 12px 8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {ALL_DISTRICTS_ORDER.filter(d => graphDistricts.has(d)).map(d => (
+                    <span key={d} style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10px' }}>
+                      <span style={{ width: '16px', height: '2px', backgroundColor: DISTRICT_COLORS[d], display: 'inline-block', borderRadius: '1px' }} />
+                      {d}
+                    </span>
+                  ))}
+                </div>
+
+                {/* 가격 라인 차트 */}
+                <div style={{ marginBottom: '4px', padding: '0 4px' }}>
+                  <div style={{ fontSize: '11px', color: '#9e9e9e', paddingLeft: '12px', marginBottom: '2px' }}>
+                    {viewMode === 'trade' ? '매매가' : '전세가'} (억원) — {selectedArea === 'all' ? '26평 기준' : AREA_LABELS[selectedArea as AreaKey]}
+                  </div>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <ComposedChart data={chartData} margin={{ top: 4, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis
+                        yAxisId="price"
+                        tickFormatter={v => `${(v / 10000).toFixed(0)}억`}
+                        tick={{ fontSize: 10 }}
+                        width={44}
+                      />
+                      <YAxis
+                        yAxisId="count"
+                        orientation="right"
+                        tick={{ fontSize: 10 }}
+                        width={32}
+                      />
+                      <Tooltip
+                        formatter={(value: number, name: string) => {
+                          if (name === 'totalCount') return [`${value}건`, '총 거래건수'];
+                          return [`${(value / 10000).toFixed(1)}억`, name];
+                        }}
+                        contentStyle={{ fontSize: '11px' }}
+                      />
+                      {/* 거래건수 막대 (배경) */}
+                      <Bar yAxisId="count" dataKey="totalCount" fill="#89CFF0" opacity={0.25} name="totalCount" />
+                      {/* 구별 가격 라인 */}
+                      {ALL_DISTRICTS_ORDER.filter(d => graphDistricts.has(d)).map(d => (
+                        <Line
+                          key={d}
+                          yAxisId="price"
+                          type="monotone"
+                          dataKey={d}
+                          stroke={DISTRICT_COLORS[d] ?? '#9e9e9e'}
+                          strokeWidth={1.5}
+                          dot={{ r: 3 }}
+                          connectNulls
+                          name={d}
+                        />
+                      ))}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 하단 안내 */}
       {stats.length > 0 && (

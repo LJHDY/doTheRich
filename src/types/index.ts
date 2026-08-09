@@ -458,6 +458,14 @@ export interface DistrictTradeDetail {
   dealingGbn?: string;   // 거래 구분
 }
 
+/** 구별 시세 이력 1건 (그래프용) */
+export interface DistrictStatHistory {
+  month: string;
+  district: string;
+  price?: number | null;
+  count?: number | null;
+}
+
 /** 다중 시리즈 차트 — 날짜별 행. 키는 '평형-타입' 형식 (e.g. '전용59-sale') */
 export interface ChartDataRow {
   date: string;
