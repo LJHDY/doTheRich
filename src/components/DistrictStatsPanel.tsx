@@ -583,7 +583,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
                     backgroundColor: on ? color + '22' : '#fafafa',
                     color: on ? color : '#bdbdbd',
                     cursor: 'pointer',
-                  }}>{d.replace('구', '')}</button>
+                  }}>{d.replace(/구$/, '')}</button>
                 );
               })}
             </div>
