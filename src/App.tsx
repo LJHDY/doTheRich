@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, ActiveFilters, EMPTY_FILTERS, isFiltersActive } from './types';
-import { getComplexes, getPriceRanges, runBatchRealEstatePrice, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon } from './services/api';
+import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon } from './services/api';
 import { pointInPolygon } from './utils/geo';
 import MapPage from './pages/MapPage';
 import PriceRangeFilter from './components/PriceRangeFilter';
@@ -349,15 +349,6 @@ const App: React.FC = () => {
     }
   };
 
-  const [batchLoading, setBatchLoading] = useState(false);
-
-  // 202 즉시 반환 — 백그라운드 처리이므로 성공/실패 피드백 불필요
-  const handleBatch = async () => {
-    if (batchLoading) return;
-    setBatchLoading(true);
-    try { await runBatchRealEstatePrice(); } catch {}
-    setBatchLoading(false);
-  };
 
   // null 클릭 = '전체' 버튼 → 빈 문자열로 변환해 모달을 전체 목록으로 오픈
   const handlePriceRangeSelect = (range: string | null) => {
@@ -723,17 +714,6 @@ const App: React.FC = () => {
                   color: affordOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >대출분석</button>
-              {/* 시세 수집 */}
-              <button
-                onClick={handleBatch}
-                disabled={batchLoading}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#fff',
-                  color: batchLoading ? '#9e9e9e' : '#5f6368',
-                  cursor: batchLoading ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >{batchLoading ? '요청 중...' : '시세 수집'}</button>
             </div>
           </>
         )}
