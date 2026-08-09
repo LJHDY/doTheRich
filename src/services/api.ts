@@ -612,4 +612,17 @@ export const upsertPropertyVisitResult = async (
   return data;
 };
 
+/** 구별 시세 통계 조회 — GET /api/district-stats */
+export const getDistrictStats = async (tradeMonth?: string): Promise<{ data: import('../types').DistrictStat[]; availableMonths: string[] }> => {
+  const params = tradeMonth ? { trade_month: tradeMonth } : {};
+  const { data } = await api.get('/api/district-stats', { params });
+  return data;
+};
+
+/** 구별 시세 수집 트리거 — POST /api/district-stats/collect (202 반환 후 백그라운드 처리) */
+export const collectDistrictStats = async (): Promise<{ message: string }> => {
+  const { data } = await api.post('/api/district-stats/collect');
+  return data;
+};
+
 export default api;

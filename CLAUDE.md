@@ -249,6 +249,8 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
 | PATCH | `/api/complexes/:id/property-visits/:visitId` | 매물 임장 기록 수정 — `PropertyVisitRequest` |
 | DELETE | `/api/complexes/:id/property-visits/:visitId` | 매물 임장 기록 삭제 (결과 CASCADE, 204) |
 | PATCH | `/api/complexes/:id/property-visits/:visitId/checklists/:templateId` | 매물 체크 결과 upsert — `{ rating? }` |
+| GET | `/api/district-stats` | 구별 시세 통계 조회 — `?trade_month=YYYYMM` (미지정 시 최신 월) |
+| POST | `/api/district-stats/collect` | 서울 25구 MOLIT 시세 수집 (202 백그라운드) |
 
 ---
 
@@ -448,6 +450,15 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
 - `commuteTimes` 받아서 S/A/B/C 배지 렌더링
 - `ComplexInfoPanel`과 `CompareCard`에서 공통 사용
 - 등급 로직은 `types/index.ts`의 `calcCommuteGrade()`로 단일 관리
+
+### `DistrictStatsPanel.tsx`
+- 헤더 "구별 시세" 버튼 클릭 시 우측 사이드패널 (640px, 모바일 전체화면)
+- 상단 컨트롤: 거래월 셀렉트 + 매매/전세 탭 + 시세 수집 버튼 + 새로고침 버튼
+- 테이블: 서울 25구 × 10/20/30평대 평균가 + 거래 건수
+  - 히트맵 색상 (낮=파랑 → 높=빨강, 평형대 내 상대적 비율 기준)
+  - 값 표시: 억 단위 소수점 1자리 (1억 미만은 천만 단위)
+- "시세 수집" 클릭 → `POST /api/district-stats/collect` → 202 메시지 표시 → 30초 후 자동 재조회
+- 하단 안내: 평형 구간 기준 + 출처 표기
 
 ### `PriceChart.tsx`
 - props: `rows: ChartDataRow[]`, `series: ChartSeries[]`
@@ -656,6 +667,17 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
   - `_to_dto()` `latest_asking_price` 파라미터 추가, `ApartmentComplexDto.asking_price` 설정
   - `get_complex_by_id()` 에서도 최신 asking_price 조회 추가
   - 프론트: `ApartmentComplex.askingPrice?: number` 타입 추가, `MapPage.tsx` `basePrice = askingPrice || price`
+- [x] 구별 시세 현황 기능 (`DistrictStatsPanel`)
+  - 서울 25개 구 × 평형대(10/20/30평대) × 매매/전세 평균가 테이블 표시
+  - 히트맵 색상 (낮=파랑 → 높=빨강) + 거래 건수(10/20/30평대 `/` 구분) 표시
+  - 헤더 Row2 "구별 시세" 버튼 → 우측 사이드패널 (640px, 모바일 전체화면)
+  - "시세 수집" 버튼 → `POST /api/district-stats/collect` (202 백그라운드) + 30초 후 자동 새로고침
+  - 거래월 셀렉트박스 (수집된 월 목록, 최신순), 매매/전세 탭 전환
+  - 백엔드: `district_price_stats` 테이블 (SQLAlchemy), `district_stats_service.py`, `routers/district_stats.py`
+    - `GET /api/district-stats?trade_month=YYYYMM` — 저장 데이터 + 사용 가능 월 목록 반환
+    - `POST /api/district-stats/collect` — 서울 25구 MOLIT API 호출 → 평형대별 평균 계산 → upsert
+    - 평형 구간: 10평대 33~66m², 20평대 66~99m², 30평대 99~132m²
+  - 타입: `DistrictStat` (src/types/index.ts), API: `getDistrictStats`, `collectDistrictStats` (src/services/api.ts)
 
 ## 미완성 / TODO
 

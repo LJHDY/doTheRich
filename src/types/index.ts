@@ -411,6 +411,26 @@ export interface MapRoute {
   createdAt: string;
 }
 
+/** 서울 구별 평형대 평균 시세 통계 (월별) */
+export interface DistrictStat {
+  id: number;
+  tradeMonth: string;    // YYYYMM
+  district: string;      // 구 이름
+  avgTrade10?: number;   // 10평대 평균 매매가 (만원)
+  avgTrade20?: number;
+  avgTrade30?: number;
+  avgJeonse10?: number;  // 10평대 평균 전세가 (만원)
+  avgJeonse20?: number;
+  avgJeonse30?: number;
+  tradeCount10?: number;
+  tradeCount20?: number;
+  tradeCount30?: number;
+  jeonseCount10?: number;
+  jeonseCount20?: number;
+  jeonseCount30?: number;
+  collectedAt?: string;
+}
+
 /** 다중 시리즈 차트 — 날짜별 행. 키는 '평형-타입' 형식 (e.g. '전용59-sale') */
 export interface ChartDataRow {
   date: string;

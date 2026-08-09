@@ -15,6 +15,7 @@ import LivingZonePanel from './components/LivingZonePanel';
 import AffordabilityPanel from './components/AffordabilityPanel';
 import RoutePanel from './components/RoutePanel';
 import ChecklistTemplatePanel from './components/ChecklistTemplatePanel';
+import DistrictStatsPanel from './components/DistrictStatsPanel';
 import FilterPanel, { applyFilters } from './components/FilterPanel';
 import DistrictSelector from './components/DistrictSelector';
 import { useIsMobile } from './hooks/useIsMobile';
@@ -98,6 +99,9 @@ const App: React.FC = () => {
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
   // 체크리스트 항목 관리 패널
   const [checklistPanelOpen, setChecklistPanelOpen] = useState(false);
+
+  // 구별 시세 현황 패널
+  const [districtStatsOpen, setDistrictStatsOpen] = useState(false);
 
   // 필터 적용된 단지 목록 — 지도 마커에 사용
   const filteredComplexes = useMemo(
@@ -528,6 +532,12 @@ const App: React.FC = () => {
                     activeColor: '#2a6090', activeBg: '#D4EFFC',
                     onClick: () => { setCompareOpen(prev => !prev); setMobileMenuOpen(false); },
                   },
+                  {
+                    label: '구별 시세',
+                    active: districtStatsOpen,
+                    activeColor: '#2a6090', activeBg: '#D4EFFC',
+                    onClick: () => { setDistrictStatsOpen(v => !v); setMobileMenuOpen(false); },
+                  },
                 ] as { label: string; active: boolean; activeColor: string; activeBg: string; onClick: () => void }[]).map(item => (
                   <button
                     key={item.label}
@@ -714,6 +724,16 @@ const App: React.FC = () => {
                   color: affordOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >대출분석</button>
+              {/* 구별 시세 */}
+              <button
+                onClick={() => setDistrictStatsOpen(v => !v)}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid', borderColor: districtStatsOpen ? '#89CFF0' : '#dadce0',
+                  borderRadius: '6px', backgroundColor: districtStatsOpen ? '#D4EFFC' : '#fff',
+                  color: districtStatsOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >구별 시세</button>
             </div>
           </>
         )}
@@ -911,6 +931,18 @@ const App: React.FC = () => {
             {/* 체크리스트 항목 관리 패널 */}
             {checklistPanelOpen && (
               <ChecklistTemplatePanel onClose={() => setChecklistPanelOpen(false)} />
+            )}
+            {/* 구별 시세 현황 패널 */}
+            {districtStatsOpen && (
+              <div style={isMobile ? {
+                position: 'fixed', inset: 0, zIndex: 500,
+                display: 'flex', flexDirection: 'column',
+              } : {}}>
+                <DistrictStatsPanel
+                  onClose={() => setDistrictStatsOpen(false)}
+                  isMobile={isMobile}
+                />
+              </div>
             )}
           </>
         )}
