@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { DistrictStat } from '../types';
-import { getDistrictStats, collectDistrictStats } from '../services/api';
+import { DistrictStat, DistrictTradeDetail } from '../types';
+import { getDistrictStats, collectDistrictStats, getDistrictTradeDetails } from '../services/api';
 
 interface Props {
   onClose: () => void;
@@ -39,6 +39,14 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
   const [loading, setLoading] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('trade');
+
+  // 실거래 상세 모달 상태
+  const [detailCtx, setDetailCtx] = useState<{
+    district: string; areaKey: AreaKey; month: string; mode: ViewMode;
+  } | null>(null);
+  const [detailItems, setDetailItems] = useState<DistrictTradeDetail[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollAttemptsRef = useRef(0);
   const collectStartRef = useRef<string>('');
@@ -178,6 +186,22 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
     const r = Math.round(255 * ratio);
     const b = Math.round(255 * (1 - ratio));
     return `rgba(${r}, 120, ${b}, 0.12)`;
+  };
+
+  const handleCountClick = async (district: string, areaKey: AreaKey) => {
+    const month = selectedMonth;
+    const mode = viewMode;
+    setDetailCtx({ district, areaKey, month, mode });
+    setDetailItems([]);
+    setDetailLoading(true);
+    try {
+      const res = await getDistrictTradeDetails(district, month, areaKey, mode === 'trade' ? 'trade' : 'jeonse');
+      setDetailItems(res.items);
+    } catch {
+      setDetailItems([]);
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const panelWidth = isMobile ? '100%' : '720px';
@@ -334,7 +358,15 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
                           {v ? (
                             <>
                               {toUk(v)}
-                              <span style={{ fontSize: '10px', color: '#9e9e9e', marginLeft: '3px' }}>
+                              <span
+                                onClick={() => handleCountClick(district, area)}
+                                style={{
+                                  fontSize: '10px', color: '#89CFF0', marginLeft: '3px',
+                                  cursor: 'pointer', textDecoration: 'underline',
+                                  textDecorationStyle: 'dotted',
+                                }}
+                                title="클릭하면 실거래 목록을 볼 수 있습니다"
+                              >
                                 ({cnt ?? 0})
                               </span>
                             </>
@@ -364,6 +396,120 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
       <style>{`
         @keyframes dtr-spin { to { transform: rotate(360deg); } }
       `}</style>
+
+      {/* 실거래 상세 모달 — 건수 클릭 시 표시 */}
+      {detailCtx && (
+        <div
+          onClick={() => setDetailCtx(null)}
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)',
+            zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: '#fff', borderRadius: '12px', width: '480px', maxWidth: '95vw',
+              maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+            }}
+          >
+            {/* 모달 헤더 */}
+            <div style={{
+              padding: '12px 16px', borderBottom: '1px solid #e8eaed',
+              display: 'flex', alignItems: 'center', gap: '8px',
+              backgroundColor: '#f0f8fd', borderRadius: '12px 12px 0 0',
+            }}>
+              <span style={{ fontWeight: 700, fontSize: '13px', color: '#1a3a5c', flex: 1 }}>
+                {detailCtx.district} · {AREA_LABELS[detailCtx.areaKey]} ·{' '}
+                {formatMonthLabel(detailCtx.month)} ·{' '}
+                {detailCtx.mode === 'trade' ? '매매' : '전세'}
+              </span>
+              <button
+                onClick={() => setDetailCtx(null)}
+                style={{
+                  padding: '2px 8px', fontSize: '13px', border: '1px solid #dadce0',
+                  borderRadius: '6px', backgroundColor: '#fff', cursor: 'pointer', color: '#5f6368',
+                }}
+              >✕</button>
+            </div>
+
+            {/* 모달 본문 */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0' }}>
+              {detailLoading ? (
+                <div style={{ padding: '32px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>
+                  불러오는 중...
+                </div>
+              ) : detailItems.length === 0 ? (
+                <div style={{ padding: '32px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>
+                  데이터가 없습니다.
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
+                      <th style={dtThStyle}>단지명</th>
+                      <th style={dtThStyle}>면적</th>
+                      <th style={dtThStyle}>층</th>
+                      <th style={dtThStyle}>연식</th>
+                      <th style={dtThStyle}>거래일</th>
+                      <th style={{ ...dtThStyle, textAlign: 'right' }}>
+                        {detailCtx.mode === 'trade' ? '매매가' : '보증금'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailItems.map((item, i) => {
+                      const price = detailCtx.mode === 'trade' ? item.dealAmount : item.deposit;
+                      const dealDate = [item.dealYear, item.dealMonth?.padStart(2, '0'), item.dealDay?.padStart(2, '0')]
+                        .filter(Boolean).join('-');
+                      return (
+                        <tr
+                          key={item.id}
+                          style={{ borderBottom: '1px solid #f5f5f5', backgroundColor: i % 2 === 0 ? '#fff' : '#fafafa' }}
+                        >
+                          <td style={dtTdStyle}>
+                            <div style={{ fontWeight: 600, color: '#1a3a5c' }}>{item.aptNm || '-'}</div>
+                            {item.umdNm && (
+                              <div style={{ fontSize: '10px', color: '#9e9e9e', marginTop: '1px' }}>{item.umdNm}</div>
+                            )}
+                          </td>
+                          <td style={{ ...dtTdStyle, textAlign: 'center', color: '#5f6368' }}>
+                            {item.excluUseAr ? `${parseFloat(item.excluUseAr).toFixed(1)}㎡` : '-'}
+                          </td>
+                          <td style={{ ...dtTdStyle, textAlign: 'center', color: '#5f6368' }}>
+                            {item.floor ? `${item.floor}층` : '-'}
+                          </td>
+                          <td style={{ ...dtTdStyle, textAlign: 'center', color: '#5f6368' }}>
+                            {item.buildYear || '-'}
+                          </td>
+                          <td style={{ ...dtTdStyle, textAlign: 'center', color: '#5f6368' }}>
+                            {dealDate || '-'}
+                          </td>
+                          <td style={{ ...dtTdStyle, textAlign: 'right', fontWeight: 700, color: '#e53935' }}>
+                            {toUk(price)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* 모달 푸터 — 건수 요약 */}
+            {!detailLoading && detailItems.length > 0 && (
+              <div style={{
+                padding: '8px 16px', borderTop: '1px solid #f0f0f0',
+                fontSize: '11px', color: '#9e9e9e', textAlign: 'right',
+                borderRadius: '0 0 12px 12px',
+              }}>
+                총 {detailItems.length}건 · 직거래 제외
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -375,6 +521,15 @@ const thStyle: React.CSSProperties = {
 
 const tdStyle: React.CSSProperties = {
   padding: '5px 8px', fontSize: '11px', color: '#1a3a5c',
+};
+
+const dtThStyle: React.CSSProperties = {
+  padding: '6px 10px', fontSize: '11px', fontWeight: 600, color: '#344054',
+  borderBottom: '1px solid #e8eaed', textAlign: 'center', whiteSpace: 'nowrap',
+};
+
+const dtTdStyle: React.CSSProperties = {
+  padding: '6px 10px', fontSize: '12px', color: '#1a3a5c',
 };
 
 export default DistrictStatsPanel;

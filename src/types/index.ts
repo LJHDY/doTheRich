@@ -441,6 +441,23 @@ export interface DistrictStat {
   collectedAt?: string;
 }
 
+/** 구별 시세 실거래 상세 1건 (apt_trade_cache / apt_jeonse_cache) */
+export interface DistrictTradeDetail {
+  id: number;
+  aptNm?: string;
+  aptDong?: string;
+  umdNm?: string;
+  excluUseAr?: string;
+  floor?: string;
+  buildYear?: string;
+  dealYear?: string;
+  dealMonth?: string;
+  dealDay?: string;
+  dealAmount?: number;   // 매매가 (만원)
+  deposit?: number;      // 전세 보증금 (만원)
+  dealingGbn?: string;   // 거래 구분
+}
+
 /** 다중 시리즈 차트 — 날짜별 행. 키는 '평형-타입' 형식 (e.g. '전용59-sale') */
 export interface ChartDataRow {
   date: string;

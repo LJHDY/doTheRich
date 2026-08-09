@@ -619,6 +619,16 @@ export const getDistrictStats = async (tradeMonth?: string): Promise<{ data: imp
   return data;
 };
 
+/** 구·월·평형별 실거래 상세 목록 — GET /api/district-stats/details */
+export const getDistrictTradeDetails = async (
+  district: string, tradeMonth: string, areaKey: string, type: 'trade' | 'jeonse'
+): Promise<{ items: import('../types').DistrictTradeDetail[] }> => {
+  const { data } = await api.get('/api/district-stats/details', {
+    params: { district, trade_month: tradeMonth, area_key: areaKey, type },
+  });
+  return data;
+};
+
 /** 구별 시세 수집 트리거 — POST /api/district-stats/collect (202 반환 후 백그라운드 처리) */
 export const collectDistrictStats = async (): Promise<{ message: string }> => {
   const { data } = await api.post('/api/district-stats/collect');
