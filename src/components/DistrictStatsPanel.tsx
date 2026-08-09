@@ -27,6 +27,17 @@ const AREA_LABELS: Record<AreaKey, string> = {
 };
 
 type ViewMode = 'trade' | 'jeonse';
+type SelectedArea = 'all' | AreaKey;
+
+// 상급지→중급지→하급지 순서 (ComparisonEvalPanel의 DISTRICT_GRADES와 동일)
+const GRADE_ORDER: Record<string, number> = Object.fromEntries(
+  [
+    '강남구', '서초구', '용산구', '송파구', '성동구', '광진구', '마포구', '양천구',   // 상급지
+    '강동구', '동작구', '영등포구', '중구', '종로구',                                   // 중급지
+    '서대문구', '강서구', '동대문구', '성북구', '관악구', '은평구', '구로구',
+    '노원구', '중랑구', '강북구', '금천구', '도봉구',                                    // 하급지
+  ].map((d, i) => [d, i])
+);
 
 // 폴링 간격 5초, 최대 3분
 const POLL_INTERVAL_MS = 5000;
@@ -39,6 +50,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
   const [loading, setLoading] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('trade');
+  const [selectedArea, setSelectedArea] = useState<SelectedArea>('all');
 
   // 실거래 상세 모달 상태
   const [detailCtx, setDetailCtx] = useState<{
@@ -158,19 +170,19 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
 
   const ALL_AREAS = ['18', '21', '24', '26', '33'] as AreaKey[];
 
-  // 26평(전용 85㎡, 국민평형) 기준 내림차순 정렬 — null이면 24평 → 33평 → 21평 → 18평 순으로 fallback
-  // 평균 정렬은 데이터가 적은 구에서 33평 한 건만 있어도 평균이 높아지는 왜곡이 생김
-  const SORT_PRIORITY: AreaKey[] = ['26', '24', '33', '21', '18'];
-  const sortKey = (s: DistrictStat | undefined): number => {
-    for (const area of SORT_PRIORITY) {
-      const v = getVal(s, area, viewMode);
-      if (v != null) return v;
+  // 전체 보기: 상급지→중급지→하급지 순서 (GRADE_ORDER)
+  // 평형 선택 시: 해당 평형 가격 내림차순, null은 하단
+  const sortedDistricts = Array.from(statMap.keys()).sort((a, b) => {
+    if (selectedArea === 'all') {
+      return (GRADE_ORDER[a] ?? 99) - (GRADE_ORDER[b] ?? 99);
     }
+    const va = getVal(statMap.get(a), selectedArea, viewMode);
+    const vb = getVal(statMap.get(b), selectedArea, viewMode);
+    if (va != null && vb != null) return vb - va;
+    if (va != null) return -1;
+    if (vb != null) return 1;
     return 0;
-  };
-  const sortedDistricts = Array.from(statMap.keys()).sort((a, b) =>
-    sortKey(statMap.get(b)) - sortKey(statMap.get(a))
-  );
+  });
 
   // 같은 평형대 내 최댓값 (색상 히트맵 계산용)
   const maxVals: Record<AreaKey, number> = { '18': 0, '21': 0, '24': 0, '26': 0, '33': 0 };
@@ -247,6 +259,21 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
           {availableMonths.length === 0 && <option value="">-- 데이터 없음 --</option>}
           {availableMonths.map(m => (
             <option key={m} value={m}>{formatMonthLabel(m)}</option>
+          ))}
+        </select>
+
+        {/* 평형 선택 */}
+        <select
+          value={selectedArea}
+          onChange={e => setSelectedArea(e.target.value as SelectedArea)}
+          style={{
+            fontSize: '12px', padding: '4px 8px', border: '1px solid #dadce0',
+            borderRadius: '6px', color: '#1a3a5c', backgroundColor: '#fff', cursor: 'pointer',
+          }}
+        >
+          <option value="all">전체 (급지순)</option>
+          {(Object.entries(AREA_LABELS) as [AreaKey, string][]).map(([k, label]) => (
+            <option key={k} value={k}>{label}</option>
           ))}
         </select>
 
@@ -335,7 +362,11 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
               <tr style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0, zIndex: 1 }}>
                 <th style={{ ...thStyle, textAlign: 'left', width: '70px' }}>지역</th>
                 {(Object.entries(AREA_LABELS) as [AreaKey, string][]).map(([key, label]) => (
-                  <th key={key} style={thStyle}>{label}</th>
+                  <th key={key} style={{
+                    ...thStyle,
+                    backgroundColor: selectedArea === key ? '#D4EFFC' : undefined,
+                    color: selectedArea === key ? '#2a6090' : '#344054',
+                  }}>{label}{selectedArea === key ? ' ▲' : ''}</th>
                 ))}
               </tr>
             </thead>
@@ -344,7 +375,18 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
                 const s = statMap.get(district);
                 return (
                   <tr key={district} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <td style={{ ...tdStyle, fontWeight: 600, color: '#1a3a5c' }}>{district}</td>
+                    <td style={{ ...tdStyle, fontWeight: 600, color: '#1a3a5c', whiteSpace: 'nowrap' }}>
+                      {district}
+                      {GRADE_ORDER[district] != null && (
+                        <span style={{
+                          marginLeft: '4px', fontSize: '9px', fontWeight: 700,
+                          color: GRADE_ORDER[district] < 8 ? '#E06060'
+                               : GRADE_ORDER[district] < 13 ? '#B8860B' : '#4BAAD4',
+                        }}>
+                          {GRADE_ORDER[district] < 8 ? '상' : GRADE_ORDER[district] < 13 ? '중' : '하'}
+                        </span>
+                      )}
+                    </td>
                     {ALL_AREAS.map(area => {
                       const v = getVal(s, area, viewMode);
                       const cnt = getCount(s, area, viewMode);
