@@ -22,8 +22,10 @@ import PasswordGate, { isSessionValid } from './components/PasswordGate';
 
 const App: React.FC = () => {
   const isMobile = useIsMobile();
-  // 세션 유효성 — localStorage 만료 시각 기준, 최초 렌더 시 동기 확인
-  const [unlocked, setUnlocked] = useState<boolean>(() => isSessionValid());
+  // 로컬(개발) 환경은 무조건 통과, 운영 환경은 세션 유효성 확인
+  const [unlocked, setUnlocked] = useState<boolean>(
+    () => process.env.NODE_ENV === 'development' || isSessionValid()
+  );
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(56);
 
