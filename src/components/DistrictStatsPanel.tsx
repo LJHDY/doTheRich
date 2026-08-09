@@ -158,17 +158,19 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
 
   const ALL_AREAS = ['18', '21', '24', '26', '33'] as AreaKey[];
 
-  // 데이터가 있는 평형의 평균가 기준 내림차순 정렬
-  // 합산 대신 평균을 써야 데이터 없는 평형이 0으로 처리되어 낮게 평가되는 것을 방지
-  const sortedDistricts = Array.from(statMap.keys()).sort((a, b) => {
-    const sa = statMap.get(a);
-    const sb = statMap.get(b);
-    const valsA = ALL_AREAS.map(area => getVal(sa, area, viewMode)).filter((v): v is number => v != null);
-    const valsB = ALL_AREAS.map(area => getVal(sb, area, viewMode)).filter((v): v is number => v != null);
-    const avgA = valsA.length ? valsA.reduce((s, v) => s + v, 0) / valsA.length : 0;
-    const avgB = valsB.length ? valsB.reduce((s, v) => s + v, 0) / valsB.length : 0;
-    return avgB - avgA;
-  });
+  // 26평(전용 85㎡, 국민평형) 기준 내림차순 정렬 — null이면 24평 → 33평 → 21평 → 18평 순으로 fallback
+  // 평균 정렬은 데이터가 적은 구에서 33평 한 건만 있어도 평균이 높아지는 왜곡이 생김
+  const SORT_PRIORITY: AreaKey[] = ['26', '24', '33', '21', '18'];
+  const sortKey = (s: DistrictStat | undefined): number => {
+    for (const area of SORT_PRIORITY) {
+      const v = getVal(s, area, viewMode);
+      if (v != null) return v;
+    }
+    return 0;
+  };
+  const sortedDistricts = Array.from(statMap.keys()).sort((a, b) =>
+    sortKey(statMap.get(b)) - sortKey(statMap.get(a))
+  );
 
   // 같은 평형대 내 최댓값 (색상 히트맵 계산용)
   const maxVals: Record<AreaKey, number> = { '18': 0, '21': 0, '24': 0, '26': 0, '33': 0 };
