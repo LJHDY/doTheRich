@@ -21,6 +21,10 @@ import {
   ZoneChecklistResultItem,
   PropertyVisit,
   PropertyVisitResultItem,
+  JeonseOnlyItem,
+  DistrictStat,
+  DistrictTradeDetail,
+  DistrictStatHistory,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -268,6 +272,12 @@ export const deleteComplexPhoto = async (complexId: number, photoId: number): Pr
 /** areaType별 시세 기록 전체 삭제 — DELETE /api/complexes/:id/price-history/area-type/:areaType */
 export const deletePriceHistoryByAreaType = async (complexId: number, areaType: string): Promise<void> => {
   await api.delete(`/api/complexes/${complexId}/price-history/area-type/${encodeURIComponent(areaType)}`);
+};
+
+/** 매매가·호가 없이 전세가만 있는 평형 목록 조회 — 단지 정리 기능용 */
+export const getJeonseOnlyItems = async (): Promise<JeonseOnlyItem[]> => {
+  const { data } = await api.get<JeonseOnlyItem[]>('/api/complexes/price-items/jeonse-only');
+  return data;
 };
 
 /** 참고가 수정 — PATCH /api/complexes/:id/price-history-items/:itemId */

@@ -469,6 +469,16 @@ export interface DistrictStatHistory {
   count?: number | null;
 }
 
+/** 매매가·호가 없이 전세가만 있는 평형 항목 — 단지 정리 기능용 */
+export interface JeonseOnlyItem {
+  complexId: number;
+  complexName: string;
+  areaType: string;
+  price?: number;        // 매매가 (확인용)
+  askingPrice?: number;  // 호가 (확인용)
+  jeonsePrice?: number;  // 전세가
+}
+
 /** 다중 시리즈 차트 — 날짜별 행. 키는 '평형-타입' 형식 (e.g. '전용59-sale') */
 export interface ChartDataRow {
   date: string;

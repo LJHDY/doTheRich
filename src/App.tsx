@@ -1146,6 +1146,8 @@ const App: React.FC = () => {
           onClose={() => setMyComplexListOpen(false)}
           onSelect={c => { handleListSelect(c); setMyComplexListOpen(false); }}
           top={headerHeight}
+          showCleanup
+          onRefresh={loadComplexes}
         />
       )}
 
