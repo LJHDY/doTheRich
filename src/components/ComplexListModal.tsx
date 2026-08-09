@@ -24,10 +24,10 @@ const getMatchingAreaTypes = (
   return complex.areaTypes ?? [];
 };
 
-// 특정 평형의 가격 반환 — priceItems 있으면 해당 평형 가격, 없으면 대표가 fallback
+// 특정 평형의 가격 반환 — areaTypePrices(평형별 실금액) 우선, 없으면 대표가 fallback
 const getPriceForAreaType = (complex: ApartmentComplex, at: string | null): number | undefined => {
   if (!at) return complex.price;
-  return complex.priceItems?.find(p => p.areaType === at)?.price ?? complex.price;
+  return complex.areaTypePrices?.[at] ?? complex.priceItems?.find(p => p.areaType === at)?.price ?? complex.price;
 };
 
 const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose, onSelect, top = 56, favoritesOnly = false }) => {
@@ -235,8 +235,13 @@ const ComplexListModal: React.FC<Props> = ({ range, areaType, complexes, onClose
                                 }}>{complex.complexName}</span>
                               </div>
                               <div style={{ fontSize: '11px', color: '#80868b' }}>
-                                {[complex.builtYear, complex.unitCount ? `${complex.unitCount.toLocaleString()}세대` : null, complex.region].filter(Boolean).join(' · ')}
+                                {[complex.builtYear, complex.unitCount ? `${complex.unitCount.toLocaleString()}세대` : null].filter(Boolean).join(' · ')}
                               </div>
+                              {complex.region && (
+                                <div style={{ fontSize: '11px', color: '#9e9e9e', marginTop: '1px' }}>
+                                  {complex.region}
+                                </div>
+                              )}
                             </div>
 
                             {/* 오른쪽: 평형별 가격 + 날짜 */}

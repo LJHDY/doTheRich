@@ -172,6 +172,7 @@ export interface ApartmentComplex {
   hazardInfos?: HazardInfo[];
   areaTypes?: string[];                        // 최신 시세 기록 기준 평형 목록
   areaTypePriceRanges?: Record<string, string>; // 평형 → 금액대 매핑 (예: {"전용 59": "11억대", "전용 84": "14억대"})
+  areaTypePrices?: Record<string, number>;       // 평형 → 실제 매매가(원) — 금액대 리스트 실금액 표시용
   priceItems?: PriceItem[]; // 백엔드가 포함 시 금액대 필터에서 평형 정보 표시 가능
   grade?: string;       // 지역 직장 밀도 등급 (S/A/B/C) — RegionWorkplaceConst 기준, DB 미저장
   employees?: number;   // 지역 종사자수
