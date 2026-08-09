@@ -129,14 +129,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
     }, POLL_INTERVAL_MS);
   };
 
-  // 지역 순서대로 정렬
-  const sortedStats = [...stats].sort((a, b) => {
-    const ia = DISTRICT_ORDER.indexOf(a.district);
-    const ib = DISTRICT_ORDER.indexOf(b.district);
-    return ia - ib;
-  });
-
-  const statMap = new Map(sortedStats.map(s => [s.district, s]));
+  const statMap = new Map(stats.map(s => [s.district, s]));
 
   const getVal = (s: DistrictStat | undefined, area: AreaKey, mode: ViewMode) => {
     if (!s) return undefined;
@@ -155,6 +148,21 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
       return area === '10' ? s.jeonseCount10 : area === '20' ? s.jeonseCount20 : s.jeonseCount30;
     }
   };
+
+  // 구별 가격 합산으로 내림차순 정렬 (탭 전환마다 재계산)
+  const sortedDistricts = DISTRICT_ORDER
+    .filter(d => statMap.has(d))
+    .sort((a, b) => {
+      const sa = statMap.get(a);
+      const sb = statMap.get(b);
+      const sumA = (['10', '20', '30'] as AreaKey[]).reduce(
+        (acc, area) => acc + (getVal(sa, area, viewMode) ?? 0), 0
+      );
+      const sumB = (['10', '20', '30'] as AreaKey[]).reduce(
+        (acc, area) => acc + (getVal(sb, area, viewMode) ?? 0), 0
+      );
+      return sumB - sumA;
+    });
 
   // 같은 평형대 내 최댓값 (색상 히트맵 계산용)
   const maxVals: Record<AreaKey, number> = { '10': 0, '20': 0, '30': 0 };
@@ -307,17 +315,17 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
                 {(Object.entries(AREA_LABELS) as [AreaKey, string][]).map(([key, label]) => (
                   <th key={key} style={thStyle}>{label}</th>
                 ))}
-                <th style={{ ...thStyle, color: '#9e9e9e', fontSize: '10px' }}>건수</th>
               </tr>
             </thead>
             <tbody>
-              {DISTRICT_ORDER.filter(d => statMap.has(d)).map(district => {
+              {sortedDistricts.map(district => {
                 const s = statMap.get(district);
                 return (
                   <tr key={district} style={{ borderBottom: '1px solid #f0f0f0' }}>
                     <td style={{ ...tdStyle, fontWeight: 600, color: '#1a3a5c' }}>{district}</td>
                     {(['10', '20', '30'] as AreaKey[]).map(area => {
                       const v = getVal(s, area, viewMode);
+                      const cnt = getCount(s, area, viewMode);
                       return (
                         <td
                           key={area}
@@ -327,13 +335,17 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
                             color: v ? '#1a3a5c' : '#bdbdbd',
                           }}
                         >
-                          {toUk(v)}
+                          {v ? (
+                            <>
+                              {toUk(v)}
+                              <span style={{ fontSize: '10px', color: '#9e9e9e', marginLeft: '3px' }}>
+                                ({cnt ?? 0})
+                              </span>
+                            </>
+                          ) : '-'}
                         </td>
                       );
                     })}
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#9e9e9e', fontSize: '10px' }}>
-                      {(['10', '20', '30'] as AreaKey[]).map(a => getCount(s, a, viewMode) ?? 0).join('/')}
-                    </td>
                   </tr>
                 );
               })}
