@@ -82,7 +82,6 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, isMobile }) => {
   });
 
   const statMap = new Map(sortedStats.map(s => [s.district, s]));
-  const displayedDistricts = DISTRICT_ORDER.filter(d => statMap.has(d) || stats.length === 0);
 
   const getVal = (s: DistrictStat | undefined, area: AreaKey, mode: ViewMode) => {
     if (!s) return undefined;
