@@ -23,12 +23,13 @@ const DISTRICT_ORDER = [
   '서초구', '강남구', '송파구', '강동구',
 ];
 
-type AreaKey = '10' | '20' | '30';
+type AreaKey = '18' | '21' | '24' | '33';
 
 const AREA_LABELS: Record<AreaKey, string> = {
-  '10': '전용 33~66㎡',
-  '20': '전용 66~99㎡',
-  '30': '전용 99~132㎡',
+  '18': '전용 59㎡ (18평)',
+  '21': '전용 69㎡ (21평)',
+  '24': '전용 79㎡ (24평)',
+  '33': '전용 109㎡ (33평)',
 };
 
 type ViewMode = 'trade' | 'jeonse';
@@ -134,18 +135,22 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
   const getVal = (s: DistrictStat | undefined, area: AreaKey, mode: ViewMode) => {
     if (!s) return undefined;
     if (mode === 'trade') {
-      return area === '10' ? s.avgTrade10 : area === '20' ? s.avgTrade20 : s.avgTrade30;
+      return area === '18' ? s.avgTrade18 : area === '21' ? s.avgTrade21
+           : area === '24' ? s.avgTrade24 : s.avgTrade33;
     } else {
-      return area === '10' ? s.avgJeonse10 : area === '20' ? s.avgJeonse20 : s.avgJeonse30;
+      return area === '18' ? s.avgJeonse18 : area === '21' ? s.avgJeonse21
+           : area === '24' ? s.avgJeonse24 : s.avgJeonse33;
     }
   };
 
   const getCount = (s: DistrictStat | undefined, area: AreaKey, mode: ViewMode) => {
     if (!s) return undefined;
     if (mode === 'trade') {
-      return area === '10' ? s.tradeCount10 : area === '20' ? s.tradeCount20 : s.tradeCount30;
+      return area === '18' ? s.tradeCount18 : area === '21' ? s.tradeCount21
+           : area === '24' ? s.tradeCount24 : s.tradeCount33;
     } else {
-      return area === '10' ? s.jeonseCount10 : area === '20' ? s.jeonseCount20 : s.jeonseCount30;
+      return area === '18' ? s.jeonseCount18 : area === '21' ? s.jeonseCount21
+           : area === '24' ? s.jeonseCount24 : s.jeonseCount33;
     }
   };
 
@@ -155,21 +160,21 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
     .sort((a, b) => {
       const sa = statMap.get(a);
       const sb = statMap.get(b);
-      const sumA = (['10', '20', '30'] as AreaKey[]).reduce(
+      const sumA = (['18', '21', '24', '33'] as AreaKey[]).reduce(
         (acc, area) => acc + (getVal(sa, area, viewMode) ?? 0), 0
       );
-      const sumB = (['10', '20', '30'] as AreaKey[]).reduce(
+      const sumB = (['18', '21', '24', '33'] as AreaKey[]).reduce(
         (acc, area) => acc + (getVal(sb, area, viewMode) ?? 0), 0
       );
       return sumB - sumA;
     });
 
   // 같은 평형대 내 최댓값 (색상 히트맵 계산용)
-  const maxVals: Record<AreaKey, number> = { '10': 0, '20': 0, '30': 0 };
+  const maxVals: Record<AreaKey, number> = { '18': 0, '21': 0, '24': 0, '33': 0 };
   for (const d of DISTRICT_ORDER) {
     const s = statMap.get(d);
     if (!s) continue;
-    (['10', '20', '30'] as AreaKey[]).forEach(a => {
+    (['18', '21', '24', '33'] as AreaKey[]).forEach(a => {
       const v = getVal(s, a, viewMode);
       if (v && v > maxVals[a]) maxVals[a] = v;
     });
@@ -323,7 +328,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
                 return (
                   <tr key={district} style={{ borderBottom: '1px solid #f0f0f0' }}>
                     <td style={{ ...tdStyle, fontWeight: 600, color: '#1a3a5c' }}>{district}</td>
-                    {(['10', '20', '30'] as AreaKey[]).map(area => {
+                    {(['18', '21', '24', '33'] as AreaKey[]).map(area => {
                       const v = getVal(s, area, viewMode);
                       const cnt = getCount(s, area, viewMode);
                       return (

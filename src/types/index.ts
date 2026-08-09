@@ -411,23 +411,29 @@ export interface MapRoute {
   createdAt: string;
 }
 
-/** 서울 구별 평형대 평균 시세 통계 (월별) */
+/** 서울 구별 평형별 평균 시세 통계 (월별)
+ * 18평(전용 59㎡) / 21평(전용 69㎡) / 24평(전용 79㎡) / 33평(전용 109㎡)
+ */
 export interface DistrictStat {
   id: number;
-  tradeMonth: string;    // YYYYMM
-  district: string;      // 구 이름
-  avgTrade10?: number;   // 10평대 평균 매매가 (만원)
-  avgTrade20?: number;
-  avgTrade30?: number;
-  avgJeonse10?: number;  // 10평대 평균 전세가 (만원)
-  avgJeonse20?: number;
-  avgJeonse30?: number;
-  tradeCount10?: number;
-  tradeCount20?: number;
-  tradeCount30?: number;
-  jeonseCount10?: number;
-  jeonseCount20?: number;
-  jeonseCount30?: number;
+  tradeMonth: string;     // YYYYMM
+  district: string;       // 구 이름
+  avgTrade18?: number;    // 18평 평균 매매가 (만원)
+  avgTrade21?: number;
+  avgTrade24?: number;
+  avgTrade33?: number;
+  avgJeonse18?: number;   // 18평 평균 전세가 (만원)
+  avgJeonse21?: number;
+  avgJeonse24?: number;
+  avgJeonse33?: number;
+  tradeCount18?: number;
+  tradeCount21?: number;
+  tradeCount24?: number;
+  tradeCount33?: number;
+  jeonseCount18?: number;
+  jeonseCount21?: number;
+  jeonseCount24?: number;
+  jeonseCount33?: number;
   collectedAt?: string;
 }
 
