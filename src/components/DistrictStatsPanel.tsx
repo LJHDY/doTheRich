@@ -15,20 +15,14 @@ const toUk = (v?: number | null): string => {
   return uk >= 1 ? `${uk.toFixed(1)}억` : `${Math.round(v / 1000)}천`;
 };
 
-// 서울 25구 지역 순서 정렬 기준
-const DISTRICT_ORDER = [
-  '종로구', '중구', '용산구', '성동구', '광진구', '동대문구', '중랑구',
-  '성북구', '강북구', '도봉구', '노원구', '은평구', '서대문구', '마포구',
-  '양천구', '강서구', '구로구', '금천구', '영등포구', '동작구', '관악구',
-  '서초구', '강남구', '송파구', '강동구',
-];
 
-type AreaKey = '18' | '21' | '24' | '33';
+type AreaKey = '18' | '21' | '24' | '26' | '33';
 
 const AREA_LABELS: Record<AreaKey, string> = {
   '18': '전용 59㎡ (18평)',
   '21': '전용 69㎡ (21평)',
   '24': '전용 79㎡ (24평)',
+  '26': '전용 85㎡ (26평)',
   '33': '전용 109㎡ (33평)',
 };
 
@@ -136,10 +130,10 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
     if (!s) return undefined;
     if (mode === 'trade') {
       return area === '18' ? s.avgTrade18 : area === '21' ? s.avgTrade21
-           : area === '24' ? s.avgTrade24 : s.avgTrade33;
+           : area === '24' ? s.avgTrade24 : area === '26' ? s.avgTrade26 : s.avgTrade33;
     } else {
       return area === '18' ? s.avgJeonse18 : area === '21' ? s.avgJeonse21
-           : area === '24' ? s.avgJeonse24 : s.avgJeonse33;
+           : area === '24' ? s.avgJeonse24 : area === '26' ? s.avgJeonse26 : s.avgJeonse33;
     }
   };
 
@@ -147,34 +141,28 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
     if (!s) return undefined;
     if (mode === 'trade') {
       return area === '18' ? s.tradeCount18 : area === '21' ? s.tradeCount21
-           : area === '24' ? s.tradeCount24 : s.tradeCount33;
+           : area === '24' ? s.tradeCount24 : area === '26' ? s.tradeCount26 : s.tradeCount33;
     } else {
       return area === '18' ? s.jeonseCount18 : area === '21' ? s.jeonseCount21
-           : area === '24' ? s.jeonseCount24 : s.jeonseCount33;
+           : area === '24' ? s.jeonseCount24 : area === '26' ? s.jeonseCount26 : s.jeonseCount33;
     }
   };
 
-  // 구별 가격 합산으로 내림차순 정렬 (탭 전환마다 재계산)
-  const sortedDistricts = DISTRICT_ORDER
-    .filter(d => statMap.has(d))
-    .sort((a, b) => {
-      const sa = statMap.get(a);
-      const sb = statMap.get(b);
-      const sumA = (['18', '21', '24', '33'] as AreaKey[]).reduce(
-        (acc, area) => acc + (getVal(sa, area, viewMode) ?? 0), 0
-      );
-      const sumB = (['18', '21', '24', '33'] as AreaKey[]).reduce(
-        (acc, area) => acc + (getVal(sb, area, viewMode) ?? 0), 0
-      );
-      return sumB - sumA;
-    });
+  const ALL_AREAS = ['18', '21', '24', '26', '33'] as AreaKey[];
+
+  // 데이터가 있는 구를 가격 합산 내림차순으로 정렬
+  const sortedDistricts = Array.from(statMap.keys()).sort((a, b) => {
+    const sa = statMap.get(a);
+    const sb = statMap.get(b);
+    const sumA = ALL_AREAS.reduce((acc, area) => acc + (getVal(sa, area, viewMode) ?? 0), 0);
+    const sumB = ALL_AREAS.reduce((acc, area) => acc + (getVal(sb, area, viewMode) ?? 0), 0);
+    return sumB - sumA;
+  });
 
   // 같은 평형대 내 최댓값 (색상 히트맵 계산용)
-  const maxVals: Record<AreaKey, number> = { '18': 0, '21': 0, '24': 0, '33': 0 };
-  for (const d of DISTRICT_ORDER) {
-    const s = statMap.get(d);
-    if (!s) continue;
-    (['18', '21', '24', '33'] as AreaKey[]).forEach(a => {
+  const maxVals: Record<AreaKey, number> = { '18': 0, '21': 0, '24': 0, '26': 0, '33': 0 };
+  for (const s of Array.from(statMap.values())) {
+    ALL_AREAS.forEach(a => {
       const v = getVal(s, a, viewMode);
       if (v && v > maxVals[a]) maxVals[a] = v;
     });
@@ -189,7 +177,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
     return `rgba(${r}, 120, ${b}, 0.12)`;
   };
 
-  const panelWidth = isMobile ? '100%' : '640px';
+  const panelWidth = isMobile ? '100%' : '720px';
   const formatMonthLabel = (m: string) => `${m.slice(0, 4)}년 ${parseInt(m.slice(4), 10)}월`;
 
   return (
@@ -328,7 +316,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
                 return (
                   <tr key={district} style={{ borderBottom: '1px solid #f0f0f0' }}>
                     <td style={{ ...tdStyle, fontWeight: 600, color: '#1a3a5c' }}>{district}</td>
-                    {(['18', '21', '24', '33'] as AreaKey[]).map(area => {
+                    {ALL_AREAS.map(area => {
                       const v = getVal(s, area, viewMode);
                       const cnt = getCount(s, area, viewMode);
                       return (

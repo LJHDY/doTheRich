@@ -454,11 +454,16 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
 ### `DistrictStatsPanel.tsx`
 - 헤더 "구별 시세" 버튼 클릭 시 우측 사이드패널 (640px, 모바일 전체화면)
 - 상단 컨트롤: 거래월 셀렉트 + 매매/전세 탭 + 시세 수집 버튼 + 새로고침 버튼
-- 테이블: 서울 25구 × 10/20/30평대 평균가 + 거래 건수
+- 테이블: 서울 25구 × 5개 평형대(18평/21평/24평/26평/33평) 평균가 + 거래 건수
+  - 평형 구간 (전용면적 ±3m² 공차): 18평(전용59㎡) 56~62m², 21평(전용69㎡) 66~72m², 24평(전용79㎡) 76~82m², 26평(전용85㎡) 82~88m², 33평(전용109㎡) 106~112m²
+  - 직거래(`dealing_gbn='직거래'`) 제외, `deal_year+deal_month` 기준 해당 월 거래만 집계
+  - 현재 월은 수집·표시 제외; 직전 3개월 대상
   - 히트맵 색상 (낮=파랑 → 높=빨강, 평형대 내 상대적 비율 기준)
-  - 값 표시: 억 단위 소수점 1자리 (1억 미만은 천만 단위)
-- "시세 수집" 클릭 → `POST /api/district-stats/collect` → 202 메시지 표시 → 30초 후 자동 재조회
-- 하단 안내: 평형 구간 기준 + 출처 표기
+  - 값 표시: 억 단위 소수점 1자리 (1억 미만은 천만 단위), 건수 괄호 표시
+  - 정렬: 4개 평형 가격 합산 내림차순
+- "시세 수집" 클릭 → `POST /api/district-stats/collect` (202) → 5초 폴링, `collectedAt` 갱신 감지 시 완료 toast
+- 매월 1일 02:00 자동 수집 (APScheduler CronTrigger)
+- 하단 안내: 전용면적 기준 + 출처 표기
 
 ### `PriceChart.tsx`
 - props: `rows: ChartDataRow[]`, `series: ChartSeries[]`
@@ -668,15 +673,19 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
   - `get_complex_by_id()` 에서도 최신 asking_price 조회 추가
   - 프론트: `ApartmentComplex.askingPrice?: number` 타입 추가, `MapPage.tsx` `basePrice = askingPrice || price`
 - [x] 구별 시세 현황 기능 (`DistrictStatsPanel`)
-  - 서울 25개 구 × 평형대(10/20/30평대) × 매매/전세 평균가 테이블 표시
-  - 히트맵 색상 (낮=파랑 → 높=빨강) + 거래 건수(10/20/30평대 `/` 구분) 표시
+  - 서울 25개 구 × 5개 평형대(18평/21평/24평/26평/33평) × 매매/전세 평균가 테이블 표시
+  - 평형 구간 (전용면적 ±3m² 공차): 18평(전용59㎡) 56~62m², 21평(전용69㎡) 66~72m², 24평(전용79㎡) 76~82m², 26평(전용85㎡) 82~88m², 33평(전용109㎡) 106~112m²
+  - 직거래(`dealing_gbn='직거래'`) 제외, `deal_year+deal_month` 기준 해당 월 거래만 집계
+  - 직전 3개월 수집 (현재 월 제외), 가격 합산 기준 내림차순 정렬
+  - 히트맵 색상 (낮=파랑 → 높=빨강, 평형대 내 상대적 비율) + 거래 건수 괄호 표시
   - 헤더 Row2 "구별 시세" 버튼 → 우측 사이드패널 (640px, 모바일 전체화면)
-  - "시세 수집" 버튼 → `POST /api/district-stats/collect` (202 백그라운드) + 30초 후 자동 새로고침
+  - "시세 수집" 버튼 → `POST /api/district-stats/collect` (202) → 5초 폴링, `collectedAt` 갱신 감지 시 완료 toast
+  - 매월 1일 02:00 APScheduler 자동 수집
   - 거래월 셀렉트박스 (수집된 월 목록, 최신순), 매매/전세 탭 전환
-  - 백엔드: `district_price_stats` 테이블 (SQLAlchemy), `district_stats_service.py`, `routers/district_stats.py`
+  - 백엔드: `district_price_stats` 테이블 (SQLAlchemy, `_18/_21/_24/_33` 컬럼), `district_stats_service.py`, `routers/district_stats.py`
     - `GET /api/district-stats?trade_month=YYYYMM` — 저장 데이터 + 사용 가능 월 목록 반환
-    - `POST /api/district-stats/collect` — 서울 25구 MOLIT API 호출 → 평형대별 평균 계산 → upsert
-    - 평형 구간: 10평대 33~66m², 20평대 66~99m², 30평대 99~132m²
+    - `POST /api/district-stats/collect` — 서울 25구 병렬(5 workers) MOLIT API 호출 → 평형별 평균 계산 → upsert
+    - 구형 컬럼(`avg_trade_10`) 감지 시 테이블 DROP 후 재생성 (idempotent 마이그레이션)
   - 타입: `DistrictStat` (src/types/index.ts), API: `getDistrictStats`, `collectDistrictStats` (src/services/api.ts)
 
 ## 미완성 / TODO

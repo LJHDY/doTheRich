@@ -421,18 +421,22 @@ export interface DistrictStat {
   avgTrade18?: number;    // 18평 평균 매매가 (만원)
   avgTrade21?: number;
   avgTrade24?: number;
+  avgTrade26?: number;    // 26평 평균 매매가 (전용 85㎡, 국민평형)
   avgTrade33?: number;
   avgJeonse18?: number;   // 18평 평균 전세가 (만원)
   avgJeonse21?: number;
   avgJeonse24?: number;
+  avgJeonse26?: number;   // 26평 평균 전세가
   avgJeonse33?: number;
   tradeCount18?: number;
   tradeCount21?: number;
   tradeCount24?: number;
+  tradeCount26?: number;
   tradeCount33?: number;
   jeonseCount18?: number;
   jeonseCount21?: number;
   jeonseCount24?: number;
+  jeonseCount26?: number;
   jeonseCount33?: number;
   collectedAt?: string;
 }
