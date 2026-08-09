@@ -460,7 +460,7 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
   - 현재 월은 수집·표시 제외; 직전 3개월 대상
   - 히트맵 색상 (낮=파랑 → 높=빨강, 평형대 내 상대적 비율 기준)
   - 값 표시: 억 단위 소수점 1자리 (1억 미만은 천만 단위), 건수 괄호 표시
-  - 정렬: 4개 평형 가격 합산 내림차순
+  - 정렬: 데이터 있는 평형의 평균가 내림차순 (null 평형 제외, 합산 아님)
 - "시세 수집" 클릭 → `POST /api/district-stats/collect` (202) → 5초 폴링, `collectedAt` 갱신 감지 시 완료 toast
 - 매월 1일 02:00 자동 수집 (APScheduler CronTrigger)
 - 하단 안내: 전용면적 기준 + 출처 표기

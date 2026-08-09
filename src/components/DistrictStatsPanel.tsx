@@ -150,13 +150,16 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
 
   const ALL_AREAS = ['18', '21', '24', '26', '33'] as AreaKey[];
 
-  // 데이터가 있는 구를 가격 합산 내림차순으로 정렬
+  // 데이터가 있는 평형의 평균가 기준 내림차순 정렬
+  // 합산 대신 평균을 써야 데이터 없는 평형이 0으로 처리되어 낮게 평가되는 것을 방지
   const sortedDistricts = Array.from(statMap.keys()).sort((a, b) => {
     const sa = statMap.get(a);
     const sb = statMap.get(b);
-    const sumA = ALL_AREAS.reduce((acc, area) => acc + (getVal(sa, area, viewMode) ?? 0), 0);
-    const sumB = ALL_AREAS.reduce((acc, area) => acc + (getVal(sb, area, viewMode) ?? 0), 0);
-    return sumB - sumA;
+    const valsA = ALL_AREAS.map(area => getVal(sa, area, viewMode)).filter((v): v is number => v != null);
+    const valsB = ALL_AREAS.map(area => getVal(sb, area, viewMode)).filter((v): v is number => v != null);
+    const avgA = valsA.length ? valsA.reduce((s, v) => s + v, 0) / valsA.length : 0;
+    const avgB = valsB.length ? valsB.reduce((s, v) => s + v, 0) / valsB.length : 0;
+    return avgB - avgA;
   });
 
   // 같은 평형대 내 최댓값 (색상 히트맵 계산용)
