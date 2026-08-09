@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { DistrictStat, DistrictTradeDetail, DistrictStatHistory } from '../types';
 import { getDistrictStats, collectDistrictStats, getDistrictTradeDetails, getDistrictStatsHistory } from '../services/api';
