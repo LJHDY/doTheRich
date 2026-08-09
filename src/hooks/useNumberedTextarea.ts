@@ -14,6 +14,9 @@ export function useNumberedTextarea(
   const ref = useRef<HTMLTextAreaElement>(null);
   // IME Enter 대기 플래그 — compositionend에서 소비
   const pendingEnterRef = useRef(false);
+  // compositionend 처리 후 브라우저가 추가로 발화하는 Enter keydown 차단 플래그
+  // (Mac Chrome/Safari: IME Enter → compositionend → 비조합 keydown 순서로 이중 발화)
+  const skipNextEnterRef = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -59,6 +62,11 @@ export function useNumberedTextarea(
           return;
         }
         e.preventDefault();
+        // compositionend 직후 브라우저가 isComposing=false로 추가 발화하는 Enter 무시
+        if (skipNextEnterRef.current) {
+          skipNextEnterRef.current = false;
+          return;
+        }
         insertNewLine(el);
         return;
       }
@@ -92,6 +100,8 @@ export function useNumberedTextarea(
     pendingEnterRef.current = false;
     const el = ref.current;
     if (!el) return;
+    // 이후 브라우저가 isComposing=false Enter keydown을 추가 발화하므로 차단 플래그 설정
+    skipNextEnterRef.current = true;
     // 한 틱 대기: compositionend 직후 DOM이 최종 확정값을 반영하도록
     setTimeout(() => insertNewLine(el), 0);
   }, [insertNewLine]);
