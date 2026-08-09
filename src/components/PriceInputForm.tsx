@@ -23,9 +23,12 @@ interface PriceInfoRow {
   tenYearRateStr: string;    // 10년 등락률 (%)
 }
 
-// new Function() 대신 직접 구현한 재귀 하강 파서 — 연산자 우선순위(*/보다 +/-) 지원
+// 사용자가 참고가 입력란에 "8.5-4.3" 같은 수식을 입력하면 자동 계산해주는 파서
+// new Function() 대신 직접 구현 — XSS/코드 인젝션 위험 없이 사칙연산만 허용
+// 재귀 하강 파서: parseAddSub > parseMulDiv > parseNum 순으로 우선순위 처리
 const safeCalcExpr = (expr: string): number | null => {
   let pos = 0;
+  // 숫자 토큰 파싱 (정수 또는 소수)
   const parseNum = (): number | null => {
     const start = pos;
     while (pos < expr.length && /[0-9.]/.test(expr[pos])) pos++;
@@ -33,6 +36,7 @@ const safeCalcExpr = (expr: string): number | null => {
     const n = parseFloat(expr.slice(start, pos));
     return isFinite(n) ? n : null;
   };
+  // 곱셈·나눗셈 처리 (0 나누기 방어)
   const parseMulDiv = (): number | null => {
     let left = parseNum();
     if (left === null) return null;
@@ -44,6 +48,7 @@ const safeCalcExpr = (expr: string): number | null => {
     }
     return left;
   };
+  // 덧셈·뺄셈 처리
   const parseAddSub = (): number | null => {
     let left = parseMulDiv();
     if (left === null) return null;
@@ -56,6 +61,7 @@ const safeCalcExpr = (expr: string): number | null => {
     return left;
   };
   const result = parseAddSub();
+  // 전체 입력이 소비됐을 때만 유효한 수식으로 인정
   return pos === expr.length ? result : null;
 };
 
@@ -68,16 +74,21 @@ const evalExpr = (expr: string): string => {
   return expr;
 };
 
+// 10년 등락 자동 계산 — "현재가-기준가" 패턴이면 등락금액·등락률 모두 산출
+// 예: "8.5-4.3" → amount=4.2(억), rate=97.67(%)
 const calcTenYear = (expr: string): { amount: string; rate: string } => {
   const cleaned = expr.replace(/\s/g, '');
+  // "숫자-숫자" 패턴: 현재가 - 10년전가 = 등락금액, (등락/기준) * 100 = 등락률
   const match = cleaned.match(/^(\d+\.?\d*)-(\d+\.?\d*)$/);
   if (match) {
     const cur = parseFloat(match[1]);
     const base = parseFloat(match[2]);
     const amount = Math.round((cur - base) * 100) / 100;
+    // 기준가 0이면 등락률 산출 불가 → 0으로 처리
     const rate = base > 0 ? Math.round((cur - base) / base * 10000) / 100 : 0;
     return { amount: String(amount), rate: String(rate) };
   }
+  // 일반 수식이면 evalExpr로 계산만, 등락률은 빈 문자열
   return { amount: evalExpr(expr), rate: '' };
 };
 

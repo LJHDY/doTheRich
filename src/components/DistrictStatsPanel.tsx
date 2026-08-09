@@ -135,7 +135,8 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
 
   const handleCollect = async () => {
     setCollecting(true);
-    // 수집 시작 시각 기록 — 이보다 최신 collectedAt이 생기면 완료로 판단
+    // 수집 시작 시각 기록 — 이보다 최신 collectedAt이 반환되면 수집 완료로 판단
+    // ISO 문자열 비교 가능: "2024-08-10T02:00:00" > "2024-08-09T23:00:00"
     collectStartRef.current = new Date().toISOString();
 
     try {
@@ -206,20 +207,22 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
   const ALL_AREAS = ['18', '21', '24', '26', '33'] as AreaKey[];
 
   // 전체 보기: 상급지→중급지→하급지 순서 (GRADE_ORDER)
-  // 평형 선택 시: 해당 평형 가격 내림차순, null은 하단
+  // 평형 선택 시: 해당 평형 가격 내림차순, 데이터 없는 구는 하단
   const sortedDistricts = Array.from(statMap.keys()).sort((a, b) => {
     if (selectedArea === 'all') {
+      // GRADE_ORDER에 없는 구는 99위로 처리 (하단 배치)
       return (GRADE_ORDER[a] ?? 99) - (GRADE_ORDER[b] ?? 99);
     }
     const va = getVal(statMap.get(a), selectedArea, viewMode);
     const vb = getVal(statMap.get(b), selectedArea, viewMode);
-    if (va != null && vb != null) return vb - va;
-    if (va != null) return -1;
-    if (vb != null) return 1;
+    if (va != null && vb != null) return vb - va; // 가격 내림차순
+    if (va != null) return -1;  // 데이터 있는 구 상단
+    if (vb != null) return 1;   // 데이터 없는 구 하단
     return 0;
   });
 
-  // 같은 평형대 내 최댓값 (색상 히트맵 계산용)
+  // 같은 평형대 내 최댓값 — 히트맵에서 상대 비율(0~1)을 계산하기 위한 기준값
+  // 평형 간 절대값 비교가 아닌 동일 평형 내 상대 순위로 색상 결정
   const maxVals: Record<AreaKey, number> = { '18': 0, '21': 0, '24': 0, '26': 0, '33': 0 };
   for (const s of Array.from(statMap.values())) {
     ALL_AREAS.forEach(a => {
@@ -228,10 +231,12 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
     });
   }
 
+  // 히트맵 배경색 — 구간 내 최솟값(0)→최댓값 대비 상대 비율로 파랑→빨강 선형 보간
+  // 투명도 0.12 — 텍스트 가독성과 색상 구분 사이 균형
   const cellBg = (v?: number | null, area?: AreaKey): string => {
     if (!v || !area || !maxVals[area]) return 'transparent';
     const ratio = v / maxVals[area];
-    // 낮을수록 파랑 → 높을수록 빨강 (부동산 가격 시각화 관례)
+    // ratio 0=파랑(낮은 가격), 1=빨강(높은 가격)
     const r = Math.round(255 * ratio);
     const b = Math.round(255 * (1 - ratio));
     return `rgba(${r}, 120, ${b}, 0.12)`;
@@ -272,19 +277,23 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
     if (graphMode) loadHistory();
   }, [graphMode, loadHistory]);
 
-  // 그래프용 Recharts 데이터 변환
+  // 그래프용 Recharts 데이터 변환 — 월별 X축 행에 구별 가격과 총 거래건수를 flatten
+  // Recharts ComposedChart: 각 구를 별도 dataKey로 가진 행 배열이 필요
   const chartData = useMemo(() => {
     return historyMonths.map(month => {
+      // 월 레이블: "202408" → "2024.08"
       const row: Record<string, string | number> = {
         month: `${month.slice(0, 4)}.${month.slice(4)}`,
       };
       let totalCount = 0;
       historyItems
+        // 해당 월 + 현재 선택된 구만 포함
         .filter(d => d.month === month && graphDistricts.has(d.district))
         .forEach(d => {
           if (d.price != null) row[d.district] = d.price;
           if (d.count != null) totalCount += d.count;
         });
+      // totalCount: 막대 차트용 (배경 거래량 시각화)
       row.totalCount = totalCount;
       return row;
     });

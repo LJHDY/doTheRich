@@ -35,12 +35,16 @@ const reprojectGeometry = (geometry: any): any => {
   return geometry;
 };
 
+// 모듈 레벨 캐시 — 동일 데이터를 중복 fetch하지 않도록 첫 로드 결과를 유지
 let cached: any = null;
+// 진행 중인 Promise — 동시 다발 호출 시 동일 Promise를 공유 (중복 fetch 방지)
 let pending: Promise<any> | null = null;
 
 /** 서울+경기도 GeoJSON 로드 — 병렬 fetch, EPSG:5179→WGS84 변환 후 합쳐서 캐시 */
 export const loadDistrictGeoJson = (): Promise<any> => {
+  // 이미 로드된 데이터가 있으면 즉시 반환
   if (cached) return Promise.resolve(cached);
+  // 첫 번째 호출자만 fetch를 시작하고, 이후 호출자는 같은 Promise를 기다림
   if (!pending) {
     pending = Promise.all([
       fetch(SEOUL_URL).then(r => { if (!r.ok) throw new Error('Seoul GeoJSON 로드 실패'); return r.json(); }),
@@ -51,7 +55,7 @@ export const loadDistrictGeoJson = (): Promise<any> => {
           ...(seoulData.features ?? []),
           ...(gyeonggiData.features ?? []),
         ];
-        // 좌표계 변환 — 원본 EPSG:5179 미터 좌표 → WGS84 경위도
+        // 좌표계 변환 — 원본 EPSG:5179 미터 좌표 → WGS84 경위도 (Naver Maps 입력 형식)
         const converted = allFeatures.map((f: any) => ({
           ...f,
           geometry: reprojectGeometry(f.geometry),
@@ -59,6 +63,7 @@ export const loadDistrictGeoJson = (): Promise<any> => {
         cached = { type: 'FeatureCollection', features: converted };
         return cached;
       })
+      // 실패 시 pending 초기화 — 다음 호출에서 재시도 가능하게 함
       .catch(err => { pending = null; throw err; });
   }
   return pending;

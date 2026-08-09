@@ -15,6 +15,7 @@ interface Props {
 }
 
 // 현재 필터(range/areaType)에 매칭되는 평형 목록 반환
+// — 평형 선택 시 해당 평형만, 금액대 선택 시 areaTypePriceRanges에서 해당 금액대 평형만 추출
 const getMatchingAreaTypes = (
   complex: ApartmentComplex, range: string, areaType?: string
 ): string[] => {
@@ -22,12 +23,16 @@ const getMatchingAreaTypes = (
   if (!range) return [];
   const atMap = complex.areaTypePriceRanges;
   if (atMap) {
+    // areaTypePriceRanges가 있으면 해당 금액대에 속하는 평형만 반환
     return Object.entries(atMap).filter(([, r]) => r === range).map(([at]) => at);
   }
+  // fallback: 평형-금액대 맵이 없으면 단지 전체 평형 목록 사용
   return complex.areaTypes ?? [];
 };
 
-// 특정 평형의 가격 반환 — areaTypePrices(평형별 실금액) 우선, 없으면 대표가 fallback
+// 특정 평형의 가격 반환 — 정밀도 순서: areaTypePrices > priceItems > 대표가
+// areaTypePrices: 백엔드가 평형별 실금액을 내려줄 때 사용
+// priceItems: 등록 시 입력한 평형별 항목에서 찾을 때 사용
 const getPriceForAreaType = (complex: ApartmentComplex, at: string | null): number | undefined => {
   if (!at) return complex.price;
   return complex.areaTypePrices?.[at] ?? complex.priceItems?.find(p => p.areaType === at)?.price ?? complex.price;
@@ -99,25 +104,30 @@ const ComplexListModal: React.FC<Props> = ({
   }, [checkedKeys, cleanupItems, onRefresh]);
 
   // 금액대 + 평형 + 즐겨찾기 + 이름 검색 필터 적용 후 지역 가나다 → 동일 지역 내 최신 확인일 순으로 정렬
+  // useMemo 의존배열에 searchQuery/favoritesOnly 누락 시 검색·즐겨찾기 필터가 반응하지 않는 버그 주의
   const sorted = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const filtered = complexes.filter(c => {
+      // 단지명 부분 일치 검색 (대소문자 무관)
       if (q && !c.complexName.toLowerCase().includes(q)) return false;
       if (favoritesOnly && !c.isFavorite) return false;
       const atMap = c.areaTypePriceRanges;
 
       if (range && areaType) {
+        // 금액대 + 평형 동시 필터: areaTypePriceRanges가 있으면 정밀하게, 없으면 fallback
         return atMap
           ? atMap[areaType] === range
           : c.priceRange === range && (c.areaTypes?.includes(areaType) ?? false);
       }
       if (range) {
+        // 금액대만 필터: 어느 평형이든 해당 금액대면 포함
         return atMap
           ? Object.values(atMap).includes(range)
           : c.priceRange === range;
       }
       return true;
     });
+    // 1차: 지역 가나다순 / 2차: 최신 확인일순 (동일 지역 내 최근 조사 단지 상위)
     return [...filtered].sort((a, b) => {
       const regionCmp = (a.region || '').localeCompare(b.region || '', 'ko');
       if (regionCmp !== 0) return regionCmp;
@@ -132,7 +142,9 @@ const ComplexListModal: React.FC<Props> = ({
       : '전체 단지 목록';
 
   // 2단계 그룹핑: 지역 → 평형 서브그룹 (평형 숫자 오름차순)
+  // 한 단지가 여러 평형에 매칭되면 각 평형 서브그룹에 각각 노출 (중복 허용)
   const groups = useMemo(() => {
+    // 평형 문자열에서 숫자 추출 — "전용 59.9" → 59.9 (서브그룹 정렬용)
     const atNum = (at: string) => parseFloat(at.replace(/[^0-9.]/g, '')) || 0;
     const regionMap = new Map<string, Map<string, ApartmentComplex[]>>();
     sorted.forEach(c => {
@@ -141,9 +153,11 @@ const ComplexListModal: React.FC<Props> = ({
       if (!regionMap.has(region)) regionMap.set(region, new Map());
       const subMap = regionMap.get(region)!;
       if (ats.length === 0) {
+        // 평형 정보 없는 단지는 '' 키(서브헤더 없음)로 그룹화
         if (!subMap.has('')) subMap.set('', []);
         subMap.get('')!.push(c);
       } else {
+        // 매칭 평형마다 서브그룹에 추가 — 다중 평형 단지는 여러 그룹에 중복 노출
         ats.forEach(at => {
           if (!subMap.has(at)) subMap.set(at, []);
           subMap.get(at)!.push(c);
@@ -155,6 +169,7 @@ const ComplexListModal: React.FC<Props> = ({
       .map(([region, subMap]) => ({
         region,
         subGroups: Array.from(subMap.entries())
+          // 평형 숫자 오름차순 정렬 ('' 키는 0으로 처리 → 최상단)
           .sort(([a], [b]) => atNum(a) - atNum(b))
           .map(([at, items]) => ({ areaType: at, items })),
       }));

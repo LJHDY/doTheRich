@@ -108,9 +108,11 @@ export const CHEMICAL_CATEGORY_MAP: Record<string, string> = {
   '기타 개인 서비스업':                                 '기타',
 };
 
-/** type + category → 단순화된 세부 카테고리 반환 */
+/** type + category → 단순화된 세부 카테고리 반환
+ *  알 수 없는 카테고리는 원본 문자열 그대로 반환 (map 미등록 케이스 fallback) */
 export function getSimplifiedCategory(type: string, category?: string): string {
   if (!category) return '';
+  // 폐기물·화학 시설만 세분류 변환, 나머지는 원본 카테고리 유지
   if (type === 'waste-facility')    return WASTE_CATEGORY_MAP[category]    ?? category;
   if (type === 'chemical-facility') return CHEMICAL_CATEGORY_MAP[category] ?? category;
   return category;

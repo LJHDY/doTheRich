@@ -6,13 +6,15 @@ import { haversineMeters } from '../utils/geo';
 // 저장된 경로마다 순환 사용할 색상 팔레트
 const ROUTE_COLORS = ['#e53935', '#1565c0', '#2e7d32', '#e65100', '#6a1b9a', '#00838f', '#ad1457', '#f9a825'];
 
-// p1 → p2 방향의 방위각 (도, 북=0, 시계방향)
+// p1 → p2 방향의 방위각 계산 (도, 북=0, 시계방향) — 화살표 마커 회전각 결정에 사용
+// Haversine 기반 구면 삼각법으로 정확한 방위각 산출
 function calcBearing(p1: RoutePoint, p2: RoutePoint): number {
   const lat1 = p1.lat * Math.PI / 180;
   const lat2 = p2.lat * Math.PI / 180;
   const dLng = (p2.lng - p1.lng) * Math.PI / 180;
   const y = Math.sin(dLng) * Math.cos(lat2);
   const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  // atan2 결과(-180~180)를 0~360으로 정규화
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
@@ -191,10 +193,11 @@ const MapPage: React.FC<MapPageProps> = ({
   );
 
   // 마커 diff 업데이트 — 추가/제거/변경된 것만 처리 (전체 재생성 X)
+  // 모든 마커를 매번 재생성하면 Naver Maps API 객체 비용이 크기 때문에 diff 방식 사용
   useEffect(() => {
     if (!mapInstanceRef.current || !window.naver) return;
 
-    // 좌표 유효성 검사
+    // 한국 본토 좌표 범위 밖인 단지는 지도에 표시하지 않음 (데이터 오류 방어)
     const validComplexes = complexes.filter(
       (c) => c.latitude && c.longitude &&
         c.latitude >= 33 && c.latitude <= 38 &&
@@ -202,6 +205,7 @@ const MapPage: React.FC<MapPageProps> = ({
     );
 
     // 마커 아이콘 외관을 결정하는 필드만 포함한 fingerprint — 하나라도 바뀌면 아이콘 재생성
+    // 선택 상태, 가격, 즐겨찾기, 임장유형, 연식, 세대수가 변경될 때만 setIcon 호출
     const makeFingerprint = (c: ApartmentComplex, isSelected: boolean) =>
       `${isSelected}-${c.price}-${c.askingPrice}-${c.priceRange}-${c.isFavorite}-${c.visitType}-${c.builtYear}-${c.unitCount}`;
 
@@ -567,7 +571,8 @@ const MapPage: React.FC<MapPageProps> = ({
         routeArrowMarkersRef.current.push(m);
       });
 
-      // 1km 간격 거리 마커
+      // 1km 간격 거리 마커 — 경로 위에 1km, 2km... 누적 거리 표시
+      // t(보간 비율) = (목표거리 - 현재까지 누적) / 현재 선분 길이
       let cumDist = 0;
       let kmCount = 1;
       for (let i = 0; i < pts.length - 1; i++) {
@@ -575,7 +580,9 @@ const MapPage: React.FC<MapPageProps> = ({
         const p2 = pts[i + 1];
         const segDist = haversineMeters(p1, p2);
 
+        // 이 선분 안에 km 경계가 하나 이상 있으면 보간 위치마다 마커 생성
         while (cumDist + segDist >= kmCount * 1000) {
+          // 선분 내 보간 비율 — 선형 보간으로 정확한 1km 지점 좌표 산출
           const t = (kmCount * 1000 - cumDist) / segDist;
           const lat = p1.lat + t * (p2.lat - p1.lat);
           const lng = p1.lng + t * (p2.lng - p1.lng);

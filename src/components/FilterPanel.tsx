@@ -36,10 +36,12 @@ const matchUnitCount = (unitCount: number | undefined, ranges: string[]): boolea
 };
 
 // ── 연식 파싱 — "95년" → 1995, "00년" → 2000, "2023년" → 2023
-// 2자리: 30이상=19xx, 29이하=20xx (부동산 데이터는 30년이내 준공이 대부분)
+// 2자리 연도: 30이상=19xx, 29이하=20xx (부동산 데이터는 1930~2029 준공 범위 기준)
 const parseBuiltYear = (builtYear: string): number | null => {
+  // 4자리 연도 우선 탐지 (예: "2023년", "2005")
   const m4 = builtYear.match(/(\d{4})/);
   if (m4) return parseInt(m4[1]);
+  // 2자리 연도 처리 (예: "95년", "00년")
   const m2 = builtYear.match(/^(\d{2})년?/);
   if (m2) {
     const y2 = parseInt(m2[1]);
@@ -107,15 +109,18 @@ const GRADE_COLORS: Record<string, string> = {
   S: '#F08080', A: '#FFD97D', B: '#7DC8A0', C: '#89CFF0',
 };
 
-// ── 단일 단지에 대해 필터 적용 ────────────────────────────────────────────────
+// ── 단일 단지에 대해 필터 적용 — App.tsx의 filteredComplexes useMemo에서 호출 ──
+// 모든 조건을 AND로 연결 — 하나라도 불일치하면 false 반환 (단락 평가)
 export const applyFilters = (c: ApartmentComplex, f: ActiveFilters): boolean => {
   if (f.isFavoriteOnly && !c.isFavorite) return false;
   if (f.regions.length > 0 && !f.regions.includes(c.region ?? '')) return false;
+  // visitType이 null인 단지는 'NONE'으로 취급 (임장 안 한 단지)
   if (f.visitTypes.length > 0 && !f.visitTypes.includes(c.visitType ?? 'NONE')) return false;
   if (f.grades.length > 0 && !f.grades.includes(c.grade ?? '')) return false;
   if (f.slopeTypes.length > 0 && !f.slopeTypes.includes(c.slopeType ?? '')) return false;
   if (f.buildingStructures.length > 0 && !f.buildingStructures.includes(c.buildingStructure ?? '')) return false;
   if (f.redevelopTypes.length > 0) {
+    // redevelopType이 null이면 '없음'으로 취급
     const rt = c.redevelopType ?? '없음';
     if (!f.redevelopTypes.includes(rt)) return false;
   }
@@ -124,13 +129,14 @@ export const applyFilters = (c: ApartmentComplex, f: ActiveFilters): boolean => 
   if (!matchJeonseRate(c.jeonseRate, f.jeonseRateRanges)) return false;
   if (!matchChangeRate(c.tenYearChangeRate, f.changeRateRanges)) return false;
 
-  // 등급 계산 필터
+  // 등급 계산 필터 — 각 등급 함수를 런타임에 호출하므로 필터 미활성 시 계산 건너뜀
   if (f.commuteGrades.length > 0) {
     const g = calcCommuteGrade(c.commuteTimes ?? []);
     if (!g || !f.commuteGrades.includes(g.grade)) return false;
   }
   if (f.schoolGrades.length > 0) {
     const g = calcSchoolGrade(c.schoolInfos);
+    // 학군 정보 없는 단지는 등급 산출 불가 → 필터에서 제외
     if (!g || !f.schoolGrades.includes(g)) return false;
   }
   if (f.infraGrades.length > 0) {

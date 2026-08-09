@@ -130,6 +130,7 @@ const App: React.FC = () => {
   const handleCompareToggle = (id: number) => {
     setCompareIds(prev => {
       if (prev.includes(id)) return prev.filter(x => x !== id);
+      // 비교평가 모드: 최대 2개 / 일반 비교 모드: 최대 3개
       const max = compareMode === 'evaluation' ? 2 : 3;
       if (prev.length >= max) {
         alert(`비교평가 모드는 최대 2개까지 선택할 수 있습니다.`);
@@ -139,10 +140,11 @@ const App: React.FC = () => {
     });
   };
 
-  // 모드 변경 — evaluation으로 전환 시 3개 이상 선택된 경우 2개로 trim
+  // 모드 변경 — evaluation으로 전환 시 기존 3개 선택이 있으면 앞 2개만 유지
   const handleCompareModeChange = (mode: 'normal' | 'evaluation') => {
     setCompareMode(mode);
     if (mode === 'evaluation') {
+      // 비교평가는 1:1만 지원 → 초과 선택분 잘라내기
       setCompareIds(prev => prev.slice(0, 2));
     }
   };
@@ -415,6 +417,7 @@ const App: React.FC = () => {
 
   // 단지 정보 갱신 — 상세 조회(getComplexById)는 목록용 computed 필드를 포함하지 않을 수 있으므로
   // 기존 항목의 priceRange·areaTypes·areaTypePriceRanges를 fallback으로 유지
+  // (ComplexInfoPanel이 학군/인프라 수정 후 재조회할 때 지도 마커 금액대 정보 손실 방지)
   const handleComplexUpdate = (updated: ApartmentComplex) => {
     setComplexes(prev => prev.map(c => {
       if (c.id !== updated.id) return c;

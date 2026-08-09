@@ -494,19 +494,21 @@ export interface ChartSeries {
   color: string;
 }
 
-/** 금액 포맷 유틸 */
+/** 금액 포맷 유틸 — 원 단위를 "7억 5천만" 형식 문자열로 변환 */
 export const formatPrice = (price: number): string => {
   const uk = Math.floor(price / 100000000);
-  const cheon = Math.floor((price % 100000000) / 10000000); // 천만 단위 나머지 추출
+  // 억 이하 잔액에서 천만 단위 추출 (예: 75000000 → cheon=7)
+  const cheon = Math.floor((price % 100000000) / 10000000);
   if (cheon > 0) {
     return `${uk}억 ${cheon}천만`;
   }
   return `${uk}억`;
 };
 
-/** 억 단위 변환 */
+/** 억 단위 변환 — 차트 Y축 및 마커 표시에 사용 */
 export const toUkUnit = (price: number): number => {
-  return Math.round((price / 100000000) * 100) / 100; // 소수점 2자리까지만 유지
+  // 소수점 2자리까지만 유지 (예: 7.543억 → 7.54)
+  return Math.round((price / 100000000) * 100) / 100;
 };
 
 /** 주요 지구 소요시간 기반 입지 등급 계산
@@ -523,10 +525,14 @@ export const calcCommuteGrade = (
   const siccheong = commuteTimes.find(ct => ct.destination === '시청');
   const yeouido   = commuteTimes.find(ct => ct.destination === '여의도');
 
+  // S: 강남 30분 이내 — 최상급 직주근접
   if (gangnam && gangnam.minutes <= 30) return { grade: 'S', color: '#F08080' };
+  // A: 강남 60분 이내 OR 도심(시청·여의도) 30분 이내 — 핵심 업무지구 접근성 우수
   const cityUnder30 = (siccheong && siccheong.minutes <= 30) || (yeouido && yeouido.minutes <= 30);
   if (cityUnder30 || (gangnam && gangnam.minutes <= 60)) return { grade: 'A', color: '#FFD97D' };
+  // B: 도심 60분 이내 — 대중교통으로 접근 가능
   const cityUnder60 = (siccheong && siccheong.minutes <= 60) || (yeouido && yeouido.minutes <= 60);
   if (cityUnder60) return { grade: 'B', color: '#7DC8A0' };
+  // C: 위 조건 모두 미충족
   return { grade: 'C', color: '#89CFF0' };
 };
