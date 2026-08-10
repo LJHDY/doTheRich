@@ -321,6 +321,7 @@ export interface ActiveFilters {
   changeRateRanges: string[]    // "80~100"|"100~150"|"150~200"|"200이상"
   peakDiffRanges: string[]      // "-60미만"|"-60~-40"|"-40~-20"|"-20~0"|"0~+20"|"+20이상"
   peakDiffPriceType: string     // "매매가"|"호가"|"KB시세" — 전고점 비교 기준 가격
+  areaTypeRanges: string[]      // "~20평"|"20~25평"|"25~30평"|"30~35평"|"35평+" — 평형대 필터
 }
 
 export const EMPTY_FILTERS: ActiveFilters = {
@@ -328,6 +329,7 @@ export const EMPTY_FILTERS: ActiveFilters = {
   unitCountRanges: [], redevelopTypes: [], slopeTypes: [], buildingStructures: [],
   builtYearRanges: [], regions: [], isFavoriteOnly: false,
   jeonseRateRanges: [], changeRateRanges: [], peakDiffRanges: [], peakDiffPriceType: '매매가',
+  areaTypeRanges: [],
 };
 
 /** 필터가 하나라도 활성화돼 있는지 */
@@ -336,7 +338,8 @@ export const isFiltersActive = (f: ActiveFilters): boolean =>
   f.schoolGrades.length > 0 || f.infraGrades.length > 0 || f.unitCountRanges.length > 0 ||
   f.redevelopTypes.length > 0 || f.slopeTypes.length > 0 || f.buildingStructures.length > 0 ||
   f.builtYearRanges.length > 0 || f.regions.length > 0 || f.isFavoriteOnly ||
-  f.jeonseRateRanges.length > 0 || f.changeRateRanges.length > 0 || f.peakDiffRanges.length > 0;
+  f.jeonseRateRanges.length > 0 || f.changeRateRanges.length > 0 || f.peakDiffRanges.length > 0 ||
+  f.areaTypeRanges.length > 0;
 
 /** 경로 좌표 점 */
 /** 체크리스트 입력 유형 */

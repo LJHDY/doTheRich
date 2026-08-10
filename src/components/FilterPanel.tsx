@@ -116,6 +116,29 @@ const matchPeakDiff = (
   });
 };
 
+// ── 평형대 범위 판별 — areaType 문자열에서 전용면적(㎡) 추출 후 ÷3.3 환산 ──────
+// 단지가 여러 평형을 가질 때 하나라도 범위에 해당하면 매칭 (OR)
+const AREA_TYPE_RANGES = ['~20평', '20~25평', '25~30평', '30~35평', '35평+'] as const;
+const matchAreaTypeRange = (areaTypes: string[] | undefined, ranges: string[]): boolean => {
+  if (ranges.length === 0) return true;
+  if (!areaTypes || areaTypes.length === 0) return false;
+  return areaTypes.some(at => {
+    // "전용 59" / "전용59" / "59.9" 등 다양한 형식에서 숫자 추출
+    const m = at.match(/[\d.]+/);
+    if (!m) return false;
+    const sqm = parseFloat(m[0]);
+    const pyeong = sqm / 3.3;
+    return ranges.some(r => {
+      if (r === '~20평')   return pyeong < 20;
+      if (r === '20~25평') return pyeong >= 20 && pyeong < 25;
+      if (r === '25~30평') return pyeong >= 25 && pyeong < 30;
+      if (r === '30~35평') return pyeong >= 30 && pyeong < 35;
+      if (r === '35평+')   return pyeong >= 35;
+      return false;
+    });
+  });
+};
+
 // ── 재개발 유형 레이블 ─────────────────────────────────────────────────────────
 const REDEVELOP_LABELS: Record<string, string> = {
   REDEVELOPMENT: '재개발', RECONSTRUCTION: '재건축', REMODELING: '리모델링',
@@ -153,6 +176,7 @@ export const applyFilters = (c: ApartmentComplex, f: ActiveFilters): boolean => 
   if (!matchJeonseRate(c.jeonseRate, f.jeonseRateRanges)) return false;
   if (!matchChangeRate(c.tenYearChangeRate, f.changeRateRanges)) return false;
   if (!matchPeakDiff(c, f.peakDiffRanges, f.peakDiffPriceType)) return false;
+  if (!matchAreaTypeRange(c.areaTypes, f.areaTypeRanges)) return false;
 
   // 등급 계산 필터 — 각 등급 함수를 런타임에 호출하므로 필터 미활성 시 계산 건너뜀
   if (f.commuteGrades.length > 0) {
@@ -275,7 +299,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     filters.schoolGrades.length + filters.infraGrades.length + filters.unitCountRanges.length +
     filters.redevelopTypes.length + filters.slopeTypes.length + filters.buildingStructures.length +
     filters.builtYearRanges.length + filters.regions.length + (filters.isFavoriteOnly ? 1 : 0) +
-    filters.jeonseRateRanges.length + filters.changeRateRanges.length + filters.peakDiffRanges.length;
+    filters.jeonseRateRanges.length + filters.changeRateRanges.length + filters.peakDiffRanges.length +
+    filters.areaTypeRanges.length;
 
   const panelStyle: React.CSSProperties = isMobile
     ? { position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }
@@ -469,6 +494,21 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           </div>
           <div style={{ fontSize: '11px', color: '#bdbdbd', marginTop: '6px' }}>
             ※ 시세 기록에 10년 등락률이 입력된 단지만 필터됩니다
+          </div>
+        </div>
+
+        {/* 평형대 */}
+        <div style={sectionStyle}>
+          <SectionLabel>평형대</SectionLabel>
+          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+            {AREA_TYPE_RANGES.map(r => (
+              <Chip key={r} label={r} active={filters.areaTypeRanges.includes(r)}
+                color='#7986cb'
+                onClick={() => upd({ areaTypeRanges: toggle(filters.areaTypeRanges, r) })} />
+            ))}
+          </div>
+          <div style={{ fontSize: '11px', color: '#bdbdbd', marginTop: '6px' }}>
+            ※ 전용면적(㎡) ÷ 3.3 환산 기준, 단지의 평형 중 하나라도 해당하면 포함
           </div>
         </div>
 
