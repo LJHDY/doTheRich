@@ -92,12 +92,19 @@ const matchChangeRate = (rate: number | undefined, ranges: string[]): boolean =>
   });
 };
 
-// ── 전고점 대비 % 범위 판별 — (price - highestPrice) / highestPrice * 100 ──────
+// ── 전고점 대비 % 범위 판별 — (선택가격 - highestPrice) / highestPrice * 100 ──
 const PEAK_DIFF_RANGES = ['-60미만', '-60~-40', '-40~-20', '-20~0', '0~+20', '+20이상'] as const;
-const matchPeakDiff = (price: number | undefined, highestPrice: number | undefined, ranges: string[]): boolean => {
+const PEAK_DIFF_PRICE_TYPES = ['매매가', '호가', 'KB시세'] as const;
+const matchPeakDiff = (
+  c: { price?: number; askingPrice?: number; kbPrice?: number; highestPrice?: number },
+  ranges: string[],
+  priceType: string,
+): boolean => {
   if (ranges.length === 0) return true;
-  if (!price || !highestPrice) return false;
-  const pct = (price - highestPrice) / highestPrice * 100;
+  if (!c.highestPrice) return false;
+  const price = priceType === '호가' ? c.askingPrice : priceType === 'KB시세' ? c.kbPrice : c.price;
+  if (!price) return false;
+  const pct = (price - c.highestPrice) / c.highestPrice * 100;
   return ranges.some(r => {
     if (r === '-60미만')  return pct < -60;
     if (r === '-60~-40') return pct >= -60 && pct < -40;
@@ -145,7 +152,7 @@ export const applyFilters = (c: ApartmentComplex, f: ActiveFilters): boolean => 
   if (!matchBuiltYear(c.builtYear, f.builtYearRanges)) return false;
   if (!matchJeonseRate(c.jeonseRate, f.jeonseRateRanges)) return false;
   if (!matchChangeRate(c.tenYearChangeRate, f.changeRateRanges)) return false;
-  if (!matchPeakDiff(c.price, c.highestPrice, f.peakDiffRanges)) return false;
+  if (!matchPeakDiff(c, f.peakDiffRanges, f.peakDiffPriceType)) return false;
 
   // 등급 계산 필터 — 각 등급 함수를 런타임에 호출하므로 필터 미활성 시 계산 건너뜀
   if (f.commuteGrades.length > 0) {
@@ -468,9 +475,25 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         {/* 전고점 대비 */}
         <div style={{ ...sectionStyle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
           <SectionLabel>전고점 대비 (%)</SectionLabel>
+          {/* 가격 기준 토글 */}
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+            {PEAK_DIFF_PRICE_TYPES.map(t => (
+              <button
+                key={t}
+                onClick={() => upd({ peakDiffPriceType: t })}
+                style={{
+                  padding: '3px 10px', fontSize: '11px', borderRadius: '12px', cursor: 'pointer',
+                  border: filters.peakDiffPriceType === t ? '1.5px solid #1a6fa8' : '1px solid #dadce0',
+                  background: filters.peakDiffPriceType === t ? '#e8f4fd' : '#fff',
+                  color: filters.peakDiffPriceType === t ? '#1a6fa8' : '#5f6368',
+                  fontWeight: filters.peakDiffPriceType === t ? 600 : 400,
+                }}
+              >{t}</button>
+            ))}
+          </div>
           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
             {PEAK_DIFF_RANGES.map(r => {
-              const isNeg = r.startsWith('-') || r === '-20~0';
+              const isNeg = r.startsWith('-');
               const color = isNeg ? '#ef9a9a' : '#90caf9';
               return (
                 <Chip
@@ -484,7 +507,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             })}
           </div>
           <div style={{ fontSize: '11px', color: '#bdbdbd', marginTop: '6px' }}>
-            ※ 매매가 기준 / 전고점이 입력된 단지만 필터됩니다
+            ※ 전고점이 입력된 단지만 필터됩니다
           </div>
         </div>
       </div>

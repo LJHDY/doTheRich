@@ -185,6 +185,7 @@ export interface ApartmentComplex {
   hanRiverParkName?: string;  // 가장 가까운 한강공원명
   hanRiverDistanceM?: number; // 한강공원까지 직선거리 (미터)
   highestPrice?: number;      // 최신 시세 기록의 전고점 (원) — 전고점 대비 필터용
+  kbPrice?: number;           // 최신 시세 기록의 KB시세 (원) — 전고점 대비 필터용
 }
 
 /** 평형별 시세 항목 — 백엔드 PriceHistoryItemDto와 1:1 매핑 */
@@ -319,13 +320,14 @@ export interface ActiveFilters {
   jeonseRateRanges: string[]    // "60미만"|"60~70"|"70~80"|"80이상"
   changeRateRanges: string[]    // "80~100"|"100~150"|"150~200"|"200이상"
   peakDiffRanges: string[]      // "-60미만"|"-60~-40"|"-40~-20"|"-20~0"|"0~+20"|"+20이상"
+  peakDiffPriceType: string     // "매매가"|"호가"|"KB시세" — 전고점 비교 기준 가격
 }
 
 export const EMPTY_FILTERS: ActiveFilters = {
   visitTypes: [], grades: [], commuteGrades: [], schoolGrades: [], infraGrades: [],
   unitCountRanges: [], redevelopTypes: [], slopeTypes: [], buildingStructures: [],
   builtYearRanges: [], regions: [], isFavoriteOnly: false,
-  jeonseRateRanges: [], changeRateRanges: [], peakDiffRanges: [],
+  jeonseRateRanges: [], changeRateRanges: [], peakDiffRanges: [], peakDiffPriceType: '매매가',
 };
 
 /** 필터가 하나라도 활성화돼 있는지 */
