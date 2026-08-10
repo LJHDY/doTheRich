@@ -92,6 +92,23 @@ const matchChangeRate = (rate: number | undefined, ranges: string[]): boolean =>
   });
 };
 
+// ── 전고점 대비 % 범위 판별 — (price - highestPrice) / highestPrice * 100 ──────
+const PEAK_DIFF_RANGES = ['-60미만', '-60~-40', '-40~-20', '-20~0', '0~+20', '+20이상'] as const;
+const matchPeakDiff = (price: number | undefined, highestPrice: number | undefined, ranges: string[]): boolean => {
+  if (ranges.length === 0) return true;
+  if (!price || !highestPrice) return false;
+  const pct = (price - highestPrice) / highestPrice * 100;
+  return ranges.some(r => {
+    if (r === '-60미만')  return pct < -60;
+    if (r === '-60~-40') return pct >= -60 && pct < -40;
+    if (r === '-40~-20') return pct >= -40 && pct < -20;
+    if (r === '-20~0')   return pct >= -20 && pct < 0;
+    if (r === '0~+20')   return pct >= 0   && pct < 20;
+    if (r === '+20이상')  return pct >= 20;
+    return false;
+  });
+};
+
 // ── 재개발 유형 레이블 ─────────────────────────────────────────────────────────
 const REDEVELOP_LABELS: Record<string, string> = {
   REDEVELOPMENT: '재개발', RECONSTRUCTION: '재건축', REMODELING: '리모델링',
@@ -128,6 +145,7 @@ export const applyFilters = (c: ApartmentComplex, f: ActiveFilters): boolean => 
   if (!matchBuiltYear(c.builtYear, f.builtYearRanges)) return false;
   if (!matchJeonseRate(c.jeonseRate, f.jeonseRateRanges)) return false;
   if (!matchChangeRate(c.tenYearChangeRate, f.changeRateRanges)) return false;
+  if (!matchPeakDiff(c.price, c.highestPrice, f.peakDiffRanges)) return false;
 
   // 등급 계산 필터 — 각 등급 함수를 런타임에 호출하므로 필터 미활성 시 계산 건너뜀
   if (f.commuteGrades.length > 0) {
@@ -250,7 +268,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     filters.schoolGrades.length + filters.infraGrades.length + filters.unitCountRanges.length +
     filters.redevelopTypes.length + filters.slopeTypes.length + filters.buildingStructures.length +
     filters.builtYearRanges.length + filters.regions.length + (filters.isFavoriteOnly ? 1 : 0) +
-    filters.jeonseRateRanges.length + filters.changeRateRanges.length;
+    filters.jeonseRateRanges.length + filters.changeRateRanges.length + filters.peakDiffRanges.length;
 
   const panelStyle: React.CSSProperties = isMobile
     ? { position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }
@@ -429,7 +447,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         </div>
 
         {/* 10년 등락률 */}
-        <div style={{ ...sectionStyle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
+        <div style={{ ...sectionStyle }}>
           <SectionLabel>10년 등락률</SectionLabel>
           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
             {(['80~100', '100~150', '150~200', '200이상'] as const).map(r => (
@@ -444,6 +462,29 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           </div>
           <div style={{ fontSize: '11px', color: '#bdbdbd', marginTop: '6px' }}>
             ※ 시세 기록에 10년 등락률이 입력된 단지만 필터됩니다
+          </div>
+        </div>
+
+        {/* 전고점 대비 */}
+        <div style={{ ...sectionStyle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
+          <SectionLabel>전고점 대비 (%)</SectionLabel>
+          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+            {PEAK_DIFF_RANGES.map(r => {
+              const isNeg = r.startsWith('-') || r === '-20~0';
+              const color = isNeg ? '#ef9a9a' : '#90caf9';
+              return (
+                <Chip
+                  key={r}
+                  label={r}
+                  active={filters.peakDiffRanges.includes(r)}
+                  color={color}
+                  onClick={() => upd({ peakDiffRanges: toggle(filters.peakDiffRanges, r) })}
+                />
+              );
+            })}
+          </div>
+          <div style={{ fontSize: '11px', color: '#bdbdbd', marginTop: '6px' }}>
+            ※ 매매가 기준 / 전고점이 입력된 단지만 필터됩니다
           </div>
         </div>
       </div>

@@ -184,6 +184,7 @@ export interface ApartmentComplex {
   floorAreaRatio?: number;    // 용적률 (%)
   hanRiverParkName?: string;  // 가장 가까운 한강공원명
   hanRiverDistanceM?: number; // 한강공원까지 직선거리 (미터)
+  highestPrice?: number;      // 최신 시세 기록의 전고점 (원) — 전고점 대비 필터용
 }
 
 /** 평형별 시세 항목 — 백엔드 PriceHistoryItemDto와 1:1 매핑 */
@@ -317,13 +318,14 @@ export interface ActiveFilters {
   isFavoriteOnly: boolean
   jeonseRateRanges: string[]    // "60미만"|"60~70"|"70~80"|"80이상"
   changeRateRanges: string[]    // "80~100"|"100~150"|"150~200"|"200이상"
+  peakDiffRanges: string[]      // "-60미만"|"-60~-40"|"-40~-20"|"-20~0"|"0~+20"|"+20이상"
 }
 
 export const EMPTY_FILTERS: ActiveFilters = {
   visitTypes: [], grades: [], commuteGrades: [], schoolGrades: [], infraGrades: [],
   unitCountRanges: [], redevelopTypes: [], slopeTypes: [], buildingStructures: [],
   builtYearRanges: [], regions: [], isFavoriteOnly: false,
-  jeonseRateRanges: [], changeRateRanges: [],
+  jeonseRateRanges: [], changeRateRanges: [], peakDiffRanges: [],
 };
 
 /** 필터가 하나라도 활성화돼 있는지 */
@@ -332,7 +334,7 @@ export const isFiltersActive = (f: ActiveFilters): boolean =>
   f.schoolGrades.length > 0 || f.infraGrades.length > 0 || f.unitCountRanges.length > 0 ||
   f.redevelopTypes.length > 0 || f.slopeTypes.length > 0 || f.buildingStructures.length > 0 ||
   f.builtYearRanges.length > 0 || f.regions.length > 0 || f.isFavoriteOnly ||
-  f.jeonseRateRanges.length > 0 || f.changeRateRanges.length > 0;
+  f.jeonseRateRanges.length > 0 || f.changeRateRanges.length > 0 || f.peakDiffRanges.length > 0;
 
 /** 경로 좌표 점 */
 /** 체크리스트 입력 유형 */
