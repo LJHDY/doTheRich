@@ -2672,6 +2672,22 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             )}
           </div>
 
+          {/* 한강공원 — 환경 섹션 헤더 바로 아래 작게 표시 */}
+          {complex.hanRiverParkName && (
+            <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>🏞</span>
+              <span style={{ fontWeight: 600, color: '#1a3a5c' }}>{complex.hanRiverParkName}</span>
+              <span>직선</span>
+              <span style={{ fontWeight: 600, color: '#4BAAD4' }}>
+                {complex.hanRiverDistanceM != null
+                  ? complex.hanRiverDistanceM >= 1000
+                    ? `${(complex.hanRiverDistanceM / 1000).toFixed(1)}km`
+                    : `${complex.hanRiverDistanceM}m`
+                  : '-'}
+              </span>
+            </div>
+          )}
+
           {/* 데이터 없을 때 안내 */}
           {(complex.infraInfos ?? []).length === 0 && newInfraRows.length === 0 && (
             <div style={{ fontSize: '12px', color: '#9e9e9e', paddingBottom: '4px' }}>등록된 인프라 없음</div>

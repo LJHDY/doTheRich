@@ -513,6 +513,21 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
               );
             })()}
           </div>
+          {/* 한강공원 — 환경 섹션 헤더 바로 아래 작게 표시 */}
+          {complex.hanRiverParkName && (
+            <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>🏞</span>
+              <span style={{ fontWeight: 600, color: '#1a3a5c' }}>{complex.hanRiverParkName}</span>
+              <span>직선</span>
+              <span style={{ fontWeight: 600, color: '#4BAAD4' }}>
+                {complex.hanRiverDistanceM != null
+                  ? complex.hanRiverDistanceM >= 1000
+                    ? `${(complex.hanRiverDistanceM / 1000).toFixed(1)}km`
+                    : `${complex.hanRiverDistanceM}m`
+                  : '-'}
+              </span>
+            </div>
+          )}
           {complex.infraInfos && complex.infraInfos.length > 0 ? (
             complex.infraInfos.map((inf: InfraInfo) => (
               <div key={inf.id} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>

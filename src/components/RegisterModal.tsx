@@ -6,6 +6,7 @@ import { ApartmentComplex, ChecklistTemplate } from '../types';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import HAZARD_LOCATIONS from '../constants/hazardLocations';
 import { FACILITY_MACRO_CATEGORY, getSimplifiedCategory } from '../constants/hazardCategories';
+import { findNearestHanRiverPark } from '../constants/hanRiverParks';
 
 // 체크리스트 타입 — 백엔드 visitType enum과 일치
 const CHECKLIST_TYPES = [
@@ -335,6 +336,18 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
     buildingStructure: '', // '' = 미입력, 'STAIRCASE' | 'CORRIDOR' | 'MIXED'
     floorAreaRatio: '',    // 용적률 (%) 숫자 문자열
   });
+
+  // 마운트 시 단지 좌표 기반 가장 가까운 한강공원 자동 계산
+  const [hanRiverParkName, setHanRiverParkName] = useState('');
+  const [hanRiverDistanceM, setHanRiverDistanceM] = useState<number | null>(null);
+  useEffect(() => {
+    if (!initialData.latitude || !initialData.longitude) return;
+    const { name, distanceM } = findNearestHanRiverPark(initialData.latitude, initialData.longitude);
+    setHanRiverParkName(name);
+    setHanRiverDistanceM(distanceM);
+  // 좌표는 모달 열릴 때 고정값 — 이후 변경 없음
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [priceInfos, setPriceInfos] = useState<PriceInfoRow[]>([
     { areaType: '', floorInfo: '', priceUk: '', jeonseUk: '', priceRange: '', kbPriceUk: '', askingPriceUk: '', highestPriceUk: '', lowestPriceUk: '', tenYearAmountStr: '', tenYearRateStr: '' },
@@ -751,6 +764,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
         slopeType: form.slopeType || undefined,
         buildingStructure: form.buildingStructure || undefined,
         floorAreaRatio: form.floorAreaRatio ? parseFloat(form.floorAreaRatio) : undefined,
+        hanRiverParkName: hanRiverParkName || undefined,
+        hanRiverDistanceM: hanRiverDistanceM ?? undefined,
         isFavorite: isFavorite,
         latitude: initialData.latitude,
         longitude: initialData.longitude,
@@ -1104,6 +1119,26 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
             <div>
               <label style={labelStyle}>용적률 (%)</label>
               <input style={inputStyle} type="number" placeholder="예) 250" value={form.floorAreaRatio} onChange={e => set('floorAreaRatio', e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>가장 가까운 한강공원</label>
+              <div style={{
+                ...readonlyStyle,
+                display: 'flex', alignItems: 'center', gap: '6px',
+                color: hanRiverParkName ? '#1a3a5c' : '#9e9e9e',
+              }}>
+                {hanRiverParkName ? (
+                  <>
+                    <span>🏞</span>
+                    <span style={{ fontWeight: 600 }}>{hanRiverParkName}</span>
+                    <span style={{ color: '#5f6368', fontSize: '12px' }}>
+                      직선 {hanRiverDistanceM != null ? hanRiverDistanceM >= 1000
+                        ? `${(hanRiverDistanceM / 1000).toFixed(1)}km`
+                        : `${hanRiverDistanceM}m` : '-'}
+                    </span>
+                  </>
+                ) : '좌표 없음 (자동 계산 불가)'}
+              </div>
             </div>
           </div>
 

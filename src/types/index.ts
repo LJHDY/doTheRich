@@ -182,6 +182,8 @@ export interface ApartmentComplex {
   slopeType?: string;         // 경사도: FLAT/GENTLE/MODERATE/STEEP
   buildingStructure?: string; // 아파트구조: STAIRCASE/CORRIDOR/MIXED
   floorAreaRatio?: number;    // 용적률 (%)
+  hanRiverParkName?: string;  // 가장 가까운 한강공원명
+  hanRiverDistanceM?: number; // 한강공원까지 직선거리 (미터)
 }
 
 /** 평형별 시세 항목 — 백엔드 PriceHistoryItemDto와 1:1 매핑 */
@@ -247,6 +249,8 @@ export interface ApartmentComplexRequest {
   slopeType?: string;         // 경사도: FLAT/GENTLE/MODERATE/STEEP
   buildingStructure?: string; // 아파트구조: STAIRCASE/CORRIDOR/MIXED
   floorAreaRatio?: number;    // 용적률 (%)
+  hanRiverParkName?: string;  // 가장 가까운 한강공원명
+  hanRiverDistanceM?: number; // 한강공원까지 직선거리 (미터)
   // 평형별 가격 배열 — 첫 번째 항목이 단지 대표 가격으로 사용됨
   priceItems?: {
     areaType?: string;
