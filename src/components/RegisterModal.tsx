@@ -1022,7 +1022,27 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
               </div>
               {/* 참고가 서브 행 — 평형별로 개별 입력 */}
               <div style={{ backgroundColor: '#f8f9fa', borderTop: '1px dashed #e8eaed', padding: '8px' }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: '#80868b', marginBottom: '5px' }}>참고가</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#80868b' }}>참고가</span>
+                  {/* 전고점 대비 % — 전고점 입력 시 실시간 계산 */}
+                  {row.highestPriceUk && +row.highestPriceUk > 0 && (() => {
+                    const h = +row.highestPriceUk;
+                    const parts = [
+                      row.priceUk      && +row.priceUk > 0      && { label: '매매', v: +row.priceUk },
+                      row.kbPriceUk    && +row.kbPriceUk > 0    && { label: 'KB',   v: +row.kbPriceUk },
+                      row.askingPriceUk && +row.askingPriceUk > 0 && { label: '호가', v: +row.askingPriceUk },
+                    ].filter(Boolean) as { label: string; v: number }[];
+                    if (parts.length === 0) return null;
+                    return (
+                      <span style={{ fontSize: '10px', color: '#e53935' }}>
+                        전고점 대비 {parts.map(({ label, v }) => {
+                          const pct = ((v - h) / h * 100).toFixed(1);
+                          return `${label} ${+pct >= 0 ? '▲' : '▼'}${Math.abs(+pct)}%`;
+                        }).join('  ')}
+                      </span>
+                    );
+                  })()}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr', gap: '6px' }}>
                   <div>
                     <label style={{ ...labelStyle, fontSize: '10px' }}>KB시세(억)</label>

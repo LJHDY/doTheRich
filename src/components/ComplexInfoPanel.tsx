@@ -434,6 +434,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [editingCommute, setEditingCommute] = useState(false);
   const [commuteRows, setCommuteRows] = useState<CommuteEditRow[]>([]);
   const [savingCommute, setSavingCommute] = useState(false);
+  const [showPeakChart, setShowPeakChart] = useState(false);
   const [showMetroMap, setShowMetroMap] = useState(false);
   const [metroZoom, setMetroZoom] = useState(1);
   const [metroPan, setMetroPan] = useState({ x: 0, y: 0 });
@@ -1955,6 +1956,29 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               <InfoRow label="KB시세" value={selectedRefItem?.kbPrice ? formatPrice(selectedRefItem.kbPrice) : null} />
               <InfoRow label="호가" value={selectedRefItem?.askingPrice ? formatPrice(selectedRefItem.askingPrice) : null} />
               <InfoRow label="전고점" value={selectedRefItem?.highestPrice ? formatPrice(selectedRefItem.highestPrice) : null} />
+              {/* 전고점 대비 % — 전고점이 있고 비교할 가격이 하나라도 있을 때 표시 */}
+              {selectedRefItem?.highestPrice && (selectedRefItem.price || selectedRefItem.kbPrice || selectedRefItem.askingPrice) && (() => {
+                const h = selectedRefItem.highestPrice!;
+                const lines = [
+                  selectedRefItem.price && { label: '매매', v: selectedRefItem.price },
+                  selectedRefItem.kbPrice && { label: 'KB', v: selectedRefItem.kbPrice },
+                  selectedRefItem.askingPrice && { label: '호가', v: selectedRefItem.askingPrice },
+                ].filter(Boolean) as { label: string; v: number }[];
+                const summary = lines.map(({ label, v }) => {
+                  const pct = ((v - h) / h * 100).toFixed(1);
+                  return `${label} ${+pct >= 0 ? '▲' : '▼'}${Math.abs(+pct)}%`;
+                }).join('  ');
+                return (
+                  <div
+                    onClick={() => setShowPeakChart(true)}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
+                    title="클릭하여 그래프 보기"
+                  >
+                    <span style={{ fontSize: '12px', color: '#80868b' }}>전고점 대비</span>
+                    <span style={{ fontSize: '12px', color: '#e53935', textAlign: 'right' }}>{summary} 📊</span>
+                  </div>
+                );
+              })()}
               <InfoRow label="전저점" value={selectedRefItem?.lowestPrice ? formatPrice(selectedRefItem.lowestPrice) : null} />
               <InfoRow label="10년 등락" value={selectedRefItem?.tenYearChangeAmount != null
                 ? `${selectedRefItem.tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(selectedRefItem.tenYearChangeAmount)}억`
@@ -3532,6 +3556,52 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           complexName={complex.complexName}
           onClose={() => setShowPhotoModal(false)}
         />
+      )}
+
+      {/* 전고점 대비 바 차트 모달 */}
+      {showPeakChart && selectedRefItem?.highestPrice && (
+        <div
+          onClick={() => setShowPeakChart(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 99998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', padding: '24px', minWidth: '320px', maxWidth: '420px', width: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>
+                전고점 대비 {selectedRefTab && `(${selectedRefTab})`}
+              </span>
+              <button onClick={() => setShowPeakChart(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#80868b', lineHeight: 1 }}>×</button>
+            </div>
+            {(() => {
+              const h = selectedRefItem.highestPrice!;
+              const rows = [
+                { label: '전고점', v: h, ref: true },
+                selectedRefItem.price      && { label: '매매가', v: selectedRefItem.price },
+                selectedRefItem.kbPrice    && { label: 'KB시세', v: selectedRefItem.kbPrice },
+                selectedRefItem.askingPrice && { label: '호가',   v: selectedRefItem.askingPrice },
+              ].filter(Boolean) as { label: string; v: number; ref?: boolean }[];
+              const maxV = Math.max(...rows.map(r => r.v));
+              return rows.map(({ label, v, ref }) => {
+                const pct = +((v - h) / h * 100).toFixed(1);
+                const barRatio = (v / maxV) * 100;
+                const barColor = ref ? '#90a4ae' : pct >= 0 ? '#42a5f5' : '#ef5350';
+                return (
+                  <div key={label} style={{ marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '12px', color: ref ? '#80868b' : '#344054', fontWeight: ref ? 400 : 600 }}>{label}</span>
+                      <span style={{ fontSize: '12px', color: ref ? '#80868b' : pct >= 0 ? '#1565c0' : '#c62828', fontWeight: 600 }}>
+                        {formatPrice(v)}{!ref && ` (${pct >= 0 ? '▲' : '▼'}${Math.abs(pct)}%)`}
+                      </span>
+                    </div>
+                    <div style={{ background: '#f0f0f0', borderRadius: '4px', height: '12px', overflow: 'hidden' }}>
+                      <div style={{ width: `${barRatio}%`, background: barColor, height: '100%', borderRadius: '4px', transition: 'width 0.4s ease' }} />
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+            <p style={{ fontSize: '11px', color: '#bdbdbd', margin: '16px 0 0', textAlign: 'center' }}>배경 클릭으로 닫기</p>
+          </div>
+        </div>
       )}
 
       {/* 서울 지하철 노선도 뷰어 */}

@@ -134,6 +134,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
   // tooltip 표시 상태
   const [showStageTooltip, setShowStageTooltip] = useState(false);
   const [showRecordTooltip, setShowRecordTooltip] = useState(false);
+  const [showPeakChart, setShowPeakChart] = useState(false);
 
   const loadHistories = useCallback(async () => {
     setLoading(true);
@@ -315,6 +316,28 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                     <InfoRow label="KB시세" value={activeItem.kbPrice ? formatPrice(activeItem.kbPrice) : null} />
                     <InfoRow label="호가" value={activeItem.askingPrice ? formatPrice(activeItem.askingPrice) : null} />
                     <InfoRow label="전고점" value={activeItem.highestPrice ? formatPrice(activeItem.highestPrice) : null} />
+                    {activeItem.highestPrice && (activeItem.price || activeItem.kbPrice || activeItem.askingPrice) && (() => {
+                      const h = activeItem.highestPrice!;
+                      const lines = [
+                        activeItem.price      && { label: '매매', v: activeItem.price },
+                        activeItem.kbPrice    && { label: 'KB',   v: activeItem.kbPrice },
+                        activeItem.askingPrice && { label: '호가', v: activeItem.askingPrice },
+                      ].filter(Boolean) as { label: string; v: number }[];
+                      const summary = lines.map(({ label, v }) => {
+                        const pct = ((v - h) / h * 100).toFixed(1);
+                        return `${label} ${+pct >= 0 ? '▲' : '▼'}${Math.abs(+pct)}%`;
+                      }).join('  ');
+                      return (
+                        <div
+                          onClick={() => setShowPeakChart(true)}
+                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
+                          title="클릭하여 그래프 보기"
+                        >
+                          <span style={{ fontSize: '12px', color: '#80868b' }}>전고점 대비</span>
+                          <span style={{ fontSize: '12px', color: '#e53935', textAlign: 'right' }}>{summary} 📊</span>
+                        </div>
+                      );
+                    })()}
                     <InfoRow label="전저점" value={activeItem.lowestPrice ? formatPrice(activeItem.lowestPrice) : null} />
                     <InfoRow label="10년 등락" value={activeItem.tenYearChangeAmount != null
                       ? `${activeItem.tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(activeItem.tenYearChangeAmount)}억`
@@ -803,6 +826,51 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           </div>
         )}
       </div>
+      {/* 전고점 대비 바 차트 모달 */}
+      {showPeakChart && (() => {
+        const activeTab = selectedRefTab || Array.from(latestItemPerAreaType.keys())[0] || '';
+        const item = latestItemPerAreaType.get(activeTab);
+        if (!item?.highestPrice) return null;
+        const h = item.highestPrice;
+        const rows = [
+          { label: '전고점', v: h, ref: true },
+          item.price       && { label: '매매가', v: item.price },
+          item.kbPrice     && { label: 'KB시세', v: item.kbPrice },
+          item.askingPrice && { label: '호가',   v: item.askingPrice },
+        ].filter(Boolean) as { label: string; v: number; ref?: boolean }[];
+        const maxV = Math.max(...rows.map(r => r.v));
+        return (
+          <div
+            onClick={() => setShowPeakChart(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 99998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', padding: '24px', minWidth: '320px', maxWidth: '420px', width: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: '#344054' }}>전고점 대비 {activeTab && `(${activeTab})`}</span>
+                <button onClick={() => setShowPeakChart(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#80868b', lineHeight: 1 }}>×</button>
+              </div>
+              {rows.map(({ label, v, ref }) => {
+                const pct = +((v - h) / h * 100).toFixed(1);
+                const barColor = ref ? '#90a4ae' : pct >= 0 ? '#42a5f5' : '#ef5350';
+                return (
+                  <div key={label} style={{ marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '12px', color: ref ? '#80868b' : '#344054', fontWeight: ref ? 400 : 600 }}>{label}</span>
+                      <span style={{ fontSize: '12px', color: ref ? '#80868b' : pct >= 0 ? '#1565c0' : '#c62828', fontWeight: 600 }}>
+                        {formatPrice(v)}{!ref && ` (${pct >= 0 ? '▲' : '▼'}${Math.abs(pct)}%)`}
+                      </span>
+                    </div>
+                    <div style={{ background: '#f0f0f0', borderRadius: '4px', height: '12px', overflow: 'hidden' }}>
+                      <div style={{ width: `${(v / maxV) * 100}%`, background: barColor, height: '100%', borderRadius: '4px', transition: 'width 0.4s ease' }} />
+                    </div>
+                  </div>
+                );
+              })}
+              <p style={{ fontSize: '11px', color: '#bdbdbd', margin: '16px 0 0', textAlign: 'center' }}>배경 클릭으로 닫기</p>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
