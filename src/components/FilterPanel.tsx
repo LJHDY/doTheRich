@@ -119,6 +119,14 @@ const matchPeakDiff = (
 // ── 평형대 범위 판별 — areaType 문자열에서 전용면적(㎡) 추출 후 ÷3.3 환산 ──────
 // 단지가 여러 평형을 가질 때 하나라도 범위에 해당하면 매칭 (OR)
 const AREA_TYPE_RANGES = ['~20평', '20~25평', '25~30평', '30~35평', '35평+'] as const;
+// 각 평형대에 대응하는 전용면적(㎡) 범위 표기 — 평 × 3.3 환산
+const AREA_TYPE_SQM: Record<string, string> = {
+  '~20평':   '~66㎡',
+  '20~25평': '66~83㎡',
+  '25~30평': '83~99㎡',
+  '30~35평': '99~116㎡',
+  '35평+':   '116㎡~',
+};
 const matchAreaTypeRange = (areaTypes: string[] | undefined, ranges: string[]): boolean => {
   if (ranges.length === 0) return true;
   if (!areaTypes || areaTypes.length === 0) return false;
@@ -502,13 +510,15 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           <SectionLabel>평형대</SectionLabel>
           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
             {AREA_TYPE_RANGES.map(r => (
-              <Chip key={r} label={r} active={filters.areaTypeRanges.includes(r)}
-                color='#7986cb'
-                onClick={() => upd({ areaTypeRanges: toggle(filters.areaTypeRanges, r) })} />
+              <div key={r} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                <Chip label={r} active={filters.areaTypeRanges.includes(r)}
+                  color='#7986cb'
+                  onClick={() => upd({ areaTypeRanges: toggle(filters.areaTypeRanges, r) })} />
+                <span style={{ fontSize: '10px', color: '#9e9e9e' }}>
+                  {AREA_TYPE_SQM[r]}
+                </span>
+              </div>
             ))}
-          </div>
-          <div style={{ fontSize: '11px', color: '#bdbdbd', marginTop: '6px' }}>
-            ※ 전용면적(㎡) ÷ 3.3 환산 기준, 단지의 평형 중 하나라도 해당하면 포함
           </div>
         </div>
 
