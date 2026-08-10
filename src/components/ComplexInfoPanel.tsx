@@ -1964,10 +1964,6 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   selectedRefItem.kbPrice && { label: 'KB', v: selectedRefItem.kbPrice },
                   selectedRefItem.askingPrice && { label: '호가', v: selectedRefItem.askingPrice },
                 ].filter(Boolean) as { label: string; v: number }[];
-                const summary = lines.map(({ label, v }) => {
-                  const pct = ((v - h) / h * 100).toFixed(1);
-                  return `${label} ${+pct >= 0 ? '▲' : '▼'}${Math.abs(+pct)}%`;
-                }).join('  ');
                 return (
                   <div
                     onClick={() => setShowPeakChart(true)}
@@ -1975,7 +1971,18 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     title="클릭하여 그래프 보기"
                   >
                     <span style={{ fontSize: '12px', color: '#80868b' }}>전고점 대비</span>
-                    <span style={{ fontSize: '12px', color: '#e53935', textAlign: 'right' }}>{summary} 📊</span>
+                    <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      {lines.map(({ label, v }) => {
+                        const pct = +((v - h) / h * 100).toFixed(1);
+                        const color = pct >= 0 ? '#1565c0' : '#c62828';
+                        return (
+                          <span key={label} style={{ fontSize: '12px', color, fontWeight: 600 }}>
+                            {label} {pct >= 0 ? '▲' : '▼'}{Math.abs(pct)}%
+                          </span>
+                        );
+                      })}
+                      <span style={{ fontSize: '12px', color: '#80868b' }}>📊</span>
+                    </span>
                   </div>
                 );
               })()}
