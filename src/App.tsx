@@ -47,6 +47,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [focusLocation, setFocusLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [registerData, setRegisterData] = useState<RegisterInitialData | null>(null);
+  const [registerMapView, setRegisterMapView] = useState(false); // 모바일 등록 모달 "지도 보기" 상태
   // null = 팝업 닫힘, '' = 전체, '7억대' = 특정 금액대
   const [listModalRange, setListModalRange] = useState<string | null>(null);
   const [favoriteListOpen, setFavoriteListOpen] = useState(false);
@@ -852,6 +853,7 @@ const App: React.FC = () => {
               drawingZonePoints={drawingZonePoints}
               onZonePointAdd={handleZonePointAdd}
               zonePolygons={zonePolygons}
+              previewMarker={registerData ? { lat: registerData.latitude, lng: registerData.longitude } : null}
             />
             {selectedComplex && !livingZoneOpen && (
               /* 모바일: 화면 전체를 덮는 fixed 오버레이 / 데스크탑: flex 옆 패널 */
@@ -1154,13 +1156,29 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* 단지 등록 모달 */}
+      {/* 단지 등록 모달 — 모바일에서 "지도 보기" 클릭 시 hidden으로 숨김(상태 유지), 돌아가기로 복귀 */}
       {registerData && (
         <RegisterModal
           initialData={registerData}
-          onClose={() => setRegisterData(null)}
-          onSuccess={loadComplexes}
+          onClose={() => { setRegisterData(null); setRegisterMapView(false); }}
+          onSuccess={() => { loadComplexes(); setRegisterMapView(false); }}
+          isMobile={isMobile}
+          hidden={isMobile && registerMapView}
+          onShowMap={() => setRegisterMapView(true)}
         />
+      )}
+      {/* 모바일 지도 보기 중 돌아가기 버튼 */}
+      {isMobile && registerMapView && registerData && (
+        <button
+          onClick={() => setRegisterMapView(false)}
+          style={{
+            position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
+            zIndex: 1100, padding: '10px 24px', fontSize: '13px', fontWeight: 700,
+            backgroundColor: '#1a3a5c', color: '#fff', border: 'none',
+            borderRadius: '24px', boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+            cursor: 'pointer', whiteSpace: 'nowrap',
+          }}
+        >← 등록으로 돌아가기</button>
       )}
 
       {/* 전역 토스트 알림 */}

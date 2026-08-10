@@ -150,6 +150,9 @@ interface Props {
   initialData: RegisterInitialData;
   onClose: () => void;
   onSuccess: () => void;
+  isMobile?: boolean;
+  hidden?: boolean;   // true = 모달 숨김 (form 상태는 유지)
+  onShowMap?: () => void; // 모바일 "지도 보기" 버튼 콜백
 }
 
 const DESTINATIONS = ['강남', '시청', '여의도', '발산', '마곡나루'];
@@ -281,8 +284,40 @@ const actionBtn = (bg: string, disabled: boolean): React.CSSProperties => ({
   fontSize: '12px', fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap',
 });
 
-const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => {
+const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMobile, hidden, onShowMap }) => {
   const today = new Date().toISOString().split('T')[0];
+
+  // 드래그 이동 상태 — 초기 위치: 화면 왼쪽 상단 여백
+  const [pos, setPos] = useState(() => ({ x: 20, y: 64 }));
+  const dragging = useRef(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
+  // 헤더 mousedown → window mousemove/mouseup 으로 드래그 처리
+  const handleDragStart = (e: React.MouseEvent) => {
+    // input·button·select 클릭은 드래그 제외
+    if ((e.target as HTMLElement).closest('input, button, select, textarea')) return;
+    dragging.current = true;
+    dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+    e.preventDefault();
+  };
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const x = Math.max(0, Math.min(e.clientX - dragOffset.current.x, window.innerWidth - 640));
+      const y = Math.max(0, Math.min(e.clientY - dragOffset.current.y, window.innerHeight - 100));
+      setPos({ x, y });
+    };
+    const onUp = () => { dragging.current = false; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  // 마운트 시 한 번만 등록
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [form, setForm] = useState({
     complexName: initialData.complexName,
@@ -807,44 +842,68 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
     }
   };
 
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-    }}>
+  // 모바일: 전체화면 오버레이 / 데스크탑: 드래그 가능 플로팅 모달
+  const wrapperStyle: React.CSSProperties = isMobile ? {
+    position: 'fixed', inset: 0, zIndex: 1000,
+    backgroundColor: '#fff', display: 'flex', flexDirection: 'column',
+    visibility: hidden ? 'hidden' : 'visible',
+    pointerEvents: hidden ? 'none' : 'auto',
+  } : {
+    position: 'fixed', left: pos.x, top: pos.y, zIndex: 1000,
+    backgroundColor: '#fff', borderRadius: '12px', width: '640px',
+    maxWidth: 'calc(100vw - 32px)',
+    maxHeight: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.28)',
+  };
 
-      <div style={{
-        backgroundColor: '#fff', borderRadius: '12px', width: '640px',
-        maxWidth: 'calc(100vw - 16px)',
-        maxHeight: '88vh', display: 'flex', flexDirection: 'column',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-      }}>
-        {/* 헤더 */}
-        <div style={{
+  return (
+    <div style={wrapperStyle}>
+      {/* 헤더 — 데스크탑: 드래그 핸들 / 모바일: 일반 헤더 */}
+      <div
+        onMouseDown={isMobile ? undefined : handleDragStart}
+        style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '18px 24px', borderBottom: '1px solid #e8eaed', flexShrink: 0,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '16px', fontWeight: 700, color: '#202124' }}>단지 등록</span>
-            {/* 즐겨찾기 별 버튼 — 노란별(활성)/회색별(비활성) 토글 */}
+          padding: '14px 20px', borderBottom: '1px solid #e8eaed', flexShrink: 0,
+          cursor: isMobile ? 'default' : 'grab', backgroundColor: '#f0f8fd',
+          borderRadius: isMobile ? 0 : '12px 12px 0 0', userSelect: 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {!isMobile && <span style={{ fontSize: '13px', color: '#9e9e9e', marginRight: '2px' }}>⠿</span>}
+          <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>단지 등록</span>
+          {/* 즐겨찾기 별 버튼 — 노란별(활성)/회색별(비활성) 토글 */}
+          <button
+            type="button"
+            onClick={() => setIsFavorite(prev => !prev)}
+            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, color: isFavorite ? '#FFD97D' : '#dadce0' }}
+          >★</button>
+          {/* 임장용 체크박스 — 체크 시 매매가 유효성 검사 생략 */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginLeft: '4px' }}>
+            <input
+              type="checkbox"
+              checked={isFieldVisitOnly}
+              onChange={e => setIsFieldVisitOnly(e.target.checked)}
+              style={{ width: '14px', height: '14px', accentColor: '#89CFF0', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: '12px', color: isFieldVisitOnly ? '#89CFF0' : '#80868b', fontWeight: isFieldVisitOnly ? 600 : 400 }}>임장용</span>
+          </label>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* 모바일 전용 — 지도 보기 버튼 */}
+          {isMobile && onShowMap && (
             <button
               type="button"
-              onClick={() => setIsFavorite(prev => !prev)}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, color: isFavorite ? '#FFD97D' : '#dadce0' }}
-            >★</button>
-            {/* 임장용 체크박스 — 체크 시 매매가 유효성 검사 생략 */}
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginLeft: '4px' }}>
-              <input
-                type="checkbox"
-                checked={isFieldVisitOnly}
-                onChange={e => setIsFieldVisitOnly(e.target.checked)}
-                style={{ width: '14px', height: '14px', accentColor: '#89CFF0', cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: '12px', color: isFieldVisitOnly ? '#89CFF0' : '#80868b', fontWeight: isFieldVisitOnly ? 600 : 400 }}>임장용</span>
-            </label>
-          </div>
+              onClick={onShowMap}
+              style={{
+                padding: '5px 12px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid #89CFF0', borderRadius: '6px',
+                backgroundColor: '#D4EFFC', color: '#2a6090', cursor: 'pointer',
+              }}
+            >🗺 지도 보기</button>
+          )}
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#80868b', padding: 0 }}>×</button>
         </div>
+      </div>
 
         {/* 폼 */}
         <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
@@ -1658,7 +1717,6 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess }) => 
             fontSize: '13px', fontWeight: 600,
           }}>{submitting ? '등록 중...' : '등록'}</button>
         </div>
-      </div>
     </div>
   );
 };

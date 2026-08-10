@@ -38,12 +38,14 @@ interface MapPageProps {
   onZonePointAdd?: (p: RoutePoint) => void;
   // 저장된 생활권 구획 폴리곤 목록 — 지도에 반투명 초록 오버레이로 표시
   zonePolygons?: { id: number; name: string; points: RoutePoint[] }[];
+  // 단지 등록 모달 검색 위치 — 임시 핀으로 표시해 실제 아파트 위치 확인용
+  previewMarker?: { lat: number; lng: number } | null;
 }
 
 const MapPage: React.FC<MapPageProps> = ({
   complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter,
   routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict, roadViewOpen, isMobile,
-  isDrawingZone, drawingZonePoints, onZonePointAdd, zonePolygons,
+  isDrawingZone, drawingZonePoints, onZonePointAdd, zonePolygons, previewMarker,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -72,6 +74,8 @@ const MapPage: React.FC<MapPageProps> = ({
   // 저장된 생활권 구획 폴리곤 오버레이 배열
   const zoneSavedPolygonsRef = useRef<any[]>([]);
   const zoneLabelMarkersRef = useRef<any[]>([]);
+  // 단지 등록 모달에서 검색한 위치 임시 마커
+  const previewMarkerRef = useRef<any>(null);
 
   // 마커 diff를 위한 Map — 단지 id → { marker, listenerHandle }
   const markerMapRef = useRef<Map<number, { marker: any; listener: any }>>(new Map());
@@ -335,6 +339,32 @@ const MapPage: React.FC<MapPageProps> = ({
     );
     mapInstanceRef.current.setZoom(16);
   }, [focusLocation]);
+
+  // 등록 모달 검색 위치 임시 마커 — 주황 핀으로 표시, 모달 닫히면 제거
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.naver) return;
+    if (previewMarkerRef.current) {
+      previewMarkerRef.current.setMap(null);
+      previewMarkerRef.current = null;
+    }
+    if (!previewMarker) return;
+    const content = `
+      <div style="
+        width:28px;height:28px;border-radius:50% 50% 50% 4px;
+        background:#FF6B35;border:2px solid #fff;
+        transform:rotate(-45deg);
+        box-shadow:0 2px 6px rgba(0,0,0,0.4);
+        display:flex;align-items:center;justify-content:center;
+      ">
+        <div style="transform:rotate(45deg);font-size:13px;color:#fff;line-height:1;">📍</div>
+      </div>`;
+    previewMarkerRef.current = new window.naver.maps.Marker({
+      position: new window.naver.maps.LatLng(previewMarker.lat, previewMarker.lng),
+      map: mapInstanceRef.current,
+      icon: { content, anchor: new window.naver.maps.Point(14, 28) },
+      zIndex: 500,
+    });
+  }, [previewMarker]);
 
   // 학교·인프라 오버레이 마커 렌더링 — complex 변경 시 갱신
   useEffect(() => {
