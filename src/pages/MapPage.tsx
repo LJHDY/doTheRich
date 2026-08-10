@@ -40,12 +40,14 @@ interface MapPageProps {
   zonePolygons?: { id: number; name: string; points: RoutePoint[] }[];
   // 단지 등록 모달 검색 위치 — 임시 핀으로 표시해 실제 아파트 위치 확인용
   previewMarker?: { lat: number; lng: number } | null;
+  // ComplexInfoPanel 표시 중 해당 단지의 가장 가까운 한강공원 — 이름 라벨 마커로 표시
+  hanRiverParkMarker?: { name: string; lat: number; lng: number } | null;
 }
 
 const MapPage: React.FC<MapPageProps> = ({
   complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter,
   routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict, roadViewOpen, isMobile,
-  isDrawingZone, drawingZonePoints, onZonePointAdd, zonePolygons, previewMarker,
+  isDrawingZone, drawingZonePoints, onZonePointAdd, zonePolygons, previewMarker, hanRiverParkMarker,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -76,6 +78,8 @@ const MapPage: React.FC<MapPageProps> = ({
   const zoneLabelMarkersRef = useRef<any[]>([]);
   // 단지 등록 모달에서 검색한 위치 임시 마커
   const previewMarkerRef = useRef<any>(null);
+  // ComplexInfoPanel 선택 단지의 한강공원 라벨 마커
+  const hanRiverMarkerRef = useRef<any>(null);
 
   // 마커 diff를 위한 Map — 단지 id → { marker, listenerHandle }
   const markerMapRef = useRef<Map<number, { marker: any; listener: any }>>(new Map());
@@ -365,6 +369,32 @@ const MapPage: React.FC<MapPageProps> = ({
       zIndex: 500,
     });
   }, [previewMarker]);
+
+  // 한강공원 라벨 마커 — ComplexInfoPanel 열림/닫힘에 따라 표시·제거
+  useEffect(() => {
+    if (hanRiverMarkerRef.current) {
+      hanRiverMarkerRef.current.setMap(null);
+      hanRiverMarkerRef.current = null;
+    }
+    if (!mapInstanceRef.current || !window.naver || !hanRiverParkMarker) return;
+    const content = `
+      <div style="
+        display:inline-flex; align-items:center; gap:5px;
+        background:#1a5c3a; color:#fff;
+        padding:5px 10px; border-radius:16px;
+        font-size:12px; font-weight:700; white-space:nowrap;
+        box-shadow:0 2px 8px rgba(0,0,0,0.35);
+        border:2px solid #fff;
+      ">
+        🏞 ${hanRiverParkMarker.name}
+      </div>`;
+    hanRiverMarkerRef.current = new window.naver.maps.Marker({
+      position: new window.naver.maps.LatLng(hanRiverParkMarker.lat, hanRiverParkMarker.lng),
+      map: mapInstanceRef.current,
+      icon: { content, anchor: new window.naver.maps.Point(0, 0) },
+      zIndex: 450,
+    });
+  }, [hanRiverParkMarker]);
 
   // 학교·인프라 오버레이 마커 렌더링 — complex 변경 시 갱신
   useEffect(() => {

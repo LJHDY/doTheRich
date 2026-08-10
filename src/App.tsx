@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, ActiveFilters, EMPTY_FILTERS, isFiltersActive } from './types';
 import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon } from './services/api';
 import { pointInPolygon } from './utils/geo';
+import { HAN_RIVER_PARKS } from './constants/hanRiverParks';
 import MapPage from './pages/MapPage';
 import PriceRangeFilter from './components/PriceRangeFilter';
 import ComplexInfoPanel from './components/ComplexInfoPanel';
@@ -854,6 +855,12 @@ const App: React.FC = () => {
               onZonePointAdd={handleZonePointAdd}
               zonePolygons={zonePolygons}
               previewMarker={registerData ? { lat: registerData.latitude, lng: registerData.longitude } : null}
+              hanRiverParkMarker={(() => {
+                const name = selectedComplex?.hanRiverParkName;
+                if (!name) return null;
+                const park = HAN_RIVER_PARKS.find(p => p.name === name);
+                return park ? { name, lat: park.lat, lng: park.lng } : null;
+              })()}
             />
             {selectedComplex && !livingZoneOpen && (
               /* 모바일: 화면 전체를 덮는 fixed 오버레이 / 데스크탑: flex 옆 패널 */
