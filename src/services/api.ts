@@ -237,6 +237,14 @@ export const updateRedevelopInfo = async (
   await api.patch(`/api/complexes/${complexId}/redevelop-info`, data);
 };
 
+/** 한강공원 정보 업데이트 — PATCH /api/complexes/:id/han-river-park */
+export const updateHanRiverPark = async (
+  complexId: number,
+  data: { hanRiverParkName: string; hanRiverDistanceM: number }
+): Promise<void> => {
+  await api.patch(`/api/complexes/${complexId}/han-river-park`, data);
+};
+
 /** 기본 정보 수정 — PATCH /api/complexes/:id/basic-info */
 export const updateComplexBasicInfo = async (
   complexId: number,

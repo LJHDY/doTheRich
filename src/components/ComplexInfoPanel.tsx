@@ -434,6 +434,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [editingCommute, setEditingCommute] = useState(false);
   const [commuteRows, setCommuteRows] = useState<CommuteEditRow[]>([]);
   const [savingCommute, setSavingCommute] = useState(false);
+  const [showMetroMap, setShowMetroMap] = useState(false);
+  const [metroZoom, setMetroZoom] = useState(1);
+  const [metroPan, setMetroPan] = useState({ x: 0, y: 0 });
+  const metroDragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
   // 추가 행 localId 생성용 카운터 — useRef로 관리해 리렌더 시 초기화 방지
   const schoolRowCounter = useRef(0);
   const infraRowCounter = useRef(0);
@@ -2254,6 +2258,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             {complex.commuteTimes && complex.commuteTimes.length > 0 && (
               <CommuteGradeBadge commuteTimes={complex.commuteTimes} />
             )}
+            <button
+              onClick={() => { setShowMetroMap(true); setMetroZoom(1); setMetroPan({ x: 0, y: 0 }); }}
+              style={{ border: '1px solid #89CFF0', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#1a6fa8', padding: '2px 8px', borderRadius: '6px' }}
+              title="서울 지하철 노선도"
+            >노선도</button>
             {!editingCommute && (
               <button
                 onClick={startEditCommute}
@@ -3523,6 +3532,86 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           complexName={complex.complexName}
           onClose={() => setShowPhotoModal(false)}
         />
+      )}
+
+      {/* 서울 지하철 노선도 뷰어 */}
+      {showMetroMap && (
+        <div
+          onClick={() => setShowMetroMap(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+            zIndex: 99999, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          {/* 컨트롤 바 */}
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              marginBottom: '12px', background: 'rgba(255,255,255,0.1)',
+              borderRadius: '20px', padding: '6px 16px',
+            }}
+          >
+            <button
+              onClick={() => setMetroZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))}
+              style={{ background: 'none', border: '1px solid #fff', color: '#fff', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}
+            >−</button>
+            <span style={{ color: '#fff', fontSize: '13px', minWidth: '40px', textAlign: 'center' }}>{Math.round(metroZoom * 100)}%</span>
+            <button
+              onClick={() => setMetroZoom(z => Math.min(5, +(z + 0.2).toFixed(1)))}
+              style={{ background: 'none', border: '1px solid #fff', color: '#fff', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}
+            >+</button>
+            <button
+              onClick={() => { setMetroZoom(1); setMetroPan({ x: 0, y: 0 }); }}
+              style={{ background: 'none', border: '1px solid #aaa', color: '#ccc', borderRadius: '12px', padding: '2px 10px', cursor: 'pointer', fontSize: '12px', marginLeft: '4px' }}
+            >초기화</button>
+            <button
+              onClick={() => setShowMetroMap(false)}
+              style={{ background: 'none', border: '1px solid #aaa', color: '#ccc', borderRadius: '12px', padding: '2px 10px', cursor: 'pointer', fontSize: '12px', marginLeft: '4px' }}
+            >닫기</button>
+          </div>
+
+          {/* 이미지 영역 */}
+          <div
+            onClick={e => e.stopPropagation()}
+            onWheel={e => {
+              e.preventDefault();
+              setMetroZoom(z => Math.min(5, Math.max(0.3, +(z - e.deltaY * 0.001).toFixed(3))));
+            }}
+            onMouseDown={e => {
+              metroDragRef.current = { startX: e.clientX, startY: e.clientY, panX: metroPan.x, panY: metroPan.y };
+            }}
+            onMouseMove={e => {
+              if (!metroDragRef.current) return;
+              setMetroPan({
+                x: metroDragRef.current.panX + (e.clientX - metroDragRef.current.startX),
+                y: metroDragRef.current.panY + (e.clientY - metroDragRef.current.startY),
+              });
+            }}
+            onMouseUp={() => { metroDragRef.current = null; }}
+            onMouseLeave={() => { metroDragRef.current = null; }}
+            style={{
+              overflow: 'hidden', cursor: metroZoom > 1 ? 'grab' : 'default',
+              maxWidth: '90vw', maxHeight: '80vh',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <img
+              src="/seoul-metro-map.png"
+              alt="서울 지하철 노선도"
+              draggable={false}
+              style={{
+                transform: `translate(${metroPan.x}px, ${metroPan.y}px) scale(${metroZoom})`,
+                transformOrigin: 'center center',
+                transition: metroDragRef.current ? 'none' : 'transform 0.1s',
+                maxWidth: '85vw', maxHeight: '75vh',
+                userSelect: 'none',
+              }}
+            />
+          </div>
+          <p style={{ color: '#888', fontSize: '11px', marginTop: '10px' }}>스크롤로 줌 · 드래그로 이동 · 배경 클릭으로 닫기</p>
+        </div>
       )}
     </div>
   );

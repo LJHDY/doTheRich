@@ -342,7 +342,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
   const [hanRiverDistanceM, setHanRiverDistanceM] = useState<number | null>(null);
   useEffect(() => {
     if (!initialData.latitude || !initialData.longitude) return;
-    const { name, distanceM } = findNearestHanRiverPark(initialData.latitude, initialData.longitude);
+    const { name, distanceM } = findNearestHanRiverPark(initialData.latitude, initialData.longitude, extractRegion(initialData.address));
     setHanRiverParkName(name);
     setHanRiverDistanceM(distanceM);
   // 좌표는 모달 열릴 때 고정값 — 이후 변경 없음
