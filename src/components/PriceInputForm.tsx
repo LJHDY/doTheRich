@@ -345,10 +345,14 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                   <div>
                     <span style={{ ...labelStyle, fontSize: '9px' }}>10년 등락(억)</span>
-                    {/* "A-B" 입력 시 등락 금액과 등락률 자동 계산 */}
-                    <input type="text" style={{ ...rowInputStyle, fontSize: '11px' }} placeholder="8.5-4.3"
+                    {/* 포커스 시 매매가가 있고 비어있으면 "A-" 자동 프리필 → B만 입력해도 계산 */}
+                    <input type="text" style={{ ...rowInputStyle, fontSize: '11px' }} placeholder="4.3 또는 8.5-4.3"
                       value={row.tenYearAmountStr}
                       onChange={e => updatePriceRow(i, { tenYearAmountStr: e.target.value })}
+                      onFocus={() => {
+                        if (!row.tenYearAmountStr && row.priceUk)
+                          updatePriceRow(i, { tenYearAmountStr: `${row.priceUk}-` });
+                      }}
                       onBlur={() => {
                         const { amount, rate } = calcTenYear(row.tenYearAmountStr);
                         updatePriceRow(i, { tenYearAmountStr: amount, ...(rate ? { tenYearRateStr: rate } : {}) });

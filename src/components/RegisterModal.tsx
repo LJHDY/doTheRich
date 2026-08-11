@@ -1074,11 +1074,15 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
                   </div>
                   <div>
                     <label style={{ ...labelStyle, fontSize: '10px' }}>10년 등락(억)</label>
-                    {/* "A-B" 입력 시 등락 금액과 등락률 자동 계산 */}
+                    {/* 포커스 시 매매가가 있고 비어있으면 "A-" 자동 프리필 → B만 입력해도 계산 */}
                     <input type="text" style={{ ...inputStyle, fontSize: '11px', padding: '5px 6px' }}
-                      placeholder="8.5-4.3"
+                      placeholder="4.3 또는 8.5-4.3"
                       value={row.tenYearAmountStr}
                       onChange={e => updatePriceRow(i, { tenYearAmountStr: e.target.value })}
+                      onFocus={() => {
+                        if (!row.tenYearAmountStr && row.priceUk)
+                          updatePriceRow(i, { tenYearAmountStr: `${row.priceUk}-` });
+                      }}
                       onBlur={() => {
                         const { amount, rate } = calcTenYear(row.tenYearAmountStr);
                         updatePriceRow(i, { tenYearAmountStr: amount, ...(rate ? { tenYearRateStr: rate } : {}) });
