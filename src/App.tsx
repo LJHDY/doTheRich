@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, ActiveFilters, EMPTY_FILTERS, isFiltersActive } from './types';
-import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon } from './services/api';
+import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon, getPublicComplexGuList, collectPublicComplexes } from './services/api';
 import { pointInPolygon } from './utils/geo';
 import { HAN_RIVER_PARKS } from './constants/hanRiverParks';
 import MapPage from './pages/MapPage';
@@ -104,6 +104,12 @@ const App: React.FC = () => {
 
   // 구별 시세 현황 패널
   const [districtStatsOpen, setDistrictStatsOpen] = useState(false);
+
+  // 공공단지 수집 패널
+  const [collectPanelOpen, setCollectPanelOpen] = useState(false);
+  const [guList, setGuList] = useState<{ guName: string; sigunguCd: string }[]>([]);
+  const [selectedCollectGu, setSelectedCollectGu] = useState('');
+  const [collectStatus, setCollectStatus] = useState<'idle' | 'collecting' | 'done' | 'error'>('idle');
 
   // 전역 토스트 알림 — 수집 완료 등 일회성 메시지
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -257,6 +263,26 @@ const App: React.FC = () => {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isDrawingRoute, handleUndoLastPoint]);
+
+  // 공공단지 수집 패널 열 때 구 목록 한 번만 로드
+  useEffect(() => {
+    if (!collectPanelOpen || guList.length > 0) return;
+    getPublicComplexGuList().then(list => {
+      setGuList(list);
+      if (list.length > 0) setSelectedCollectGu(list[0].guName);
+    }).catch(() => {});
+  }, [collectPanelOpen, guList.length]);
+
+  const handleCollect = async () => {
+    if (!selectedCollectGu) return;
+    setCollectStatus('collecting');
+    try {
+      await collectPublicComplexes(selectedCollectGu);
+      setCollectStatus('done');
+    } catch {
+      setCollectStatus('error');
+    }
+  };
 
   // 경로 저장 — 신규면 POST, 수정이면 PATCH
   const handleSaveRoute = async () => {
@@ -748,6 +774,57 @@ const App: React.FC = () => {
                   color: districtStatsOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >구별 시세</button>
+              {/* 공공단지 수집 */}
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <button
+                  onClick={() => { setCollectPanelOpen(v => !v); setCollectStatus('idle'); }}
+                  style={{
+                    padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                    border: `1px solid ${collectPanelOpen ? '#E06060' : '#dadce0'}`,
+                    borderRadius: '6px', backgroundColor: collectPanelOpen ? '#fdecea' : '#fff',
+                    color: collectPanelOpen ? '#E06060' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >공공단지 수집</button>
+                {collectPanelOpen && (
+                  <div style={{
+                    position: 'absolute', top: '100%', right: 0, marginTop: '4px',
+                    background: '#fff', border: '1px solid #dadce0', borderRadius: '8px',
+                    padding: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.12)', zIndex: 1000,
+                    display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '220px',
+                  }}>
+                    <div style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>서울 구 선택</div>
+                    <select
+                      value={selectedCollectGu}
+                      onChange={e => { setSelectedCollectGu(e.target.value); setCollectStatus('idle'); }}
+                      style={{ fontSize: '13px', padding: '5px 8px', borderRadius: '6px', border: '1px solid #dadce0' }}
+                    >
+                      {guList.map(g => <option key={g.guName} value={g.guName}>{g.guName}</option>)}
+                    </select>
+                    <button
+                      onClick={handleCollect}
+                      disabled={collectStatus === 'collecting' || !selectedCollectGu}
+                      style={{
+                        padding: '6px', fontSize: '13px', fontWeight: 600, borderRadius: '6px',
+                        border: 'none', cursor: collectStatus === 'collecting' ? 'not-allowed' : 'pointer',
+                        background: collectStatus === 'collecting' ? '#ccc' : '#E06060',
+                        color: '#fff',
+                      }}
+                    >
+                      {collectStatus === 'collecting' ? '수집 중…' : '수집 시작'}
+                    </button>
+                    {collectStatus === 'done' && (
+                      <div style={{ fontSize: '12px', color: '#2e7d32', fontWeight: 600 }}>
+                        ✅ {selectedCollectGu} 수집 요청 완료 (백그라운드 진행 중)
+                      </div>
+                    )}
+                    {collectStatus === 'error' && (
+                      <div style={{ fontSize: '12px', color: '#E06060', fontWeight: 600 }}>
+                        ❌ 수집 실패 — 서버 로그 확인
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}

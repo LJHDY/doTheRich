@@ -660,4 +660,22 @@ export const collectDistrictStats = async (): Promise<{ message: string }> => {
   return data;
 };
 
+/** 서울 25구 목록 — GET /api/public-complexes/gu-list */
+export const getPublicComplexGuList = async (): Promise<{ guName: string; sigunguCd: string }[]> => {
+  const { data } = await api.get('/api/public-complexes/gu-list');
+  return data;
+};
+
+/** 공공단지 수집 트리거 — POST /api/public-complexes/collect (백그라운드 실행) */
+export const collectPublicComplexes = async (guName: string): Promise<{ status: string; gu_name: string }> => {
+  const { data } = await api.post('/api/public-complexes/collect', { gu_name: guName });
+  return data;
+};
+
+/** 저장된 공공단지 목록 — GET /api/public-complexes?sigungu_cd= */
+export const getPublicComplexes = async (sigunguCd: string): Promise<any[]> => {
+  const { data } = await api.get('/api/public-complexes', { params: { sigungu_cd: sigunguCd } });
+  return data;
+};
+
 export default api;
