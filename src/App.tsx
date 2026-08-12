@@ -68,10 +68,10 @@ const App: React.FC = () => {
   const [radiusCenter, setRadiusCenter] = useState<{ lat: number; lng: number } | null>(null);
 
   // 생활권 패널 — ComplexInfoPanel과 동일 슬롯, 동시에 열리지 않음
-  const [livingZoneOpen, setLivingZoneOpen] = useState(false);
+  const [livingZoneOpen, setLivingZoneOpen] = useState(() => sessionStorage.getItem('panel_living') === 'true');
 
   // 경로 관리 패널 + 그리기/수정 모드
-  const [routePanelOpen, setRoutePanelOpen] = useState(false);
+  const [routePanelOpen, setRoutePanelOpen] = useState(() => sessionStorage.getItem('panel_route') === 'true');
   // 모바일 전용: 'list'=경로 목록 패널 / 'map'=지도에서 경로 확인
   const [mobileRouteView, setMobileRouteView] = useState<'list' | 'map'>('list');
   // 모바일 햄버거 풀다운 메뉴 열림 여부
@@ -94,7 +94,7 @@ const App: React.FC = () => {
   const [zonePolygons, setZonePolygons] = useState<{ id: number; name: string; points: RoutePoint[] }[]>([]);
 
   // 행정구역 경계 표시 — 선택한 구/시 폴리곤을 지도에 오버레이
-  const [selectedDistrict, setSelectedDistrict] = useState<string | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState<string | null>(() => sessionStorage.getItem('selected_district') || null);
 
   // 로드뷰 패널 — 지도 하단 분할 뷰
   const [roadViewOpen, setRoadViewOpen] = useState(false);
@@ -103,14 +103,15 @@ const App: React.FC = () => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
   // 체크리스트 항목 관리 패널
-  const [checklistPanelOpen, setChecklistPanelOpen] = useState(false);
+  const [checklistPanelOpen, setChecklistPanelOpen] = useState(() => sessionStorage.getItem('panel_checklist') === 'true');
 
   // 구별 시세 현황 패널
-  const [districtStatsOpen, setDistrictStatsOpen] = useState(false);
+  const [districtStatsOpen, setDistrictStatsOpen] = useState(() => sessionStorage.getItem('panel_district') === 'true');
 
   // 가계부 — 새로고침 후에도 열린 상태 복원
   const [budgetOpen, setBudgetOpen] = useState(() => sessionStorage.getItem('budget_open') === 'true');
   useEffect(() => { sessionStorage.setItem('budget_open', String(budgetOpen)); }, [budgetOpen]);
+
   // 유저 미선택 시 선택 모달 표시 — 가계부 열기 시점에 확인
   const [showUserSelect, setShowUserSelect] = useState(false);
 
@@ -139,12 +140,26 @@ const App: React.FC = () => {
   );
 
   // 구매 가능 분석 패널 — 생활권·단지패널과 상호 배타
-  const [affordOpen, setAffordOpen] = useState(false);
+  const [affordOpen, setAffordOpen] = useState(() => sessionStorage.getItem('panel_afford') === 'true');
 
   // 비교하기 — 일반(최대 3개) / 비교평가(1:1) 모드
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [compareOpen, setCompareOpen] = useState(() => sessionStorage.getItem('panel_compare') === 'true');
+  const [compareIds, setCompareIds] = useState<number[]>(() => {
+    try { return JSON.parse(sessionStorage.getItem('compare_ids') || '[]'); } catch { return []; }
+  });
   const [compareMode, setCompareMode] = useState<'normal' | 'evaluation'>('normal');
+
+  // 전체 패널 열림 상태 → sessionStorage 동기화 (새로고침 후 복원용)
+  useEffect(() => {
+    sessionStorage.setItem('panel_living',      String(livingZoneOpen));
+    sessionStorage.setItem('panel_route',       String(routePanelOpen));
+    sessionStorage.setItem('panel_district',    String(districtStatsOpen));
+    sessionStorage.setItem('panel_afford',      String(affordOpen));
+    sessionStorage.setItem('panel_checklist',   String(checklistPanelOpen));
+    sessionStorage.setItem('panel_compare',     String(compareOpen));
+    sessionStorage.setItem('compare_ids',       JSON.stringify(compareIds));
+    sessionStorage.setItem('selected_district', selectedDistrict ?? '');
+  }, [livingZoneOpen, routePanelOpen, districtStatsOpen, affordOpen, checklistPanelOpen, compareOpen, compareIds, selectedDistrict]);
 
   // 체크박스 토글 — 모드별 최대값 체크 후 추가/해제
   const handleCompareToggle = (id: number) => {
