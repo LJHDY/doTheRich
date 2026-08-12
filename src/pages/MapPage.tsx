@@ -408,14 +408,24 @@ const MapPage: React.FC<MapPageProps> = ({
     publicComplexMarkersRef.current = [];
     if (!publicComplexes?.length) return;
     publicComplexes.forEach(pc => {
-      const name = (pc.bldNm ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      const hhld = pc.hhldCnt ? `${pc.hhldCnt}세대` : '';
+      const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const name = esc(pc.bldNm ?? '');
+      // 세부 정보: 연식·세대수·용적률·주차 중 값 있는 것만 · 구분자로 연결
+      const details = [
+        pc.useAprDay ? pc.useAprDay.slice(0,4)+'년' : null,
+        pc.hhldCnt   ? pc.hhldCnt+'세대'             : null,
+        pc.vlRat     ? pc.vlRat+'%'                   : null,
+        pc.parkingCnt? pc.parkingCnt+'대'              : null,
+      ].filter(Boolean).join(' · ');
       const content = `
         <div style="
-          background:#fff;border:1.5px solid #89CFF0;border-radius:4px;
-          padding:2px 5px;font-size:9px;color:#1a3a5c;white-space:nowrap;
-          box-shadow:0 1px 4px rgba(0,0,0,0.12);cursor:default;opacity:0.85;
-        ">${name}${hhld ? ` <span style="color:#80868b">${hhld}</span>` : ''}</div>`;
+          background:rgba(255,255,255,0.95);border:1.5px solid #89CFF0;border-radius:5px;
+          padding:3px 8px;white-space:nowrap;
+          box-shadow:0 2px 6px rgba(0,0,0,0.18);cursor:default;
+        ">
+          <div style="font-size:11px;font-weight:700;color:#1a3a5c;line-height:1.5;">${name}</div>
+          ${details ? `<div style="font-size:10px;color:#555;line-height:1.4;">${details}</div>` : ''}
+        </div>`;
       const marker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(pc.latitude, pc.longitude),
         map: mapInstanceRef.current,
