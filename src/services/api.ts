@@ -27,6 +27,7 @@ import {
   BudgetSummary,
   Asset,
   AssetSnapshotCell,
+  AssetSnapshotDetail,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -864,6 +865,40 @@ export const copyAssetSnapshot = async (
 /** 특정 날짜의 모든 스냅샷 행 삭제 */
 export const deleteAssetSnapshotDate = async (userId: string, snapshotDate: string): Promise<void> => {
   await api.delete(`/api/assets/snapshots/${snapshotDate}`, { params: { user_id: userId } });
+};
+
+// ─── 자산 세부 항목 API ──────────────────────────────────────────
+
+const toDetail = (d: any): AssetSnapshotDetail => ({
+  id: d.id,
+  userId: d.user_id,
+  snapshotDate: d.snapshot_date,
+  assetType: d.asset_type,
+  accountName: d.account_name,
+  amount: d.amount,
+});
+
+/** 특정 날짜의 세부 항목 목록 (전체 유저) */
+export const getAssetSnapshotDetails = async (snapshotDate: string): Promise<AssetSnapshotDetail[]> => {
+  const { data } = await api.get('/api/assets/snapshots/details', { params: { snapshot_date: snapshotDate } });
+  return data.map(toDetail);
+};
+
+/** 세부 항목 일괄 저장 — 닫을 때 합산이 스냅샷 셀에 자동 반영됨 */
+export const bulkSaveAssetSnapshotDetails = async (
+  snapshotDate: string,
+  items: { userId: string; assetType: string; accountName: string; amount: number }[],
+): Promise<AssetSnapshotDetail[]> => {
+  const { data } = await api.post('/api/assets/snapshots/details/bulk', {
+    snapshot_date: snapshotDate,
+    items: items.map(i => ({
+      user_id: i.userId,
+      asset_type: i.assetType,
+      account_name: i.accountName,
+      amount: i.amount,
+    })),
+  });
+  return data.map(toDetail);
 };
 
 export default api;

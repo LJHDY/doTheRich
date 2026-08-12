@@ -613,6 +613,16 @@ export interface AssetSnapshotCell {
   amount: number;        // 원 단위 (달러 현금은 USD 달러 금액)
 }
 
+/** 자산 세부 항목 — 계좌별 내역 (합산 → 스냅샷 셀 자동 반영) */
+export interface AssetSnapshotDetail {
+  id: number;
+  userId: string;
+  snapshotDate: string;
+  assetType: string;
+  accountName: string;
+  amount: number;  // 원 단위
+}
+
 /** 금액을 "0,000원" 형식으로 포맷 */
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';

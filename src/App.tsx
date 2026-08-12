@@ -1116,7 +1116,15 @@ const App: React.FC = () => {
             )}
             {/* 체크리스트 항목 관리 패널 */}
             {checklistPanelOpen && (
-              <ChecklistTemplatePanel onClose={() => setChecklistPanelOpen(false)} />
+              <div style={isMobile ? {
+                position: 'fixed', inset: 0, zIndex: 500,
+                display: 'flex', flexDirection: 'column',
+              } : {}}>
+                <ChecklistTemplatePanel
+                  onClose={() => setChecklistPanelOpen(false)}
+                  isMobile={isMobile}
+                />
+              </div>
             )}
             {/* 구별 시세 현황 패널 */}
             {districtStatsOpen && (

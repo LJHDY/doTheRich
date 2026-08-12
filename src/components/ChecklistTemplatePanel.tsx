@@ -31,9 +31,10 @@ const inputTypeBadge = (type: ChecklistInputType | undefined): React.CSSProperti
 
 interface Props {
   onClose: () => void;
+  isMobile?: boolean;
 }
 
-const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
+const ChecklistTemplatePanel: React.FC<Props> = ({ onClose, isMobile }) => {
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [activeTab, setActiveTab] = useState<VisitTypeKey>('ATMOSPHERE');
 
@@ -191,8 +192,8 @@ const ChecklistTemplatePanel: React.FC<Props> = ({ onClose }) => {
 
   return (
     <div style={{
-      width: '320px', height: '100%',
-      backgroundColor: '#fff', borderLeft: '1px solid #e8eaed',
+      width: isMobile ? '100%' : '320px', height: '100%',
+      backgroundColor: '#fff', borderLeft: isMobile ? 'none' : '1px solid #e8eaed',
       display: 'flex', flexDirection: 'column', flexShrink: 0,
     }}>
       {/* 헤더 */}

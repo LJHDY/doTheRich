@@ -274,6 +274,8 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
 | PUT | `/api/assets/snapshots/cell` | 단일 셀 upsert — `{user_id, snapshot_date, asset_type, amount}` |
 | POST | `/api/assets/snapshots/copy` | 날짜 간 스냅샷 복사 — `{user_id, from_date, to_date}` |
 | DELETE | `/api/assets/snapshots/{snapshot_date}?user_id=` | 특정 날짜 스냅샷 전체 삭제 |
+| GET | `/api/assets/snapshots/details?snapshot_date=` | 특정 날짜 세부 항목 목록 (전체 유저) |
+| POST | `/api/assets/snapshots/details/bulk` | 세부 항목 일괄 저장 + 스냅샷 셀 합산 자동 업데이트 — `{snapshot_date, items:[{user_id, asset_type, account_name, amount}]}` |
 
 ---
 
@@ -756,6 +758,13 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
     - `ASSET_COLUMNS` (10개 항목, 즉시사용가능/불가 2그룹), `AssetSnapshotCell` 타입, snapshot API 5종
     - 백엔드: `asset_snapshot` 테이블, `asset_snapshot_service.py`, snapshot 라우트 5개 (`/api/assets/snapshots/*`)
   - **통합 보기 탭**: 최신 스냅샷 기준 자산 현황 + 월별 가계부 요약 (동영|주해|합산 3열)
+- [x] 자산 세부 내역 기능 (`AssetDetailModal`)
+  - 자산 현황 탭 우측 상단 "📋 세부 내역" 버튼 → 모달 오픈
+  - 모달: ASSET_COLUMNS × BUDGET_USERS 구조, 자산 항목별/유저별 [계좌명, 금액(만원)] 행 추가·삭제
+  - 저장 시: 입력 만원 × 10,000 → 원 환산, 합산 자동으로 스냅샷 셀 업데이트 (없어진 항목 → 0)
+  - 재오픈 시 저장된 세부 항목 그대로 표시·수정 가능
+  - `AssetSnapshotDetail` 타입, `getAssetSnapshotDetails` / `bulkSaveAssetSnapshotDetails` API
+  - 백엔드: `asset_snapshot_detail` 테이블, `asset_snapshot_detail_service.py`, 라우트 2개
 
 ## 미완성 / TODO
 

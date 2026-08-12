@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
@@ -22,8 +23,10 @@ import {
   upsertAssetSnapshotCell,
   copyAssetSnapshot,
   deleteAssetSnapshotDate,
+  getAssetSnapshotDetails,
+  bulkSaveAssetSnapshotDetails,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
@@ -68,6 +71,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem('budget_tab') as Tab) || 'ENTRIES');
   useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
+  const isMobile = useIsMobile();
 
   // 입력 폼
   const [formOpen, setFormOpen] = useState(false);
@@ -195,46 +199,75 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       fontFamily: 'inherit',
     }}>
       {/* ── 헤더 ─────────────────────────────────────────────── */}
-      <div style={{
-        background: '#fff', borderBottom: '3px solid #89CFF0',
-        padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '12px',
-        flexShrink: 0,
-      }}>
-        <button onClick={onClose} style={btnStyle('#e0f0ff', '#1a3a5c')}>← 닫기</button>
-        <span style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a5c', flexGrow: 1 }}>
-          💰 가계부
-        </span>
-        {/* 탭 전환 */}
-        <div style={{ display: 'flex', gap: '4px', background: '#f0f4f8', borderRadius: '8px', padding: '3px' }}>
-          {([['ENTRIES', '내역'], ['ACCOUNTS', '통장 관리'], ['ASSETS', '자산'], ['OVERVIEW', '통합 보기']] as [Tab, string][]).map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              padding: '4px 10px', fontSize: '12px', fontWeight: tab === t ? 700 : 400,
-              borderRadius: '6px', border: 'none', cursor: 'pointer',
-              background: tab === t ? '#fff' : 'transparent',
-              color: tab === t ? '#1a3a5c' : '#5f6368',
-              boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            }}>{label}</button>
-          ))}
-        </div>
-        {/* 사용자 전환 — 클릭 시 선택 모달 */}
-        <button onClick={() => setShowUserSelect(true)} style={btnStyle('#f0f8fd', '#1a3a5c')}>
-          👤 {userName}
-        </button>
-        {/* 월 네비게이션 (내역·통합 탭에서 표시) */}
-        {(tab === 'ENTRIES' || tab === 'OVERVIEW') && <>
-          <button onClick={() => moveMonth(-1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>◀</button>
-          <span style={{ fontSize: '14px', fontWeight: 600, color: '#344054', minWidth: '100px', textAlign: 'center' }}>
-            {displayYearMonth(yearMonth)}
-          </span>
-          <button onClick={() => moveMonth(1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>▶</button>
-          {tab === 'ENTRIES' && <button onClick={openAdd} style={btnStyle('#89CFF0', '#fff')}>+ 추가</button>}
-        </>}
+      <div style={{ background: '#fff', borderBottom: '3px solid #89CFF0', flexShrink: 0 }}>
+        {isMobile ? (
+          /* 모바일: 3행 레이아웃 */
+          <>
+            {/* 행 1: 닫기 + 타이틀 + 유저 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px 6px' }}>
+              <button onClick={onClose} style={btnStyle('#e0f0ff', '#1a3a5c')}>← 닫기</button>
+              <span style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c', flexGrow: 1 }}>💰 가계부</span>
+              <button onClick={() => setShowUserSelect(true)} style={btnStyle('#f0f8fd', '#1a3a5c')}>👤 {userName}</button>
+            </div>
+            {/* 행 2: 탭 전환 */}
+            <div style={{ padding: '0 14px 6px' }}>
+              <div style={{ display: 'flex', gap: '3px', background: '#f0f4f8', borderRadius: '8px', padding: '3px' }}>
+                {([['ENTRIES', '내역'], ['ACCOUNTS', '통장'], ['ASSETS', '자산'], ['OVERVIEW', '통합']] as [Tab, string][]).map(([t, label]) => (
+                  <button key={t} onClick={() => setTab(t)} style={{
+                    flex: 1, padding: '6px 4px', fontSize: '12px', fontWeight: tab === t ? 700 : 400,
+                    borderRadius: '6px', border: 'none', cursor: 'pointer',
+                    background: tab === t ? '#fff' : 'transparent',
+                    color: tab === t ? '#1a3a5c' : '#5f6368',
+                    boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+            {/* 행 3: 월 네비게이션 (내역·통합 탭에서만) */}
+            {(tab === 'ENTRIES' || tab === 'OVERVIEW') && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 14px 10px' }}>
+                <button onClick={() => moveMonth(-1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>◀</button>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#344054', flexGrow: 1, textAlign: 'center' }}>
+                  {displayYearMonth(yearMonth)}
+                </span>
+                <button onClick={() => moveMonth(1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>▶</button>
+                {tab === 'ENTRIES' && <button onClick={openAdd} style={btnStyle('#89CFF0', '#fff')}>+ 추가</button>}
+              </div>
+            )}
+          </>
+        ) : (
+          /* 데스크탑: 1행 레이아웃 (기존) */
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 20px' }}>
+            <button onClick={onClose} style={btnStyle('#e0f0ff', '#1a3a5c')}>← 닫기</button>
+            <span style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a5c', flexGrow: 1 }}>💰 가계부</span>
+            <div style={{ display: 'flex', gap: '4px', background: '#f0f4f8', borderRadius: '8px', padding: '3px' }}>
+              {([['ENTRIES', '내역'], ['ACCOUNTS', '통장 관리'], ['ASSETS', '자산'], ['OVERVIEW', '통합 보기']] as [Tab, string][]).map(([t, label]) => (
+                <button key={t} onClick={() => setTab(t)} style={{
+                  padding: '4px 10px', fontSize: '12px', fontWeight: tab === t ? 700 : 400,
+                  borderRadius: '6px', border: 'none', cursor: 'pointer',
+                  background: tab === t ? '#fff' : 'transparent',
+                  color: tab === t ? '#1a3a5c' : '#5f6368',
+                  boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}>{label}</button>
+              ))}
+            </div>
+            <button onClick={() => setShowUserSelect(true)} style={btnStyle('#f0f8fd', '#1a3a5c')}>👤 {userName}</button>
+            {(tab === 'ENTRIES' || tab === 'OVERVIEW') && <>
+              <button onClick={() => moveMonth(-1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>◀</button>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#344054', minWidth: '100px', textAlign: 'center' }}>
+                {displayYearMonth(yearMonth)}
+              </span>
+              <button onClick={() => moveMonth(1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>▶</button>
+              {tab === 'ENTRIES' && <button onClick={openAdd} style={btnStyle('#89CFF0', '#fff')}>+ 추가</button>}
+            </>}
+          </div>
+        )}
       </div>
 
       {/* ══ 내역 탭 ══════════════════════════════════════════ */}
       {tab === 'ENTRIES' && <>
         {/* ── 요약 카드 */}
-        <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexShrink: 0 }}>
+        <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexShrink: 0, flexWrap: 'wrap' }}>
           <SummaryCard label="총 수입" amount={summary.totalIncome} color="#4CAF50" sign="+" />
           <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-" />
           <SummaryCard label="잔액" amount={summary.totalIncome - summary.totalExpense}
@@ -646,9 +679,10 @@ const AccountManagementView: React.FC = () => {
             </div>
 
             {/* 통장 테이블 */}
+            <div style={{ overflowX: 'auto' }}>
             <div style={{
               background: '#fff', border: `1px solid ${colors.border}40`,
-              borderRadius: '10px', overflow: 'hidden',
+              borderRadius: '10px', overflow: 'hidden', minWidth: '480px',
             }}>
               {/* 테이블 헤더 */}
               <div style={{
@@ -702,6 +736,7 @@ const AccountManagementView: React.FC = () => {
                 <span style={{ paddingLeft: '16px', color: '#9aa0a6' }}>-</span>
               </div>
             </div>
+            </div> {/* overflowX wrapper */}
           </div>
         );
       })}
@@ -891,6 +926,7 @@ const AssetView: React.FC = () => {
   const [editingCell, setEditingCell] = useState<{ userId: string; assetKey: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1064,6 +1100,7 @@ const AssetView: React.FC = () => {
   if (loading) return <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6' }}>불러오는 중…</div>;
 
   return (
+    <>
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }}>
       <div style={{ maxWidth: '780px', margin: '0 auto' }}>
 
@@ -1081,6 +1118,19 @@ const AssetView: React.FC = () => {
               }}>{label}</button>
             ))}
           </div>
+
+          {/* 세부 내역 버튼 (현황 탭에서만 표시) */}
+          {subTab === 'CURRENT' && (
+            <button
+              onClick={() => setDetailModalOpen(true)}
+              style={{
+                ...btnStyle('#f0f8fd', '#1a3a5c'),
+                border: '1px solid #89CFF0', fontSize: '12px',
+              }}
+            >
+              📋 세부 내역
+            </button>
+          )}
 
           {/* 환율 입력 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto', fontSize: '12px' }}>
@@ -1154,7 +1204,7 @@ const AssetView: React.FC = () => {
           )}
 
           {/* 총 자산 요약 카드 */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
             {[
               { label: `총 자산 합산 (${selectedDate})`, amount: gtSum, large: true, color: '#1a3a5c' },
               { label: u0.name, amount: gt0, large: false, color: '#1565c0' },
@@ -1202,7 +1252,8 @@ const AssetView: React.FC = () => {
           </div>
 
           {/* 메인 테이블 */}
-          <div style={{ border: '1px solid #e8ecf0', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+          <div style={{ border: '1px solid #e8ecf0', borderRadius: '12px', overflow: 'hidden', minWidth: '360px' }}>
             <div style={{
               display: 'grid', ...COLS,
               padding: '10px 16px', fontSize: '12px', fontWeight: 700,
@@ -1305,11 +1356,13 @@ const AssetView: React.FC = () => {
               </span>
             </div>
           </div>
+          </div> {/* overflowX wrapper */}
         </>)}
 
         {/* ══ 이력 탭 ═══════════════════════════════════════════ */}
         {subTab === 'HISTORY' && (
-          <div>
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: '420px' }}>
             <div style={{
               display: 'grid', gridTemplateColumns: '130px 1fr 1fr 1fr 100px',
               padding: '10px 16px', fontSize: '12px', fontWeight: 700, color: '#fff',
@@ -1362,6 +1415,7 @@ const AssetView: React.FC = () => {
                 );
               })}
             </div>
+            </div> {/* minWidth wrapper */}
           </div>
         )}
 
@@ -1423,6 +1477,222 @@ const AssetView: React.FC = () => {
             )}
           </div>
         )}
+      </div>
+    </div>
+
+    {/* 자산 세부 내역 모달 — 스크롤 div 밖에서 렌더 (clipping 방지) */}
+    {detailModalOpen && (
+      <AssetDetailModal
+        snapshotDate={selectedDate}
+        users={BUDGET_USERS.map(u => ({ id: u.id, name: u.name }))}
+        onClose={() => setDetailModalOpen(false)}
+        onSaved={() => { load(); }}
+      />
+    )}
+    </>
+  );
+};
+
+// ─── 자산 세부 내역 모달 ──────────────────────────────────────────
+
+type LocalDetail = {
+  key: string;
+  userId: string;
+  assetType: string;
+  accountName: string;
+  amountStr: string; // 만원 단위 입력값
+};
+
+const AssetDetailModal: React.FC<{
+  snapshotDate: string;
+  users: { id: string; name: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+}> = ({ snapshotDate, users, onClose, onSaved }) => {
+  const [items, setItems] = useState<LocalDetail[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // 마운트 시 기존 세부 항목 로드 (원 → 만원 변환)
+  useEffect(() => {
+    getAssetSnapshotDetails(snapshotDate).then(data => {
+      setItems(data.map(d => ({
+        key: String(d.id),
+        userId: d.userId,
+        assetType: d.assetType,
+        accountName: d.accountName,
+        amountStr: d.amount > 0 ? String(Math.round(d.amount / 10000)) : '',
+      })));
+      setLoading(false);
+    });
+  }, [snapshotDate]);
+
+  const addItem = (userId: string, assetType: string) => {
+    setItems(prev => [...prev, {
+      key: `new-${Date.now()}-${Math.random()}`,
+      userId, assetType, accountName: '', amountStr: '',
+    }]);
+  };
+
+  const removeItem = (key: string) => setItems(prev => prev.filter(i => i.key !== key));
+
+  const updateItem = (key: string, field: 'accountName' | 'amountStr', value: string) =>
+    setItems(prev => prev.map(i => i.key === key ? { ...i, [field]: value } : i));
+
+  // (userId, assetType) 별 합산 (만원 단위) — 실시간 미리보기
+  const totals = useMemo(() => {
+    const map = new Map<string, number>();
+    items.forEach(i => {
+      const val = Number(i.amountStr.replace(/,/g, '')) || 0;
+      if (val > 0) {
+        const k = `${i.userId}::${i.assetType}`;
+        map.set(k, (map.get(k) || 0) + val);
+      }
+    });
+    return map;
+  }, [items]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = items
+        .filter(i => Number(i.amountStr) > 0)
+        .map(i => ({
+          userId: i.userId,
+          assetType: i.assetType,
+          accountName: i.accountName.trim(),
+          amount: Math.round(Number(i.amountStr.replace(/,/g, '')) * 10000), // 만원 → 원
+        }));
+      await bulkSaveAssetSnapshotDetails(snapshotDate, payload);
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9500,
+        background: 'rgba(0,0,0,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: '#fff', borderRadius: '16px',
+        width: '560px', maxWidth: '96vw',
+        maxHeight: '82vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+      }} onClick={e => e.stopPropagation()}>
+        {/* 헤더 */}
+        <div style={{
+          padding: '14px 20px', borderBottom: '1px solid #e8ecf0',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+        }}>
+          <div>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>📋 자산 세부 내역</span>
+            <span style={{ fontSize: '12px', color: '#9aa0a6', marginLeft: '8px' }}>{snapshotDate}</span>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* 안내 */}
+        <div style={{ padding: '7px 20px', background: '#f0f8fd', borderBottom: '1px solid #e8ecf0', flexShrink: 0, fontSize: '11px', color: '#4BAAD4' }}>
+          금액 단위: <strong>만원</strong> · 저장 시 합산이 자산 현황에 자동 반영됩니다
+        </div>
+
+        {/* 본문 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px' }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>불러오는 중…</div>
+          ) : (
+            ASSET_COLUMNS.map(col => (
+              <div key={col.key} style={{ marginBottom: '12px', border: '1px solid #e8ecf0', borderRadius: '8px', overflow: 'hidden' }}>
+                {/* 자산 항목 헤더 */}
+                <div style={{
+                  padding: '7px 12px', background: '#f5f7fa',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  borderBottom: '1px solid #e8ecf0',
+                }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>{col.label}</span>
+                  <span style={{ fontSize: '10px', color: '#9aa0a6' }}>{col.group}</span>
+                </div>
+
+                {/* 유저별 세부 섹션 */}
+                {users.map((user, ui) => {
+                  const userItems = items.filter(i => i.userId === user.id && i.assetType === col.key);
+                  const total = totals.get(`${user.id}::${col.key}`) || 0;
+                  return (
+                    <div key={user.id} style={{
+                      padding: '8px 12px',
+                      borderTop: ui > 0 ? '1px solid #f5f5f5' : 'none',
+                      background: '#fff',
+                    }}>
+                      {/* 유저 행 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: userItems.length > 0 ? '6px' : '0' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#89CFF0', minWidth: '30px' }}>{user.name}</span>
+                        {total > 0 && (
+                          <span style={{ fontSize: '11px', color: '#1a3a5c', fontWeight: 600 }}>
+                            = {total.toLocaleString('ko-KR')}만원
+                          </span>
+                        )}
+                        <button
+                          onClick={() => addItem(user.id, col.key)}
+                          style={{ marginLeft: 'auto', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px dashed #89CFF0', background: 'transparent', color: '#4BAAD4', cursor: 'pointer' }}
+                        >
+                          + 추가
+                        </button>
+                      </div>
+
+                      {/* 세부 항목 행 */}
+                      {userItems.map(item => (
+                        <div key={item.key} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' }}>
+                          <input
+                            type="text"
+                            placeholder="계좌명"
+                            value={item.accountName}
+                            onChange={e => updateItem(item.key, 'accountName', e.target.value)}
+                            style={{ flex: 2, padding: '4px 8px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none' }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="금액"
+                            value={item.amountStr}
+                            onChange={e => updateItem(item.key, 'amountStr', e.target.value.replace(/[^0-9]/g, ''))}
+                            style={{ width: '80px', padding: '4px 8px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', textAlign: 'right' }}
+                          />
+                          <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>만원</span>
+                          <button
+                            onClick={() => removeItem(item.key)}
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#bdbdbd', fontSize: '18px', padding: '0 2px', lineHeight: 1 }}
+                          >×</button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* 푸터 */}
+        <div style={{
+          padding: '12px 20px', borderTop: '1px solid #e8ecf0',
+          display: 'flex', gap: '8px', justifyContent: 'flex-end', flexShrink: 0,
+          background: '#fafbfc',
+        }}>
+          <button onClick={onClose} style={{ ...btnStyle('#f0f4f8', '#5f6368'), padding: '8px 20px' }}>취소</button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{ ...btnStyle('#1a3a5c', '#fff'), padding: '8px 20px', fontWeight: 700 }}
+          >
+            {saving ? '저장 중…' : '저장 · 합산 반영'}
+          </button>
+        </div>
       </div>
     </div>
   );

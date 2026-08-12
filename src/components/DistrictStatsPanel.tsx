@@ -454,7 +454,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
       )}
 
       {/* 테이블 */}
-      {!graphMode && <div style={{ flex: 1, overflowY: 'auto' }}>
+      {!graphMode && <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
         {loading ? (
           <div style={{ padding: '24px', textAlign: 'center', color: '#9e9e9e', fontSize: '13px' }}>
             불러오는 중...
@@ -468,7 +468,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
             </div>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+          <table style={{ width: '100%', minWidth: '400px', borderCollapse: 'collapse', fontSize: '11px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0, zIndex: 1 }}>
                 <th style={{ ...thStyle, textAlign: 'left', width: '70px' }}>지역</th>
