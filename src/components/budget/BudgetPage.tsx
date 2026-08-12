@@ -901,7 +901,11 @@ const AssetView: React.FC = () => {
   const saveEdit = async () => {
     if (!editingCell || saving) return;
     const { userId, assetKey } = editingCell;
-    const amount = Number(editValue.replace(/[^0-9]/g, '')) || 0;
+    // 콤마로 구분된 여러 금액을 합산 (예: "5000000, 1200" → 5001200)
+    const amount = editValue
+      .split(',')
+      .map(s => Number(s.trim().replace(/[^0-9]/g, '')) || 0)
+      .reduce((a, b) => a + b, 0);
     setSaving(true);
     try {
       const existing = assetMap[userId]?.[assetKey];
@@ -1106,21 +1110,33 @@ const AssetCell: React.FC<{
   accentColor: string;
 }> = ({ value, isEditing, editValue, onStartEdit, onEditChange, onSave, onCancel, saving, accentColor }) => {
   if (isEditing) {
+    // 콤마 구분 합산 미리보기 계산
+    const parts = editValue.split(',').map(s => Number(s.trim().replace(/[^0-9]/g, '')) || 0);
+    const previewSum = parts.reduce((a, b) => a + b, 0);
+    const showPreview = editValue.includes(',') && previewSum > 0;
+
     return (
-      <div style={{ padding: '5px 10px' }}>
+      <div style={{ padding: '4px 8px' }}>
         <input
-          type="text" inputMode="numeric"
-          value={editValue} autoFocus placeholder="0"
-          onChange={e => onEditChange(e.target.value.replace(/[^0-9]/g, ''))}
+          type="text"
+          value={editValue} autoFocus placeholder="숫자, 숫자, ..."
+          // 숫자·콤마·공백만 허용
+          onChange={e => onEditChange(e.target.value.replace(/[^0-9,\s]/g, ''))}
           onKeyDown={e => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel(); }}
           onBlur={onSave}
           style={{
-            width: '100%', padding: '5px 8px', fontSize: '12px',
+            width: '100%', padding: '4px 8px', fontSize: '12px',
             border: `2px solid ${accentColor}`, borderRadius: '6px',
             textAlign: 'right', outline: 'none', boxSizing: 'border-box',
           }}
           disabled={saving}
         />
+        {/* 합산 미리보기 */}
+        {showPreview && (
+          <div style={{ fontSize: '11px', color: accentColor, textAlign: 'right', marginTop: '2px', fontWeight: 700 }}>
+            = {previewSum.toLocaleString('ko-KR')}
+          </div>
+        )}
       </div>
     );
   }
