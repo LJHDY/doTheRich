@@ -26,6 +26,7 @@ import {
   BudgetEntry,
   BudgetSummary,
   Asset,
+  AssetSnapshotCell,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -806,6 +807,63 @@ export const updateAsset = async (id: number, payload: Partial<Pick<Asset, 'asse
 
 export const deleteAsset = async (id: number): Promise<void> => {
   await api.delete(`/api/assets/${id}`);
+};
+
+// ─── 자산 스냅샷 API ──────────────────────────────────────────────
+
+const toSnapshotCell = (d: any): AssetSnapshotCell => ({
+  id: d.id,
+  userId: d.user_id,
+  snapshotDate: d.snapshot_date,
+  assetType: d.asset_type,
+  amount: d.amount,
+});
+
+/** 전체 유저 스냅샷 목록 (그래프·통합 보기용) */
+export const getAllAssetSnapshots = async (): Promise<AssetSnapshotCell[]> => {
+  const { data } = await api.get('/api/assets/snapshots/all');
+  return data.map(toSnapshotCell);
+};
+
+/** 특정 유저의 전체 스냅샷 목록 */
+export const getAssetSnapshots = async (userId: string): Promise<AssetSnapshotCell[]> => {
+  const { data } = await api.get('/api/assets/snapshots', { params: { user_id: userId } });
+  return data.map(toSnapshotCell);
+};
+
+/** 단일 셀 upsert */
+export const upsertAssetSnapshotCell = async (payload: {
+  userId: string;
+  snapshotDate: string;
+  assetType: string;
+  amount: number;
+}): Promise<AssetSnapshotCell> => {
+  const { data } = await api.put('/api/assets/snapshots/cell', {
+    user_id: payload.userId,
+    snapshot_date: payload.snapshotDate,
+    asset_type: payload.assetType,
+    amount: payload.amount,
+  });
+  return toSnapshotCell(data);
+};
+
+/** 특정 날짜 스냅샷을 새 날짜로 복사 */
+export const copyAssetSnapshot = async (
+  userId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<AssetSnapshotCell[]> => {
+  const { data } = await api.post('/api/assets/snapshots/copy', {
+    user_id: userId,
+    from_date: fromDate,
+    to_date: toDate,
+  });
+  return data.map(toSnapshotCell);
+};
+
+/** 특정 날짜의 모든 스냅샷 행 삭제 */
+export const deleteAssetSnapshotDate = async (userId: string, snapshotDate: string): Promise<void> => {
+  await api.delete(`/api/assets/snapshots/${snapshotDate}`, { params: { user_id: userId } });
 };
 
 export default api;

@@ -265,10 +265,15 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
 | PATCH | `/api/budget/entries/:id` | 가계부 항목 수정 |
 | DELETE | `/api/budget/entries/:id` | 가계부 항목 삭제 (204) |
 | GET | `/api/budget/summary?user_id=&year_month=` | 월별 가계부 요약 |
-| GET | `/api/assets?user_id=` | 자산 목록 조회 |
-| POST | `/api/assets` | 자산 추가 (201) |
-| PATCH | `/api/assets/:id` | 자산 수정 |
-| DELETE | `/api/assets/:id` | 자산 삭제 (204) |
+| GET | `/api/assets?user_id=` | 자산 목록 조회 (레거시) |
+| POST | `/api/assets` | 자산 추가 (레거시, 201) |
+| PATCH | `/api/assets/:id` | 자산 수정 (레거시) |
+| DELETE | `/api/assets/:id` | 자산 삭제 (레거시, 204) |
+| GET | `/api/assets/snapshots/all` | 전체 유저 스냅샷 목록 (그래프·통합 보기용) |
+| GET | `/api/assets/snapshots?user_id=` | 특정 유저 스냅샷 목록 |
+| PUT | `/api/assets/snapshots/cell` | 단일 셀 upsert — `{user_id, snapshot_date, asset_type, amount}` |
+| POST | `/api/assets/snapshots/copy` | 날짜 간 스냅샷 복사 — `{user_id, from_date, to_date}` |
+| DELETE | `/api/assets/snapshots/{snapshot_date}?user_id=` | 특정 날짜 스냅샷 전체 삭제 |
 
 ---
 
@@ -743,9 +748,14 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
   - localStorage `budget_user_id`로 세션 유저 저장, 👤 버튼 클릭 시 `UserSelectModal`로 재선택 가능
   - **내역 탭**: 총 수입/지출/잔액 카드, 고정비/변동비/투자 소요약, 통장별 현황, 필터(전체/수입/지출/고정비/투자), 항목 목록
   - **통장 관리 탭**: `ACCOUNT_GROUPS` 상수 기반 읽기 전용 참고 테이블 (통장명/예산/항목/은행카드/합계)
-  - **자산 탭**: 총 자산 합계 + 그룹별 비율 막대, 안전자산/투자자산/실물자산/기타 그룹 카드, 자산 CRUD (슬라이드업 폼)
-  - `ASSET_TYPES` / `ASSET_GROUP_COLORS` 상수 (`budgetConstants.ts`), `Asset` 타입 (`types/index.ts`), `getAssets/createAsset/updateAsset/deleteAsset` API
-  - 백엔드: `asset` 테이블 (BigInteger amount), `asset_service.py`, `routers/asset.py` — `GET/POST /api/assets`, `PATCH/DELETE /api/assets/:id`
+  - **자산 탭 (스냅샷 기반)**: 현황/이력/그래프 서브탭
+    - **현황**: 날짜 선택 + 이전 날짜 복사, 스프레드시트 테이블 (동영|주해|합산), 셀 클릭 편집 (콤마 구분 합산), 달러 현금 USD 입력 + 환율 자동 환산
+    - **이력**: 날짜별 합산 + 전기 대비 변동(억) 목록, 클릭 시 해당 날짜 현황으로 이동
+    - **그래프**: Recharts LineChart, 유저별/유동성별 토글, Y축 억 단위
+    - 달러 환율 입력 (localStorage 저장, `EXCHANGE_RATE_KEY`), `달러 현금`은 USD 금액 저장 → KRW 합산 시 환율 적용
+    - `ASSET_COLUMNS` (10개 항목, 즉시사용가능/불가 2그룹), `AssetSnapshotCell` 타입, snapshot API 5종
+    - 백엔드: `asset_snapshot` 테이블, `asset_snapshot_service.py`, snapshot 라우트 5개 (`/api/assets/snapshots/*`)
+  - **통합 보기 탭**: 최신 스냅샷 기준 자산 현황 + 월별 가계부 요약 (동영|주해|합산 3열)
 
 ## 미완성 / TODO
 

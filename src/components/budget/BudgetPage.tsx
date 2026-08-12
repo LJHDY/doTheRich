@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
+import {
   ACCOUNT_GROUPS,
   ASSET_COLUMNS,
   ASSET_LIQUIDITY_COLORS,
@@ -15,12 +18,15 @@ import {
   createBudgetEntry,
   updateBudgetEntry,
   deleteBudgetEntry,
-  getAssets,
-  createAsset,
-  updateAsset,
+  getAllAssetSnapshots,
+  upsertAssetSnapshotCell,
+  copyAssetSnapshot,
+  deleteAssetSnapshotDate,
 } from '../../services/api';
-import { Asset, BudgetEntry, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
+
+const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
 
 interface Props {
   onClose: () => void;
@@ -705,42 +711,51 @@ const AccountManagementView: React.FC = () => {
 // ─── 통합 보기 뷰 ─────────────────────────────────────────────
 
 const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
-  const [assets, setAssets] = useState<{ ldy: Asset[]; juhae: Asset[] }>({ ldy: [], juhae: [] });
+  const [allSnapshots, setAllSnapshots] = useState<AssetSnapshotCell[]>([]);
   const [entries, setEntries] = useState<{ ldy: BudgetEntry[]; juhae: BudgetEntry[] }>({ ldy: [], juhae: [] });
   const [loading, setLoading] = useState(false);
+
+  // 통합 보기에서도 최신 스냅샷 사용 (localStorage의 환율 참조)
+  const exchangeRate = Number(localStorage.getItem(EXCHANGE_RATE_KEY)) || 1450;
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      getAssets(BUDGET_USERS[0].id),
-      getAssets(BUDGET_USERS[1].id),
+      getAllAssetSnapshots(),
       getBudgetEntries(BUDGET_USERS[0].id, yearMonth),
       getBudgetEntries(BUDGET_USERS[1].id, yearMonth),
-    ]).then(([la, ja, le, je]) => {
-      setAssets({ ldy: la, juhae: ja });
+    ]).then(([snapshots, le, je]) => {
+      setAllSnapshots(snapshots);
       setEntries({ ldy: le, juhae: je });
     }).finally(() => setLoading(false));
   }, [yearMonth]);
 
   const [u0, u1] = BUDGET_USERS; // 동영, 주해
 
-  // assetMap: userId → (assetType → amount)
-  const assetMapByUser = useMemo(() => {
-    const build = (list: Asset[]) => {
-      const m: Record<string, number> = {};
-      list.forEach(a => { m[a.assetType] = a.amount; });
-      return m;
-    };
-    return { [u0.id]: build(assets.ldy), [u1.id]: build(assets.juhae) } as Record<string, Record<string, number>>;
-  }, [assets, u0.id, u1.id]);
+  // 가장 최근 스냅샷 날짜의 데이터를 자산 현황에 사용
+  const latestDate = useMemo(() => {
+    const dates = Array.from(new Set(allSnapshots.map(s => s.snapshotDate))).sort().reverse();
+    return dates[0] ?? '';
+  }, [allSnapshots]);
 
-  const getAssetAmt = (userId: string, key: string) => assetMapByUser[userId]?.[key] ?? 0;
+  const getAssetAmt = (userId: string, key: string) => {
+    const cell = allSnapshots.find(
+      s => s.snapshotDate === latestDate && s.userId === userId && s.assetType === key
+    );
+    return cell?.amount ?? 0;
+  };
+
+  // 달러 현금은 USD → KRW 환산
+  const toKrw = (key: string, amount: number) =>
+    key === '달러 현금' ? Math.round(amount * exchangeRate) : amount;
 
   const assetGroupSubtotal = (group: string, userId: string) =>
-    ASSET_COLUMNS.filter(c => c.group === group).reduce((s, c) => s + getAssetAmt(userId, c.key), 0);
+    ASSET_COLUMNS.filter(c => c.group === group).reduce(
+      (s, c) => s + toKrw(c.key, getAssetAmt(userId, c.key)), 0
+    );
 
   const assetGrandTotal = (userId: string) =>
-    ASSET_COLUMNS.reduce((s, c) => s + getAssetAmt(userId, c.key), 0);
+    ASSET_COLUMNS.reduce((s, c) => s + toKrw(c.key, getAssetAmt(userId, c.key)), 0);
 
   // 가계부 요약
   const entrySummary = useMemo(() => {
@@ -804,7 +819,7 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }}>
 
       {/* ── 자산 현황 테이블 (유동성 그룹별 소계) */}
-      <TableHeader title="💰 자산 현황" />
+      <TableHeader title={`💰 자산 현황${latestDate ? ` (${latestDate})` : ''}`} />
       <div style={{ border: '1px solid #f0f0f0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
         {LIQUIDITY_GROUPS.map(g => {
           const v0 = assetGroupSubtotal(g, u0.id);
@@ -857,12 +872,21 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
   );
 };
 
-// ─── 자산 관리 뷰 (스프레드시트 스타일) ──────────────────────
+// ─── 자산 관리 뷰 (스냅샷 기반) ──────────────────────────────────
+
+type AssetSubTab = 'CURRENT' | 'HISTORY' | 'CHART';
 
 const AssetView: React.FC = () => {
-  // assetMap[userId][assetKey] = Asset 레코드
-  const [assetMap, setAssetMap] = useState<Record<string, Record<string, Asset>>>({});
+  const [allSnapshots, setAllSnapshots] = useState<AssetSnapshotCell[]>([]);
   const [loading, setLoading] = useState(false);
+  const [subTab, setSubTab] = useState<AssetSubTab>('CURRENT');
+  const [selectedDate, setSelectedDate] = useState<string>(today());
+  // 환율 (달러 현금 USD → KRW 환산, localStorage 저장)
+  const [exchangeRate, setExchangeRate] = useState<number>(
+    () => Number(localStorage.getItem(EXCHANGE_RATE_KEY) || '0') || 1450
+  );
+  const [editingRate, setEditingRate] = useState(false);
+  const [rateInput, setRateInput] = useState('');
   const [editingCell, setEditingCell] = useState<{ userId: string; assetKey: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -870,228 +894,534 @@ const AssetView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [a0, a1] = await Promise.all([
-        getAssets(BUDGET_USERS[0].id),
-        getAssets(BUDGET_USERS[1].id),
-      ]);
-      const buildMap = (list: Asset[]) => {
-        const m: Record<string, Asset> = {};
-        list.forEach(a => { m[a.assetType] = a; });
-        return m;
-      };
-      setAssetMap({
-        [BUDGET_USERS[0].id]: buildMap(a0),
-        [BUDGET_USERS[1].id]: buildMap(a1),
-      });
+      const data = await getAllAssetSnapshots();
+      setAllSnapshots(data);
+      // 최신 날짜를 기본 선택 (오늘 날짜에 데이터 없으면 최신 날짜로)
+      const existingDates = Array.from(new Set(data.map(s => s.snapshotDate))).sort().reverse();
+      if (existingDates.length > 0 && !data.some(s => s.snapshotDate === today())) {
+        setSelectedDate(existingDates[0]);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 
-  const getAmt = (userId: string, key: string) => assetMap[userId]?.[key]?.amount ?? 0;
+  // 날짜 목록 (최신순)
+  const dates = useMemo(() =>
+    Array.from(new Set(allSnapshots.map(s => s.snapshotDate))).sort().reverse(),
+    [allSnapshots]
+  );
 
+  // cellMap[date][userId][assetType] = amount
+  const cellMap = useMemo(() => {
+    const m: Record<string, Record<string, Record<string, number>>> = {};
+    allSnapshots.forEach(s => {
+      if (!m[s.snapshotDate]) m[s.snapshotDate] = {};
+      if (!m[s.snapshotDate][s.userId]) m[s.snapshotDate][s.userId] = {};
+      m[s.snapshotDate][s.userId][s.assetType] = s.amount;
+    });
+    return m;
+  }, [allSnapshots]);
+
+  const getAmt = (date: string, userId: string, key: string) =>
+    cellMap[date]?.[userId]?.[key] ?? 0;
+
+  // 달러 현금은 USD → KRW 환산, 그 외 원화 그대로
+  const toKrw = (assetType: string, amount: number) =>
+    assetType === '달러 현금' ? Math.round(amount * exchangeRate) : amount;
+
+  const getKrw = (date: string, userId: string, key: string) =>
+    toKrw(key, getAmt(date, userId, key));
+
+  const [u0, u1] = BUDGET_USERS;
+  const GROUPS = ['즉시 사용 가능', '즉시 사용 불가'] as const;
+
+  const groupKrw = (date: string, group: string, userId: string) =>
+    ASSET_COLUMNS.filter(c => c.group === group).reduce((s, c) => s + getKrw(date, userId, c.key), 0);
+
+  const grandKrw = (date: string, userId: string) =>
+    ASSET_COLUMNS.reduce((s, c) => s + getKrw(date, userId, c.key), 0);
+
+  // 셀 편집 시작
   const startEdit = (userId: string, key: string) => {
-    const amt = getAmt(userId, key);
+    const amt = getAmt(selectedDate, userId, key);
     setEditingCell({ userId, assetKey: key });
     setEditValue(amt === 0 ? '' : String(amt));
   };
 
+  // 셀 저장 (upsert to snapshot)
   const saveEdit = async () => {
     if (!editingCell || saving) return;
     const { userId, assetKey } = editingCell;
-    // 콤마로 구분된 여러 금액을 합산 (예: "5000000, 1200" → 5001200)
     const amount = editValue
       .split(',')
       .map(s => Number(s.trim().replace(/[^0-9]/g, '')) || 0)
       .reduce((a, b) => a + b, 0);
     setSaving(true);
     try {
-      const existing = assetMap[userId]?.[assetKey];
-      const updated = existing
-        ? await updateAsset(existing.id, { amount })
-        : await createAsset({ userId, assetName: assetKey, assetType: assetKey, amount });
-      setAssetMap(prev => ({
-        ...prev,
-        [userId]: { ...prev[userId], [assetKey]: updated },
-      }));
+      const cell = await upsertAssetSnapshotCell({
+        userId, snapshotDate: selectedDate, assetType: assetKey, amount,
+      });
+      setAllSnapshots(prev => {
+        const idx = prev.findIndex(
+          s => s.userId === userId && s.snapshotDate === selectedDate && s.assetType === assetKey
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = cell;
+          return next;
+        }
+        return [...prev, cell];
+      });
     } catch { alert('저장에 실패했습니다'); }
-    finally {
-      setSaving(false);
-      setEditingCell(null);
-    }
+    finally { setSaving(false); setEditingCell(null); }
   };
 
-  const [u0, u1] = BUDGET_USERS;
-  const GROUPS = ['즉시 사용 가능', '즉시 사용 불가'] as const;
+  // 이전 최신 날짜에서 복사
+  const handleCopyFromLatest = async () => {
+    if (!dates.length) return;
+    const fromDate = dates[0];
+    try {
+      const copied = (await Promise.all(
+        BUDGET_USERS.map(u => copyAssetSnapshot(u.id, fromDate, selectedDate))
+      )).flat();
+      setAllSnapshots(prev => [
+        ...prev.filter(s => s.snapshotDate !== selectedDate),
+        ...copied,
+      ]);
+    } catch { alert('복사에 실패했습니다'); }
+  };
 
-  const groupSub = (group: string, userId: string) =>
-    ASSET_COLUMNS.filter(c => c.group === group).reduce((s, c) => s + getAmt(userId, c.key), 0);
-  const grandTotal = (userId: string) =>
-    ASSET_COLUMNS.reduce((s, c) => s + getAmt(userId, c.key), 0);
+  // 선택 날짜 스냅샷 삭제
+  const handleDeleteDate = async () => {
+    if (!window.confirm(`${selectedDate} 스냅샷을 삭제할까요?`)) return;
+    try {
+      await Promise.all(BUDGET_USERS.map(u => deleteAssetSnapshotDate(u.id, selectedDate)));
+      setAllSnapshots(prev => prev.filter(s => s.snapshotDate !== selectedDate));
+      const next = dates.filter(d => d !== selectedDate);
+      if (next.length > 0) setSelectedDate(next[0]);
+    } catch { alert('삭제에 실패했습니다'); }
+  };
+
+  // 환율 저장
+  const saveRate = () => {
+    const r = Number(rateInput.replace(/[^0-9]/g, ''));
+    if (r > 0) {
+      setExchangeRate(r);
+      localStorage.setItem(EXCHANGE_RATE_KEY, String(r));
+    }
+    setEditingRate(false);
+  };
 
   const COLS: React.CSSProperties = { gridTemplateColumns: '1.6fr 1fr 1fr 1fr' };
+  const hasData = dates.includes(selectedDate);
+  const gt0 = grandKrw(selectedDate, u0.id);
+  const gt1 = grandKrw(selectedDate, u1.id);
+  const gtSum = gt0 + gt1;
+
+  // ── 차트 데이터 계산 ──────────────────────────────────────────
+  const chartDataByUser = useMemo(() => {
+    return [...dates].reverse().map(date => {
+      const v0 = grandKrw(date, u0.id);
+      const v1 = grandKrw(date, u1.id);
+      const toUk = (v: number) => Math.round(v / 1e6) / 100;
+      return {
+        label: date.slice(5),
+        fullDate: date,
+        [u0.name]: toUk(v0),
+        [u1.name]: toUk(v1),
+        '합산': toUk(v0 + v1),
+      };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allSnapshots, exchangeRate]);
+
+  const chartDataByLiquidity = useMemo(() => {
+    return [...dates].reverse().map(date => {
+      const toUk = (v: number) => Math.round(v / 1e6) / 100;
+      const liquid = ASSET_COLUMNS
+        .filter(c => c.group === '즉시 사용 가능')
+        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrw(date, u.id, c.key), 0), 0);
+      const illiquid = ASSET_COLUMNS
+        .filter(c => c.group === '즉시 사용 불가')
+        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrw(date, u.id, c.key), 0), 0);
+      return {
+        label: date.slice(5),
+        fullDate: date,
+        '즉시 사용 가능': toUk(liquid),
+        '즉시 사용 불가': toUk(illiquid),
+        '합산': toUk(liquid + illiquid),
+      };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allSnapshots, exchangeRate]);
+
+  const [chartMode, setChartMode] = useState<'USER' | 'LIQUIDITY'>('USER');
 
   if (loading) return <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6' }}>불러오는 중…</div>;
 
-  const gt0 = grandTotal(u0.id);
-  const gt1 = grandTotal(u1.id);
-  const gtSum = gt0 + gt1;
-
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }}>
-      <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '780px', margin: '0 auto' }}>
 
-        {/* ── 총 자산 요약 카드 */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-          {[
-            { label: '총 자산 합산', amount: gtSum, large: true, color: '#1a3a5c' },
-            { label: u0.name, amount: gt0, large: false, color: '#1565c0' },
-            { label: u1.name, amount: gt1, large: false, color: '#1565c0' },
-          ].map(({ label, amount, large, color }) => (
-            <div key={label} style={{
-              flex: large ? 2 : 1,
-              background: '#fff', borderRadius: '12px', padding: '14px 16px',
-              border: '1px solid #e8ecf0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-            }}>
-              <div style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, marginBottom: '6px' }}>{label}</div>
-              <div style={{ fontSize: large ? '20px' : '15px', fontWeight: 800, color }}>
-                {amount === 0 ? '—' : (large ? formatAmount(amount) : formatAmountShort(amount))}
-              </div>
-            </div>
-          ))}
+        {/* ── 환율 + 서브탭 영역 ───────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {/* 서브탭 */}
+          <div style={{ display: 'flex', gap: '4px', background: '#f0f4f8', borderRadius: '8px', padding: '3px' }}>
+            {([['CURRENT', '현황'], ['HISTORY', '이력'], ['CHART', '그래프']] as [AssetSubTab, string][]).map(([t, label]) => (
+              <button key={t} onClick={() => setSubTab(t)} style={{
+                padding: '4px 12px', fontSize: '12px', fontWeight: subTab === t ? 700 : 400,
+                borderRadius: '6px', border: 'none', cursor: 'pointer',
+                background: subTab === t ? '#fff' : 'transparent',
+                color: subTab === t ? '#1a3a5c' : '#5f6368',
+                boxShadow: subTab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              }}>{label}</button>
+            ))}
+          </div>
+
+          {/* 환율 입력 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto', fontSize: '12px' }}>
+            <span style={{ color: '#5f6368', fontWeight: 600 }}>달러 환율</span>
+            {editingRate ? (
+              <>
+                <input
+                  type="text" value={rateInput} autoFocus
+                  onChange={e => setRateInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  onKeyDown={e => { if (e.key === 'Enter') saveRate(); if (e.key === 'Escape') setEditingRate(false); }}
+                  onBlur={saveRate}
+                  style={{ width: '80px', padding: '3px 6px', fontSize: '12px', border: '1px solid #89CFF0', borderRadius: '6px', textAlign: 'right' }}
+                />
+                <span style={{ color: '#5f6368' }}>원/$</span>
+              </>
+            ) : (
+              <button
+                onClick={() => { setRateInput(String(exchangeRate)); setEditingRate(true); }}
+                style={{ background: '#f0f8fd', border: '1px solid #dadce0', borderRadius: '6px', padding: '3px 8px', fontSize: '12px', cursor: 'pointer', color: '#1a3a5c', fontWeight: 700 }}
+              >
+                {exchangeRate.toLocaleString('ko-KR')}원/$
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* ── 유동성 비율 바 */}
-        {gtSum > 0 && (
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-            {GROUPS.map(g => {
-              const v = groupSub(g, u0.id) + groupSub(g, u1.id);
-              if (v === 0) return null;
-              const lc = ASSET_LIQUIDITY_COLORS[g];
-              const pct = (v / gtSum * 100).toFixed(0);
-              return (
-                <div key={g} style={{
-                  flex: v, background: lc.bg, border: `1px solid ${lc.border}60`,
-                  borderRadius: '8px', padding: '6px 12px',
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: lc.text }}>{g}</span>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: lc.text }}>{formatAmountShort(v)}</span>
-                  <span style={{ fontSize: '11px', color: lc.border, marginLeft: 'auto' }}>{pct}%</span>
+        {/* ══ 현황 탭 ═══════════════════════════════════════════ */}
+        {subTab === 'CURRENT' && (<>
+
+          {/* 날짜 선택 */}
+          <div style={{
+            background: '#fff', border: '1px solid #e8ecf0', borderRadius: '10px',
+            padding: '12px 16px', marginBottom: '14px',
+            display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>날짜</span>
+            <input
+              type="date" value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              style={{ padding: '5px 8px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px' }}
+            />
+            {/* 기존 날짜 빠른 선택 */}
+            {dates.length > 0 && (
+              <select
+                value={dates.includes(selectedDate) ? selectedDate : ''}
+                onChange={e => e.target.value && setSelectedDate(e.target.value)}
+                style={{ padding: '5px 8px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', color: '#5f6368' }}
+              >
+                <option value="">기록된 날짜 선택</option>
+                {dates.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            )}
+            {/* 복사 버튼: 데이터 없는 날짜에서만 */}
+            {!hasData && dates.length > 0 && (
+              <button onClick={handleCopyFromLatest} style={btnStyle('#E8F5E9', '#1B5E20')}>
+                ← {dates[0]}에서 복사
+              </button>
+            )}
+            {/* 삭제 버튼: 데이터 있을 때만 */}
+            {hasData && (
+              <button onClick={handleDeleteDate} style={{ ...btnStyle('#fdecea', '#E06060'), marginLeft: 'auto' }}>
+                삭제
+              </button>
+            )}
+          </div>
+
+          {!hasData && (
+            <div style={{ fontSize: '12px', color: '#9aa0a6', marginBottom: '10px', textAlign: 'center' }}>
+              이 날짜에 데이터가 없습니다. 셀을 클릭하여 입력하거나 이전 날짜에서 복사하세요.
+            </div>
+          )}
+
+          {/* 총 자산 요약 카드 */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
+            {[
+              { label: `총 자산 합산 (${selectedDate})`, amount: gtSum, large: true, color: '#1a3a5c' },
+              { label: u0.name, amount: gt0, large: false, color: '#1565c0' },
+              { label: u1.name, amount: gt1, large: false, color: '#1565c0' },
+            ].map(({ label, amount, large, color }) => (
+              <div key={label} style={{
+                flex: large ? 2 : 1,
+                background: '#fff', borderRadius: '12px', padding: '12px 16px',
+                border: '1px solid #e8ecf0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+              }}>
+                <div style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, marginBottom: '5px' }}>{label}</div>
+                <div style={{ fontSize: large ? '18px' : '14px', fontWeight: 800, color }}>
+                  {amount === 0 ? '—' : (large ? formatAmount(amount) : formatAmountShort(amount))}
                 </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 유동성 비율 바 */}
+          {gtSum > 0 && (
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+              {GROUPS.map(g => {
+                const v = groupKrw(selectedDate, g, u0.id) + groupKrw(selectedDate, g, u1.id);
+                if (v === 0) return null;
+                const lc = ASSET_LIQUIDITY_COLORS[g];
+                const pct = (v / gtSum * 100).toFixed(0);
+                return (
+                  <div key={g} style={{
+                    flex: v, background: lc.bg, border: `1px solid ${lc.border}60`,
+                    borderRadius: '8px', padding: '6px 12px',
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                  }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: lc.text }}>{g}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: lc.text }}>{formatAmountShort(v)}</span>
+                    <span style={{ fontSize: '11px', color: lc.border, marginLeft: 'auto' }}>{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 안내 */}
+          <div style={{ fontSize: '11px', color: '#b0b8c4', textAlign: 'right', marginBottom: '6px' }}>
+            ✏️ 금액 셀 클릭하여 수정 · 달러 현금은 USD 금액 입력
+          </div>
+
+          {/* 메인 테이블 */}
+          <div style={{ border: '1px solid #e8ecf0', borderRadius: '12px', overflow: 'hidden' }}>
+            <div style={{
+              display: 'grid', ...COLS,
+              padding: '10px 16px', fontSize: '12px', fontWeight: 700,
+              background: '#1a3a5c', color: '#fff',
+            }}>
+              <span>자산 항목</span>
+              <span style={{ textAlign: 'right' }}>{u0.name}</span>
+              <span style={{ textAlign: 'right' }}>{u1.name}</span>
+              <span style={{ textAlign: 'right' }}>합산 (KRW)</span>
+            </div>
+
+            {GROUPS.map((group, gi) => {
+              const cols = ASSET_COLUMNS.filter(c => c.group === group);
+              const lc = ASSET_LIQUIDITY_COLORS[group];
+              const sub0 = groupKrw(selectedDate, group, u0.id);
+              const sub1 = groupKrw(selectedDate, group, u1.id);
+              return (
+                <React.Fragment key={group}>
+                  <div style={{
+                    display: 'grid', ...COLS,
+                    padding: '7px 16px', fontSize: '11px', fontWeight: 800,
+                    background: lc.bg, color: lc.text,
+                    borderTop: gi > 0 ? '2px solid #e8ecf0' : 'none',
+                  }}>
+                    <span>{group}</span>
+                    <span style={{ textAlign: 'right', fontWeight: 400, opacity: 0.7 }}>클릭 수정</span>
+                    <span style={{ textAlign: 'right', fontWeight: 400, opacity: 0.7 }}>클릭 수정</span>
+                    <span />
+                  </div>
+
+                  {cols.map(col => {
+                    const isDollar = col.key === '달러 현금';
+                    const raw0 = getAmt(selectedDate, u0.id, col.key);
+                    const raw1 = getAmt(selectedDate, u1.id, col.key);
+                    const krw0 = toKrw(col.key, raw0);
+                    const krw1 = toKrw(col.key, raw1);
+                    const isEdit0 = editingCell?.userId === u0.id && editingCell?.assetKey === col.key;
+                    const isEdit1 = editingCell?.userId === u1.id && editingCell?.assetKey === col.key;
+                    return (
+                      <div key={col.key} style={{
+                        display: 'grid', ...COLS,
+                        background: '#fff', alignItems: 'center',
+                        borderBottom: '1px solid #f5f5f5',
+                      }}>
+                        <span style={{ padding: '0 16px', fontSize: '13px', color: '#344054', lineHeight: isDollar ? '1.3' : '42px', paddingTop: isDollar ? '8px' : '0', paddingBottom: isDollar ? '8px' : '0' }}>
+                          {col.label}
+                          {isDollar && <div style={{ fontSize: '10px', color: '#9aa0a6' }}>USD 입력 · 환율 {exchangeRate.toLocaleString()}원/$</div>}
+                        </span>
+                        <AssetCell
+                          value={raw0} isEditing={isEdit0} editValue={editValue}
+                          onStartEdit={() => startEdit(u0.id, col.key)}
+                          onEditChange={setEditValue} onSave={saveEdit}
+                          onCancel={() => setEditingCell(null)}
+                          saving={saving} accentColor={lc.border}
+                          isDollar={isDollar} exchangeRate={exchangeRate} />
+                        <AssetCell
+                          value={raw1} isEditing={isEdit1} editValue={editValue}
+                          onStartEdit={() => startEdit(u1.id, col.key)}
+                          onEditChange={setEditValue} onSave={saveEdit}
+                          onCancel={() => setEditingCell(null)}
+                          saving={saving} accentColor={lc.border}
+                          isDollar={isDollar} exchangeRate={exchangeRate} />
+                        <span style={{
+                          padding: '0 16px', textAlign: 'right', fontSize: '13px', lineHeight: '42px',
+                          fontWeight: 600, color: (krw0 + krw1) === 0 ? '#dadce0' : '#1a3a5c',
+                        }}>
+                          {(krw0 + krw1) === 0 ? '—' : formatAmountShort(krw0 + krw1)}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  <div style={{
+                    display: 'grid', ...COLS,
+                    padding: '9px 16px', fontSize: '13px', fontWeight: 700,
+                    background: lc.bg, color: lc.text,
+                  }}>
+                    <span>소계</span>
+                    <span style={{ textAlign: 'right' }}>{sub0 ? formatAmountShort(sub0) : '—'}</span>
+                    <span style={{ textAlign: 'right' }}>{sub1 ? formatAmountShort(sub1) : '—'}</span>
+                    <span style={{ textAlign: 'right', fontSize: '14px' }}>
+                      {(sub0 + sub1) ? formatAmountShort(sub0 + sub1) : '—'}
+                    </span>
+                  </div>
+                </React.Fragment>
               );
             })}
+
+            <div style={{
+              display: 'grid', ...COLS,
+              padding: '14px 16px', fontSize: '14px', fontWeight: 800,
+              background: '#f0f8fd', color: '#1a3a5c',
+              borderTop: '2px solid #89CFF060',
+            }}>
+              <span>총 자산</span>
+              <span style={{ textAlign: 'right' }}>{gt0 ? formatAmountShort(gt0) : '—'}</span>
+              <span style={{ textAlign: 'right' }}>{gt1 ? formatAmountShort(gt1) : '—'}</span>
+              <span style={{ textAlign: 'right', fontSize: '16px' }}>
+                {gtSum ? formatAmount(gtSum) : '—'}
+              </span>
+            </div>
+          </div>
+        </>)}
+
+        {/* ══ 이력 탭 ═══════════════════════════════════════════ */}
+        {subTab === 'HISTORY' && (
+          <div>
+            <div style={{
+              display: 'grid', gridTemplateColumns: '130px 1fr 1fr 1fr 100px',
+              padding: '10px 16px', fontSize: '12px', fontWeight: 700, color: '#fff',
+              background: '#1a3a5c', borderRadius: '8px 8px 0 0',
+            }}>
+              <span>날짜</span>
+              <span style={{ textAlign: 'right' }}>{u0.name}</span>
+              <span style={{ textAlign: 'right' }}>{u1.name}</span>
+              <span style={{ textAlign: 'right' }}>합산</span>
+              <span style={{ textAlign: 'right' }}>변동</span>
+            </div>
+            <div style={{ border: '1px solid #e8ecf0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+              {dates.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6', fontSize: '13px' }}>
+                  스냅샷 이력이 없습니다.
+                </div>
+              )}
+              {dates.map((date, i) => {
+                const v0 = grandKrw(date, u0.id);
+                const v1 = grandKrw(date, u1.id);
+                const total = v0 + v1;
+                const prevDate = dates[i + 1];
+                const prevTotal = prevDate
+                  ? grandKrw(prevDate, u0.id) + grandKrw(prevDate, u1.id)
+                  : null;
+                const diff = prevTotal !== null ? total - prevTotal : null;
+                return (
+                  <div key={date}
+                    onClick={() => { setSelectedDate(date); setSubTab('CURRENT'); }}
+                    style={{
+                      display: 'grid', gridTemplateColumns: '130px 1fr 1fr 1fr 100px',
+                      padding: '11px 16px', fontSize: '13px',
+                      borderBottom: i < dates.length - 1 ? '1px solid #f0f0f0' : 'none',
+                      background: '#fff', cursor: 'pointer', alignItems: 'center',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f0f8fd')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                  >
+                    <span style={{ fontWeight: 700, color: '#1565c0' }}>{date}</span>
+                    <span style={{ textAlign: 'right', color: '#344054' }}>{v0 ? formatAmountShort(v0) : '—'}</span>
+                    <span style={{ textAlign: 'right', color: '#344054' }}>{v1 ? formatAmountShort(v1) : '—'}</span>
+                    <span style={{ textAlign: 'right', fontWeight: 700, color: '#1a3a5c' }}>{total ? formatAmountShort(total) : '—'}</span>
+                    <span style={{
+                      textAlign: 'right', fontWeight: 600,
+                      color: diff === null ? '#9aa0a6' : diff >= 0 ? '#4CAF50' : '#E06060',
+                    }}>
+                      {diff === null ? '—' : `${diff >= 0 ? '+' : ''}${(diff / 1e8).toFixed(2)}억`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* ── 안내 */}
-        <div style={{ fontSize: '11px', color: '#b0b8c4', textAlign: 'right', marginBottom: '6px' }}>
-          ✏️ 금액 셀 클릭하여 수정
-        </div>
+        {/* ══ 그래프 탭 ═════════════════════════════════════════ */}
+        {subTab === 'CHART' && (
+          <div>
+            {/* 모드 토글 */}
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+              {([['USER', '유저별'], ['LIQUIDITY', '유동성별']] as ['USER' | 'LIQUIDITY', string][]).map(([m, label]) => (
+                <button key={m} onClick={() => setChartMode(m)} style={{
+                  padding: '6px 16px', fontSize: '12px', fontWeight: chartMode === m ? 700 : 400,
+                  borderRadius: '20px', border: `1px solid ${chartMode === m ? '#89CFF0' : '#dadce0'}`,
+                  background: chartMode === m ? '#89CFF0' : '#fff',
+                  color: chartMode === m ? '#fff' : '#5f6368',
+                  cursor: 'pointer',
+                }}>{label}</button>
+              ))}
+            </div>
 
-        {/* ── 메인 테이블 */}
-        <div style={{ border: '1px solid #e8ecf0', borderRadius: '12px', overflow: 'hidden' }}>
-          {/* 헤더 행 */}
-          <div style={{
-            display: 'grid', ...COLS,
-            padding: '10px 16px', fontSize: '12px', fontWeight: 700,
-            background: '#1a3a5c', color: '#fff',
-          }}>
-            <span>자산 항목</span>
-            <span style={{ textAlign: 'right' }}>{u0.name}</span>
-            <span style={{ textAlign: 'right' }}>{u1.name}</span>
-            <span style={{ textAlign: 'right' }}>합산</span>
-          </div>
-
-          {GROUPS.map((group, gi) => {
-            const cols = ASSET_COLUMNS.filter(c => c.group === group);
-            const lc = ASSET_LIQUIDITY_COLORS[group];
-            const sub0 = groupSub(group, u0.id);
-            const sub1 = groupSub(group, u1.id);
-            return (
-              <React.Fragment key={group}>
-                {/* 그룹 섹션 헤더 */}
-                <div style={{
-                  display: 'grid', ...COLS,
-                  padding: '7px 16px', fontSize: '11px', fontWeight: 800,
-                  background: lc.bg, color: lc.text,
-                  borderTop: gi > 0 ? '2px solid #e8ecf0' : 'none',
-                }}>
-                  <span>{group}</span>
-                  <span style={{ textAlign: 'right', fontWeight: 400, opacity: 0.7 }}>클릭 수정</span>
-                  <span style={{ textAlign: 'right', fontWeight: 400, opacity: 0.7 }}>클릭 수정</span>
-                  <span />
+            {dates.length < 2 ? (
+              <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '13px' }}>
+                그래프를 보려면 스냅샷이 2개 이상 필요합니다.
+              </div>
+            ) : (
+              <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: '12px', padding: '20px' }}>
+                <ResponsiveContainer width="100%" height={340}>
+                  <LineChart
+                    data={chartMode === 'USER' ? chartDataByUser : chartDataByLiquidity}
+                    margin={{ top: 10, right: 20, left: 10, bottom: 10 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9aa0a6' }} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#9aa0a6' }}
+                      tickFormatter={v => `${v}억`}
+                      width={50}
+                    />
+                    <Tooltip
+                      formatter={(value: number, name: string) => [`${value}억`, name]}
+                      labelFormatter={label => `날짜: ${label}`}
+                      contentStyle={{ fontSize: '12px' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    {chartMode === 'USER' ? (<>
+                      <Line type="monotone" dataKey={u0.name} stroke="#1565c0" strokeWidth={2} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey={u1.name} stroke="#E06060" strokeWidth={2} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="합산" stroke="#4CAF50" strokeWidth={2.5} dot={{ r: 5 }} />
+                    </>) : (<>
+                      <Line type="monotone" dataKey="즉시 사용 가능" stroke="#4CAF50" strokeWidth={2} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="즉시 사용 불가" stroke="#FF9800" strokeWidth={2} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="합산" stroke="#1565c0" strokeWidth={2.5} dot={{ r: 5 }} />
+                    </>)}
+                  </LineChart>
+                </ResponsiveContainer>
+                <div style={{ fontSize: '11px', color: '#9aa0a6', textAlign: 'right', marginTop: '8px' }}>
+                  Y축: 억 단위 · 달러 현금은 {exchangeRate.toLocaleString()}원/$ 환율 적용
                 </div>
-
-                {/* 자산 항목 행 */}
-                {cols.map(col => {
-                  const a0 = getAmt(u0.id, col.key);
-                  const a1 = getAmt(u1.id, col.key);
-                  const isEdit0 = editingCell?.userId === u0.id && editingCell?.assetKey === col.key;
-                  const isEdit1 = editingCell?.userId === u1.id && editingCell?.assetKey === col.key;
-                  return (
-                    <div key={col.key} style={{
-                      display: 'grid', ...COLS,
-                      background: '#fff', alignItems: 'center',
-                      borderBottom: '1px solid #f5f5f5',
-                    }}>
-                      <span style={{ padding: '0 16px', fontSize: '13px', color: '#344054', lineHeight: '42px' }}>
-                        {col.label}
-                      </span>
-                      <AssetCell value={a0} isEditing={isEdit0} editValue={editValue}
-                        onStartEdit={() => startEdit(u0.id, col.key)}
-                        onEditChange={setEditValue} onSave={saveEdit}
-                        onCancel={() => setEditingCell(null)}
-                        saving={saving} accentColor={lc.border} />
-                      <AssetCell value={a1} isEditing={isEdit1} editValue={editValue}
-                        onStartEdit={() => startEdit(u1.id, col.key)}
-                        onEditChange={setEditValue} onSave={saveEdit}
-                        onCancel={() => setEditingCell(null)}
-                        saving={saving} accentColor={lc.border} />
-                      <span style={{
-                        padding: '0 16px', textAlign: 'right', fontSize: '13px', lineHeight: '42px',
-                        fontWeight: 600, color: (a0 + a1) === 0 ? '#dadce0' : '#1a3a5c',
-                      }}>
-                        {(a0 + a1) === 0 ? '—' : formatAmountShort(a0 + a1)}
-                      </span>
-                    </div>
-                  );
-                })}
-
-                {/* 소계 행 */}
-                <div style={{
-                  display: 'grid', ...COLS,
-                  padding: '9px 16px', fontSize: '13px', fontWeight: 700,
-                  background: lc.bg, color: lc.text,
-                }}>
-                  <span>소계</span>
-                  <span style={{ textAlign: 'right' }}>{sub0 ? formatAmountShort(sub0) : '—'}</span>
-                  <span style={{ textAlign: 'right' }}>{sub1 ? formatAmountShort(sub1) : '—'}</span>
-                  <span style={{ textAlign: 'right', fontSize: '14px' }}>
-                    {(sub0 + sub1) ? formatAmountShort(sub0 + sub1) : '—'}
-                  </span>
-                </div>
-              </React.Fragment>
-            );
-          })}
-
-          {/* 총 자산 행 */}
-          <div style={{
-            display: 'grid', ...COLS,
-            padding: '14px 16px', fontSize: '14px', fontWeight: 800,
-            background: '#f0f8fd', color: '#1a3a5c',
-            borderTop: '2px solid #89CFF060',
-          }}>
-            <span>총 자산</span>
-            <span style={{ textAlign: 'right' }}>{gt0 ? formatAmountShort(gt0) : '—'}</span>
-            <span style={{ textAlign: 'right' }}>{gt1 ? formatAmountShort(gt1) : '—'}</span>
-            <span style={{ textAlign: 'right', fontSize: '16px' }}>
-              {gtSum ? formatAmount(gtSum) : '—'}
-            </span>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -1108,19 +1438,20 @@ const AssetCell: React.FC<{
   onCancel: () => void;
   saving: boolean;
   accentColor: string;
-}> = ({ value, isEditing, editValue, onStartEdit, onEditChange, onSave, onCancel, saving, accentColor }) => {
+  isDollar?: boolean;
+  exchangeRate?: number;
+}> = ({ value, isEditing, editValue, onStartEdit, onEditChange, onSave, onCancel, saving, accentColor, isDollar, exchangeRate }) => {
   if (isEditing) {
-    // 콤마 구분 합산 미리보기 계산
     const parts = editValue.split(',').map(s => Number(s.trim().replace(/[^0-9]/g, '')) || 0);
     const previewSum = parts.reduce((a, b) => a + b, 0);
     const showPreview = editValue.includes(',') && previewSum > 0;
+    const krwPreview = isDollar && exchangeRate ? Math.round(previewSum * exchangeRate) : null;
 
     return (
       <div style={{ padding: '4px 8px' }}>
         <input
           type="text"
-          value={editValue} autoFocus placeholder="숫자, 숫자, ..."
-          // 숫자·콤마·공백만 허용
+          value={editValue} autoFocus placeholder={isDollar ? '$금액' : '숫자, 숫자, ...'}
           onChange={e => onEditChange(e.target.value.replace(/[^0-9,\s]/g, ''))}
           onKeyDown={e => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel(); }}
           onBlur={onSave}
@@ -1131,15 +1462,40 @@ const AssetCell: React.FC<{
           }}
           disabled={saving}
         />
-        {/* 합산 미리보기 */}
         {showPreview && (
           <div style={{ fontSize: '11px', color: accentColor, textAlign: 'right', marginTop: '2px', fontWeight: 700 }}>
-            = {previewSum.toLocaleString('ko-KR')}
+            = {isDollar ? `$${previewSum.toLocaleString('ko-KR')}` : previewSum.toLocaleString('ko-KR')}
+            {krwPreview ? ` (≈${krwPreview.toLocaleString('ko-KR')}원)` : ''}
           </div>
         )}
       </div>
     );
   }
+
+  // 달러 현금: USD 금액 표시 + KRW 환산 부기
+  if (isDollar && value > 0 && exchangeRate) {
+    const krw = Math.round(value * exchangeRate);
+    return (
+      <div
+        onClick={onStartEdit}
+        title="클릭하여 수정 (USD 입력)"
+        style={{
+          padding: '6px 16px', textAlign: 'right', cursor: 'pointer',
+          userSelect: 'none',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#f0f8fd')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+      >
+        <div style={{ fontSize: '13px', fontWeight: 600, color: '#344054' }}>
+          ${value.toLocaleString('ko-KR')}
+        </div>
+        <div style={{ fontSize: '10px', color: '#9aa0a6' }}>
+          ≈ {krw.toLocaleString('ko-KR')}원
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={onStartEdit}

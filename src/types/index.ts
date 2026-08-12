@@ -604,6 +604,15 @@ export interface Asset {
   updatedAt: string;
 }
 
+/** 자산 스냅샷 단일 셀 — (user_id, snapshot_date, asset_type) 기준 upsert */
+export interface AssetSnapshotCell {
+  id: number;
+  userId: string;
+  snapshotDate: string;  // "YYYY-MM-DD"
+  assetType: string;     // ASSET_COLUMNS key
+  amount: number;        // 원 단위 (달러 현금은 USD 달러 금액)
+}
+
 /** 금액을 "0,000원" 형식으로 포맷 */
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';
