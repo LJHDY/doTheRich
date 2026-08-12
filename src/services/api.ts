@@ -22,6 +22,7 @@ import {
   PropertyVisit,
   PropertyVisitResultItem,
   JeonseOnlyItem,
+  PublicComplex,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -673,9 +674,21 @@ export const collectPublicComplexes = async (guName: string): Promise<{ status: 
 };
 
 /** 저장된 공공단지 목록 — GET /api/public-complexes?sigungu_cd= */
-export const getPublicComplexes = async (sigunguCd: string): Promise<any[]> => {
+export const getPublicComplexes = async (sigunguCd: string): Promise<PublicComplex[]> => {
   const { data } = await api.get('/api/public-complexes', { params: { sigungu_cd: sigunguCd } });
-  return data;
+  // 백엔드가 snake_case로 반환 → camelCase로 변환
+  return data.map((item: any) => ({
+    id: item.id,
+    guName: item.gu_name,
+    bldNm: item.bld_nm,
+    address: item.address,
+    hhldCnt: item.hhld_cnt,
+    vlRat: item.vl_rat,
+    parkingCnt: item.parking_cnt,
+    useAprDay: item.use_apr_day,
+    latitude: item.latitude,
+    longitude: item.longitude,
+  }));
 };
 
 
