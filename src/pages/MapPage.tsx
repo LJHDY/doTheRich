@@ -426,8 +426,8 @@ const MapPage: React.FC<MapPageProps> = ({
           pointer-events:none;
         ">
           <div style="font-size:10px;font-weight:600;color:#1a3a5c;line-height:1.4;">${name}</div>
-          ${row1 ? `<div style="font-size:9px;color:#666;line-height:1.3;">${row1}</div>` : ''}
-          ${row2 ? `<div style="font-size:9px;color:#888;line-height:1.3;">${row2}</div>` : ''}
+          ${row1 ? `<div style="font-size:8px;color:#666;line-height:1.3;">${row1}</div>` : ''}
+          ${row2 ? `<div style="font-size:8px;color:#888;line-height:1.3;">${row2}</div>` : ''}
         </div>`;
       const marker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(pc.latitude, pc.longitude),
