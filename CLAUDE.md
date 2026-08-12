@@ -10,6 +10,7 @@
 - 백엔드 변경이 필요한 경우, 변경 내용을 텍스트로 설명하고 구현은 사용자에게 맡긴다. (단, 사용자가 명시적으로 요청 시 직접 수정 가능)
 - 모든 소스 파일에 **한국어 주석** 작성 (로직 설명, Why 위주).
 - TypeScript 타입 오류 없이 `npx tsc --noEmit` 통과 확인 후 완료 보고.
+- **API 응답은 반드시 camelCase로 변환** — 백엔드(Python)는 snake_case 반환. `api.ts` 내 함수에서 `data.map(item => ({ camelCaseKey: item.snake_key }))` 변환 레이어 적용. `return data` 그대로 쓰지 않는다.
 - 작업 완료 후 이 파일의 해당 섹션을 업데이트한다.
 
 ---
@@ -186,6 +187,10 @@ PropertyVisitResultItem { id, templateId, itemName, category?, displayOrder, inp
 
 // 매물 임장 기록 1건 (부동산·동호수·평형·금액 + 체크리스트 results 배열 포함)
 PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone?, dong?, hosu?, areaType?, price?, memo?, createdAt, results: PropertyVisitResultItem[] }
+
+// 공공단지 (건축물대장 API 수집, 150세대↑ 공동주택)
+PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, useAprDay?, latitude, longitude }
+// useAprDay: YYYYMMDD 형식 사용승인일
 ```
 
 ### 유틸 함수
@@ -251,6 +256,9 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
 | PATCH | `/api/complexes/:id/property-visits/:visitId/checklists/:templateId` | 매물 체크 결과 upsert — `{ rating? }` |
 | GET | `/api/district-stats` | 구별 시세 통계 조회 — `?trade_month=YYYYMM` (미지정 시 최신 월) |
 | POST | `/api/district-stats/collect` | 서울 25구 MOLIT 시세 수집 (202 백그라운드) |
+| GET | `/api/public-complexes/gu-list` | 서울 25구 목록 (guName + sigunguCd) |
+| GET | `/api/public-complexes?sigungu_cd=` | 공공단지 목록 (좌표 있는 것만, snake_case 반환 → api.ts에서 camelCase 변환) |
+| POST | `/api/public-complexes/collect` | 지정 구 공공단지 수집 — `{ gu_name }` (백그라운드 실행) |
 
 ---
 
@@ -277,6 +285,12 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
   - `handleConfirmZoneDrawing()`: 3개 미만 점 → alert, 내부 단지 없음 → alert, confirm 후 단지 추가 + 폴리곤 저장 병렬 처리, 완료 시 `livingZoneRefreshKey` 증가로 패널 리로드
   - 구획 플로팅 바: 점 개수 · ↩ 삭제 · 확인(3개 이상 활성) · 취소
 - `myComplexListOpen` → ComplexListModal(전체, 단지명 검색) 오픈 (헤더 "내 단지" 버튼)
+- **공공단지 상태**:
+  - `guList` — 서울 25구 목록 (앱 마운트 시 1회 로드)
+  - `publicComplexes: PublicComplex[]` — 선택 구의 공공단지 목록 (좌표 있는 것만)
+  - `showPublicComplexes` / `showMyComplexes` — 지도 마커 on/off 토글 (구 변경 시 둘 다 true로 초기화)
+  - 구 선택 시 헤더에 **내단지** / **아파트** 버튼 표시 → 각각 내 단지 마커 / 공공단지 마커 토글
+  - MapPage에 `showMyComplexes ? filteredComplexes : []` / `showPublicComplexes ? publicComplexes : []` 전달
 - 검색 결과 선택 시 `fromSearch:true`로 RegisterModal 오픈
 - **경로 상태**:
   - `routePanelOpen` → RoutePanel 표시 (헤더 "경로" 버튼)
@@ -335,6 +349,10 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
   - `drawingZonePoints` 변경 시: 초록 원 꼭지점 마커 + 3개 이상이면 반투명 초록 Polygon / 2개 이하면 Polyline
   - `zonePolygons` 변경 시: 저장된 구획을 반투명 초록 `shortdash` Polygon + 생활권 이름 라벨 마커로 표시
   - `zoneClickListenerRef` / `zonePolygonRef` / `zoneMarkersRef` / `zoneSavedPolygonsRef` / `zoneLabelMarkersRef`로 수명 관리
+- **공공단지 마커** (`publicComplexes` prop):
+  - 3줄 카드형: 단지명(10px bold) / 연식·세대수(8px) / 용적·주차(8px)
+  - `pointer-events:none` — 마커 클릭이 지도로 통과 (경로 그리기 방해 없음)
+  - `publicComplexMarkersRef`로 수명 관리, 빈 배열 전달 시 전체 제거
 
 ### `RegisterModal.tsx`
 - 섹션: 기본정보 / 가격정보 / 단지정보 / 교통정보 / 출퇴근시간 / 유해시설 / 메모
@@ -687,6 +705,15 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
     - `POST /api/district-stats/collect` — 서울 25구 병렬(5 workers) MOLIT API 호출 → 평형별 평균 계산 → upsert
     - 구형 컬럼(`avg_trade_10`) 감지 시 테이블 DROP 후 재생성 (idempotent 마이그레이션)
   - 타입: `DistrictStat` (src/types/index.ts), API: `getDistrictStats`, `collectDistrictStats` (src/services/api.ts)
+
+- [x] 공공단지 수집 및 지도 표시 기능
+  - 백엔드: 건축물대장 API로 서울 25구 150세대↑ 공동주택 수집 (`public_complex` 테이블)
+  - 법정동코드 `BJDONG_SCAN_RANGE = range(10100, 30000, 100)` 전체 스캔
+  - 지오코딩: Naver local search API (`openapi.naver.com`) — 단지명+구명 1차, 주소 2차 fallback
+  - 프론트: `PublicComplex` 타입, `getPublicComplexes` API (snake_case → camelCase 변환)
+  - 구 경계 선택 시 해당 구 공공단지 자동 로드 → 지도 마커 표시
+  - 마커: 3줄 카드형 (단지명/연식·세대수/용적·주차), `pointer-events:none`으로 경로 그리기 방해 없음
+  - 헤더 토글 버튼: **내단지** / **아파트** (구 선택 시에만 표시, 구 변경 시 ON으로 초기화)
 
 ## 미완성 / TODO
 
