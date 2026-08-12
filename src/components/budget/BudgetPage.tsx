@@ -18,7 +18,6 @@ import {
   getAssets,
   createAsset,
   updateAsset,
-  deleteAsset,
 } from '../../services/api';
 import { Asset, BudgetEntry, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
