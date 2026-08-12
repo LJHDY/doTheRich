@@ -65,7 +65,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [entries, setEntries] = useState<BudgetEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('ALL');
-  const [tab, setTab] = useState<Tab>('ENTRIES');
+  const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem('budget_tab') as Tab) || 'ENTRIES');
+  useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
 
   // 입력 폼

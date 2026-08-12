@@ -108,8 +108,9 @@ const App: React.FC = () => {
   // 구별 시세 현황 패널
   const [districtStatsOpen, setDistrictStatsOpen] = useState(false);
 
-  // 가계부
-  const [budgetOpen, setBudgetOpen] = useState(false);
+  // 가계부 — 새로고침 후에도 열린 상태 복원
+  const [budgetOpen, setBudgetOpen] = useState(() => sessionStorage.getItem('budget_open') === 'true');
+  useEffect(() => { sessionStorage.setItem('budget_open', String(budgetOpen)); }, [budgetOpen]);
   // 유저 미선택 시 선택 모달 표시 — 가계부 열기 시점에 확인
   const [showUserSelect, setShowUserSelect] = useState(false);
 
