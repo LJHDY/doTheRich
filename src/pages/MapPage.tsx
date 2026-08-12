@@ -86,7 +86,7 @@ const MapPage: React.FC<MapPageProps> = ({
   // 공공단지 마커 목록
   const publicComplexMarkersRef = useRef<any[]>([]);
   // 공공단지 마커 줌 임계값 — 이 줌 이상에서만 표시 (겹침 방지)
-  const PUBLIC_COMPLEX_MIN_ZOOM = 14;
+  const PUBLIC_COMPLEX_MIN_ZOOM = 15;
 
   // 마커 diff를 위한 Map — 단지 id → { marker, listenerHandle }
   const markerMapRef = useRef<Map<number, { marker: any; listener: any }>>(new Map());
