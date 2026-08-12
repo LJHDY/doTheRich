@@ -608,9 +608,6 @@ export interface Asset {
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';
 
-/** 금액을 "0.0만" 또는 "0.0억" 단위로 포맷 */
-export const formatAmountShort = (amount: number): string => {
-  if (amount >= 100_000_000) return (amount / 100_000_000).toFixed(1) + '억';
-  if (amount >= 10_000) return Math.round(amount / 10_000) + '만';
-  return amount.toLocaleString('ko-KR');
-};
+/** 금액을 콤마 구분 정수로 포맷 (반올림·버림 없음) */
+export const formatAmountShort = (amount: number): string =>
+  amount.toLocaleString('ko-KR');
