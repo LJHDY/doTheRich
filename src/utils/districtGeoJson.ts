@@ -7,6 +7,8 @@ const SEOUL_URL =
   'https://raw.githubusercontent.com/statgarten/maps/main/json/%EC%84%9C%EC%9A%B8%ED%8A%B9%EB%B3%84%EC%8B%9C_%EC%8B%9C%EA%B5%B0%EA%B5%AC_%EA%B2%BD%EA%B3%84.json';
 const GYEONGGI_URL =
   'https://raw.githubusercontent.com/statgarten/maps/main/json/%EA%B2%BD%EA%B8%B0%EB%8F%84_%EC%8B%9C%EA%B5%B0%EA%B5%AC_%EA%B2%BD%EA%B3%84.json';
+const INCHEON_URL =
+  'https://raw.githubusercontent.com/statgarten/maps/main/json/%EC%9D%B8%EC%B2%9C%EA%B4%91%EC%97%AD%EC%8B%9C_%EC%8B%9C%EA%B5%B0%EA%B5%AC_%EA%B2%BD%EA%B3%84.json';
 
 // EPSG:5179 — 한국 TM 좌표계 (통계청 SGIS 기본 출력 좌표계)
 const EPSG5179 =
@@ -40,7 +42,17 @@ let cached: any = null;
 // 진행 중인 Promise — 동시 다발 호출 시 동일 Promise를 공유 (중복 fetch 방지)
 let pending: Promise<any> | null = null;
 
-/** 서울+경기도 GeoJSON 로드 — 병렬 fetch, EPSG:5179→WGS84 변환 후 합쳐서 캐시 */
+// 인천 GeoJSON feature 이름 충돌 처리 — 서울/경기의 동명 구와 구분
+// GeoJSON에서 그냥 "중구"/"동구"로 오는 것을 "인천 중구"/"인천 동구"로 변경
+const disambiguateIncheon = (f: any): any => {
+  const title: string = f.properties?.title ?? '';
+  const renamed = title === '중구' ? '인천 중구' : title === '동구' ? '인천 동구' : title;
+  return renamed !== title
+    ? { ...f, properties: { ...f.properties, title: renamed } }
+    : f;
+};
+
+/** 서울+경기도+인천 GeoJSON 로드 — 병렬 fetch, EPSG:5179→WGS84 변환 후 합쳐서 캐시 */
 export const loadDistrictGeoJson = (): Promise<any> => {
   // 이미 로드된 데이터가 있으면 즉시 반환
   if (cached) return Promise.resolve(cached);
@@ -49,11 +61,14 @@ export const loadDistrictGeoJson = (): Promise<any> => {
     pending = Promise.all([
       fetch(SEOUL_URL).then(r => { if (!r.ok) throw new Error('Seoul GeoJSON 로드 실패'); return r.json(); }),
       fetch(GYEONGGI_URL).then(r => { if (!r.ok) throw new Error('Gyeonggi GeoJSON 로드 실패'); return r.json(); }),
+      fetch(INCHEON_URL).then(r => { if (!r.ok) throw new Error('Incheon GeoJSON 로드 실패'); return r.json(); }),
     ])
-      .then(([seoulData, gyeonggiData]) => {
+      .then(([seoulData, gyeonggiData, incheonData]) => {
+        const incheonFeatures = (incheonData.features ?? []).map(disambiguateIncheon);
         const allFeatures = [
           ...(seoulData.features ?? []),
           ...(gyeonggiData.features ?? []),
+          ...incheonFeatures,
         ];
         // 좌표계 변환 — 원본 EPSG:5179 미터 좌표 → WGS84 경위도 (Naver Maps 입력 형식)
         const converted = allFeatures.map((f: any) => ({
@@ -79,3 +94,7 @@ export const isSeoul = (f: any): boolean =>
 /** 경기도(id 31xxx) 소속 feature 여부 */
 export const isGyeonggi = (f: any): boolean =>
   String(f.properties?.id ?? '').startsWith('31');
+
+/** 인천(id 23xxx) 소속 feature 여부 */
+export const isIncheon = (f: any): boolean =>
+  String(f.properties?.id ?? '').startsWith('23');

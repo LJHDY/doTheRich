@@ -661,8 +661,8 @@ export const collectDistrictStats = async (): Promise<{ message: string }> => {
   return data;
 };
 
-/** 서울 25구 목록 — GET /api/public-complexes/gu-list */
-export const getPublicComplexGuList = async (): Promise<{ guName: string; sigunguCd: string }[]> => {
+/** 수도권 지역 목록 — GET /api/public-complexes/gu-list */
+export const getPublicComplexGuList = async (): Promise<{ guName: string; sigunguCd: string; province?: string }[]> => {
   const { data } = await api.get('/api/public-complexes/gu-list');
   return data;
 };

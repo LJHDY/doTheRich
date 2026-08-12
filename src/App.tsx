@@ -107,7 +107,7 @@ const App: React.FC = () => {
 
   // 공공단지 수집 패널
   const [collectPanelOpen, setCollectPanelOpen] = useState(false);
-  const [guList, setGuList] = useState<{ guName: string; sigunguCd: string }[]>([]);
+  const [guList, setGuList] = useState<{ guName: string; sigunguCd: string; province?: string }[]>([]);
   const [selectedCollectGu, setSelectedCollectGu] = useState('');
   const [collectStatus, setCollectStatus] = useState<'idle' | 'collecting' | 'done' | 'error'>('idle');
   const [publicComplexes, setPublicComplexes] = useState<PublicComplex[]>([]);
@@ -830,13 +830,22 @@ const App: React.FC = () => {
                     padding: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.12)', zIndex: 1000,
                     display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '220px',
                   }}>
-                    <div style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>서울 구 선택</div>
+                    <div style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>수도권 지역 선택</div>
                     <select
                       value={selectedCollectGu}
                       onChange={e => { setSelectedCollectGu(e.target.value); setCollectStatus('idle'); }}
                       style={{ fontSize: '13px', padding: '5px 8px', borderRadius: '6px', border: '1px solid #dadce0' }}
                     >
-                      {guList.map(g => <option key={g.guName} value={g.guName}>{g.guName}</option>)}
+                      {/* province별로 optgroup 그룹핑 */}
+                      {['서울', '경기', '인천'].map(prov => {
+                        const items = guList.filter(g => g.province === prov);
+                        if (items.length === 0) return null;
+                        return (
+                          <optgroup key={prov} label={prov}>
+                            {items.map(g => <option key={g.guName} value={g.guName}>{g.guName}</option>)}
+                          </optgroup>
+                        );
+                      })}
                     </select>
                     <button
                       onClick={handleCollect}

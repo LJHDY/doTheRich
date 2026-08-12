@@ -258,7 +258,8 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
 | POST | `/api/district-stats/collect` | 서울 25구 MOLIT 시세 수집 (202 백그라운드) |
 | GET | `/api/public-complexes/gu-list` | 서울 25구 목록 (guName + sigunguCd) |
 | GET | `/api/public-complexes?sigungu_cd=` | 공공단지 목록 (좌표 있는 것만, snake_case 반환 → api.ts에서 camelCase 변환) |
-| POST | `/api/public-complexes/collect` | 지정 구 공공단지 수집 — `{ gu_name }` (백그라운드 실행) |
+| GET | `/api/public-complexes/gu-list` | 수도권 지역 목록 — `{ guName, sigunguCd, province }[]` |
+| POST | `/api/public-complexes/collect` | 지정 지역 공공단지 수집 — `{ gu_name }` (백그라운드 실행) |
 
 ---
 
@@ -710,16 +711,23 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
     - 구형 컬럼(`avg_trade_10`) 감지 시 테이블 DROP 후 재생성 (idempotent 마이그레이션)
   - 타입: `DistrictStat` (src/types/index.ts), API: `getDistrictStats`, `collectDistrictStats` (src/services/api.ts)
 
-- [x] 공공단지 수집 및 지도 표시 기능
-  - 백엔드: 건축물대장 API로 서울 25구 150세대↑ 공동주택 수집 (`public_complex` 테이블)
+- [x] 공공단지 수집 및 지도 표시 기능 (수도권 확장)
+  - 백엔드: 건축물대장 API로 수도권(서울 25구 + 경기도 33개 + 인천 8구) 150세대↑ 공동주택 수집 (`public_complex` 테이블)
+  - `REGION_MAP`: 지역명 → `{sigunguCd, province}` (서울/경기/인천 분류)
+  - 인천 중구/동구: "인천 중구"/"인천 동구"로 키 설정 (서울 중구와 충돌 방지)
+  - 경기 광주시: "광주시"로 키 설정 (GeoJSON feature 이름과 일치)
   - 법정동코드 `BJDONG_SCAN_RANGE = range(10100, 30000, 100)` 전체 스캔
   - 지오코딩: Naver local search API (`openapi.naver.com`) — 단지명+구명 1차, 주소 2차 fallback
   - 프론트: `PublicComplex` 타입, `getPublicComplexes` API (snake_case → camelCase 변환)
+  - `getPublicComplexGuList` 반환 타입에 `province?: string` 추가 → 수집 드롭다운 optgroup 그룹핑
+  - GeoJSON: 서울+경기+인천 병렬 fetch, 인천 "중구"→"인천 중구", "동구"→"인천 동구" 리네임 (`disambiguateIncheon`)
+  - `isIncheon()` 헬퍼 추가 (id 23xxx 판별)
   - 구 경계 선택 시 해당 구 공공단지 자동 로드 → 지도 마커 표시
   - 마커: 좌표 근접(30m) 그룹화 → 단일=카드형, 다중=이름 목록+클릭 펼치기/접기
   - 줌 14+ 표시, 줌 15+에서 세부정보 노출 (CSS 토글, 마커 재생성 없음)
   - 경로/구획 그리기 모드 시 다중 마커 클릭 자동 차단 (`pointer-events` style 태그 전환)
   - 헤더 토글 버튼: **내단지** / **아파트** (구 선택 시에만 표시, 구 변경 시 ON으로 초기화)
+  - 수집 패널 레이블: "서울 구 선택" → "수도권 지역 선택", optgroup(서울/경기/인천)으로 구분
 
 ## 미완성 / TODO
 
