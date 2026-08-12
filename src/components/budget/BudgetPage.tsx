@@ -41,6 +41,7 @@ const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
 });
 
 type Filter = 'ALL' | 'INCOME' | 'EXPENSE' | 'FIXED' | 'INVEST';
+type Tab = 'ENTRIES' | 'ACCOUNTS'; // 가계부 내역 / 통장 관리
 
 // ─── 컴포넌트 ─────────────────────────────────────────────────
 const BudgetPage: React.FC<Props> = ({ onClose }) => {
@@ -51,6 +52,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [entries, setEntries] = useState<BudgetEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('ALL');
+  const [tab, setTab] = useState<Tab>('ENTRIES');
 
   // 입력 폼
   const [formOpen, setFormOpen] = useState(false);
@@ -185,93 +187,117 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         <span style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a5c', flexGrow: 1 }}>
           💰 가계부
         </span>
+        {/* 탭 전환 */}
+        <div style={{ display: 'flex', gap: '4px', background: '#f0f4f8', borderRadius: '8px', padding: '3px' }}>
+          {([['ENTRIES', '내역'], ['ACCOUNTS', '통장 관리']] as [Tab, string][]).map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              padding: '4px 10px', fontSize: '12px', fontWeight: tab === t ? 700 : 400,
+              borderRadius: '6px', border: 'none', cursor: 'pointer',
+              background: tab === t ? '#fff' : 'transparent',
+              color: tab === t ? '#1a3a5c' : '#5f6368',
+              boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            }}>{label}</button>
+          ))}
+        </div>
         {/* 사용자 전환 */}
         <button onClick={switchUser} style={btnStyle('#f0f8fd', '#1a3a5c')}>
           👤 {userName}
         </button>
-        {/* 월 네비게이션 */}
-        <button onClick={() => moveMonth(-1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>◀</button>
-        <span style={{ fontSize: '14px', fontWeight: 600, color: '#344054', minWidth: '100px', textAlign: 'center' }}>
-          {displayYearMonth(yearMonth)}
-        </span>
-        <button onClick={() => moveMonth(1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>▶</button>
-        <button onClick={openAdd} style={btnStyle('#89CFF0', '#fff')}>+ 추가</button>
+        {/* 월 네비게이션 (내역 탭에서만) */}
+        {tab === 'ENTRIES' && <>
+          <button onClick={() => moveMonth(-1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>◀</button>
+          <span style={{ fontSize: '14px', fontWeight: 600, color: '#344054', minWidth: '100px', textAlign: 'center' }}>
+            {displayYearMonth(yearMonth)}
+          </span>
+          <button onClick={() => moveMonth(1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>▶</button>
+          <button onClick={openAdd} style={btnStyle('#89CFF0', '#fff')}>+ 추가</button>
+        </>}
       </div>
 
-      {/* ── 요약 카드 ─────────────────────────────────────────── */}
-      <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexShrink: 0 }}>
-        <SummaryCard label="총 수입" amount={summary.totalIncome} color="#4CAF50" sign="+" />
-        <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-" />
-        <SummaryCard label="잔액" amount={summary.totalIncome - summary.totalExpense}
-          color={summary.totalIncome >= summary.totalExpense ? '#1565c0' : '#E06060'} sign="" />
-      </div>
+      {/* ══ 내역 탭 ══════════════════════════════════════════ */}
+      {tab === 'ENTRIES' && <>
+        {/* ── 요약 카드 */}
+        <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexShrink: 0 }}>
+          <SummaryCard label="총 수입" amount={summary.totalIncome} color="#4CAF50" sign="+" />
+          <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-" />
+          <SummaryCard label="잔액" amount={summary.totalIncome - summary.totalExpense}
+            color={summary.totalIncome >= summary.totalExpense ? '#1565c0' : '#E06060'} sign="" />
+        </div>
 
-      {/* ── 고정/변동/투자 소요약 ──────────────────────────────── */}
-      <div style={{ padding: '8px 20px 0', display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
-        {[
-          { label: '고정비', val: summary.fixedExpense, color: '#9C27B0' },
-          { label: '변동비', val: summary.varExpense, color: '#FF9800' },
-          { label: '투자',   val: summary.totalInvest, color: '#2196F3' },
-        ].map(({ label, val, color }) => (
-          <div key={label} style={{
-            background: '#fff', border: `1px solid ${color}30`, borderRadius: '8px',
-            padding: '6px 14px', display: 'flex', gap: '8px', alignItems: 'center',
-          }}>
-            <span style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>{label}</span>
-            <span style={{ fontSize: '13px', fontWeight: 700, color }}>{formatAmountShort(val)}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* ── 통장별 현황 ──────────────────────────────────────── */}
-      {Object.keys(summary.accountMap).length > 0 && (
+        {/* ── 고정/변동/투자 소요약 */}
         <div style={{ padding: '8px 20px 0', display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
-          {Object.entries(summary.accountMap).map(([acc, { income, expense }]) => (
-            <div key={acc} style={{
-              background: '#fff', border: '1px solid #dadce0', borderRadius: '8px',
-              padding: '6px 14px', fontSize: '12px',
+          {[
+            { label: '고정비', val: summary.fixedExpense, color: '#9C27B0' },
+            { label: '변동비', val: summary.varExpense,   color: '#FF9800' },
+            { label: '투자',   val: summary.totalInvest,  color: '#2196F3' },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{
+              background: '#fff', border: `1px solid ${color}30`, borderRadius: '8px',
+              padding: '6px 14px', display: 'flex', gap: '8px', alignItems: 'center',
             }}>
-              <span style={{ fontWeight: 600, color: '#344054' }}>{acc}</span>
-              {income > 0 && <span style={{ color: '#4CAF50', marginLeft: '6px' }}>+{formatAmountShort(income)}</span>}
-              {expense > 0 && <span style={{ color: '#E06060', marginLeft: '4px' }}>-{formatAmountShort(expense)}</span>}
+              <span style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>{label}</span>
+              <span style={{ fontSize: '13px', fontWeight: 700, color }}>{formatAmountShort(val)}</span>
             </div>
           ))}
         </div>
-      )}
 
-      {/* ── 필터 탭 ──────────────────────────────────────────── */}
-      <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexShrink: 0 }}>
-        {([
-          ['ALL', '전체'], ['INCOME', '수입'], ['EXPENSE', '지출'],
-          ['FIXED', '고정비'], ['INVEST', '투자'],
-        ] as [Filter, string][]).map(([val, label]) => (
-          <button key={val} onClick={() => setFilter(val)} style={{
-            padding: '5px 12px', fontSize: '12px', borderRadius: '20px',
-            border: `1px solid ${filter === val ? '#89CFF0' : '#dadce0'}`,
-            background: filter === val ? '#89CFF0' : '#fff',
-            color: filter === val ? '#fff' : '#5f6368',
-            cursor: 'pointer', fontWeight: filter === val ? 700 : 400,
-          }}>
-            {label}
-          </button>
-        ))}
-        <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#9aa0a6', alignSelf: 'center' }}>
-          {filtered.length}건
-        </span>
-      </div>
-
-      {/* ── 항목 목록 ─────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 20px' }}>
-        {loading && <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>불러오는 중…</div>}
-        {!loading && filtered.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
-            항목이 없습니다. + 추가로 기록을 시작하세요.
+        {/* ── 통장별 현황 */}
+        {Object.keys(summary.accountMap).length > 0 && (
+          <div style={{ padding: '8px 20px 0', display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+            {Object.entries(summary.accountMap).map(([acc, { income, expense }]) => (
+              <div key={acc} style={{
+                background: '#fff', border: '1px solid #dadce0', borderRadius: '8px',
+                padding: '6px 14px', fontSize: '12px',
+              }}>
+                <span style={{ fontWeight: 600, color: '#344054' }}>{acc}</span>
+                {income > 0 && <span style={{ color: '#4CAF50', marginLeft: '6px' }}>+{formatAmountShort(income)}</span>}
+                {expense > 0 && <span style={{ color: '#E06060', marginLeft: '4px' }}>-{formatAmountShort(expense)}</span>}
+              </div>
+            ))}
           </div>
         )}
-        {!loading && filtered.map(entry => (
-          <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete} />
-        ))}
-      </div>
+
+        {/* ── 필터 탭 */}
+        <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexShrink: 0 }}>
+          {([
+            ['ALL', '전체'], ['INCOME', '수입'], ['EXPENSE', '지출'],
+            ['FIXED', '고정비'], ['INVEST', '투자'],
+          ] as [Filter, string][]).map(([val, label]) => (
+            <button key={val} onClick={() => setFilter(val)} style={{
+              padding: '5px 12px', fontSize: '12px', borderRadius: '20px',
+              border: `1px solid ${filter === val ? '#89CFF0' : '#dadce0'}`,
+              background: filter === val ? '#89CFF0' : '#fff',
+              color: filter === val ? '#fff' : '#5f6368',
+              cursor: 'pointer', fontWeight: filter === val ? 700 : 400,
+            }}>
+              {label}
+            </button>
+          ))}
+          <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#9aa0a6', alignSelf: 'center' }}>
+            {filtered.length}건
+          </span>
+        </div>
+
+        {/* ── 항목 목록 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 20px' }}>
+          {loading && <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>불러오는 중…</div>}
+          {!loading && filtered.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
+              항목이 없습니다. + 추가로 기록을 시작하세요.
+            </div>
+          )}
+          {!loading && filtered.map(entry => (
+            <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete} />
+          ))}
+        </div>
+      </>}
+
+      {/* ══ 통장 관리 탭 ═════════════════════════════════════ */}
+      {tab === 'ACCOUNTS' && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+          <AccountManagementView />
+        </div>
+      )}
 
       {/* ── 입력 폼 모달 ─────────────────────────────────────── */}
       {formOpen && (
@@ -344,8 +370,9 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
             {/* 통장 중분류 — 대분류 선택 시만 표시 */}
             {form.accountMain && (() => {
-              const subs = ACCOUNT_GROUPS.find(g => g.main === form.accountMain)?.subs ?? [];
-              return subs.length > 0 ? (
+              const group = ACCOUNT_GROUPS.find(g => g.main === form.accountMain);
+              const accs = group?.accounts ?? [];
+              return accs.length > 0 ? (
                 <FieldRow label="통장 (중분류)">
                   <select
                     value={form.account ?? ''}
@@ -353,7 +380,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                     style={inputStyle}
                   >
                     <option value="">선택 안함</option>
-                    {subs.map(s => <option key={s} value={s}>{s}</option>)}
+                    {accs.map(a => (
+                      <option key={a.name} value={a.name}>
+                        {a.name}{a.bankName ? ` (${a.bankName})` : ''}
+                      </option>
+                    ))}
                   </select>
                 </FieldRow>
               ) : null;
@@ -520,6 +551,116 @@ const inputStyle: React.CSSProperties = {
   width: '100%', padding: '9px 12px', fontSize: '14px',
   borderRadius: '8px', border: '1px solid #dadce0',
   boxSizing: 'border-box', outline: 'none',
+};
+
+// ─── 통장 관리 뷰 ─────────────────────────────────────────────
+const GROUP_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  '고정비 통장':  { bg: '#FFF3E0', border: '#FF9800', text: '#E65100' },
+  '변동비 통장':  { bg: '#E8F5E9', border: '#4CAF50', text: '#1B5E20' },
+  '이벤트 통장':  { bg: '#E3F2FD', border: '#2196F3', text: '#0D47A1' },
+};
+
+const AccountManagementView: React.FC = () => {
+  const totalBudget = ACCOUNT_GROUPS.flatMap(g => g.accounts).reduce((s, a) => s + a.budget, 0);
+
+  return (
+    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+      {/* 전체 월 예산 합계 */}
+      <div style={{
+        background: '#fff', borderRadius: '12px', padding: '16px 20px',
+        marginBottom: '20px', border: '1px solid #dadce0',
+        display: 'flex', alignItems: 'center', gap: '12px',
+      }}>
+        <span style={{ fontSize: '14px', fontWeight: 600, color: '#344054' }}>전체 월 예산 합계</span>
+        <span style={{ fontSize: '20px', fontWeight: 800, color: '#E06060' }}>
+          {formatAmount(totalBudget)}
+        </span>
+      </div>
+
+      {ACCOUNT_GROUPS.map(group => {
+        const groupTotal = group.accounts.reduce((s, a) => s + a.budget, 0);
+        const colors = GROUP_COLORS[group.main] ?? { bg: '#f5f5f5', border: '#9aa0a6', text: '#344054' };
+
+        return (
+          <div key={group.main} style={{ marginBottom: '28px' }}>
+            {/* 대분류 헤더 */}
+            <div style={{
+              display: 'flex', alignItems: 'baseline', gap: '12px',
+              marginBottom: '8px',
+            }}>
+              <span style={{
+                fontSize: '16px', fontWeight: 800, color: colors.text,
+                borderBottom: `3px solid ${colors.border}`, paddingBottom: '2px',
+              }}>
+                {group.main}
+              </span>
+              <span style={{ fontSize: '12px', color: '#5f6368', fontStyle: 'italic' }}>
+                {group.description}
+              </span>
+            </div>
+
+            {/* 통장 테이블 */}
+            <div style={{
+              background: '#fff', border: `1px solid ${colors.border}40`,
+              borderRadius: '10px', overflow: 'hidden',
+            }}>
+              {/* 테이블 헤더 */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 1.2fr 3fr 1.5fr',
+                background: colors.bg,
+                padding: '10px 16px',
+                fontSize: '12px', fontWeight: 700, color: colors.text,
+                borderBottom: `1px solid ${colors.border}40`,
+              }}>
+                <span>통장</span>
+                <span style={{ textAlign: 'right' }}>예산 금액</span>
+                <span style={{ paddingLeft: '16px' }}>통장 항목</span>
+                <span style={{ paddingLeft: '16px' }}>은행 / 카드</span>
+              </div>
+
+              {/* 통장 행 */}
+              {group.accounts.map((acc, i) => (
+                <div key={acc.name} style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1.2fr 3fr 1.5fr',
+                  padding: '12px 16px', fontSize: '13px',
+                  borderBottom: i < group.accounts.length - 1 ? '1px solid #f0f0f0' : 'none',
+                  alignItems: 'start',
+                }}>
+                  <span style={{ fontWeight: 600, color: '#344054' }}>{acc.name}</span>
+                  <span style={{ textAlign: 'right', fontWeight: 700, color: '#E06060' }}>
+                    {formatAmount(acc.budget)}
+                  </span>
+                  <span style={{ paddingLeft: '16px', color: '#5f6368', lineHeight: 1.6 }}>
+                    {acc.items.join(', ')}
+                  </span>
+                  <span style={{ paddingLeft: '16px', color: '#9aa0a6' }}>
+                    {acc.bankName || '-'}
+                  </span>
+                </div>
+              ))}
+
+              {/* 합계 행 */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 1.2fr 3fr 1.5fr',
+                padding: '10px 16px',
+                background: colors.bg,
+                borderTop: `2px solid ${colors.border}60`,
+                fontSize: '13px', fontWeight: 700,
+              }}>
+                <span style={{ color: colors.text }}>합계</span>
+                <span style={{ textAlign: 'right', color: '#E06060' }}>{formatAmount(groupTotal)}</span>
+                <span style={{ paddingLeft: '16px', color: '#9aa0a6' }}>-</span>
+                <span style={{ paddingLeft: '16px', color: '#9aa0a6' }}>-</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 };
 
 export default BudgetPage;
