@@ -592,6 +592,18 @@ export interface BudgetSummary {
   byCategory: { category: string; type: string; amount: number }[];
 }
 
+// ─── 자산 관리 ───────────────────────────────────────────────
+
+export interface Asset {
+  id: number;
+  userId: string;
+  assetName: string;
+  assetType: string;
+  amount: number;    // 원 단위 (BigInteger 허용)
+  memo?: string;
+  updatedAt: string;
+}
+
 /** 금액을 "0,000원" 형식으로 포맷 */
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';

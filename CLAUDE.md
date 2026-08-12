@@ -260,6 +260,15 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
 | GET | `/api/public-complexes?sigungu_cd=` | 공공단지 목록 (좌표 있는 것만, snake_case 반환 → api.ts에서 camelCase 변환) |
 | GET | `/api/public-complexes/gu-list` | 수도권 지역 목록 — `{ guName, sigunguCd, province }[]` |
 | POST | `/api/public-complexes/collect` | 지정 지역 공공단지 수집 — `{ gu_name }` (백그라운드 실행) |
+| GET | `/api/budget/entries?user_id=&year_month=` | 월별 가계부 항목 목록 |
+| POST | `/api/budget/entries` | 가계부 항목 추가 (201) |
+| PATCH | `/api/budget/entries/:id` | 가계부 항목 수정 |
+| DELETE | `/api/budget/entries/:id` | 가계부 항목 삭제 (204) |
+| GET | `/api/budget/summary?user_id=&year_month=` | 월별 가계부 요약 |
+| GET | `/api/assets?user_id=` | 자산 목록 조회 |
+| POST | `/api/assets` | 자산 추가 (201) |
+| PATCH | `/api/assets/:id` | 자산 수정 |
+| DELETE | `/api/assets/:id` | 자산 삭제 (204) |
 
 ---
 
@@ -728,6 +737,15 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
   - 경로/구획 그리기 모드 시 다중 마커 클릭 자동 차단 (`pointer-events` style 태그 전환)
   - 헤더 토글 버튼: **내단지** / **아파트** (구 선택 시에만 표시, 구 변경 시 ON으로 초기화)
   - 수집 패널 레이블: "서울 구 선택" → "수도권 지역 선택", optgroup(서울/경기/인천)으로 구분
+
+- [x] 가계부 기능 (`BudgetPage`, `UserSelectModal`)
+  - 헤더 "💰 가계부" 버튼 → 전체화면 오버레이 (z-index 9000)
+  - localStorage `budget_user_id`로 세션 유저 저장, 👤 버튼 클릭 시 `UserSelectModal`로 재선택 가능
+  - **내역 탭**: 총 수입/지출/잔액 카드, 고정비/변동비/투자 소요약, 통장별 현황, 필터(전체/수입/지출/고정비/투자), 항목 목록
+  - **통장 관리 탭**: `ACCOUNT_GROUPS` 상수 기반 읽기 전용 참고 테이블 (통장명/예산/항목/은행카드/합계)
+  - **자산 탭**: 총 자산 합계 + 그룹별 비율 막대, 안전자산/투자자산/실물자산/기타 그룹 카드, 자산 CRUD (슬라이드업 폼)
+  - `ASSET_TYPES` / `ASSET_GROUP_COLORS` 상수 (`budgetConstants.ts`), `Asset` 타입 (`types/index.ts`), `getAssets/createAsset/updateAsset/deleteAsset` API
+  - 백엔드: `asset` 테이블 (BigInteger amount), `asset_service.py`, `routers/asset.py` — `GET/POST /api/assets`, `PATCH/DELETE /api/assets/:id`
 
 ## 미완성 / TODO
 

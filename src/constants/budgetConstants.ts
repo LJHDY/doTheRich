@@ -29,16 +29,16 @@ export const ACCOUNT_GROUPS: AccountGroup[] = [
     description: '생활에 꼭 필요한 비용 / 매달 고정되어 있음',
     accounts: [
       {
-        name: '고정비 통장(아내)',
+        name: '고정비 통장(주해)',
         budget: 1_500_000,
         items: ['이자', '월세', '관리비', '통신비', '정기구독', '회비', '보험'],
         bankName: '신한은행',
       },
       {
-        name: '고정비 통장(남편)',
+        name: '고정비 통장(동영)',
         budget: 880_000,
         items: ['이자', '통신비', '보험', '적금'],
-        bankName: '새마을금고',
+        bankName: 'KB국민',
       },
     ],
   },
@@ -47,28 +47,28 @@ export const ACCOUNT_GROUPS: AccountGroup[] = [
     description: '줄여볼 수 있는 조율 가능한 비용 / 조금씩의 변동이 있음',
     accounts: [
       {
-        name: '용돈 통장(아내)',
+        name: '용돈 통장(주해)',
         budget: 230_000,
         items: ['식대(회사)', '교통비', '운동/취미', '용돈', '교육/문화'],
-        bankName: 'BC카드',
+        bankName: '',
       },
       {
-        name: '용돈 통장(남편)',
+        name: '용돈 통장(동영)',
         budget: 290_000,
         items: ['식대(회사)', '교통비', '운동/취미', '용돈', '교육/문화'],
-        bankName: '삼성카드, 체크카드',
+        bankName: '',
       },
       {
         name: '생활비 통장',
         budget: 550_000,
         items: ['식비(마트)', '주유비', '병원/약국/의료', '영양제'],
-        bankName: '신한 신용카드',
+        bankName: '',
       },
       {
         name: '데이트통장',
         budget: 100_000,
         items: ['식비(배달)', '식비(외식)'],
-        bankName: '토스',
+        bankName: '',
       },
     ],
   },
@@ -80,7 +80,7 @@ export const ACCOUNT_GROUPS: AccountGroup[] = [
         name: '여행 통장',
         budget: 100_000,
         items: ['여행'],
-        bankName: '토스',
+        bankName: '',
       },
       {
         name: '비상금 통장',
@@ -99,22 +99,41 @@ export const ACCOUNT_MAINS = ACCOUNT_GROUPS.map(g => g.main);
 export const ACCOUNTS = ACCOUNT_GROUPS.flatMap(g => g.accounts.map(a => a.name));
 
 // ─── 지출 카테고리 ────────────────────────────────────────────
+// 고정비: 매달 거의 동일하게 나가는 항목
+// 변동비: 달마다 달라지는 항목
 
-export const EXPENSE_CATEGORIES: { name: string; subcategories: string[] }[] = [
-  { name: '식비',      subcategories: ['외식', '장보기', '카페', '배달', '식대(회사)'] },
-  { name: '교통',      subcategories: ['대중교통', '주유', '주차', '택시'] },
-  { name: '주거',      subcategories: ['월세', '관리비', '공과금', '인터넷', '핸드폰'] },
-  { name: '의료/건강', subcategories: ['병원', '약국', '의료비', '헬스/운동', '영양제'] },
-  { name: '여가',      subcategories: ['여행', '취미', '운동', '영화/공연', '구독서비스'] },
-  { name: '쇼핑',      subcategories: ['의류', '잡화', '생활용품', '온라인쇼핑'] },
-  { name: '교육',      subcategories: ['도서', '강의/학원', '교육/문화'] },
-  { name: '보험',      subcategories: ['생명보험', '실손보험', '기타보험'] },
-  { name: '저축',      subcategories: ['적금', '예금', '청약'] },
-  { name: '경조사',    subcategories: ['결혼', '장례', '선물', '부모님 용돈', '용돈'] },
-  { name: '고정지출',  subcategories: ['이자', '월세', '회비', '정기구독'] },
-  { name: '투자',      subcategories: ['주식', '펀드/ETF', '예금/적금', '부동산', '코인'] },
-  { name: '세금/공과', subcategories: ['세금', '4대보험', '기타공과금'] },
-  { name: '기타',      subcategories: [] },
+export const FIXED_EXPENSE_CATEGORIES: string[] = [
+  '월세',
+  '통신비',
+  '관리비',
+  '정기구독',
+  '회비',
+  '보험',
+  '이자',
+  '적금',
+  '미분류',
+];
+
+export const VARIABLE_EXPENSE_CATEGORIES: string[] = [
+  '교육/문화',
+  '식비(마트)',
+  '식대(회사)',
+  '식비(배달)',
+  '식비(외식)',
+  '병원/약국/의료',
+  '미용/패션/쇼핑',
+  '용돈',
+  '경조사',
+  '세금',
+  '주유비',
+  '영양제',
+  '교통비',
+  '여행',
+  '부모님 용돈',
+  '운동/취미',
+  '생필품',
+  '가구/가전',
+  '미분류',
 ];
 
 // ─── 수입 카테고리 ────────────────────────────────────────────
@@ -139,3 +158,31 @@ export const INVESTMENT_TYPES = [
 ] as const;
 
 export const BUDGET_USER_STORAGE_KEY = 'budget_user_id';
+
+// ─── 자산 항목 ────────────────────────────────────────────────
+// 즉시 사용 가능: 보증금·현금·주식·퇴직금(수령완료)
+// 즉시 사용 불가: 주택청약저축·퇴직연금·ISA·미국주식·국채·달러 현금
+
+export interface AssetColumn {
+  key: string;   // DB assetType 저장값 (유니크)
+  label: string; // 화면 표시명
+  group: '즉시 사용 가능' | '즉시 사용 불가';
+}
+
+export const ASSET_COLUMNS: AssetColumn[] = [
+  { key: '보증금',       label: '보증금',       group: '즉시 사용 가능' },
+  { key: '현금',         label: '현금',         group: '즉시 사용 가능' },
+  { key: '주식',         label: '주식',         group: '즉시 사용 가능' },
+  { key: '퇴직금',       label: '퇴직금',       group: '즉시 사용 가능' },
+  { key: '주택청약저축', label: '주택청약저축', group: '즉시 사용 불가' },
+  { key: '퇴직연금',     label: '퇴직연금',     group: '즉시 사용 불가' },
+  { key: 'ISA',          label: 'ISA',          group: '즉시 사용 불가' },
+  { key: '미국주식',     label: '미국주식',     group: '즉시 사용 불가' },
+  { key: '국채',         label: '국채',         group: '즉시 사용 불가' },
+  { key: '달러 현금',    label: '달러 현금',    group: '즉시 사용 불가' },
+];
+
+export const ASSET_LIQUIDITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  '즉시 사용 가능': { bg: '#E8F5E9', text: '#1B5E20', border: '#4CAF50' },
+  '즉시 사용 불가': { bg: '#FFF3E0', text: '#E65100', border: '#FF9800' },
+};

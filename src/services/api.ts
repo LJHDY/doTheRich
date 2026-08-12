@@ -25,6 +25,7 @@ import {
   PublicComplex,
   BudgetEntry,
   BudgetSummary,
+  Asset,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -763,6 +764,48 @@ export const deleteBudgetEntry = async (id: number): Promise<void> => {
 export const getBudgetSummary = async (userId: string, yearMonth: string): Promise<BudgetSummary> => {
   const { data } = await api.get('/api/budget/summary', { params: { user_id: userId, year_month: yearMonth } });
   return data as BudgetSummary;
+};
+
+// ─── 자산 API ─────────────────────────────────────────────────
+
+const toAsset = (d: any): Asset => ({
+  id: d.id,
+  userId: d.user_id,
+  assetName: d.asset_name,
+  assetType: d.asset_type,
+  amount: d.amount,
+  memo: d.memo,
+  updatedAt: d.updated_at,
+});
+
+export const getAssets = async (userId: string): Promise<Asset[]> => {
+  const { data } = await api.get('/api/assets', { params: { user_id: userId } });
+  return data.map(toAsset);
+};
+
+export const createAsset = async (payload: Omit<Asset, 'id' | 'updatedAt'>): Promise<Asset> => {
+  const { data } = await api.post('/api/assets', {
+    user_id: payload.userId,
+    asset_name: payload.assetName,
+    asset_type: payload.assetType,
+    amount: payload.amount,
+    memo: payload.memo ?? null,
+  });
+  return toAsset(data);
+};
+
+export const updateAsset = async (id: number, payload: Partial<Pick<Asset, 'assetName' | 'assetType' | 'amount' | 'memo'>>): Promise<Asset> => {
+  const body: any = {};
+  if (payload.assetName !== undefined) body.asset_name = payload.assetName;
+  if (payload.assetType !== undefined) body.asset_type = payload.assetType;
+  if (payload.amount !== undefined) body.amount = payload.amount;
+  if (payload.memo !== undefined) body.memo = payload.memo;
+  const { data } = await api.patch(`/api/assets/${id}`, body);
+  return toAsset(data);
+};
+
+export const deleteAsset = async (id: number): Promise<void> => {
+  await api.delete(`/api/assets/${id}`);
 };
 
 export default api;
