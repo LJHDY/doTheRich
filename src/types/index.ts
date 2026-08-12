@@ -560,3 +560,44 @@ export const calcCommuteGrade = (
   // C: 위 조건 모두 미충족
   return { grade: 'C', color: '#89CFF0' };
 };
+
+// ─── 가계부 ───────────────────────────────────────────────
+
+export interface BudgetEntry {
+  id: number;
+  userId: string;
+  yearMonth: string;    // "202508"
+  entryDate: string;    // "2025-08-12"
+  entryType: 'INCOME' | 'EXPENSE';
+  category: string;
+  subcategory?: string;
+  account?: string;
+  amount: number;       // 원 단위
+  isFixed: boolean;
+  isInvestment: boolean;
+  investmentType?: string;
+  memo?: string;
+  createdAt: string;
+}
+
+export interface BudgetSummary {
+  yearMonth: string;
+  totalIncome: number;
+  totalExpense: number;
+  totalInvestment: number;
+  fixedExpense: number;
+  variableExpense: number;
+  byAccount: { account: string; income: number; expense: number }[];
+  byCategory: { category: string; type: string; amount: number }[];
+}
+
+/** 금액을 "0,000원" 형식으로 포맷 */
+export const formatAmount = (amount: number): string =>
+  amount.toLocaleString('ko-KR') + '원';
+
+/** 금액을 "0.0만" 또는 "0.0억" 단위로 포맷 */
+export const formatAmountShort = (amount: number): string => {
+  if (amount >= 100_000_000) return (amount / 100_000_000).toFixed(1) + '억';
+  if (amount >= 10_000) return Math.round(amount / 10_000) + '만';
+  return amount.toLocaleString('ko-KR');
+};

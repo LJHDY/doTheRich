@@ -21,6 +21,9 @@ import FilterPanel, { applyFilters } from './components/FilterPanel';
 import DistrictSelector from './components/DistrictSelector';
 import { useIsMobile } from './hooks/useIsMobile';
 import PasswordGate, { isSessionValid } from './components/PasswordGate';
+import BudgetPage from './components/budget/BudgetPage';
+import UserSelectModal from './components/budget/UserSelectModal';
+import { BUDGET_USER_STORAGE_KEY } from './constants/budgetConstants';
 
 const App: React.FC = () => {
   const isMobile = useIsMobile();
@@ -104,6 +107,11 @@ const App: React.FC = () => {
 
   // 구별 시세 현황 패널
   const [districtStatsOpen, setDistrictStatsOpen] = useState(false);
+
+  // 가계부
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  // 유저 미선택 시 선택 모달 표시 — 가계부 열기 시점에 확인
+  const [showUserSelect, setShowUserSelect] = useState(false);
 
   // 공공단지 수집 패널
   const [collectPanelOpen, setCollectPanelOpen] = useState(false);
@@ -802,6 +810,22 @@ const App: React.FC = () => {
                   color: affordOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >대출분석</button>
+              {/* 가계부 */}
+              <button
+                onClick={() => {
+                  if (!localStorage.getItem(BUDGET_USER_STORAGE_KEY)) {
+                    setShowUserSelect(true);
+                  } else {
+                    setBudgetOpen(true);
+                  }
+                }}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: `1px solid ${budgetOpen ? '#89CFF0' : '#dadce0'}`,
+                  borderRadius: '6px', backgroundColor: budgetOpen ? '#e0f8ff' : '#fff',
+                  color: budgetOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >💰 가계부</button>
               {/* 구별 시세 */}
               <button
                 onClick={() => setDistrictStatsOpen(v => !v)}
@@ -1094,6 +1118,14 @@ const App: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* 가계부 전체화면 */}
+      {budgetOpen && <BudgetPage onClose={() => setBudgetOpen(false)} />}
+
+      {/* 유저 미선택 시 선택 모달 */}
+      {showUserSelect && (
+        <UserSelectModal onSelect={() => { setShowUserSelect(false); setBudgetOpen(true); }} />
+      )}
 
       {/* 비교하기 단지 선택 패널 */}
       {compareOpen && (

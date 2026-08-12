@@ -23,6 +23,8 @@ import {
   PropertyVisitResultItem,
   JeonseOnlyItem,
   PublicComplex,
+  BudgetEntry,
+  BudgetSummary,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -691,5 +693,73 @@ export const getPublicComplexes = async (sigunguCd: string): Promise<PublicCompl
   }));
 };
 
+
+// ─── 가계부 API ───────────────────────────────────────────────
+
+// 백엔드는 snake_case 반환 → camelCase 변환
+const toEntry = (d: any): BudgetEntry => ({
+  id: d.id,
+  userId: d.user_id,
+  yearMonth: d.year_month,
+  entryDate: d.entry_date,
+  entryType: d.entry_type,
+  category: d.category,
+  subcategory: d.subcategory,
+  account: d.account,
+  amount: d.amount,
+  isFixed: d.is_fixed ?? false,
+  isInvestment: d.is_investment ?? false,
+  investmentType: d.investment_type,
+  memo: d.memo,
+  createdAt: d.created_at,
+});
+
+export const getBudgetEntries = async (userId: string, yearMonth: string): Promise<BudgetEntry[]> => {
+  const { data } = await api.get('/api/budget/entries', { params: { user_id: userId, year_month: yearMonth } });
+  return data.map(toEntry);
+};
+
+export const createBudgetEntry = async (payload: Omit<BudgetEntry, 'id' | 'createdAt'>): Promise<BudgetEntry> => {
+  const { data } = await api.post('/api/budget/entries', {
+    user_id: payload.userId,
+    year_month: payload.yearMonth,
+    entry_date: payload.entryDate,
+    entry_type: payload.entryType,
+    category: payload.category,
+    subcategory: payload.subcategory ?? null,
+    account: payload.account ?? null,
+    amount: payload.amount,
+    is_fixed: payload.isFixed,
+    is_investment: payload.isInvestment,
+    investment_type: payload.investmentType ?? null,
+    memo: payload.memo ?? null,
+  });
+  return toEntry(data);
+};
+
+export const updateBudgetEntry = async (id: number, payload: Partial<Omit<BudgetEntry, 'id' | 'userId' | 'yearMonth' | 'createdAt'>>): Promise<BudgetEntry> => {
+  const body: any = {};
+  if (payload.entryDate !== undefined) body.entry_date = payload.entryDate;
+  if (payload.entryType !== undefined) body.entry_type = payload.entryType;
+  if (payload.category !== undefined) body.category = payload.category;
+  if (payload.subcategory !== undefined) body.subcategory = payload.subcategory;
+  if (payload.account !== undefined) body.account = payload.account;
+  if (payload.amount !== undefined) body.amount = payload.amount;
+  if (payload.isFixed !== undefined) body.is_fixed = payload.isFixed;
+  if (payload.isInvestment !== undefined) body.is_investment = payload.isInvestment;
+  if (payload.investmentType !== undefined) body.investment_type = payload.investmentType;
+  if (payload.memo !== undefined) body.memo = payload.memo;
+  const { data } = await api.patch(`/api/budget/entries/${id}`, body);
+  return toEntry(data);
+};
+
+export const deleteBudgetEntry = async (id: number): Promise<void> => {
+  await api.delete(`/api/budget/entries/${id}`);
+};
+
+export const getBudgetSummary = async (userId: string, yearMonth: string): Promise<BudgetSummary> => {
+  const { data } = await api.get('/api/budget/summary', { params: { user_id: userId, year_month: yearMonth } });
+  return data as BudgetSummary;
+};
 
 export default api;
