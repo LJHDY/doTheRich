@@ -1,7 +1,7 @@
 // 가계부 관련 상수 — 변경 시 이 파일만 수정하면 전체 반영
 
 export const BUDGET_USERS = [
-  { id: 'ldy',    name: '나' },
+  { id: 'ldy',    name: '동영' },
   { id: 'juhae',  name: '주해' },
 ] as const;
 
