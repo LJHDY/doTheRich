@@ -705,6 +705,7 @@ const toEntry = (d: any): BudgetEntry => ({
   entryType: d.entry_type,
   category: d.category,
   subcategory: d.subcategory,
+  accountMain: d.account_main,
   account: d.account,
   amount: d.amount,
   isFixed: d.is_fixed ?? false,
@@ -727,6 +728,7 @@ export const createBudgetEntry = async (payload: Omit<BudgetEntry, 'id' | 'creat
     entry_type: payload.entryType,
     category: payload.category,
     subcategory: payload.subcategory ?? null,
+    account_main: payload.accountMain ?? null,
     account: payload.account ?? null,
     amount: payload.amount,
     is_fixed: payload.isFixed,
@@ -743,6 +745,7 @@ export const updateBudgetEntry = async (id: number, payload: Partial<Omit<Budget
   if (payload.entryType !== undefined) body.entry_type = payload.entryType;
   if (payload.category !== undefined) body.category = payload.category;
   if (payload.subcategory !== undefined) body.subcategory = payload.subcategory;
+  if (payload.accountMain !== undefined) body.account_main = payload.accountMain;
   if (payload.account !== undefined) body.account = payload.account;
   if (payload.amount !== undefined) body.amount = payload.amount;
   if (payload.isFixed !== undefined) body.is_fixed = payload.isFixed;

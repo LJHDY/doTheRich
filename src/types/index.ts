@@ -571,7 +571,8 @@ export interface BudgetEntry {
   entryType: 'INCOME' | 'EXPENSE';
   category: string;
   subcategory?: string;
-  account?: string;
+  accountMain?: string; // 통장 대분류 (고정비통장/변동비통장/이벤트통장)
+  account?: string;     // 통장 중분류 (생활비/데이트 등)
   amount: number;       // 원 단위
   isFixed: boolean;
   isInvestment: boolean;

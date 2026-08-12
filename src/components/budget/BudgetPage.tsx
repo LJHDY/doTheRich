@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ACCOUNTS,
+  ACCOUNT_GROUPS,
   BUDGET_USER_STORAGE_KEY,
   BUDGET_USERS,
   EXPENSE_CATEGORIES,
@@ -31,7 +31,8 @@ const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
   entryType: 'EXPENSE',
   category: '',
   subcategory: '',
-  account: ACCOUNTS[0],
+  accountMain: '',
+  account: '',
   amountStr: '',
   isFixed: false,
   isInvestment: false,
@@ -87,10 +88,10 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed).reduce((s, e) => s + e.amount, 0);
     const totalInvest = entries.filter(e => e.isInvestment).reduce((s, e) => s + e.amount, 0);
 
-    // 통장별 합산
+    // 통장 대분류 기준 합산
     const accountMap: Record<string, { income: number; expense: number }> = {};
     entries.forEach(e => {
-      const key = e.account || '미분류';
+      const key = e.accountMain || e.account || '미분류';
       if (!accountMap[key]) accountMap[key] = { income: 0, expense: 0 };
       if (e.entryType === 'INCOME') accountMap[key].income += e.amount;
       else accountMap[key].expense += e.amount;
@@ -130,6 +131,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       entryType: form.entryType as 'INCOME' | 'EXPENSE',
       category: form.category ?? '',
       subcategory: form.subcategory || undefined,
+      accountMain: form.accountMain || undefined,
       account: form.account || undefined,
       amount,
       isFixed: form.isFixed ?? false,
@@ -328,13 +330,34 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               </FieldRow>
             )}
 
-            {/* 통장 */}
-            <FieldRow label="통장">
-              <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputStyle}>
+            {/* 통장 대분류 */}
+            <FieldRow label="통장 (대분류)">
+              <select
+                value={form.accountMain ?? ''}
+                onChange={e => setForm(f => ({ ...f, accountMain: e.target.value, account: '' }))}
+                style={inputStyle}
+              >
                 <option value="">선택 안함</option>
-                {ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}
+                {ACCOUNT_GROUPS.map(g => <option key={g.main} value={g.main}>{g.main}</option>)}
               </select>
             </FieldRow>
+
+            {/* 통장 중분류 — 대분류 선택 시만 표시 */}
+            {form.accountMain && (() => {
+              const subs = ACCOUNT_GROUPS.find(g => g.main === form.accountMain)?.subs ?? [];
+              return subs.length > 0 ? (
+                <FieldRow label="통장 (중분류)">
+                  <select
+                    value={form.account ?? ''}
+                    onChange={e => setForm(f => ({ ...f, account: e.target.value }))}
+                    style={inputStyle}
+                  >
+                    <option value="">선택 안함</option>
+                    {subs.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </FieldRow>
+              ) : null;
+            })()}
 
             {/* 금액 */}
             <FieldRow label="금액 (원)">
@@ -451,9 +474,11 @@ const EntryRow: React.FC<{
             </span>
           )}
         </div>
-        {entry.account && (
+        {(entry.accountMain || entry.account || entry.memo) && (
           <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '2px' }}>
-            {entry.account}{entry.memo ? ` · ${entry.memo}` : ''}
+            {entry.accountMain && <span>{entry.accountMain}</span>}
+            {entry.account && <span> › {entry.account}</span>}
+            {entry.memo && <span> · {entry.memo}</span>}
           </div>
         )}
       </div>

@@ -7,17 +7,18 @@ export const BUDGET_USERS = [
 
 export type BudgetUserId = typeof BUDGET_USERS[number]['id'];
 
-// 통장 쪼개기
-export const ACCOUNTS = [
-  '생활비통장',
-  '저축통장',
-  '투자통장',
-  '비상금통장',
-  '카드',
-  '현금',
-] as const;
+// 통장 쪼개기 — 대분류 → 중분류 2단계 구조
+export const ACCOUNT_GROUPS: { main: string; subs: string[] }[] = [
+  { main: '고정비통장',  subs: ['고정비'] },
+  { main: '변동비통장',  subs: ['용돈(동영)', '용돈(주해)', '생활비', '데이트'] },
+  { main: '이벤트통장',  subs: ['여행', '비상금'] },
+];
 
-export type AccountType = typeof ACCOUNTS[number];
+// 대분류 목록
+export const ACCOUNT_MAINS = ACCOUNT_GROUPS.map(g => g.main);
+
+// 중분류 전체 flat 목록 (기존 호환용)
+export const ACCOUNTS = ACCOUNT_GROUPS.flatMap(g => g.subs);
 
 // 지출 카테고리 (카테고리 → 세부항목)
 export const EXPENSE_CATEGORIES: { name: string; subcategories: string[] }[] = [
