@@ -175,7 +175,7 @@ export const ASSET_COLUMNS: AssetColumn[] = [
   { key: '주식',         label: '주식',         group: '즉시 사용 가능' },
   { key: '퇴직금',       label: '퇴직금',       group: '즉시 사용 가능' },
   { key: '주택청약저축', label: '주택청약저축', group: '즉시 사용 불가' },
-  { key: '퇴직금',     label: '퇴직금',     group: '즉시 사용 불가' },
+  { key: '퇴직연금',   label: '퇴직금',     group: '즉시 사용 불가' },
   { key: 'ISA',          label: 'ISA',          group: '즉시 사용 불가' },
   { key: '미국주식',     label: '미국주식',     group: '즉시 사용 불가' },
   { key: '국채',         label: '국채',         group: '즉시 사용 불가' },
