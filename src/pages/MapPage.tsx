@@ -410,12 +410,13 @@ const MapPage: React.FC<MapPageProps> = ({
     publicComplexes.forEach(pc => {
       const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const name = esc(pc.bldNm ?? '');
-      // 세부 정보: 연식·세대수·용적률·주차 중 값 있는 것만 · 구분자로 연결
-      const details = [
+      const row1 = [
         pc.useAprDay ? pc.useAprDay.slice(0,4)+'년' : null,
         pc.hhldCnt   ? pc.hhldCnt+'세대'             : null,
-        pc.vlRat     ? pc.vlRat+'%'                   : null,
-        pc.parkingCnt? pc.parkingCnt+'대'              : null,
+      ].filter(Boolean).join(' · ');
+      const row2 = [
+        pc.vlRat     ? '용적 '+pc.vlRat+'%'          : null,
+        pc.parkingCnt? '주차 '+pc.parkingCnt+'대'     : null,
       ].filter(Boolean).join(' · ');
       const content = `
         <div style="
@@ -425,7 +426,8 @@ const MapPage: React.FC<MapPageProps> = ({
           pointer-events:none;
         ">
           <div style="font-size:10px;font-weight:600;color:#1a3a5c;line-height:1.4;">${name}</div>
-          ${details ? `<div style="font-size:9px;color:#666;line-height:1.3;">${details}</div>` : ''}
+          ${row1 ? `<div style="font-size:9px;color:#666;line-height:1.3;">${row1}</div>` : ''}
+          ${row2 ? `<div style="font-size:9px;color:#888;line-height:1.3;">${row2}</div>` : ''}
         </div>`;
       const marker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(pc.latitude, pc.longitude),
