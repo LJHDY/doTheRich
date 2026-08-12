@@ -926,7 +926,8 @@ const AssetView: React.FC = () => {
   const [editingCell, setEditingCell] = useState<{ userId: string; assetKey: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  // 셀별 세부 내역 모달 대상 (null=닫힘)
+  const [detailTarget, setDetailTarget] = useState<{ userId: string; assetType: string; userName: string; assetLabel: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1119,19 +1120,6 @@ const AssetView: React.FC = () => {
             ))}
           </div>
 
-          {/* 세부 내역 버튼 (현황 탭에서만 표시) */}
-          {subTab === 'CURRENT' && (
-            <button
-              onClick={() => setDetailModalOpen(true)}
-              style={{
-                ...btnStyle('#f0f8fd', '#1a3a5c'),
-                border: '1px solid #89CFF0', fontSize: '12px',
-              }}
-            >
-              📋 세부 내역
-            </button>
-          )}
-
           {/* 환율 입력 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto', fontSize: '12px' }}>
             <span style={{ color: '#5f6368', fontWeight: 600 }}>달러 환율</span>
@@ -1308,14 +1296,16 @@ const AssetView: React.FC = () => {
                           onEditChange={setEditValue} onSave={saveEdit}
                           onCancel={() => setEditingCell(null)}
                           saving={saving} accentColor={lc.border}
-                          isDollar={isDollar} exchangeRate={exchangeRate} />
+                          isDollar={isDollar} exchangeRate={exchangeRate}
+                          onDetailClick={() => setDetailTarget({ userId: u0.id, assetType: col.key, userName: u0.name, assetLabel: col.label })} />
                         <AssetCell
                           value={raw1} isEditing={isEdit1} editValue={editValue}
                           onStartEdit={() => startEdit(u1.id, col.key)}
                           onEditChange={setEditValue} onSave={saveEdit}
                           onCancel={() => setEditingCell(null)}
                           saving={saving} accentColor={lc.border}
-                          isDollar={isDollar} exchangeRate={exchangeRate} />
+                          isDollar={isDollar} exchangeRate={exchangeRate}
+                          onDetailClick={() => setDetailTarget({ userId: u1.id, assetType: col.key, userName: u1.name, assetLabel: col.label })} />
                         <span style={{
                           padding: '0 16px', textAlign: 'right', fontSize: '13px', lineHeight: '42px',
                           fontWeight: 600, color: (krw0 + krw1) === 0 ? '#dadce0' : '#1a3a5c',
@@ -1480,12 +1470,15 @@ const AssetView: React.FC = () => {
       </div>
     </div>
 
-    {/* 자산 세부 내역 모달 — 스크롤 div 밖에서 렌더 (clipping 방지) */}
-    {detailModalOpen && (
+    {/* 셀별 세부 내역 모달 — 스크롤 div 밖에서 렌더 (clipping 방지) */}
+    {detailTarget && (
       <AssetDetailModal
         snapshotDate={selectedDate}
-        users={BUDGET_USERS.map(u => ({ id: u.id, name: u.name }))}
-        onClose={() => setDetailModalOpen(false)}
+        userId={detailTarget.userId}
+        assetType={detailTarget.assetType}
+        userName={detailTarget.userName}
+        assetLabel={detailTarget.assetLabel}
+        onClose={() => setDetailTarget(null)}
         onSaved={() => { load(); }}
       />
     )}
@@ -1493,7 +1486,7 @@ const AssetView: React.FC = () => {
   );
 };
 
-// ─── 자산 세부 내역 모달 ──────────────────────────────────────────
+// ─── 자산 세부 내역 모달 (셀 단위) ──────────────────────────────────
 
 type LocalDetail = {
   key: string;
@@ -1505,65 +1498,74 @@ type LocalDetail = {
 
 const AssetDetailModal: React.FC<{
   snapshotDate: string;
-  users: { id: string; name: string }[];
+  userId: string;
+  assetType: string;
+  userName: string;
+  assetLabel: string;
   onClose: () => void;
   onSaved: () => void;
-}> = ({ snapshotDate, users, onClose, onSaved }) => {
-  const [items, setItems] = useState<LocalDetail[]>([]);
+}> = ({ snapshotDate, userId, assetType, userName, assetLabel, onClose, onSaved }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // 다른 셀의 기존 데이터 (저장 시 그대로 포함, 원 단위)
+  const [otherItems, setOtherItems] = useState<Array<{ userId: string; assetType: string; accountName: string; amountWon: number }>>([]);
+  // 이 셀의 편집 가능 항목 (만원 단위 입력)
+  const [cellItems, setCellItems] = useState<LocalDetail[]>([]);
 
-  // 마운트 시 기존 세부 항목 로드 (원 → 만원 변환)
   useEffect(() => {
     getAssetSnapshotDetails(snapshotDate).then(data => {
-      setItems(data.map(d => ({
-        key: String(d.id),
-        userId: d.userId,
-        assetType: d.assetType,
-        accountName: d.accountName,
-        amountStr: d.amount > 0 ? String(Math.round(d.amount / 10000)) : '',
-      })));
+      setOtherItems(
+        data
+          .filter(d => !(d.userId === userId && d.assetType === assetType))
+          .map(d => ({ userId: d.userId, assetType: d.assetType, accountName: d.accountName, amountWon: d.amount }))
+      );
+      setCellItems(
+        data
+          .filter(d => d.userId === userId && d.assetType === assetType)
+          .map(d => ({
+            key: String(d.id),
+            userId: d.userId,
+            assetType: d.assetType,
+            accountName: d.accountName,
+            amountStr: d.amount > 0 ? String(Math.round(d.amount / 10000)) : '',
+          }))
+      );
       setLoading(false);
     });
-  }, [snapshotDate]);
+  }, [snapshotDate, userId, assetType]);
 
-  const addItem = (userId: string, assetType: string) => {
-    setItems(prev => [...prev, {
-      key: `new-${Date.now()}-${Math.random()}`,
-      userId, assetType, accountName: '', amountStr: '',
-    }]);
-  };
+  const addItem = () => setCellItems(prev => [...prev, {
+    key: `new-${Date.now()}-${Math.random()}`,
+    userId, assetType, accountName: '', amountStr: '',
+  }]);
 
-  const removeItem = (key: string) => setItems(prev => prev.filter(i => i.key !== key));
+  const removeItem = (key: string) => setCellItems(prev => prev.filter(i => i.key !== key));
 
   const updateItem = (key: string, field: 'accountName' | 'amountStr', value: string) =>
-    setItems(prev => prev.map(i => i.key === key ? { ...i, [field]: value } : i));
+    setCellItems(prev => prev.map(i => i.key === key ? { ...i, [field]: value } : i));
 
-  // (userId, assetType) 별 합산 (만원 단위) — 실시간 미리보기
-  const totals = useMemo(() => {
-    const map = new Map<string, number>();
-    items.forEach(i => {
-      const val = Number(i.amountStr.replace(/,/g, '')) || 0;
-      if (val > 0) {
-        const k = `${i.userId}::${i.assetType}`;
-        map.set(k, (map.get(k) || 0) + val);
-      }
-    });
-    return map;
-  }, [items]);
+  // 현재 셀 합산 (만원 단위) — 실시간 미리보기
+  const total = useMemo(
+    () => cellItems.reduce((s, i) => s + (Number(i.amountStr.replace(/,/g, '')) || 0), 0),
+    [cellItems]
+  );
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload = items
-        .filter(i => Number(i.amountStr) > 0)
+      // 다른 셀 그대로 + 이 셀 새 항목 병합 후 일괄 저장
+      const othersPayload = otherItems.map(i => ({
+        userId: i.userId, assetType: i.assetType,
+        accountName: i.accountName, amount: i.amountWon,
+      }));
+      const thisPayload = cellItems
+        .filter(i => Number(i.amountStr.replace(/,/g, '')) > 0)
         .map(i => ({
-          userId: i.userId,
-          assetType: i.assetType,
+          userId: i.userId, assetType: i.assetType,
           accountName: i.accountName.trim(),
           amount: Math.round(Number(i.amountStr.replace(/,/g, '')) * 10000), // 만원 → 원
         }));
-      await bulkSaveAssetSnapshotDetails(snapshotDate, payload);
+      await bulkSaveAssetSnapshotDetails(snapshotDate, [...othersPayload, ...thisPayload]);
       onSaved();
       onClose();
     } finally {
@@ -1582,8 +1584,8 @@ const AssetDetailModal: React.FC<{
     >
       <div style={{
         background: '#fff', borderRadius: '16px',
-        width: '560px', maxWidth: '96vw',
-        maxHeight: '82vh', display: 'flex', flexDirection: 'column',
+        width: '440px', maxWidth: '96vw',
+        maxHeight: '72vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
       }} onClick={e => e.stopPropagation()}>
         {/* 헤더 */}
@@ -1592,8 +1594,9 @@ const AssetDetailModal: React.FC<{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
           <div>
-            <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>📋 자산 세부 내역</span>
-            <span style={{ fontSize: '12px', color: '#9aa0a6', marginLeft: '8px' }}>{snapshotDate}</span>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>📋 {assetLabel}</span>
+            <span style={{ fontSize: '12px', color: '#4BAAD4', marginLeft: '8px', fontWeight: 600 }}>{userName}</span>
+            <span style={{ fontSize: '11px', color: '#9aa0a6', marginLeft: '6px' }}>{snapshotDate}</span>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6', lineHeight: 1 }}>×</button>
         </div>
@@ -1604,77 +1607,51 @@ const AssetDetailModal: React.FC<{
         </div>
 
         {/* 본문 */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 10px' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>불러오는 중…</div>
           ) : (
-            ASSET_COLUMNS.map(col => (
-              <div key={col.key} style={{ marginBottom: '12px', border: '1px solid #e8ecf0', borderRadius: '8px', overflow: 'hidden' }}>
-                {/* 자산 항목 헤더 */}
-                <div style={{
-                  padding: '7px 12px', background: '#f5f7fa',
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  borderBottom: '1px solid #e8ecf0',
-                }}>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>{col.label}</span>
-                  <span style={{ fontSize: '10px', color: '#9aa0a6' }}>{col.group}</span>
+            <>
+              {/* 세부 항목 목록 */}
+              {cellItems.map(item => (
+                <div key={item.key} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="계좌명"
+                    value={item.accountName}
+                    onChange={e => updateItem(item.key, 'accountName', e.target.value)}
+                    style={{ flex: 2, padding: '6px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none' }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="금액"
+                    value={item.amountStr}
+                    onChange={e => updateItem(item.key, 'amountStr', e.target.value.replace(/[^0-9]/g, ''))}
+                    style={{ width: '90px', padding: '6px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', textAlign: 'right' }}
+                  />
+                  <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>만원</span>
+                  <button
+                    onClick={() => removeItem(item.key)}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#bdbdbd', fontSize: '18px', padding: '0 2px', lineHeight: 1 }}
+                  >×</button>
                 </div>
+              ))}
 
-                {/* 유저별 세부 섹션 */}
-                {users.map((user, ui) => {
-                  const userItems = items.filter(i => i.userId === user.id && i.assetType === col.key);
-                  const total = totals.get(`${user.id}::${col.key}`) || 0;
-                  return (
-                    <div key={user.id} style={{
-                      padding: '8px 12px',
-                      borderTop: ui > 0 ? '1px solid #f5f5f5' : 'none',
-                      background: '#fff',
-                    }}>
-                      {/* 유저 행 */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: userItems.length > 0 ? '6px' : '0' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#89CFF0', minWidth: '30px' }}>{user.name}</span>
-                        {total > 0 && (
-                          <span style={{ fontSize: '11px', color: '#1a3a5c', fontWeight: 600 }}>
-                            = {total.toLocaleString('ko-KR')}만원
-                          </span>
-                        )}
-                        <button
-                          onClick={() => addItem(user.id, col.key)}
-                          style={{ marginLeft: 'auto', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px dashed #89CFF0', background: 'transparent', color: '#4BAAD4', cursor: 'pointer' }}
-                        >
-                          + 추가
-                        </button>
-                      </div>
+              {/* + 항목 추가 */}
+              <button
+                onClick={addItem}
+                style={{ width: '100%', padding: '8px', fontSize: '12px', border: '1px dashed #89CFF0', borderRadius: '6px', background: 'transparent', color: '#4BAAD4', cursor: 'pointer', marginTop: '4px' }}
+              >
+                + 항목 추가
+              </button>
 
-                      {/* 세부 항목 행 */}
-                      {userItems.map(item => (
-                        <div key={item.key} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' }}>
-                          <input
-                            type="text"
-                            placeholder="계좌명"
-                            value={item.accountName}
-                            onChange={e => updateItem(item.key, 'accountName', e.target.value)}
-                            style={{ flex: 2, padding: '4px 8px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none' }}
-                          />
-                          <input
-                            type="text"
-                            placeholder="금액"
-                            value={item.amountStr}
-                            onChange={e => updateItem(item.key, 'amountStr', e.target.value.replace(/[^0-9]/g, ''))}
-                            style={{ width: '80px', padding: '4px 8px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', textAlign: 'right' }}
-                          />
-                          <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>만원</span>
-                          <button
-                            onClick={() => removeItem(item.key)}
-                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#bdbdbd', fontSize: '18px', padding: '0 2px', lineHeight: 1 }}
-                          >×</button>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            ))
+              {/* 합산 미리보기 */}
+              {total > 0 && (
+                <div style={{ marginTop: '12px', padding: '8px 12px', background: '#f0f8fd', borderRadius: '8px', fontSize: '13px', textAlign: 'right', color: '#1a3a5c', fontWeight: 700 }}>
+                  합계: {total.toLocaleString('ko-KR')} 만원
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -1711,7 +1688,8 @@ const AssetCell: React.FC<{
   accentColor: string;
   isDollar?: boolean;
   exchangeRate?: number;
-}> = ({ value, isEditing, editValue, onStartEdit, onEditChange, onSave, onCancel, saving, accentColor, isDollar, exchangeRate }) => {
+  onDetailClick?: () => void;
+}> = ({ value, isEditing, editValue, onStartEdit, onEditChange, onSave, onCancel, saving, accentColor, isDollar, exchangeRate, onDetailClick }) => {
   if (isEditing) {
     const parts = editValue.split(',').map(s => Number(s.trim().replace(/[^0-9]/g, '')) || 0);
     const previewSum = parts.reduce((a, b) => a + b, 0);
@@ -1743,44 +1721,62 @@ const AssetCell: React.FC<{
     );
   }
 
+  // 세부 내역 버튼 (항상 우측 하단에 작게 표시)
+  const detailBtn = onDetailClick ? (
+    <button
+      onClick={e => { e.stopPropagation(); onDetailClick(); }}
+      title="세부 내역"
+      style={{
+        border: 'none', background: 'none', cursor: 'pointer',
+        fontSize: '11px', color: '#c0cfe0', padding: '0 2px', lineHeight: 1,
+        flexShrink: 0, userSelect: 'none',
+      }}
+    >≡</button>
+  ) : null;
+
   // 달러 현금: USD 금액 표시 + KRW 환산 부기
   if (isDollar && value > 0 && exchangeRate) {
     const krw = Math.round(value * exchangeRate);
     return (
       <div
-        onClick={onStartEdit}
         title="클릭하여 수정 (USD 입력)"
         style={{
-          padding: '6px 16px', textAlign: 'right', cursor: 'pointer',
+          padding: '6px 16px 6px 8px', display: 'flex', alignItems: 'center', gap: '4px',
           userSelect: 'none',
         }}
         onMouseEnter={e => (e.currentTarget.style.background = '#f0f8fd')}
         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
       >
-        <div style={{ fontSize: '13px', fontWeight: 600, color: '#344054' }}>
-          ${value.toLocaleString('ko-KR')}
+        <div onClick={onStartEdit} style={{ flex: 1, textAlign: 'right', cursor: 'pointer' }}>
+          <div style={{ fontSize: '13px', fontWeight: 600, color: '#344054' }}>
+            ${value.toLocaleString('ko-KR')}
+          </div>
+          <div style={{ fontSize: '10px', color: '#9aa0a6' }}>
+            ≈ {krw.toLocaleString('ko-KR')}원
+          </div>
         </div>
-        <div style={{ fontSize: '10px', color: '#9aa0a6' }}>
-          ≈ {krw.toLocaleString('ko-KR')}원
-        </div>
+        {detailBtn}
       </div>
     );
   }
 
   return (
     <div
-      onClick={onStartEdit}
       title="클릭하여 수정"
       style={{
-        padding: '0 16px', textAlign: 'right', lineHeight: '42px',
-        cursor: 'pointer', fontSize: '13px',
-        color: value === 0 ? '#d0d5dd' : '#344054',
-        userSelect: 'none',
+        padding: '0 8px 0 16px', display: 'flex', alignItems: 'center', gap: '4px',
+        userSelect: 'none', minHeight: '42px',
       }}
       onMouseEnter={e => (e.currentTarget.style.background = '#f0f8fd')}
       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
     >
-      {value === 0 ? '—' : formatAmountShort(value)}
+      <span
+        onClick={onStartEdit}
+        style={{ flex: 1, textAlign: 'right', cursor: 'pointer', fontSize: '13px', color: value === 0 ? '#d0d5dd' : '#344054' }}
+      >
+        {value === 0 ? '—' : formatAmountShort(value)}
+      </span>
+      {detailBtn}
     </div>
   );
 };
