@@ -85,6 +85,8 @@ const MapPage: React.FC<MapPageProps> = ({
   const hanRiverMarkerRef = useRef<any>(null);
   // 공공단지 마커 목록
   const publicComplexMarkersRef = useRef<any[]>([]);
+  // 공공단지 마커 줌 임계값 — 이 줌 이상에서만 표시 (겹침 방지)
+  const PUBLIC_COMPLEX_MIN_ZOOM = 14;
 
   // 마커 diff를 위한 Map — 단지 id → { marker, listenerHandle }
   const markerMapRef = useRef<Map<number, { marker: any; listener: any }>>(new Map());
@@ -407,6 +409,10 @@ const MapPage: React.FC<MapPageProps> = ({
     publicComplexMarkersRef.current.forEach(m => m.setMap(null));
     publicComplexMarkersRef.current = [];
     if (!publicComplexes?.length) return;
+
+    const map = mapInstanceRef.current;
+    const isVisible = () => map.getZoom() >= PUBLIC_COMPLEX_MIN_ZOOM;
+
     publicComplexes.forEach(pc => {
       const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const name = esc(pc.bldNm ?? '');
@@ -431,12 +437,22 @@ const MapPage: React.FC<MapPageProps> = ({
         </div>`;
       const marker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(pc.latitude, pc.longitude),
-        map: mapInstanceRef.current,
+        map: isVisible() ? map : null,
         icon: { content, anchor: new window.naver.maps.Point(0, 0) },
         zIndex: 100,
       });
       publicComplexMarkersRef.current.push(marker);
     });
+
+    // 줌 변경 시 임계값 기준으로 마커 일괄 show/hide
+    const zoomListener = window.naver.maps.Event.addListener(map, 'zoom_changed', () => {
+      const show = map.getZoom() >= PUBLIC_COMPLEX_MIN_ZOOM;
+      publicComplexMarkersRef.current.forEach(m => m.setMap(show ? map : null));
+    });
+
+    return () => {
+      window.naver.maps.Event.removeListener(zoomListener);
+    };
   }, [publicComplexes]);
 
   // 학교·인프라 오버레이 마커 렌더링 — complex 변경 시 갱신
