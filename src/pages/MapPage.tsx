@@ -85,6 +85,8 @@ const MapPage: React.FC<MapPageProps> = ({
   const hanRiverMarkerRef = useRef<any>(null);
   // 공공단지 마커 목록
   const publicComplexMarkersRef = useRef<any[]>([]);
+  // 공공단지 그룹 마커 데이터 — groupId → { marker, complexes, expanded }
+  const pcGroupMapRef = useRef<Map<string, { marker: any; complexes: PublicComplex[]; expanded: boolean }>>(new Map());
   // 공공단지 마커 줌 임계값 — 이 줌 이상에서만 표시 (겹침 방지)
   const PUBLIC_COMPLEX_MIN_ZOOM = 14;
 
@@ -403,63 +405,119 @@ const MapPage: React.FC<MapPageProps> = ({
     });
   }, [hanRiverParkMarker]);
 
-  // 공공단지 마커 렌더링 — 구 선택 시 작은 원형 마커로 표시
+  // 공공단지 마커 렌더링 — 좌표 근접 그룹화 + 다중 단지 클릭 펼치기
   useEffect(() => {
     if (!mapInstanceRef.current || !window.naver) return;
     publicComplexMarkersRef.current.forEach(m => m.setMap(null));
     publicComplexMarkersRef.current = [];
+    pcGroupMapRef.current.clear();
     if (!publicComplexes?.length) return;
 
     const map = mapInstanceRef.current;
     const isVisible = () => map.getZoom() >= PUBLIC_COMPLEX_MIN_ZOOM;
+    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-    // 좌표가 약 30m(0.0003°) 이내인 단지는 세대수가 많은 대표 1개만 표시 (겹침 방지)
-    const DEDUP_THRESHOLD = 0.0003;
-    const placed: { lat: number; lng: number }[] = [];
-    const deduped = publicComplexes
-      .slice()
-      .sort((a, b) => (b.hhldCnt ?? 0) - (a.hhldCnt ?? 0))
-      .filter(pc => {
-        const tooClose = placed.some(
-          p => Math.abs(p.lat - pc.latitude) < DEDUP_THRESHOLD &&
-               Math.abs(p.lng - pc.longitude) < DEDUP_THRESHOLD
-        );
-        if (!tooClose) placed.push({ lat: pc.latitude, lng: pc.longitude });
-        return !tooClose;
-      });
-
-    deduped.forEach(pc => {
-      const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      const name = esc(pc.bldNm ?? '');
-      const row1 = [
+    // 단지 정보 행 생성 헬퍼
+    const pcRows = (pc: PublicComplex) => {
+      const r1 = [
         pc.useAprDay ? pc.useAprDay.slice(0,4)+'년' : null,
         pc.hhldCnt   ? pc.hhldCnt+'세대'             : null,
       ].filter(Boolean).join(' · ');
-      const row2 = [
-        pc.vlRat     ? '용적 '+pc.vlRat+'%'          : null,
-        pc.parkingCnt? '주차 '+pc.parkingCnt+'대'     : null,
+      const r2 = [
+        pc.vlRat     ? '용적 '+pc.vlRat+'%'  : null,
+        pc.parkingCnt? '주차 '+pc.parkingCnt+'대' : null,
       ].filter(Boolean).join(' · ');
-      const content = `
-        <div style="
-          background:rgba(255,255,255,0.92);border:1px solid #89CFF0;border-radius:4px;
-          padding:2px 6px;white-space:nowrap;
-          box-shadow:0 1px 4px rgba(0,0,0,0.15);
-          pointer-events:none;
-        ">
-          <div style="font-size:10px;font-weight:600;color:#1a3a5c;line-height:1.4;">${name}</div>
-          ${row1 ? `<div class="pc-detail" style="font-size:8px;color:#666;line-height:1.3;">${row1}</div>` : ''}
-          ${row2 ? `<div class="pc-detail" style="font-size:8px;color:#888;line-height:1.3;">${row2}</div>` : ''}
+      return { r1, r2 };
+    };
+
+    // 마커 카드 HTML 생성 — collapsed=이름만 나열, expanded=각 단지 상세
+    const buildContent = (complexes: PublicComplex[], expanded: boolean, groupId: string) => {
+      const isMulti = complexes.length > 1;
+      const baseStyle = `
+        background:rgba(255,255,255,0.92);border:1px solid #89CFF0;border-radius:4px;
+        padding:3px 7px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.15);
+      `;
+      if (!isMulti) {
+        // 단일 단지 — pointer-events:none 유지
+        const { r1, r2 } = pcRows(complexes[0]);
+        return `<div style="${baseStyle}pointer-events:none;">
+          <div style="font-size:10px;font-weight:600;color:#1a3a5c;line-height:1.4;">${esc(complexes[0].bldNm ?? '')}</div>
+          ${r1 ? `<div class="pc-detail" style="font-size:8px;color:#666;line-height:1.3;">${r1}</div>` : ''}
+          ${r2 ? `<div class="pc-detail" style="font-size:8px;color:#888;line-height:1.3;">${r2}</div>` : ''}
         </div>`;
+      }
+      if (!expanded) {
+        // 다중 단지 접힘 — 이름 목록 + ▼
+        const names = complexes.map(pc =>
+          `<div style="font-size:10px;font-weight:600;color:#1a3a5c;line-height:1.4;">${esc(pc.bldNm ?? '')}</div>`
+        ).join('');
+        return `<div class="pc-multi" onclick="window.__pcGroupClick('${groupId}')"
+          style="${baseStyle}cursor:pointer;">
+          ${names}
+          <div style="font-size:8px;color:#89CFF0;text-align:right;margin-top:1px;">▼ ${complexes.length}개</div>
+        </div>`;
+      }
+      // 다중 단지 펼침 — 각 단지 상세
+      const items = complexes.map((pc, i) => {
+        const { r1, r2 } = pcRows(pc);
+        return `<div style="${i > 0 ? 'border-top:1px solid #d6edf9;margin-top:3px;padding-top:3px;' : ''}">
+          <div style="font-size:10px;font-weight:600;color:#1a3a5c;line-height:1.4;">${esc(pc.bldNm ?? '')}</div>
+          ${r1 ? `<div style="font-size:8px;color:#666;line-height:1.3;">${r1}</div>` : ''}
+          ${r2 ? `<div style="font-size:8px;color:#888;line-height:1.3;">${r2}</div>` : ''}
+        </div>`;
+      }).join('');
+      return `<div class="pc-multi" onclick="window.__pcGroupClick('${groupId}')"
+        style="${baseStyle}cursor:pointer;">
+        ${items}
+        <div style="font-size:8px;color:#89CFF0;text-align:right;margin-top:3px;">▲ 닫기</div>
+      </div>`;
+    };
+
+    // 좌표 근접(0.0003°≈30m) 단지를 하나의 그룹으로 묶기
+    const DEDUP_THRESHOLD = 0.0003;
+    const assigned = new Set<string>();
+    const groups: PublicComplex[][] = [];
+    const sorted = publicComplexes.slice().sort((a, b) => (b.hhldCnt ?? 0) - (a.hhldCnt ?? 0));
+    sorted.forEach(pc => {
+      if (assigned.has(pc.id)) return;
+      const group: PublicComplex[] = [pc];
+      assigned.add(pc.id);
+      sorted.forEach(other => {
+        if (assigned.has(other.id)) return;
+        if (Math.abs(other.latitude - pc.latitude) < DEDUP_THRESHOLD &&
+            Math.abs(other.longitude - pc.longitude) < DEDUP_THRESHOLD) {
+          group.push(other);
+          assigned.add(other.id);
+        }
+      });
+      groups.push(group);
+    });
+
+    // 그룹별 마커 생성
+    groups.forEach(complexes => {
+      const groupId = complexes[0].id;
+      const rep = complexes[0]; // 세대수 최대 단지가 대표 좌표
+      const content = buildContent(complexes, false, groupId);
       const marker = new window.naver.maps.Marker({
-        position: new window.naver.maps.LatLng(pc.latitude, pc.longitude),
+        position: new window.naver.maps.LatLng(rep.latitude, rep.longitude),
         map: isVisible() ? map : null,
         icon: { content, anchor: new window.naver.maps.Point(0, 0) },
         zIndex: 100,
       });
       publicComplexMarkersRef.current.push(marker);
+      pcGroupMapRef.current.set(groupId, { marker, complexes, expanded: false });
     });
 
-    // 줌에 따라 세부정보 행 CSS 표시 여부 제어 (마커 재생성 없이)
+    // 전역 클릭 핸들러 — 그룹 토글
+    (window as any).__pcGroupClick = (groupId: string) => {
+      const entry = pcGroupMapRef.current.get(groupId);
+      if (!entry) return;
+      entry.expanded = !entry.expanded;
+      const newContent = buildContent(entry.complexes, entry.expanded, groupId);
+      entry.marker.setIcon({ content: newContent, anchor: new window.naver.maps.Point(0, 0) });
+    };
+
+    // 줌 변경 시 show/hide + 단일 마커 세부정보 토글
     const updateDetailVisibility = (zoom: number) => {
       let styleEl = document.getElementById('pc-zoom-style') as HTMLStyleElement | null;
       if (!styleEl) {
@@ -467,12 +525,10 @@ const MapPage: React.FC<MapPageProps> = ({
         styleEl.id = 'pc-zoom-style';
         document.head.appendChild(styleEl);
       }
-      // 줌 15 이상에서만 세부정보(연식·세대수·용적·주차) 표시
       styleEl.textContent = `.pc-detail { display: ${zoom >= 15 ? 'block' : 'none'}; }`;
     };
     updateDetailVisibility(map.getZoom());
 
-    // 줌 변경 시 임계값 기준으로 마커 일괄 show/hide + 세부정보 토글
     const zoomListener = window.naver.maps.Event.addListener(map, 'zoom_changed', () => {
       const zoom = map.getZoom();
       const show = zoom >= PUBLIC_COMPLEX_MIN_ZOOM;
@@ -484,6 +540,17 @@ const MapPage: React.FC<MapPageProps> = ({
       window.naver.maps.Event.removeListener(zoomListener);
     };
   }, [publicComplexes]);
+
+  // 경로/구획 그리기 모드일 때 다중 단지 마커 클릭 차단 (pointer-events 전환)
+  useEffect(() => {
+    let styleEl = document.getElementById('pc-multi-style') as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'pc-multi-style';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `.pc-multi { pointer-events: ${(isDrawingRoute || isDrawingZone) ? 'none' : 'auto'}; }`;
+  }, [isDrawingRoute, isDrawingZone]);
 
   // 학교·인프라 오버레이 마커 렌더링 — complex 변경 시 갱신
   useEffect(() => {
