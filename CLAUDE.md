@@ -350,9 +350,13 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
   - `zonePolygons` 변경 시: 저장된 구획을 반투명 초록 `shortdash` Polygon + 생활권 이름 라벨 마커로 표시
   - `zoneClickListenerRef` / `zonePolygonRef` / `zoneMarkersRef` / `zoneSavedPolygonsRef` / `zoneLabelMarkersRef`로 수명 관리
 - **공공단지 마커** (`publicComplexes` prop):
-  - 3줄 카드형: 단지명(10px bold) / 연식·세대수(8px) / 용적·주차(8px)
-  - `pointer-events:none` — 마커 클릭이 지도로 통과 (경로 그리기 방해 없음)
-  - `publicComplexMarkersRef`로 수명 관리, 빈 배열 전달 시 전체 제거
+  - 줌 14 미만: 숨김 / 줌 14~14: 단지명만 / 줌 15+: 연식·세대수·용적·주차 세부정보 (CSS `pc-detail` 클래스로 마커 재생성 없이 토글)
+  - **좌표 근접 그룹화** (0.0003°≈30m 이내): 세대수 내림차순 정렬 후 greedy grouping
+    - 단일 단지: `pointer-events:none` 카드 (경로 그리기 방해 없음)
+    - 다중 단지(2개+): `class="pc-multi"` → 이름 목록 + `▼ N개` 표시, 클릭 시 각 단지 상세 펼침 / 재클릭 시 `▲ 닫기`로 접힘
+  - `window.__pcGroupClick(groupId)` 전역 함수로 토글, `pcGroupMapRef`에 {marker, complexes, expanded} 저장
+  - `isDrawingRoute || isDrawingZone` 시 CSS `pc-multi { pointer-events:none }` 자동 전환 (별도 useEffect)
+  - `publicComplexMarkersRef` / `pcGroupMapRef`로 수명 관리, 빈 배열 전달 시 전체 제거
 
 ### `RegisterModal.tsx`
 - 섹션: 기본정보 / 가격정보 / 단지정보 / 교통정보 / 출퇴근시간 / 유해시설 / 메모
@@ -712,7 +716,9 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
   - 지오코딩: Naver local search API (`openapi.naver.com`) — 단지명+구명 1차, 주소 2차 fallback
   - 프론트: `PublicComplex` 타입, `getPublicComplexes` API (snake_case → camelCase 변환)
   - 구 경계 선택 시 해당 구 공공단지 자동 로드 → 지도 마커 표시
-  - 마커: 3줄 카드형 (단지명/연식·세대수/용적·주차), `pointer-events:none`으로 경로 그리기 방해 없음
+  - 마커: 좌표 근접(30m) 그룹화 → 단일=카드형, 다중=이름 목록+클릭 펼치기/접기
+  - 줌 14+ 표시, 줌 15+에서 세부정보 노출 (CSS 토글, 마커 재생성 없음)
+  - 경로/구획 그리기 모드 시 다중 마커 클릭 자동 차단 (`pointer-events` style 태그 전환)
   - 헤더 토글 버튼: **내단지** / **아파트** (구 선택 시에만 표시, 구 변경 시 ON으로 초기화)
 
 ## 미완성 / TODO
