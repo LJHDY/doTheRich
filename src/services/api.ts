@@ -672,10 +672,11 @@ export const collectPublicComplexes = async (guName: string): Promise<{ status: 
   return data;
 };
 
-/** 저장된 공공단지 목록 — GET /api/public-complexes?sigungu_cd= */
+/** 저장된 공공단지 목록 — GET /api/public-complexes?sigungu_cd= *
 export const getPublicComplexes = async (sigunguCd: string): Promise<any[]> => {
   const { data } = await api.get('/api/public-complexes', { params: { sigungu_cd: sigunguCd } });
   return data;
 };
+*/
 
 export default api;
