@@ -615,6 +615,25 @@ const App: React.FC = () => {
                     activeColor: '#2a6090', activeBg: '#D4EFFC',
                     onClick: () => { setDistrictStatsOpen(v => !v); setMobileMenuOpen(false); },
                   },
+                  {
+                    label: '체크리스트',
+                    active: checklistPanelOpen,
+                    activeColor: '#b07d00', activeBg: '#fef9e7',
+                    onClick: () => { setChecklistPanelOpen(v => !v); setMobileMenuOpen(false); },
+                  },
+                  {
+                    label: '💰 가계부',
+                    active: budgetOpen,
+                    activeColor: '#2a6090', activeBg: '#e0f8ff',
+                    onClick: () => {
+                      if (!localStorage.getItem(BUDGET_USER_STORAGE_KEY)) {
+                        setShowUserSelect(true);
+                      } else {
+                        setBudgetOpen(true);
+                      }
+                      setMobileMenuOpen(false);
+                    },
+                  },
                 ] as { label: string; active: boolean; activeColor: string; activeBg: string; onClick: () => void }[]).map(item => (
                   <button
                     key={item.label}
