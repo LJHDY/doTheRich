@@ -481,6 +481,19 @@ export interface DistrictStatHistory {
 }
 
 /** 매매가·호가 없이 전세가만 있는 평형 항목 — 단지 정리 기능용 */
+export interface PublicComplex {
+  id: string;
+  guName?: string;
+  bldNm?: string;
+  address?: string;
+  hhldCnt?: number;
+  vlRat?: number;
+  parkingCnt?: number;
+  useAprDay?: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface JeonseOnlyItem {
   complexId: number;
   complexName: string;

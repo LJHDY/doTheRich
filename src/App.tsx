@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, ActiveFilters, EMPTY_FILTERS, isFiltersActive } from './types';
-import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon, getPublicComplexGuList, collectPublicComplexes } from './services/api';
+import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, ActiveFilters, EMPTY_FILTERS, isFiltersActive, PublicComplex } from './types';
+import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon, getPublicComplexGuList, collectPublicComplexes, getPublicComplexes } from './services/api';
 import { pointInPolygon } from './utils/geo';
 import { HAN_RIVER_PARKS } from './constants/hanRiverParks';
 import MapPage from './pages/MapPage';
@@ -110,6 +110,7 @@ const App: React.FC = () => {
   const [guList, setGuList] = useState<{ guName: string; sigunguCd: string }[]>([]);
   const [selectedCollectGu, setSelectedCollectGu] = useState('');
   const [collectStatus, setCollectStatus] = useState<'idle' | 'collecting' | 'done' | 'error'>('idle');
+  const [publicComplexes, setPublicComplexes] = useState<PublicComplex[]>([]);
 
   // 전역 토스트 알림 — 수집 완료 등 일회성 메시지
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -264,14 +265,22 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isDrawingRoute, handleUndoLastPoint]);
 
-  // 공공단지 수집 패널 열 때 구 목록 한 번만 로드
+  // 구 목록 마운트 시 한 번 로드 (수집 패널 + 공공단지 조회에 공통 사용)
   useEffect(() => {
-    if (!collectPanelOpen || guList.length > 0) return;
+    if (guList.length > 0) return;
     getPublicComplexGuList().then(list => {
       setGuList(list);
       if (list.length > 0) setSelectedCollectGu(list[0].guName);
     }).catch(() => {});
-  }, [collectPanelOpen, guList.length]);
+  }, [guList.length]);
+
+  // 구 경계 선택 시 해당 구의 공공단지 조회
+  useEffect(() => {
+    if (!selectedDistrict) { setPublicComplexes([]); return; }
+    const gu = guList.find(g => g.guName === selectedDistrict);
+    if (!gu) return;
+    getPublicComplexes(gu.sigunguCd).then(setPublicComplexes).catch(() => setPublicComplexes([]));
+  }, [selectedDistrict, guList]);
 
   const handleCollect = async () => {
     if (!selectedCollectGu) return;
@@ -931,6 +940,7 @@ const App: React.FC = () => {
               drawingZonePoints={drawingZonePoints}
               onZonePointAdd={handleZonePointAdd}
               zonePolygons={zonePolygons}
+              publicComplexes={publicComplexes}
               previewMarker={registerData ? { lat: registerData.latitude, lng: registerData.longitude } : null}
               hanRiverParkMarker={(() => {
                 const name = selectedComplex?.hanRiverParkName;

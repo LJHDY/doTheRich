@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, formatPrice } from '../types';
+import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, PublicComplex, formatPrice } from '../types';
 import { loadDistrictGeoJson, getFeatureName } from '../utils/districtGeoJson';
 import { haversineMeters } from '../utils/geo';
 
@@ -42,12 +42,15 @@ interface MapPageProps {
   previewMarker?: { lat: number; lng: number } | null;
   // ComplexInfoPanel 표시 중 해당 단지의 가장 가까운 한강공원 — 이름 라벨 마커로 표시
   hanRiverParkMarker?: { name: string; lat: number; lng: number } | null;
+  // 선택된 구의 공공단지 목록 — 작은 원형 마커로 표시
+  publicComplexes?: PublicComplex[];
 }
 
 const MapPage: React.FC<MapPageProps> = ({
   complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter,
   routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict, roadViewOpen, isMobile,
   isDrawingZone, drawingZonePoints, onZonePointAdd, zonePolygons, previewMarker, hanRiverParkMarker,
+  publicComplexes,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -80,6 +83,8 @@ const MapPage: React.FC<MapPageProps> = ({
   const previewMarkerRef = useRef<any>(null);
   // ComplexInfoPanel 선택 단지의 한강공원 라벨 마커
   const hanRiverMarkerRef = useRef<any>(null);
+  // 공공단지 마커 목록
+  const publicComplexMarkersRef = useRef<any[]>([]);
 
   // 마커 diff를 위한 Map — 단지 id → { marker, listenerHandle }
   const markerMapRef = useRef<Map<number, { marker: any; listener: any }>>(new Map());
@@ -395,6 +400,31 @@ const MapPage: React.FC<MapPageProps> = ({
       zIndex: 450,
     });
   }, [hanRiverParkMarker]);
+
+  // 공공단지 마커 렌더링 — 구 선택 시 작은 원형 마커로 표시
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.naver) return;
+    publicComplexMarkersRef.current.forEach(m => m.setMap(null));
+    publicComplexMarkersRef.current = [];
+    if (!publicComplexes?.length) return;
+    publicComplexes.forEach(pc => {
+      const name = (pc.bldNm ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const hhld = pc.hhldCnt ? `${pc.hhldCnt}세대` : '';
+      const content = `
+        <div style="
+          background:#fff;border:1.5px solid #89CFF0;border-radius:4px;
+          padding:2px 5px;font-size:9px;color:#1a3a5c;white-space:nowrap;
+          box-shadow:0 1px 4px rgba(0,0,0,0.12);cursor:default;opacity:0.85;
+        ">${name}${hhld ? ` <span style="color:#80868b">${hhld}</span>` : ''}</div>`;
+      const marker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(pc.latitude, pc.longitude),
+        map: mapInstanceRef.current,
+        icon: { content, anchor: new window.naver.maps.Point(0, 0) },
+        zIndex: 100,
+      });
+      publicComplexMarkersRef.current.push(marker);
+    });
+  }, [publicComplexes]);
 
   // 학교·인프라 오버레이 마커 렌더링 — complex 변경 시 갱신
   useEffect(() => {
