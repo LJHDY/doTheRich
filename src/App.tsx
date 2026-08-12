@@ -112,6 +112,7 @@ const App: React.FC = () => {
   const [collectStatus, setCollectStatus] = useState<'idle' | 'collecting' | 'done' | 'error'>('idle');
   const [publicComplexes, setPublicComplexes] = useState<PublicComplex[]>([]);
   const [showPublicComplexes, setShowPublicComplexes] = useState(true);
+  const [showMyComplexes, setShowMyComplexes] = useState(true);
 
   // 전역 토스트 알림 — 수집 완료 등 일회성 메시지
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -280,7 +281,8 @@ const App: React.FC = () => {
     if (!selectedDistrict) { setPublicComplexes([]); return; }
     const gu = guList.find(g => g.guName === selectedDistrict);
     if (!gu) return;
-    setShowPublicComplexes(true); // 구 변경 시 항상 ON으로 초기화
+    setShowPublicComplexes(true);
+    setShowMyComplexes(true);
     getPublicComplexes(gu.sigunguCd).then(setPublicComplexes).catch(() => setPublicComplexes([]));
   }, [selectedDistrict, guList]);
 
@@ -727,17 +729,30 @@ const App: React.FC = () => {
               >로드뷰</button>
               {/* 구 경계 */}
               <DistrictSelector value={selectedDistrict} onChange={setSelectedDistrict} />
-              {/* 공공단지 표시 토글 — 구 선택 시에만 표시 */}
-              {selectedDistrict && publicComplexes.length > 0 && (
-                <button
-                  onClick={() => setShowPublicComplexes(v => !v)}
-                  style={{
-                    padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                    border: '1px solid', borderColor: showPublicComplexes ? '#89CFF0' : '#dadce0',
-                    borderRadius: '6px', backgroundColor: showPublicComplexes ? '#f0f8fd' : '#fff',
-                    color: showPublicComplexes ? '#1a6a9a' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                  }}
-                >공공단지</button>
+              {/* 내 단지 / 아파트 on/off 토글 — 구 선택 시에만 표시 */}
+              {selectedDistrict && (
+                <>
+                  <button
+                    onClick={() => setShowMyComplexes(v => !v)}
+                    style={{
+                      padding: '2px 7px', fontSize: '11px', fontWeight: 600,
+                      border: '1px solid', borderColor: showMyComplexes ? '#89CFF0' : '#dadce0',
+                      borderRadius: '6px', backgroundColor: showMyComplexes ? '#f0f8fd' : '#fff',
+                      color: showMyComplexes ? '#1a6a9a' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                    }}
+                  >내단지</button>
+                  {publicComplexes.length > 0 && (
+                    <button
+                      onClick={() => setShowPublicComplexes(v => !v)}
+                      style={{
+                        padding: '2px 7px', fontSize: '11px', fontWeight: 600,
+                        border: '1px solid', borderColor: showPublicComplexes ? '#89CFF0' : '#dadce0',
+                        borderRadius: '6px', backgroundColor: showPublicComplexes ? '#f0f8fd' : '#fff',
+                        color: showPublicComplexes ? '#1a6a9a' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                      }}
+                    >아파트</button>
+                  )}
+                </>
               )}
               {/* 체크리스트 */}
               <button
@@ -937,7 +952,7 @@ const App: React.FC = () => {
           /* 기본 뷰 — 지도는 항상 전체 렌더, 사이드패널은 모바일에서 fixed 오버레이 */
           <>
             <MapPage
-              complexes={filteredComplexes}
+              complexes={showMyComplexes ? filteredComplexes : []}
               selectedComplex={selectedComplex}
               onComplexSelect={handleComplexSelect}
               focusLocation={focusLocation}
