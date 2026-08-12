@@ -419,12 +419,13 @@ const MapPage: React.FC<MapPageProps> = ({
       ].filter(Boolean).join(' · ');
       const content = `
         <div style="
-          background:rgba(255,255,255,0.95);border:1.5px solid #89CFF0;border-radius:5px;
-          padding:3px 8px;white-space:nowrap;
-          box-shadow:0 2px 6px rgba(0,0,0,0.18);cursor:default;
+          background:rgba(255,255,255,0.92);border:1px solid #89CFF0;border-radius:4px;
+          padding:2px 6px;white-space:nowrap;
+          box-shadow:0 1px 4px rgba(0,0,0,0.15);
+          pointer-events:none;
         ">
-          <div style="font-size:11px;font-weight:700;color:#1a3a5c;line-height:1.5;">${name}</div>
-          ${details ? `<div style="font-size:10px;color:#555;line-height:1.4;">${details}</div>` : ''}
+          <div style="font-size:10px;font-weight:600;color:#1a3a5c;line-height:1.4;">${name}</div>
+          ${details ? `<div style="font-size:9px;color:#666;line-height:1.3;">${details}</div>` : ''}
         </div>`;
       const marker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(pc.latitude, pc.longitude),
