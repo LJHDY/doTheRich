@@ -26,7 +26,7 @@ import {
   getAssetSnapshotDetails,
   bulkSaveAssetSnapshotDetails,
 } from '../../services/api';
-import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
