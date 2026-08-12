@@ -432,8 +432,8 @@ const MapPage: React.FC<MapPageProps> = ({
           pointer-events:none;
         ">
           <div style="font-size:10px;font-weight:600;color:#1a3a5c;line-height:1.4;">${name}</div>
-          ${row1 ? `<div style="font-size:8px;color:#666;line-height:1.3;">${row1}</div>` : ''}
-          ${row2 ? `<div style="font-size:8px;color:#888;line-height:1.3;">${row2}</div>` : ''}
+          ${row1 ? `<div class="pc-detail" style="font-size:8px;color:#666;line-height:1.3;">${row1}</div>` : ''}
+          ${row2 ? `<div class="pc-detail" style="font-size:8px;color:#888;line-height:1.3;">${row2}</div>` : ''}
         </div>`;
       const marker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(pc.latitude, pc.longitude),
@@ -444,10 +444,25 @@ const MapPage: React.FC<MapPageProps> = ({
       publicComplexMarkersRef.current.push(marker);
     });
 
-    // 줌 변경 시 임계값 기준으로 마커 일괄 show/hide
+    // 줌에 따라 세부정보 행 CSS 표시 여부 제어 (마커 재생성 없이)
+    const updateDetailVisibility = (zoom: number) => {
+      let styleEl = document.getElementById('pc-zoom-style') as HTMLStyleElement | null;
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'pc-zoom-style';
+        document.head.appendChild(styleEl);
+      }
+      // 줌 15 이상에서만 세부정보(연식·세대수·용적·주차) 표시
+      styleEl.textContent = `.pc-detail { display: ${zoom >= 15 ? 'block' : 'none'}; }`;
+    };
+    updateDetailVisibility(map.getZoom());
+
+    // 줌 변경 시 임계값 기준으로 마커 일괄 show/hide + 세부정보 토글
     const zoomListener = window.naver.maps.Event.addListener(map, 'zoom_changed', () => {
-      const show = map.getZoom() >= PUBLIC_COMPLEX_MIN_ZOOM;
+      const zoom = map.getZoom();
+      const show = zoom >= PUBLIC_COMPLEX_MIN_ZOOM;
       publicComplexMarkersRef.current.forEach(m => m.setMap(show ? map : null));
+      updateDetailVisibility(zoom);
     });
 
     return () => {
