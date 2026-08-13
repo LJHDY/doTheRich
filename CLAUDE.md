@@ -783,7 +783,7 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
     - `GET /api/financial-reports` — 저장 리포트 목록 (최신순)
     - `POST /api/financial-reports/generate?report_month=YYYYMM` — 즉시 생성 (202 백그라운드)
   - `GEMINI_API_KEY` 환경변수 필요 (Railway에 추가, `aistudio.google.com` → Get API Key)
-  - `google-generativeai==0.8.3` 패키지 추가 (requirements.txt), 모델: `gemini-1.5-flash` (무료 티어)
+  - `google-generativeai==0.8.3` 패키지 추가 (requirements.txt), 모델: `gemini-2.0-flash` (무료 티어)
 - [x] 공통코드 관리 (`CommonCodeModal`, `common_code` 테이블)
   - 통장 관리 탭 하단 "⚙ 공통코드 관리" 버튼 → `CommonCodeModal` 오픈
   - 모달 구조: 좌측 공통코드 그룹 목록 / 우측 상세코드 테이블 (추가·인라인수정·삭제·정렬순서)
