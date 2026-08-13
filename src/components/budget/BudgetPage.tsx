@@ -124,7 +124,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [form, setForm] = useState(initialForm());
   const [isShared, setIsShared] = useState(false); // 공용 지출 — 두 유저에게 절반씩 저장
 
-  // 달력 뷰
+  // 달력/목록 뷰 전환 상태
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [calSelectedDate, setCalSelectedDate] = useState<string | null>(null); // "YYYY-MM-DD"
 
