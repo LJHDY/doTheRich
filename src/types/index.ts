@@ -667,3 +667,12 @@ export const formatAmount = (amount: number): string =>
 /** 금액을 콤마 구분 정수로 포맷 (반올림·버림 없음) */
 export const formatAmountShort = (amount: number): string =>
   amount.toLocaleString('ko-KR');
+
+/** 모바일 등 좁은 공간용 억/만 단위 축약 포맷 */
+export const formatAmountCompact = (amount: number): string => {
+  if (amount === 0) return '—';
+  if (amount >= 100_000_000) {
+    return `${parseFloat((amount / 100_000_000).toFixed(2))}억`;
+  }
+  return `${Math.round(amount / 10_000).toLocaleString()}만`;
+};

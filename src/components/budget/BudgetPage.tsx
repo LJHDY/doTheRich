@@ -46,7 +46,7 @@ import {
   generateFinancialReport,
   FinancialReport as FinancialReportType,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, PaymentMethod, formatAmount, formatAmountCompact, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
@@ -1424,6 +1424,7 @@ const AccountManagementView: React.FC = () => {
 // ─── 통합 보기 뷰 ─────────────────────────────────────────────
 
 const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
+  const isMobile = useIsMobile();
   const [allSnapshots, setAllSnapshots] = useState<AssetSnapshotCell[]>([]);
   const [entries, setEntries] = useState<{ ldy: BudgetEntry[]; juhae: BudgetEntry[] }>({ ldy: [], juhae: [] });
   const [loading, setLoading] = useState(false);
@@ -1487,6 +1488,9 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
 
   const LIQUIDITY_GROUPS = ['즉시 사용 가능', '즉시 사용 불가'] as const;
 
+  // 모바일: "즉시 O/X" 같은 짧은 레이블 → 첫 열 좁게, 숫자 열 공간 최대화
+  const GRID = isMobile ? '62px 1fr 1fr 1fr' : '120px 1fr 1fr 1fr';
+
   // 3열 행 렌더 헬퍼
   const Row3 = ({
     label, v0, v1, bold = false, colored = false, isBalance = false,
@@ -1498,7 +1502,7 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
       : colored ? '#E06060' : '#344054';
     return (
       <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr',
+        display: 'grid', gridTemplateColumns: GRID,
         padding: '10px 16px', fontSize: '13px',
         borderBottom: '1px solid #f0f0f0',
         fontWeight: bold ? 700 : 400,
@@ -1517,7 +1521,7 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
     <>
       <div style={{ fontSize: '14px', fontWeight: 800, color: '#1a3a5c', marginBottom: '8px', marginTop: '24px' }}>{title}</div>
       <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr',
+        display: 'grid', gridTemplateColumns: GRID,
         padding: '8px 16px', fontSize: '12px', fontWeight: 700, color: '#fff',
         background: '#89CFF0', borderRadius: '8px 8px 0 0',
       }}>
@@ -1541,13 +1545,17 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
           const v0 = assetGroupSubtotal(g, u0.id);
           const v1 = assetGroupSubtotal(g, u1.id);
           const lc = ASSET_LIQUIDITY_COLORS[g];
+          // 모바일: "즉시 O" / "즉시 X" 로 축약해 숫자 열 공간 확보
+          const label = isMobile
+            ? (g === '즉시 사용 가능' ? '즉시 O' : '즉시 X')
+            : g;
           return (
             <div key={g} style={{
-              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr',
+              display: 'grid', gridTemplateColumns: GRID,
               padding: '10px 16px', fontSize: '13px',
               borderBottom: '1px solid #f0f0f0', background: '#fff',
             }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: lc.bg, color: lc.text, alignSelf: 'center', width: 'fit-content' }}>{g}</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: lc.bg, color: lc.text, alignSelf: 'center', width: 'fit-content', whiteSpace: 'nowrap' }}>{label}</span>
               <span style={{ textAlign: 'right', color: '#344054' }}>{v0 ? formatAmountShort(v0) : '—'}</span>
               <span style={{ textAlign: 'right', color: '#344054' }}>{v1 ? formatAmountShort(v1) : '—'}</span>
               <span style={{ textAlign: 'right', fontWeight: 700, color: '#1a3a5c' }}>{(v0 + v1) ? formatAmountShort(v0 + v1) : '—'}</span>
@@ -1555,7 +1563,7 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
           );
         })}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr',
+          display: 'grid', gridTemplateColumns: GRID,
           padding: '12px 16px', fontSize: '13px', fontWeight: 800,
           background: '#f0f8fd', borderTop: '2px solid #89CFF040',
         }}>
@@ -1924,13 +1932,26 @@ const AssetView: React.FC = () => {
 
           {/* 유동성 비율 바 */}
           {gtSum > 0 && (
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: isMobile ? '8px' : '6px', marginBottom: '12px' }}>
               {GROUPS.map(g => {
                 const v = groupKrw(selectedDate, g, u0.id) + groupKrw(selectedDate, g, u1.id);
                 if (v === 0) return null;
                 const lc = ASSET_LIQUIDITY_COLORS[g];
                 const pct = (v / gtSum * 100).toFixed(0);
-                return (
+                return isMobile ? (
+                  /* 모바일: 균등 2칸, 세로 레이아웃으로 텍스트 깨짐 방지 */
+                  <div key={g} style={{
+                    flex: 1,
+                    background: lc.bg, border: `1.5px solid ${lc.border}80`,
+                    borderRadius: '10px', padding: '10px 12px',
+                    display: 'flex', flexDirection: 'column', gap: '3px',
+                  }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: lc.text, whiteSpace: 'nowrap' }}>{g}</span>
+                    <span style={{ fontSize: '15px', fontWeight: 800, color: lc.text }}>{formatAmountCompact(v)}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: lc.border }}>{pct}%</span>
+                  </div>
+                ) : (
+                  /* PC: 비율 비례 가로 바 */
                   <div key={g} style={{
                     flex: v, background: lc.bg, border: `1px solid ${lc.border}60`,
                     borderRadius: '8px', padding: '6px 12px',
