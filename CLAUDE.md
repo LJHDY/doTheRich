@@ -758,7 +758,13 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - [x] 가계부 기능 (`BudgetPage`, `UserSelectModal`)
   - 헤더 "💰 가계부" 버튼 → 전체화면 오버레이 (z-index 9000)
   - localStorage `budget_user_id`로 세션 유저 저장, 👤 버튼 클릭 시 `UserSelectModal`로 재선택 가능
-  - **내역 탭**: 총 수입/지출/잔액 카드, 고정비/변동비/투자 소요약, 통장별 현황, 필터(전체/수입/지출/고정비/투자), 항목 목록
+  - **내역 탭**: 총 수입/지출/잔액 카드, 고정비/변동비/투자 소요약, 통장별 현황, 필터(전체/수입/지출/고정비/투자/이체), 항목 목록
+    - 전체 탭 콘텐츠를 단일 스크롤 컨테이너로 감싸 (내부 리스트 별도 스크롤 제거)
+    - **이체(이체 필터)**: `isXfer = e.isTransfer || e.category === '이체'` 헬퍼로 판정 — `is_transfer` DB 컬럼 마이그레이션 이전 항목도 `category='이체'`로 fallback 처리
+    - **요약 계산 규칙**: 이체는 수입·지출 모두에서 제외 / 투자(`isInvestment=true`)는 지출에서 분리해 별도 집계
+    - **잔액 공식**: `잔액 = 총수입 - 총지출 - 투자` (이체·투자 모두 수입/지출에서 제외 후 투자 별도 차감)
+    - **통장 잔액 합계 카드**: 이체 제외 수입/지출로 표시 (개별 통장 카드는 이체 포함 유지 — 계좌 간 이동 반영)
+    - `accountMap`: 개별 통장 잔액용, 이체 포함 / 합계 카드는 `entries`에서 `!isXfer` 직접 필터해 별도 계산
   - **통장 관리 탭**: `ACCOUNT_GROUPS` 상수 기반 읽기 전용 참고 테이블 (통장명/예산/항목/은행카드/합계)
   - **자산 탭 (스냅샷 기반)**: 현황/이력/그래프 서브탭
     - **현황**: 날짜 선택 + 이전 날짜 복사, 스프레드시트 테이블 (동영|주해|합산), 셀 클릭 편집 (콤마 구분 합산), 달러 현금 USD 입력 + 환율 자동 환산
@@ -768,6 +774,8 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
     - `ASSET_COLUMNS` (10개 항목, 즉시사용가능/불가 2그룹), `AssetSnapshotCell` 타입, snapshot API 5종
     - 백엔드: `asset_snapshot` 테이블, `asset_snapshot_service.py`, snapshot 라우트 5개 (`/api/assets/snapshots/*`)
   - **통합 보기 탭**: 최신 스냅샷 기준 자산 현황 + 월별 가계부 요약 (동영|주해|합산 3열)
+    - `entrySummary` useMemo: 유저별 가계부 집계 — 이체 제외, 투자 별도, **잔액 = 수입 - 지출 - 투자**
+    - `OverviewView` Row3 잔액: `income - expense - invest` (이체·투자 제외 후 투자 추가 차감)
 - [x] 자산 세부 내역 기능 (`AssetDetailModal`)
   - 자산 현황 탭 우측 상단 "📋 세부 내역" 버튼 → 모달 오픈
   - 모달: ASSET_COLUMNS × BUDGET_USERS 구조, 자산 항목별/유저별 [계좌명, 금액(만원)] 행 추가·삭제
@@ -777,13 +785,19 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
   - 백엔드: `asset_snapshot_detail` 테이블, `asset_snapshot_detail_service.py`, 라우트 2개
 - [x] AI 재무 분석 리포트 (`AIReportView`, `financial_report` 테이블)
   - 가계부 "🤖 AI 분석" 탭 — 월별 리포트 선택·조회, "✨ 지금 분석" 버튼으로 즉시 생성 요청
-  - 매달 25일 오전 9시 APScheduler 자동 생성 (직전 3개월 가계부 + 최근 6개 자산 스냅샷 → Claude API)
+  - 매달 25일 오전 9시 APScheduler 자동 생성 (직전 3개월 가계부 + 최근 6개 자산 스냅샷 → Gemini API)
   - DB 월별 1건 upsert, 마크다운 렌더링 (헤더·굵기·글머리)
   - 백엔드: `financial_report` 테이블, `financial_report_service.py`, `routers/financial_report.py`
     - `GET /api/financial-reports` — 저장 리포트 목록 (최신순)
     - `POST /api/financial-reports/generate?report_month=YYYYMM` — 즉시 생성 (202 백그라운드)
-  - `GEMINI_API_KEY` 환경변수 필요 (Railway에 추가, `aistudio.google.com` → Get API Key)
-  - `google-generativeai==0.8.3` 패키지 추가 (requirements.txt), 모델: `gemini-2.0-flash` (무료 티어)
+  - `GEMINI_API_KEY` 환경변수 필요 (Railway에 추가), 모델: `gemini-3.5-flash`
+  - **프롬프트 데이터 구성** (`_collect_budget_data` + `_build_prompt`):
+    - 이체·투자 제외 후 수입/지출/고정비/변동비 집계 (프론트 잔액 공식과 동일)
+    - `is_xfer`: `is_transfer` 또는 `category='이체'` fallback (프론트와 동일 판정)
+    - 투자: 수입 대비 투자율(%) + `investment_type`별 금액 분류
+    - 이체: `account_main`별 수신/송금 금액 → 통장 쪼개기 적정성 AI 검증용
+    - 잔액: `수입 - 지출 - 투자` 계산 후 포함
+  - **AI 분석 6개 섹션**: 소비패턴 / 투자현황 / 통장쪼개기검증 / 자산배분 / 리밸런싱 / 이달의 개선포인트
 - [x] 공통코드 관리 (`CommonCodeModal`, `common_code` 테이블)
   - 통장 관리 탭 하단 "⚙ 공통코드 관리" 버튼 → `CommonCodeModal` 오픈
   - 모달 구조: 좌측 공통코드 그룹 목록 / 우측 상세코드 테이블 (추가·인라인수정·삭제·정렬순서)
