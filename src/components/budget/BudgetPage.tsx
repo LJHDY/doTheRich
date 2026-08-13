@@ -1747,7 +1747,7 @@ const AssetView: React.FC = () => {
         '합산': toUk(v0 + v1),
       };
     });
-  }, [cellMap, dates, exchangeRate]);
+  }, [cellMap, dates, exchangeRate, u0, u1]);
 
   const chartDataByLiquidity = useMemo(() => {
     const toKrwLocal = (assetType: string, amount: number) =>
