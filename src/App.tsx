@@ -24,6 +24,7 @@ import PasswordGate, { isSessionValid } from './components/PasswordGate';
 import BudgetPage from './components/budget/BudgetPage';
 import UserSelectModal from './components/budget/UserSelectModal';
 import { BUDGET_USER_STORAGE_KEY } from './constants/budgetConstants';
+import RealEstateAnalysisModal from './components/RealEstateAnalysisModal';
 
 const App: React.FC = () => {
   const isMobile = useIsMobile();
@@ -144,6 +145,7 @@ const App: React.FC = () => {
 
   // 비교하기 — 일반(최대 3개) / 비교평가(1:1) 모드
   const [compareOpen, setCompareOpen] = useState(() => sessionStorage.getItem('panel_compare') === 'true');
+  const [realEstateAiOpen, setRealEstateAiOpen] = useState(false);
   const [compareIds, setCompareIds] = useState<number[]>(() => {
     try { return JSON.parse(sessionStorage.getItem('compare_ids') || '[]'); } catch { return []; }
   });
@@ -1310,20 +1312,43 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 비교 모드 종료 플로팅 버튼 — 비교 카드가 보일 때 표시 */}
+      {/* 비교 모드 플로팅 버튼 영역 — 비교 카드가 보일 때 표시 */}
       {compareIds.length > 0 && (
-        <button
-          onClick={handleCompareClose}
-          style={{
-            position: 'fixed', bottom: '24px', right: '24px', zIndex: 400,
-            padding: '10px 18px', fontSize: '13px', fontWeight: 600,
-            backgroundColor: '#E06060', color: '#fff',
-            border: 'none', borderRadius: '20px', cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-          }}
-        >
-          비교 종료
-        </button>
+        <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 400, display: 'flex', gap: '10px' }}>
+          {/* AI 투자 분석 버튼 — 2개 이상 선택 시 활성 */}
+          {compareIds.length >= 2 && (
+            <button
+              onClick={() => setRealEstateAiOpen(true)}
+              style={{
+                padding: '10px 18px', fontSize: '13px', fontWeight: 600,
+                backgroundColor: '#89CFF0', color: '#fff',
+                border: 'none', borderRadius: '20px', cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(137,207,240,0.5)',
+              }}
+            >
+              🤖 AI 투자 분석
+            </button>
+          )}
+          <button
+            onClick={handleCompareClose}
+            style={{
+              padding: '10px 18px', fontSize: '13px', fontWeight: 600,
+              backgroundColor: '#E06060', color: '#fff',
+              border: 'none', borderRadius: '20px', cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            }}
+          >
+            비교 종료
+          </button>
+        </div>
+      )}
+
+      {/* AI 부동산 투자 분석 모달 */}
+      {realEstateAiOpen && compareIds.length >= 2 && (
+        <RealEstateAnalysisModal
+          complexes={compareIds.map(id => complexes.find(c => c.id === id)!).filter(Boolean)}
+          onClose={() => setRealEstateAiOpen(false)}
+        />
       )}
 
       {/* 금액대별 단지 목록 팝업 */}

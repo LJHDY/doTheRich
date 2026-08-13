@@ -1083,4 +1083,12 @@ export const generateFinancialReport = async (reportMonth?: string): Promise<voi
   await api.post('/api/financial-reports/generate', null, { params });
 };
 
+// ── AI 부동산 투자 분석 ─────────────────────────────────────────────────────
+export const analyzeRealEstate = async (complexIds: number[]): Promise<string> => {
+  const res = await api.post<{ content: string }>('/api/ai/real-estate/analyze', {
+    complex_ids: complexIds,
+  });
+  return res.data.content;
+};
+
 export default api;
