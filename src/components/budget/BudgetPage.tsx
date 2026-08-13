@@ -16,6 +16,7 @@ import {
   VARIABLE_EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   INVESTMENT_TYPES,
+  buildAssetCellCode,
 } from '../../constants/budgetConstants';
 import {
   getBudgetEntries,
@@ -1585,7 +1586,7 @@ const AssetView: React.FC = () => {
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
   // 셀별 세부 내역 모달 대상 (null=닫힘)
-  const [detailTarget, setDetailTarget] = useState<{ userId: string; assetType: string; userName: string; assetLabel: string } | null>(null);
+  const [detailTarget, setDetailTarget] = useState<{ userId: string; assetType: string; userName: string; assetLabel: string; cellCode: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1986,7 +1987,7 @@ const AssetView: React.FC = () => {
                           onCancel={() => setEditingCell(null)}
                           saving={saving} accentColor={lc.border}
                           isDollar={isDollar} exchangeRate={exchangeRate}
-                          onDetailClick={() => setDetailTarget({ userId: u0.id, assetType: col.key, userName: u0.name, assetLabel: col.label })} />
+                          onDetailClick={() => setDetailTarget({ userId: u0.id, assetType: col.key, userName: u0.name, assetLabel: col.label, cellCode: buildAssetCellCode(col.codeKey, u0.id) })} />
                         <AssetCell
                           value={raw1} isEditing={isEdit1} editValue={editValue}
                           onStartEdit={() => startEdit(u1.id, col.key)}
@@ -1994,7 +1995,7 @@ const AssetView: React.FC = () => {
                           onCancel={() => setEditingCell(null)}
                           saving={saving} accentColor={lc.border}
                           isDollar={isDollar} exchangeRate={exchangeRate}
-                          onDetailClick={() => setDetailTarget({ userId: u1.id, assetType: col.key, userName: u1.name, assetLabel: col.label })} />
+                          onDetailClick={() => setDetailTarget({ userId: u1.id, assetType: col.key, userName: u1.name, assetLabel: col.label, cellCode: buildAssetCellCode(col.codeKey, u1.id) })} />
                         <span style={{
                           padding: '0 16px', textAlign: 'right', fontSize: '13px', lineHeight: '42px',
                           fontWeight: 600, color: (krw0 + krw1) === 0 ? '#dadce0' : '#1a3a5c',
@@ -2246,6 +2247,7 @@ const AssetView: React.FC = () => {
         assetType={detailTarget.assetType}
         userName={detailTarget.userName}
         assetLabel={detailTarget.assetLabel}
+        cellCode={detailTarget.cellCode}
         onClose={() => setDetailTarget(null)}
         onSaved={() => { load(); }}
       />
@@ -2270,15 +2272,25 @@ const AssetDetailModal: React.FC<{
   assetType: string;
   userName: string;
   assetLabel: string;
+  cellCode: string;   // 공통코드 복합키 — ASSET_CELL 그룹의 detail_code (예: STOCK_LDY)
   onClose: () => void;
   onSaved: () => void;
-}> = ({ snapshotDate, userId, assetType, userName, assetLabel, onClose, onSaved }) => {
+}> = ({ snapshotDate, userId, assetType, userName, assetLabel, cellCode, onClose, onSaved }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // 다른 셀의 기존 데이터 (저장 시 그대로 포함, 원 단위)
   const [otherItems, setOtherItems] = useState<Array<{ userId: string; assetType: string; accountName: string; amountWon: number }>>([]);
   // 이 셀의 편집 가능 항목 (원 단위 입력)
   const [cellItems, setCellItems] = useState<LocalDetail[]>([]);
+  // 이 셀에 매핑된 공통코드 정보 (ASSET_CELL 그룹)
+  const [cellCommonCode, setCellCommonCode] = useState<CommonCode | null>(null);
+
+  useEffect(() => {
+    // 공통코드 조회 — detail_code = cellCode (예: STOCK_LDY)
+    getCommonCodes('ASSET_CELL').then(data => {
+      setCellCommonCode(data.find(c => c.detailCode === cellCode) ?? null);
+    });
+  }, [cellCode]);
 
   useEffect(() => {
     getAssetSnapshotDetails(snapshotDate).then(data => {
@@ -2365,6 +2377,15 @@ const AssetDetailModal: React.FC<{
             <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>📋 {assetLabel}</span>
             <span style={{ fontSize: '12px', color: '#4BAAD4', marginLeft: '8px', fontWeight: 600 }}>{userName}</span>
             <span style={{ fontSize: '11px', color: '#9aa0a6', marginLeft: '6px' }}>{snapshotDate}</span>
+            {/* 공통코드 표시 — ASSET_CELL 그룹에 등록된 경우에만 */}
+            {cellCommonCode && (
+              <div style={{ marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '10px', fontFamily: 'monospace', background: '#e8f0fe', color: '#1565c0', borderRadius: '4px', padding: '1px 6px', fontWeight: 700 }}>
+                  {cellCommonCode.detailCode}
+                </span>
+                <span style={{ fontSize: '11px', color: '#5f6368' }}>{cellCommonCode.detailCodeName}</span>
+              </div>
+            )}
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6', lineHeight: 1 }}>×</button>
         </div>

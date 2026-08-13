@@ -180,23 +180,32 @@ export const FIXED_EXPENSE_ITEM_CATEGORIES: string[] = [
 // 즉시 사용 불가: 주택청약저축·퇴직연금·ISA·미국주식·국채·달러 현금
 
 export interface AssetColumn {
-  key: string;   // DB assetType 저장값 (유니크)
-  label: string; // 화면 표시명
+  key: string;      // DB assetType 저장값 (유니크, 한글)
+  label: string;    // 화면 표시명
   group: '즉시 사용 가능' | '즉시 사용 불가';
+  codeKey: string;  // 공통코드 detail_code 영문 접두사 (ASSET_CELL 그룹, {codeKey}_{USER} 조합)
 }
 
 export const ASSET_COLUMNS: AssetColumn[] = [
-  { key: '보증금',       label: '보증금',       group: '즉시 사용 가능' },
-  { key: '현금',         label: '현금',         group: '즉시 사용 가능' },
-  { key: '주식',         label: '주식',         group: '즉시 사용 가능' },
-  { key: '퇴직금',       label: '퇴직금',       group: '즉시 사용 가능' },
-  { key: '주택청약저축', label: '주택청약저축', group: '즉시 사용 불가' },
-  { key: '퇴직연금',   label: '퇴직금',     group: '즉시 사용 불가' },
-  { key: 'ISA',          label: 'ISA',          group: '즉시 사용 불가' },
-  { key: '미국주식',     label: '미국주식',     group: '즉시 사용 불가' },
-  { key: '국채',         label: '국채',         group: '즉시 사용 불가' },
-  { key: '달러 현금',    label: '달러 현금',    group: '즉시 사용 불가' },
+  { key: '보증금',       label: '보증금',       group: '즉시 사용 가능', codeKey: 'DEPOSIT'        },
+  { key: '현금',         label: '현금',         group: '즉시 사용 가능', codeKey: 'CASH'           },
+  { key: '주식',         label: '주식',         group: '즉시 사용 가능', codeKey: 'STOCK'          },
+  { key: '퇴직금',       label: '퇴직금',       group: '즉시 사용 가능', codeKey: 'SEVERANCE'      },
+  { key: '주택청약저축', label: '주택청약저축', group: '즉시 사용 불가', codeKey: 'HOUSING_SAVINGS' },
+  { key: '퇴직연금',     label: '퇴직연금',     group: '즉시 사용 불가', codeKey: 'PENSION'        },
+  { key: 'ISA',          label: 'ISA',          group: '즉시 사용 불가', codeKey: 'ISA'            },
+  { key: '미국주식',     label: '미국주식',     group: '즉시 사용 불가', codeKey: 'US_STOCK'       },
+  { key: '국채',         label: '국채',         group: '즉시 사용 불가', codeKey: 'GOV_BOND'       },
+  { key: '달러 현금',    label: '달러 현금',    group: '즉시 사용 불가', codeKey: 'DOLLAR_CASH'    },
 ];
+
+/**
+ * 자산 셀 공통코드 복합키 생성
+ * common_code = 'ASSET_CELL', detail_code = '{codeKey}_{USER_SUFFIX}'
+ * 예: STOCK_LDY, STOCK_JUHAE
+ */
+export const buildAssetCellCode = (codeKey: string, userId: string): string =>
+  `${codeKey}_${userId.toUpperCase()}`;
 
 export const ASSET_LIQUIDITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   '즉시 사용 가능': { bg: '#E8F5E9', text: '#1B5E20', border: '#4CAF50' },
