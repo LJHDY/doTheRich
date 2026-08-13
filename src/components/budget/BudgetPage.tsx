@@ -188,10 +188,9 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
     const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
 
-    // 통장별 수입/지출 — 이체는 내 돈 이동이므로 제외 (합계가 요약과 일치하도록)
+    // 통장별 잔액 계산용 — 이체 포함 (계좌 간 이동도 개별 잔액에 반영)
     const accountMap: Record<string, { income: number; expense: number }> = {};
     entries.forEach(e => {
-      if (isXfer(e)) return;
       const key = e.account || '미분류';
       if (!accountMap[key]) accountMap[key] = { income: 0, expense: 0 };
       if (e.entryType === 'INCOME') accountMap[key].income += e.amount;
@@ -541,10 +540,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   <AccountCard key="미분류" accName="미분류 (통장 미지정)" opening={0} income={unassigned.income} expense={unassigned.expense} dimmed />
                 ) : null;
 
-                // 합계 카드 (모든 통장 잔액 + 미분류)
+                // 합계 카드 — 이체 제외 수입/지출 (요약의 총수입·총지출과 일치)
+                const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
                 const totalOpening = bankAccounts.reduce((s, pm) => s + (openingBalances[pm.name] ?? 0), 0);
-                const totalIncome = bankAccounts.reduce((s, pm) => s + (summary.accountMap[pm.name]?.income ?? 0), 0) + unassigned.income;
-                const totalExpense = bankAccounts.reduce((s, pm) => s + (summary.accountMap[pm.name]?.expense ?? 0), 0) + unassigned.expense;
+                const totalIncome = entries.filter(e => e.entryType === 'INCOME' && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+                const totalExpense = entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
                 const totalBalance = totalOpening + totalIncome - totalExpense;
 
                 return (
