@@ -2083,6 +2083,9 @@ const FixedExpenseModal: React.FC<{
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FeForm>(emptyFeForm());
   const [saving, setSaving] = useState(false);
+  // 공과금 항목 금액 인라인 편집
+  const [editingAmountId, setEditingAmountId] = useState<number | null>(null);
+  const [editingAmountStr, setEditingAmountStr] = useState('');
 
   // 납부일 오름차순 정렬 (미설정은 뒤로)
   const sortByPaymentDay = (arr: FixedExpense[]) =>
@@ -2157,6 +2160,16 @@ const FixedExpenseModal: React.FC<{
       await deleteFixedExpense(fe.id);
       setItems(prev => prev.filter(i => i.id !== fe.id));
     } catch { alert('삭제에 실패했습니다'); }
+  };
+
+  const handleAmountSave = async (fe: FixedExpense) => {
+    const amount = Number(editingAmountStr.replace(/,/g, ''));
+    if (!amount || amount <= 0) { setEditingAmountId(null); return; }
+    try {
+      const updated = await updateFixedExpense(fe.id, { amount });
+      setItems(prev => sortByPaymentDay(prev.map(i => i.id === fe.id ? updated : i)));
+    } catch { alert('금액 저장에 실패했습니다'); }
+    setEditingAmountId(null);
   };
 
   // 납부일(day)과 yearMonth(YYYYMM)로 YYYY-MM-DD 조합
@@ -2368,10 +2381,38 @@ const FixedExpenseModal: React.FC<{
                       <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {fe.name}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#5f6368', marginTop: '2px' }}>
-                        {formatAmountShort(fe.amount)}원
-                        {fe.account && <span style={{ marginLeft: '6px', color: '#9aa0a6' }}>· {fe.account}</span>}
-                        {fe.category && fe.category !== '미분류' && <span style={{ marginLeft: '6px', color: '#CE93D8' }}>#{fe.category}</span>}
+                      <div style={{ fontSize: '11px', color: '#5f6368', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                        {/* 공과금은 금액 클릭 시 인라인 편집 */}
+                        {fe.category === '공과금' && editingAmountId === fe.id ? (
+                          <input
+                            autoFocus
+                            type="text" inputMode="numeric"
+                            value={editingAmountStr}
+                            onChange={e => setEditingAmountStr(e.target.value.replace(/[^0-9]/g, ''))}
+                            onBlur={() => handleAmountSave(fe)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleAmountSave(fe);
+                              if (e.key === 'Escape') setEditingAmountId(null);
+                            }}
+                            style={{
+                              width: '100px', padding: '1px 5px', fontSize: '11px',
+                              border: '1px solid #89CFF0', borderRadius: '4px', outline: 'none',
+                            }}
+                          />
+                        ) : (
+                          <span
+                            onClick={fe.category === '공과금' ? () => { setEditingAmountId(fe.id); setEditingAmountStr(String(fe.amount)); } : undefined}
+                            style={{
+                              cursor: fe.category === '공과금' ? 'text' : 'default',
+                              borderBottom: fe.category === '공과금' ? '1px dashed #89CFF0' : 'none',
+                            }}
+                            title={fe.category === '공과금' ? '클릭하여 금액 수정' : undefined}
+                          >
+                            {formatAmountShort(fe.amount)}원
+                          </span>
+                        )}
+                        {fe.account && <span style={{ color: '#9aa0a6' }}>· {fe.account}</span>}
+                        {fe.category && fe.category !== '미분류' && <span style={{ color: '#CE93D8' }}>#{fe.category}</span>}
                       </div>
                     </div>
                     {/* 버튼들 */}
