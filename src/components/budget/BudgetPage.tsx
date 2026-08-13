@@ -426,7 +426,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           ) => {
             if (data.length === 0) return null;
             return (
-              <div style={{ flex: 1, minWidth: isMobile ? '100%' : '220px' }}>
+              <div>
                 <div style={{ fontSize: '12px', fontWeight: 700, color: '#344054', marginBottom: '4px' }}>{title}</div>
                 {/* 파이 */}
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -456,10 +456,15 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             );
           };
 
+          const expenseChart = renderChart('카테고리별 지출', expenseData, expenseTotal, COLORS);
+          const investChart = renderChart('카테고리별 투자', investData, investTotal, INVEST_COLORS);
           return (
-            <div style={{ padding: '8px 20px 0', display: 'flex', gap: '20px', flexShrink: 0, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-              {renderChart('카테고리별 지출', expenseData, expenseTotal, COLORS)}
-              {renderChart('카테고리별 투자', investData, investTotal, INVEST_COLORS)}
+            <div style={{ padding: '8px 20px 0', display: 'flex', gap: '0', flexShrink: 0, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              {expenseChart && <div style={{ flex: 1, minWidth: isMobile ? '100%' : '220px', paddingRight: investChart ? '20px' : 0 }}>{expenseChart}</div>}
+              {expenseChart && investChart && (
+                <div style={{ width: '1px', background: '#e8ecf0', alignSelf: 'stretch', flexShrink: 0, marginRight: '20px' }} />
+              )}
+              {investChart && <div style={{ flex: 1, minWidth: isMobile ? '100%' : '220px' }}>{investChart}</div>}
             </div>
           );
         })()}
