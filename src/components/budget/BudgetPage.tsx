@@ -200,13 +200,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   const handleSave = async () => {
     const amount = Number(form.amountStr?.replace(/,/g, '') ?? 0);
-    if (!form.category || !amount) { alert('카테고리와 금액을 입력해주세요'); return; }
+    const isInvest = form.isInvestment ?? false;
+    // 투자 항목은 카테고리 불필요 (투자 유형으로 대체)
+    if (!isInvest && !form.category) { alert('카테고리를 선택해주세요'); return; }
+    if (!amount) { alert('금액을 입력해주세요'); return; }
+    // 투자 항목의 카테고리는 투자 유형 값으로 자동 설정
+    const resolvedCategory = isInvest ? (form.investmentType || '투자') : (form.category ?? '');
     const basePayload = {
       userId,
       yearMonth,
       entryDate: form.entryDate ?? today(),
       entryType: form.entryType as 'INCOME' | 'EXPENSE',
-      category: form.category ?? '',
+      category: resolvedCategory,
       subcategory: form.subcategory || undefined,
       accountMain: form.accountMain || undefined,
       account: form.account || undefined,
@@ -330,9 +335,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         {/* ── 요약 카드 */}
         <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexShrink: 0, flexWrap: 'wrap' }}>
           <SummaryCard label="총 수입" amount={summary.totalIncome} color="#4CAF50" sign="+" />
-          <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-" />
+          <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-"
+            subText={summary.totalInvest > 0 ? `투자 ${formatAmountShort(summary.totalInvest)} 포함` : undefined} />
           <SummaryCard label="잔액" amount={summary.totalIncome - summary.totalExpense}
-            color={summary.totalIncome >= summary.totalExpense ? '#1565c0' : '#E06060'} sign="" />
+            color={summary.totalIncome >= summary.totalExpense ? '#1565c0' : '#E06060'} sign=""
+            subText={summary.totalInvest > 0 ? `투자 ${formatAmountShort(summary.totalInvest)} 포함` : undefined} />
         </div>
 
         {/* ── 고정/변동/투자 소요약 */}
@@ -627,8 +634,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               <input type="date" value={form.entryDate ?? today()} onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} style={inputStyle} />
             </FieldRow>
 
-            {/* 카테고리 + 지출처 (지출 시 나란히 표시) */}
-            {form.entryType === 'EXPENSE' ? (
+            {/* 카테고리 + 지출처 (지출 시 나란히 표시, 투자 체크 시 숨김) */}
+            {form.entryType === 'EXPENSE' && !form.isInvestment ? (
               <div style={{ marginBottom: '14px' }}>
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '5px' }}>
                   <label style={{ flex: 1, fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>카테고리</label>
@@ -870,7 +877,7 @@ const MerchantStatsSection: React.FC<{ rows: MerchantRow[] }> = ({ rows }) => {
   );
 };
 
-const SummaryCard: React.FC<{ label: string; amount: number; color: string; sign: string }> = ({ label, amount, color, sign }) => (
+const SummaryCard: React.FC<{ label: string; amount: number; color: string; sign: string; subText?: string }> = ({ label, amount, color, sign, subText }) => (
   <div style={{
     flex: 1, background: '#fff', borderRadius: '12px',
     padding: '14px 16px', border: `1px solid ${color}30`,
@@ -880,6 +887,9 @@ const SummaryCard: React.FC<{ label: string; amount: number; color: string; sign
     <div style={{ fontSize: '16px', fontWeight: 700, color }}>
       {sign}{formatAmountShort(Math.abs(amount))}
     </div>
+    {subText && (
+      <div style={{ fontSize: '10px', color: '#E06060', marginTop: '3px', fontWeight: 500 }}>{subText}</div>
+    )}
   </div>
 );
 
@@ -1238,15 +1248,15 @@ const EntryRow: React.FC<{
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '13px', fontWeight: 600, color: '#344054' }}>
-            {entry.category}{entry.subcategory ? ` › ${entry.subcategory}` : ''}
+            {entry.isInvestment
+              ? `투자(${entry.investmentType || entry.category || '기타'})`
+              : `${entry.category}${entry.subcategory ? ` › ${entry.subcategory}` : ''}`}
           </span>
           {entry.isFixed && (
             <span style={{ fontSize: '10px', background: '#9C27B020', color: '#9C27B0', borderRadius: '4px', padding: '1px 5px' }}>고정</span>
           )}
           {entry.isInvestment && (
-            <span style={{ fontSize: '10px', background: '#2196F320', color: '#2196F3', borderRadius: '4px', padding: '1px 5px' }}>
-              투자{entry.investmentType ? `·${entry.investmentType}` : ''}
-            </span>
+            <span style={{ fontSize: '10px', background: '#2196F320', color: '#2196F3', borderRadius: '4px', padding: '1px 5px' }}>투자</span>
           )}
         </div>
         {(entry.merchant || entry.accountMain || entry.account || entry.memo) && (
