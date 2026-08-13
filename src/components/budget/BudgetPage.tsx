@@ -207,10 +207,13 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     if (!amount) { alert('금액을 입력해주세요'); return; }
     // 투자 항목의 카테고리는 투자 유형 값으로 자동 설정
     const resolvedCategory = isInvest ? (form.investmentType || '투자') : (form.category ?? '');
+    const entryDate = form.entryDate ?? today();
+    // yearMonth는 입력한 날짜 기준으로 파생 (현재 탭 월과 무관하게 저장)
+    const resolvedYearMonth = entryDate.replace(/-/g, '').slice(0, 6);
     const basePayload = {
       userId,
-      yearMonth,
-      entryDate: form.entryDate ?? today(),
+      yearMonth: resolvedYearMonth,
+      entryDate,
       entryType: form.entryType as 'INCOME' | 'EXPENSE',
       category: resolvedCategory,
       subcategory: form.subcategory || undefined,
@@ -225,7 +228,12 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     try {
       if (editingId !== null) {
         const updated = await updateBudgetEntry(editingId, { ...basePayload, amount });
-        setEntries(prev => prev.map(e => e.id === editingId ? updated : e));
+        // 날짜 변경으로 다른 달이 된 경우 현재 뷰에서 제거
+        if (updated.yearMonth !== yearMonth) {
+          setEntries(prev => prev.filter(e => e.id !== editingId));
+        } else {
+          setEntries(prev => prev.map(e => e.id === editingId ? updated : e));
+        }
       } else if (isShared && form.entryType === 'EXPENSE') {
         // 공용 지출: 두 유저에게 각각 절반 금액으로 저장
         const halfAmount = Math.round(amount / 2);
@@ -234,10 +242,12 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           createBudgetEntry({ ...basePayload, userId, amount: halfAmount }),
           createBudgetEntry({ ...basePayload, userId: otherUserId, amount: halfAmount }),
         ]);
-        setEntries(prev => [created1, ...prev]);
+        // 현재 보고 있는 달의 항목만 목록에 추가
+        if (created1.yearMonth === yearMonth) setEntries(prev => [created1, ...prev]);
       } else {
         const created = await createBudgetEntry({ ...basePayload, amount });
-        setEntries(prev => [created, ...prev]);
+        // 현재 보고 있는 달의 항목만 목록에 추가
+        if (created.yearMonth === yearMonth) setEntries(prev => [created, ...prev]);
       }
       closeForm();
     } catch { alert('저장에 실패했습니다'); }
