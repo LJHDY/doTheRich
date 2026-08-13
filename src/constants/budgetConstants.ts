@@ -127,6 +127,7 @@ export const VARIABLE_EXPENSE_CATEGORIES: string[] = [
   '경조사',
   '세금',
   '주유비',
+  '주차비',
   '영양제',
   '교통비',
   '여행',
