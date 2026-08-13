@@ -155,10 +155,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   // ─── 요약 계산 ───────────────────────────────────────────────
   const summary = useMemo(() => {
     const totalIncome = entries.filter(e => e.entryType === 'INCOME').reduce((s, e) => s + e.amount, 0);
-    const totalExpense = entries.filter(e => e.entryType === 'EXPENSE').reduce((s, e) => s + e.amount, 0);
-    const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed).reduce((s, e) => s + e.amount, 0);
-    const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed).reduce((s, e) => s + e.amount, 0);
     const totalInvest = entries.filter(e => e.isInvestment).reduce((s, e) => s + e.amount, 0);
+    // 투자 제외 순수 지출
+    const totalExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment).reduce((s, e) => s + e.amount, 0);
+    const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment).reduce((s, e) => s + e.amount, 0);
+    const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment).reduce((s, e) => s + e.amount, 0);
 
     // 통장 대분류 기준 합산
     const accountMap: Record<string, { income: number; expense: number }> = {};
@@ -335,11 +336,10 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         {/* ── 요약 카드 */}
         <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexShrink: 0, flexWrap: 'wrap' }}>
           <SummaryCard label="총 수입" amount={summary.totalIncome} color="#4CAF50" sign="+" />
-          <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-"
-            subText={summary.totalInvest > 0 ? `투자 ${formatAmountShort(summary.totalInvest)} 포함` : undefined} />
-          <SummaryCard label="잔액" amount={summary.totalIncome - summary.totalExpense}
-            color={summary.totalIncome >= summary.totalExpense ? '#1565c0' : '#E06060'} sign=""
-            subText={summary.totalInvest > 0 ? `투자 ${formatAmountShort(summary.totalInvest)} 포함` : undefined} />
+          <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-" />
+          <SummaryCard label="투자" amount={summary.totalInvest} color="#2196F3" sign="-" />
+          <SummaryCard label="잔액" amount={summary.totalIncome - summary.totalExpense - summary.totalInvest}
+            color={summary.totalIncome >= summary.totalExpense + summary.totalInvest ? '#1565c0' : '#E06060'} sign="" />
         </div>
 
         {/* ── 고정/변동/투자 소요약 */}
