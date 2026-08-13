@@ -582,6 +582,20 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         ) : (
           /* ── 목록 뷰 */
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 20px' }}>
+            {/* 데스크탑: 목록 바로 위 추가 버튼 */}
+            {!isMobile && (
+              <button
+                onClick={openAdd}
+                style={{
+                  width: '100%', marginBottom: '10px', padding: '9px',
+                  fontSize: '13px', fontWeight: 700, borderRadius: '8px',
+                  border: '1px dashed #89CFF0', background: '#f0f8fd',
+                  color: '#1a3a5c', cursor: 'pointer',
+                }}
+              >
+                + 새 항목 추가
+              </button>
+            )}
             {loading && <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>불러오는 중…</div>}
             {!loading && filtered.length === 0 && (
               <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
