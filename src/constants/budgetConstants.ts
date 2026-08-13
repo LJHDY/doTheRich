@@ -135,6 +135,7 @@ export const VARIABLE_EXPENSE_CATEGORIES: string[] = [
   '운동/취미',
   '생필품',
   '가구/가전',
+  '결혼준비',
   '미분류',
 ];
 
