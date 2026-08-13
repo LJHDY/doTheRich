@@ -505,6 +505,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               onDelete={handleDelete}
               userId={userId}
               onEntriesAdded={newEntries => setEntries(prev => [...newEntries, ...prev])}
+              paymentMethods={paymentMethods}
             />
           </div>
         ) : (
@@ -889,12 +890,13 @@ type BulkRow = {
   entryType: 'INCOME' | 'EXPENSE';
   category: string;
   merchant: string;
+  account: string;
   amountStr: string;
 };
 
 let _bulkKey = 0;
 const mkBulkRow = (): BulkRow => ({
-  key: _bulkKey++, entryType: 'EXPENSE', category: '', merchant: '', amountStr: '',
+  key: _bulkKey++, entryType: 'EXPENSE', category: '', merchant: '', account: '', amountStr: '',
 });
 
 const CalendarView: React.FC<{
@@ -906,7 +908,8 @@ const CalendarView: React.FC<{
   onDelete: (e: BudgetEntry) => void;
   userId: string;
   onEntriesAdded: (newEntries: BudgetEntry[]) => void;
-}> = ({ yearMonth, entries, selectedDate, onSelectDate, onEdit, onDelete, userId, onEntriesAdded }) => {
+  paymentMethods: PaymentMethod[];
+}> = ({ yearMonth, entries, selectedDate, onSelectDate, onEdit, onDelete, userId, onEntriesAdded, paymentMethods }) => {
   const year = Number(yearMonth.slice(0, 4));
   const month = Number(yearMonth.slice(4)) - 1;
 
@@ -969,12 +972,12 @@ const CalendarView: React.FC<{
         entryType: r.entryType,
         category: r.category,
         merchant: r.merchant || undefined,
+        account: r.account || undefined,
         amount: Number(r.amountStr.replace(/,/g, '')),
         isFixed: false,
         isInvestment: false,
         subcategory: undefined as string | undefined,
         accountMain: undefined as string | undefined,
-        account: undefined as string | undefined,
         investmentType: undefined as string | undefined,
         memo: undefined as string | undefined,
       }));
@@ -1121,6 +1124,25 @@ const CalendarView: React.FC<{
                         style={{ ...bulkInputStyle, flex: '1 1 80px', minWidth: '70px' }}
                       />
                     )}
+                    {/* 결제수단 */}
+                    <select
+                      value={row.account}
+                      onChange={e => updateBulkRow(row.key, { account: e.target.value })}
+                      style={{ ...bulkInputStyle, flex: '1 1 90px', minWidth: '80px' }}
+                    >
+                      <option value="">결제수단</option>
+                      {(['통장', '카드'] as const).map(type => {
+                        const group = paymentMethods.filter(p => p.type === type);
+                        if (group.length === 0) return null;
+                        return (
+                          <optgroup key={type} label={type}>
+                            {group.map(p => (
+                              <option key={p.id} value={p.name}>{p.name}</option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
+                    </select>
                     {/* 금액 */}
                     <input
                       type="text" inputMode="numeric"
