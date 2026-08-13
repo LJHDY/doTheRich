@@ -4014,6 +4014,8 @@ const AIReportView: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [toast, setToast] = useState('');
+  // 분석 기간 선택: false=직전 3개월(기본) / true=이번달 포함
+  const [includeCurrentMonth, setIncludeCurrentMonth] = useState(false);
 
   // 리포트 목록 불러오기
   const load = async () => {
@@ -4034,7 +4036,7 @@ const AIReportView: React.FC = () => {
     setGenerating(true);
     setToast('분석 요청 중…');
     try {
-      await generateFinancialReport();
+      await generateFinancialReport(undefined, includeCurrentMonth);
       setToast('Gemini가 분석 중입니다. 잠시 후 자동으로 업데이트됩니다.');
       const prevTopId = reports.length > 0 ? reports[0].id : null;
       let tries = 0;
@@ -4137,6 +4139,22 @@ const AIReportView: React.FC = () => {
               ))}
             </select>
           )}
+          {/* 분석 기간 토글 */}
+          <div style={{ display: 'flex', border: '1px solid #dadce0', borderRadius: '8px', overflow: 'hidden', fontSize: '12px' }}>
+            {([false, true] as const).map(val => (
+              <button
+                key={String(val)}
+                onClick={() => setIncludeCurrentMonth(val)}
+                style={{
+                  padding: '5px 12px', border: 'none', cursor: 'pointer', fontWeight: includeCurrentMonth === val ? 700 : 400,
+                  background: includeCurrentMonth === val ? '#89CFF0' : '#fff',
+                  color: includeCurrentMonth === val ? '#fff' : '#5f6368',
+                }}
+              >
+                {val ? '이번달 포함' : '직전 3개월'}
+              </button>
+            ))}
+          </div>
           <button
             onClick={handleGenerate}
             disabled={generating}

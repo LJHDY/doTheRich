@@ -1123,9 +1123,13 @@ export const getFinancialReports = async (): Promise<FinancialReport[]> => {
   return data;
 };
 
-/** AI 재무 분석 즉시 생성 요청 (백그라운드, 202) — reportMonth 미지정 시 이번 달 */
-export const generateFinancialReport = async (reportMonth?: string): Promise<void> => {
-  const params = reportMonth ? { report_month: reportMonth } : {};
+/** AI 재무 분석 즉시 생성 요청 (백그라운드, 202)
+ *  includeCurrentMonth=true → 이번 달 포함 3개월 / false → 직전 3개월 (기본)
+ */
+export const generateFinancialReport = async (reportMonth?: string, includeCurrentMonth?: boolean): Promise<void> => {
+  const params: Record<string, string | boolean> = {};
+  if (reportMonth) params.report_month = reportMonth;
+  if (includeCurrentMonth) params.include_current = true;
   await api.post('/api/financial-reports/generate', null, { params });
 };
 
