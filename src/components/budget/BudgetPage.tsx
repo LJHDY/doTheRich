@@ -1926,9 +1926,23 @@ const FixedExpenseModal: React.FC<{
     } catch { alert('삭제에 실패했습니다'); }
   };
 
+  // 납부일(day)과 yearMonth(YYYYMM)로 YYYY-MM-DD 조합
+  const buildPayDate = (fe: FixedExpense): string => {
+    const year = yearMonth.slice(0, 4);
+    const month = yearMonth.slice(4, 6);
+    const day = fe.paymentDay
+      ? String(fe.paymentDay).padStart(2, '0')
+      : new Date().getDate().toString().padStart(2, '0');
+    // 해당 월 말일 초과 시 말일로 클램프
+    const lastDay = new Date(Number(year), Number(month), 0).getDate();
+    const clampedDay = Math.min(Number(day), lastDay).toString().padStart(2, '0');
+    return `${year}-${month}-${clampedDay}`;
+  };
+
   const handlePay = async (fe: FixedExpense) => {
     if (!payDate) { alert('납부일을 입력해주세요'); return; }
-    const ym = payDate.replace(/-/g, '').slice(0, 6);
+    // yearMonth는 payDate의 연월이 아닌 현재 탭의 연월 사용
+    const ym = yearMonth;
     try {
       const entry = await payFixedExpense(fe.id, ym, payDate);
       onPaid(entry);
@@ -2098,7 +2112,7 @@ const FixedExpenseModal: React.FC<{
                     {/* 버튼들 */}
                     <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                       <button
-                        onClick={() => { setPayingId(payingId === fe.id ? null : fe.id); setPayDate(today()); }}
+                        onClick={() => { setPayingId(payingId === fe.id ? null : fe.id); setPayDate(buildPayDate(fe)); }}
                         style={{
                           padding: '4px 10px', fontSize: '12px', fontWeight: 700,
                           border: '1px solid #4CAF50', borderRadius: '6px',
