@@ -1573,8 +1573,8 @@ const AssetView: React.FC = () => {
           </div>
 
           {/* 메인 테이블 */}
-          <div style={{ overflowX: 'auto' }}>
-          <div style={{ border: '1px solid #e8ecf0', borderRadius: '12px', overflow: 'hidden', minWidth: '360px' }}>
+          <div style={{ overflowX: isMobile ? 'visible' : 'auto' }}>
+          <div style={{ border: '1px solid #e8ecf0', borderRadius: '12px', overflow: 'hidden', minWidth: isMobile ? 'unset' : '360px' }}>
             <div style={{
               display: 'grid', ...COLS,
               padding: '10px 16px', fontSize: '12px', fontWeight: 700,
@@ -1583,7 +1583,7 @@ const AssetView: React.FC = () => {
               <span>자산 항목</span>
               <span style={{ textAlign: 'right' }}>{u0.name}</span>
               <span style={{ textAlign: 'right' }}>{u1.name}</span>
-              <span style={{ textAlign: 'right' }}>합산 (KRW)</span>
+              <span style={{ textAlign: 'right' }}>{isMobile ? '합산' : '합산 (KRW)'}</span>
             </div>
 
             {GROUPS.map((group, gi) => {
@@ -1593,17 +1593,30 @@ const AssetView: React.FC = () => {
               const sub1 = groupKrw(selectedDate, group, u1.id);
               return (
                 <React.Fragment key={group}>
-                  <div style={{
-                    display: 'grid', ...COLS,
-                    padding: '7px 16px', fontSize: '11px', fontWeight: 800,
-                    background: lc.bg, color: lc.text,
-                    borderTop: gi > 0 ? '2px solid #e8ecf0' : 'none',
-                  }}>
-                    <span>{group}</span>
-                    <span style={{ textAlign: 'right', fontWeight: 400, opacity: 0.7 }}>클릭 수정</span>
-                    <span style={{ textAlign: 'right', fontWeight: 400, opacity: 0.7 }}>클릭 수정</span>
-                    <span />
-                  </div>
+                  {isMobile ? (
+                    /* 모바일: 그룹명을 상단 타이틀 바로 표시 (4열 그리드 제거) */
+                    <div style={{
+                      padding: '6px 16px', fontSize: '11px', fontWeight: 800,
+                      background: lc.bg, color: lc.text,
+                      borderTop: gi > 0 ? '2px solid #e8ecf0' : 'none',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}>
+                      <span>{group}</span>
+                      <span style={{ fontWeight: 400, opacity: 0.7, fontSize: '10px' }}>금액 클릭 시 수정</span>
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'grid', ...COLS,
+                      padding: '7px 16px', fontSize: '11px', fontWeight: 800,
+                      background: lc.bg, color: lc.text,
+                      borderTop: gi > 0 ? '2px solid #e8ecf0' : 'none',
+                    }}>
+                      <span>{group}</span>
+                      <span style={{ textAlign: 'right', fontWeight: 400, opacity: 0.7 }}>클릭 수정</span>
+                      <span style={{ textAlign: 'right', fontWeight: 400, opacity: 0.7 }}>클릭 수정</span>
+                      <span />
+                    </div>
+                  )}
 
                   {cols.map(col => {
                     const isDollar = col.key === '달러 현금';
