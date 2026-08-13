@@ -465,50 +465,52 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   ← 이전달 이월
                 </button>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {bankAccounts.map(pm => {
-                  const accName = pm.name;
-                  const opening = openingBalances[accName] ?? 0;
-                  const { income = 0, expense = 0 } = summary.accountMap[accName] ?? {};
+              {(() => {
+                // 계좌 카드 공통 렌더러
+                const AccountCard = ({ accName, opening, income, expense, dimmed = false }: {
+                  accName: string; opening: number; income: number; expense: number; dimmed?: boolean;
+                }) => {
                   const closing = opening + income - expense;
                   const isEditing = editingOpeningAccount === accName;
                   return (
-                    <div key={accName} style={{
-                      background: '#fff', border: '1px solid #e8ecf0', borderRadius: '10px',
+                    <div style={{
+                      background: dimmed ? '#fafafa' : '#fff',
+                      border: `1px solid ${dimmed ? '#e0e0e0' : '#e8ecf0'}`, borderRadius: '10px',
                       padding: '10px 14px', minWidth: '160px', fontSize: '12px',
                     }}>
-                      <div style={{ fontWeight: 700, color: '#1a3a5c', marginBottom: '6px' }}>{accName}</div>
+                      <div style={{ fontWeight: 700, color: dimmed ? '#9aa0a6' : '#1a3a5c', marginBottom: '6px' }}>{accName}</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#5f6368' }}>
-                        {/* 이월 잔액 — 클릭 시 인라인 편집 */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ minWidth: '52px' }}>이월 잔액</span>
-                          {isEditing ? (
-                            <input
-                              autoFocus type="text" inputMode="numeric"
-                              value={editingOpeningStr}
-                              onChange={e => setEditingOpeningStr(e.target.value.replace(/[^0-9-]/g, ''))}
-                              onBlur={async () => {
-                                const v = Number(editingOpeningStr || '0');
-                                await upsertAccountBalance(userId, accName, yearMonth, v);
-                                setOpeningBalances(prev => ({ ...prev, [accName]: v }));
-                                setEditingOpeningAccount(null);
-                              }}
-                              onKeyDown={async e => {
-                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                                if (e.key === 'Escape') setEditingOpeningAccount(null);
-                              }}
-                              style={{ width: '90px', padding: '1px 5px', fontSize: '11px', border: '1px solid #89CFF0', borderRadius: '4px', outline: 'none' }}
-                            />
-                          ) : (
-                            <span
-                              onClick={() => { setEditingOpeningAccount(accName); setEditingOpeningStr(String(opening)); }}
-                              style={{ cursor: 'text', borderBottom: '1px dashed #89CFF0', color: '#344054', fontWeight: 600 }}
-                              title="클릭하여 이월 잔액 수정"
-                            >
-                              {formatAmountShort(opening)}
-                            </span>
-                          )}
-                        </div>
+                        {!dimmed && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ minWidth: '52px' }}>이월 잔액</span>
+                            {isEditing ? (
+                              <input
+                                autoFocus type="text" inputMode="numeric"
+                                value={editingOpeningStr}
+                                onChange={e => setEditingOpeningStr(e.target.value.replace(/[^0-9-]/g, ''))}
+                                onBlur={async () => {
+                                  const v = Number(editingOpeningStr || '0');
+                                  await upsertAccountBalance(userId, accName, yearMonth, v);
+                                  setOpeningBalances(prev => ({ ...prev, [accName]: v }));
+                                  setEditingOpeningAccount(null);
+                                }}
+                                onKeyDown={async e => {
+                                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                  if (e.key === 'Escape') setEditingOpeningAccount(null);
+                                }}
+                                style={{ width: '90px', padding: '1px 5px', fontSize: '11px', border: '1px solid #89CFF0', borderRadius: '4px', outline: 'none' }}
+                              />
+                            ) : (
+                              <span
+                                onClick={() => { setEditingOpeningAccount(accName); setEditingOpeningStr(String(opening)); }}
+                                style={{ cursor: 'text', borderBottom: '1px dashed #89CFF0', color: '#344054', fontWeight: 600 }}
+                                title="클릭하여 이월 잔액 수정"
+                              >
+                                {formatAmountShort(opening)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {income > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>+ 수입</span><span style={{ color: '#4CAF50', fontWeight: 600 }}>{formatAmountShort(income)}</span></div>}
                         {expense > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>- 지출</span><span style={{ color: '#E06060', fontWeight: 600 }}>{formatAmountShort(expense)}</span></div>}
                         <div style={{ borderTop: '1px solid #f0f0f0', marginTop: '4px', paddingTop: '4px' }}>
@@ -518,8 +520,55 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                };
+
+                // 등록된 통장 카드
+                const cards = bankAccounts.map(pm => {
+                  const accName = pm.name;
+                  const opening = openingBalances[accName] ?? 0;
+                  const { income = 0, expense = 0 } = summary.accountMap[accName] ?? {};
+                  return <AccountCard key={accName} accName={accName} opening={opening} income={income} expense={expense} />;
+                });
+
+                // 미분류 — 통장 미지정 항목 (잔액 합계를 맞추기 위해 표시)
+                const knownNames = new Set(bankAccounts.map(p => p.name));
+                const unassigned = { income: 0, expense: 0 };
+                Object.entries(summary.accountMap).forEach(([k, v]) => {
+                  if (!knownNames.has(k)) { unassigned.income += v.income; unassigned.expense += v.expense; }
+                });
+                const unassignedBalance = unassigned.income - unassigned.expense;
+                const unassignedCard = (unassigned.income > 0 || unassigned.expense > 0) ? (
+                  <AccountCard key="미분류" accName="미분류 (통장 미지정)" opening={0} income={unassigned.income} expense={unassigned.expense} dimmed />
+                ) : null;
+
+                // 합계 카드 (모든 통장 잔액 + 미분류)
+                const totalOpening = bankAccounts.reduce((s, pm) => s + (openingBalances[pm.name] ?? 0), 0);
+                const totalIncome = bankAccounts.reduce((s, pm) => s + (summary.accountMap[pm.name]?.income ?? 0), 0) + unassigned.income;
+                const totalExpense = bankAccounts.reduce((s, pm) => s + (summary.accountMap[pm.name]?.expense ?? 0), 0) + unassigned.expense;
+                const totalBalance = totalOpening + totalIncome - totalExpense;
+
+                return (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'flex-start' }}>
+                    {cards}
+                    {unassignedCard}
+                    {/* 합계 — 요약 잔액과 일치해야 함 */}
+                    <div style={{
+                      background: '#f0f8fd', border: '1px solid #89CFF0', borderRadius: '10px',
+                      padding: '10px 14px', minWidth: '160px', fontSize: '12px',
+                    }}>
+                      <div style={{ fontWeight: 700, color: '#1a3a5c', marginBottom: '6px' }}>합계</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#5f6368' }}>
+                        {totalIncome > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>+ 수입</span><span style={{ color: '#4CAF50', fontWeight: 600 }}>{formatAmountShort(totalIncome)}</span></div>}
+                        {totalExpense > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>- 지출</span><span style={{ color: '#E06060', fontWeight: 600 }}>{formatAmountShort(totalExpense)}</span></div>}
+                        <div style={{ borderTop: '1px solid #89CFF0', marginTop: '4px', paddingTop: '4px' }}>
+                          <span style={{ minWidth: '52px', display: 'inline-block' }}>잔액</span>
+                          <span style={{ fontWeight: 700, color: totalBalance >= 0 ? '#1565c0' : '#E06060', fontSize: '13px' }}>{formatAmountShort(totalBalance)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
@@ -2429,8 +2478,8 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
           <Row3 label="총 지출" v0={entrySummary.ldy.expense} v1={entrySummary.juhae.expense} colored />
           <Row3
             label="잔액"
-            v0={entrySummary.ldy.income - entrySummary.ldy.expense}
-            v1={entrySummary.juhae.income - entrySummary.juhae.expense}
+            v0={entrySummary.ldy.income - entrySummary.ldy.expense - entrySummary.ldy.invest}
+            v1={entrySummary.juhae.income - entrySummary.juhae.expense - entrySummary.juhae.invest}
             bold isBalance
           />
           <Row3 label="고정비" v0={entrySummary.ldy.fixed} v1={entrySummary.juhae.fixed} />
