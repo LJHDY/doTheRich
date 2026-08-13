@@ -46,7 +46,7 @@ import {
   generateFinancialReport,
   FinancialReport as FinancialReportType,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, PaymentMethod, formatAmount, formatAmountCompact, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
