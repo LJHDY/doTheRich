@@ -164,6 +164,7 @@ export const BUDGET_USER_STORAGE_KEY = 'budget_user_id';
 export const FIXED_EXPENSE_ITEM_CATEGORIES: string[] = [
   '주거비',
   '공과금',
+  '통신비',
   '구독료',
   '기부',
   '고정 투자비',
