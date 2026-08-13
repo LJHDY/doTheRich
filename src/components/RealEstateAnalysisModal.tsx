@@ -280,7 +280,13 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
 
           {analyzing && (
             <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-              <div style={{ fontSize: '36px', marginBottom: '12px' }}>⚙️</div>
+              <div style={{
+                width: '40px', height: '40px', margin: '0 auto 16px',
+                border: '4px solid #e0f0ff',
+                borderTop: '4px solid #89CFF0',
+                borderRadius: '50%',
+                animation: 'ai-spin 0.9s linear infinite',
+              }} />
               <div style={{ fontSize: '14px', fontWeight: 600, color: '#344054' }}>Gemini가 분석 중입니다…</div>
               <div style={{ fontSize: '12px', color: '#9aa0a6', marginTop: '8px' }}>약 20~40초 소요됩니다</div>
             </div>
@@ -333,7 +339,7 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
         </div>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes ai-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };
