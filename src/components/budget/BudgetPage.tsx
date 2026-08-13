@@ -2045,11 +2045,21 @@ const AssetView: React.FC = () => {
                         display: 'grid', ...COLS,
                         background: '#fff', alignItems: 'center',
                         borderBottom: '1px solid #f5f5f5',
+                        minHeight: '42px', overflow: 'hidden',
                       }}>
-                        <span style={{ padding: '0 16px', fontSize: '13px', color: '#344054', lineHeight: isDollar ? '1.3' : '42px', paddingTop: isDollar ? '8px' : '0', paddingBottom: isDollar ? '8px' : '0' }}>
-                          {col.label}
-                          {isDollar && <div style={{ fontSize: '10px', color: '#9aa0a6' }}>USD 입력 · 환율 {exchangeRate.toLocaleString()}원/$</div>}
-                        </span>
+                        <div
+                          title={col.label}
+                          style={{
+                            padding: isDollar ? '8px 16px' : '0 16px',
+                            fontSize: '13px', color: '#344054',
+                            /* 긴 항목명 말줄임 처리 */
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '42px',
+                          }}
+                        >
+                          <span>{col.label}</span>
+                          {isDollar && <span style={{ fontSize: '10px', color: '#9aa0a6', marginTop: '2px' }}>USD 입력 · 환율 {exchangeRate.toLocaleString()}원/$</span>}
+                        </div>
                         <AssetCell
                           value={raw0} isEditing={isEdit0} editValue={editValue}
                           onStartEdit={() => startEdit(u0.id, col.key)}
