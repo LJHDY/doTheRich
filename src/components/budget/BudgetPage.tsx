@@ -86,6 +86,7 @@ const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
   isFixed: false,
   isInvestment: false,
   investmentType: '',
+  merchant: '',
   memo: '',
 });
 
@@ -121,6 +122,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(initialForm());
+  const [isShared, setIsShared] = useState(false); // 공용 지출 — 두 유저에게 절반씩 저장
 
   // ─── 데이터 로드 ─────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -175,10 +177,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   }, [entries, filter]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
-  const openAdd = () => { setEditingId(null); setForm(initialForm()); setFormOpen(true); };
+  const openAdd = () => { setEditingId(null); setForm(initialForm()); setIsShared(false); setFormOpen(true); };
   const openEdit = (e: BudgetEntry) => {
     setEditingId(e.id);
     setForm({ ...e, amountStr: String(e.amount) });
+    setIsShared(false);
     setFormOpen(true);
   };
   const closeForm = () => { setFormOpen(false); setEditingId(null); };
@@ -193,7 +196,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const handleSave = async () => {
     const amount = Number(form.amountStr?.replace(/,/g, '') ?? 0);
     if (!form.category || !amount) { alert('카테고리와 금액을 입력해주세요'); return; }
-    const payload = {
+    const basePayload = {
       userId,
       yearMonth,
       entryDate: form.entryDate ?? today(),
@@ -202,18 +205,27 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       subcategory: form.subcategory || undefined,
       accountMain: form.accountMain || undefined,
       account: form.account || undefined,
-      amount,
       isFixed: form.isFixed ?? false,
       isInvestment: form.isInvestment ?? false,
       investmentType: form.isInvestment ? (form.investmentType || undefined) : undefined,
+      merchant: form.merchant || undefined,
       memo: form.memo || undefined,
     };
     try {
       if (editingId !== null) {
-        const updated = await updateBudgetEntry(editingId, payload);
+        const updated = await updateBudgetEntry(editingId, { ...basePayload, amount });
         setEntries(prev => prev.map(e => e.id === editingId ? updated : e));
+      } else if (isShared && form.entryType === 'EXPENSE') {
+        // 공용 지출: 두 유저에게 각각 절반 금액으로 저장
+        const halfAmount = Math.round(amount / 2);
+        const otherUserId = BUDGET_USERS.find(u => u.id !== userId)?.id ?? '';
+        const [created1] = await Promise.all([
+          createBudgetEntry({ ...basePayload, userId, amount: halfAmount }),
+          createBudgetEntry({ ...basePayload, userId: otherUserId, amount: halfAmount }),
+        ]);
+        setEntries(prev => [created1, ...prev]);
       } else {
-        const created = await createBudgetEntry(payload);
+        const created = await createBudgetEntry({ ...basePayload, amount });
         setEntries(prev => [created, ...prev]);
       }
       closeForm();
@@ -560,20 +572,39 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               <input type="date" value={form.entryDate ?? today()} onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} style={inputStyle} />
             </FieldRow>
 
-            {/* 카테고리 */}
-            <FieldRow label="카테고리">
-              {form.entryType === 'EXPENSE' ? (
-                <select value={form.category ?? ''} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={inputStyle}>
-                  <option value="">선택</option>
-                  {expenseCats.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              ) : (
+            {/* 카테고리 + 지출처 (지출 시 나란히 표시) */}
+            {form.entryType === 'EXPENSE' ? (
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '5px' }}>
+                  <label style={{ flex: 1, fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>카테고리</label>
+                  <label style={{ flex: 1, fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>지출처</label>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select
+                    value={form.category ?? ''}
+                    onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                    style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                  >
+                    <option value="">선택</option>
+                    {expenseCats.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="예: 스타벅스"
+                    value={form.merchant ?? ''}
+                    onChange={e => setForm(f => ({ ...f, merchant: e.target.value }))}
+                    style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <FieldRow label="카테고리">
                 <select value={form.category ?? ''} onChange={e => setForm(f => ({ ...f, category: e.target.value, subcategory: '' }))} style={inputStyle}>
                   <option value="">선택</option>
                   {incomeCats.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                 </select>
-              )}
-            </FieldRow>
+              </FieldRow>
+            )}
 
             {/* 수입 세부항목 (수입 카테고리에만) */}
             {selectedIncomeCat && selectedIncomeCat.subcategories.length > 0 && (
@@ -609,8 +640,23 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               </select>
             </FieldRow>
 
-            {/* 금액 */}
-            <FieldRow label="금액 (원)">
+            {/* 금액 + 공용 체크박스 */}
+            <div style={{ marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                <label style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>금액 (원)</label>
+                {/* 공용 체크박스 — 지출일 때만 표시, 수정 모드에서는 비활성 */}
+                {form.entryType === 'EXPENSE' && editingId === null && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: isShared ? '#1a7c4a' : '#5f6368' }}>
+                    <input
+                      type="checkbox"
+                      checked={isShared}
+                      onChange={e => setIsShared(e.target.checked)}
+                      style={{ width: '14px', height: '14px', accentColor: '#2e7d32', cursor: 'pointer' }}
+                    />
+                    공용 (÷2)
+                  </label>
+                )}
+              </div>
               <input
                 type="text" inputMode="numeric"
                 value={form.amountStr ?? ''}
@@ -622,11 +668,13 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 style={inputStyle}
               />
               {form.amountStr && Number(form.amountStr) > 0 && (
-                <span style={{ fontSize: '12px', color: '#4BAAD4', marginTop: '3px', display: 'block', fontWeight: 600 }}>
-                  = {formatAmountKorean(Number(form.amountStr))}
+                <span style={{ fontSize: '12px', color: isShared ? '#1a7c4a' : '#4BAAD4', marginTop: '3px', display: 'block', fontWeight: 600 }}>
+                  {isShared
+                    ? `각 ${formatAmountKorean(Math.round(Number(form.amountStr) / 2))} (동영·주해 각각 저장)`
+                    : `= ${formatAmountKorean(Number(form.amountStr))}`}
                 </span>
               )}
-            </FieldRow>
+            </div>
 
             {/* 투자 여부 */}
             <FieldRow label="투자">
@@ -725,9 +773,10 @@ const EntryRow: React.FC<{
             </span>
           )}
         </div>
-        {(entry.accountMain || entry.account || entry.memo) && (
+        {(entry.merchant || entry.accountMain || entry.account || entry.memo) && (
           <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '2px' }}>
-            {entry.accountMain && <span>{entry.accountMain}</span>}
+            {entry.merchant && <span style={{ color: '#5f6368', fontWeight: 600 }}>{entry.merchant}</span>}
+            {entry.accountMain && <span>{entry.merchant ? ' · ' : ''}{entry.accountMain}</span>}
             {entry.account && <span> › {entry.account}</span>}
             {entry.memo && <span> · {entry.memo}</span>}
           </div>

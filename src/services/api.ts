@@ -717,6 +717,7 @@ const toEntry = (d: any): BudgetEntry => ({
   isFixed: d.is_fixed ?? false,
   isInvestment: d.is_investment ?? false,
   investmentType: d.investment_type,
+  merchant: d.merchant,
   memo: d.memo,
   createdAt: d.created_at,
 });
@@ -740,6 +741,7 @@ export const createBudgetEntry = async (payload: Omit<BudgetEntry, 'id' | 'creat
     is_fixed: payload.isFixed,
     is_investment: payload.isInvestment,
     investment_type: payload.investmentType ?? null,
+    merchant: payload.merchant ?? null,
     memo: payload.memo ?? null,
   });
   return toEntry(data);
@@ -757,6 +759,7 @@ export const updateBudgetEntry = async (id: number, payload: Partial<Omit<Budget
   if (payload.isFixed !== undefined) body.is_fixed = payload.isFixed;
   if (payload.isInvestment !== undefined) body.is_investment = payload.isInvestment;
   if (payload.investmentType !== undefined) body.investment_type = payload.investmentType;
+  if (payload.merchant !== undefined) body.merchant = payload.merchant;
   if (payload.memo !== undefined) body.memo = payload.memo;
   const { data } = await api.patch(`/api/budget/entries/${id}`, body);
   return toEntry(data);

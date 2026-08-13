@@ -577,6 +577,7 @@ export interface BudgetEntry {
   isFixed: boolean;
   isInvestment: boolean;
   investmentType?: string;
+  merchant?: string;    // 지출처 (예: 스타벅스, 쿠팡)
   memo?: string;
   createdAt: string;
 }
