@@ -103,6 +103,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [entries, setEntries] = useState<BudgetEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem('budget_tab') as Tab) || 'ENTRIES');
   useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
@@ -175,12 +176,14 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   // ─── 필터링된 항목 ───────────────────────────────────────────
   const filtered = useMemo(() => {
-    if (filter === 'INCOME') return entries.filter(e => e.entryType === 'INCOME');
-    if (filter === 'EXPENSE') return entries.filter(e => e.entryType === 'EXPENSE');
-    if (filter === 'FIXED') return entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed);
-    if (filter === 'INVEST') return entries.filter(e => e.isInvestment);
-    return entries;
-  }, [entries, filter]);
+    let base = entries;
+    if (filter === 'INCOME') base = base.filter(e => e.entryType === 'INCOME');
+    else if (filter === 'EXPENSE') base = base.filter(e => e.entryType === 'EXPENSE');
+    else if (filter === 'FIXED') base = base.filter(e => e.entryType === 'EXPENSE' && e.isFixed);
+    else if (filter === 'INVEST') base = base.filter(e => e.isInvestment);
+    if (categoryFilter) base = base.filter(e => e.category === categoryFilter);
+    return base;
+  }, [entries, filter, categoryFilter]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
   const openAdd = () => { setEditingId(null); setForm(initialForm()); setIsShared(false); setFormOpen(true); };
@@ -442,15 +445,27 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                     />
                   </PieChart>
                 </div>
-                {/* 범례 — 파이 아래 */}
+                {/* 범례 — 파이 아래, 클릭 시 카테고리 필터 적용 */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px', marginTop: '6px' }}>
-                  {data.map((d, i) => (
-                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '2px', flexShrink: 0, background: colors[i % colors.length] }} />
-                      <span style={{ fontSize: '11px', color: '#344054', whiteSpace: 'nowrap' }}>{d.name}</span>
-                      <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>{Math.round(d.value / total * 100)}%</span>
-                    </div>
-                  ))}
+                  {data.map((d, i) => {
+                    const isActive = categoryFilter === d.name;
+                    return (
+                      <div
+                        key={d.name}
+                        onClick={() => setCategoryFilter(isActive ? null : d.name)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '4px',
+                          cursor: 'pointer', borderRadius: '4px', padding: '2px 4px',
+                          background: isActive ? `${colors[i % colors.length]}22` : 'transparent',
+                          border: isActive ? `1px solid ${colors[i % colors.length]}` : '1px solid transparent',
+                        }}
+                      >
+                        <span style={{ width: '8px', height: '8px', borderRadius: '2px', flexShrink: 0, background: colors[i % colors.length] }} />
+                        <span style={{ fontSize: '11px', color: '#344054', whiteSpace: 'nowrap' }}>{d.name}</span>
+                        <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>{Math.round(d.value / total * 100)}%</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -489,6 +504,23 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           );
         })()}
 
+        {/* 카테고리 필터 활성 배지 */}
+        {categoryFilter && (
+          <div style={{ padding: '6px 20px 0', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', color: '#5f6368' }}>카테고리 필터:</span>
+            <span
+              onClick={() => setCategoryFilter(null)}
+              style={{
+                fontSize: '12px', fontWeight: 700, color: '#1a3a5c',
+                background: '#e0f0ff', border: '1px solid #89CFF0',
+                borderRadius: '12px', padding: '2px 10px', cursor: 'pointer',
+              }}
+            >
+              {categoryFilter} ×
+            </span>
+          </div>
+        )}
+
         {/* ── 고정비 관리 버튼 + 필터 탭 + 뷰 토글 */}
         <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
@@ -504,7 +536,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             ['ALL', '전체'], ['INCOME', '수입'], ['EXPENSE', '지출'],
             ['FIXED', '고정비'], ['INVEST', '투자'],
           ] as [Filter, string][]).map(([val, label]) => (
-            <button key={val} onClick={() => setFilter(val)} style={{
+            <button key={val} onClick={() => { setFilter(val); setCategoryFilter(null); }} style={{
               padding: '5px 12px', fontSize: '12px', borderRadius: '20px',
               border: `1px solid ${filter === val ? '#89CFF0' : '#dadce0'}`,
               background: filter === val ? '#89CFF0' : '#fff',
