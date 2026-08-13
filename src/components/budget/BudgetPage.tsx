@@ -2248,18 +2248,24 @@ const FixedExpenseModal: React.FC<{
             byMethod[key] = (byMethod[key] ?? 0) + fe.amount;
           }
           const entries = Object.entries(byMethod).sort((a, b) => b[1] - a[1]);
+          const grandTotal = items.reduce((s, fe) => s + fe.amount, 0);
           return (
-            <div style={{
-              padding: '6px 20px', borderBottom: '1px solid #e8ecf0', flexShrink: 0,
-              display: 'flex', flexWrap: 'wrap', gap: '6px 16px',
-            }}>
-              {entries.map(([method, total]) => (
-                <span key={method} style={{ fontSize: '11px', color: '#344054' }}>
-                  <span style={{ color: '#7B1FA2', fontWeight: 600 }}>{method}</span>
-                  {' '}
-                  <span style={{ fontWeight: 700 }}>{formatAmountKorean(total)}</span>
-                </span>
-              ))}
+            <div style={{ borderBottom: '1px solid #e8ecf0', flexShrink: 0 }}>
+              {/* 결제수단별 합계 */}
+              <div style={{ padding: '6px 20px', display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
+                {entries.map(([method, total]) => (
+                  <span key={method} style={{ fontSize: '11px', color: '#344054' }}>
+                    <span style={{ color: '#7B1FA2', fontWeight: 600 }}>{method}</span>
+                    {' '}
+                    <span style={{ fontWeight: 700 }}>{formatAmountKorean(total)}</span>
+                  </span>
+                ))}
+              </div>
+              {/* 총 합산 */}
+              <div style={{ padding: '4px 20px 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '11px', color: '#5f6368' }}>총 고정비</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>{formatAmountKorean(grandTotal)}</span>
+              </div>
             </div>
           );
         })()}
