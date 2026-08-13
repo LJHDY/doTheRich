@@ -2083,6 +2083,15 @@ const FixedExpenseModal: React.FC<{
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FeForm>(emptyFeForm());
   const [saving, setSaving] = useState(false);
+
+  // 납부일 오름차순 정렬 (미설정은 뒤로)
+  const sortByPaymentDay = (arr: FixedExpense[]) =>
+    [...arr].sort((a, b) => {
+      if (a.paymentDay == null && b.paymentDay == null) return 0;
+      if (a.paymentDay == null) return 1;
+      if (b.paymentDay == null) return -1;
+      return a.paymentDay - b.paymentDay;
+    });
   // 납부 확인 중인 항목 ID → 납부일 입력값
   const [payingId, setPayingId] = useState<number | null>(null);
   const [payDate, setPayDate] = useState<string>(today());
@@ -2132,10 +2141,10 @@ const FixedExpenseModal: React.FC<{
       };
       if (editingId !== null) {
         const updated = await updateFixedExpense(editingId, payload);
-        setItems(prev => prev.map(i => i.id === editingId ? updated : i));
+        setItems(prev => sortByPaymentDay(prev.map(i => i.id === editingId ? updated : i)));
       } else {
         const created = await createFixedExpense({ userId, ...payload });
-        setItems(prev => [...prev, created]);
+        setItems(prev => sortByPaymentDay([...prev, created]));
       }
       setFormOpen(false);
     } catch { alert('저장에 실패했습니다'); }
@@ -2215,6 +2224,31 @@ const FixedExpenseModal: React.FC<{
         <div style={{ padding: '6px 20px', background: '#f3e5f5', borderBottom: '1px solid #e8ecf0', flexShrink: 0, fontSize: '11px', color: '#7B1FA2' }}>
           납부 버튼을 누르면 지출 내역에 자동 등록됩니다
         </div>
+
+        {/* 결제수단별 합계 */}
+        {items.length > 0 && (() => {
+          // account 필드 기준으로 합산
+          const byMethod: Record<string, number> = {};
+          for (const fe of items) {
+            const key = fe.account || '미지정';
+            byMethod[key] = (byMethod[key] ?? 0) + fe.amount;
+          }
+          const entries = Object.entries(byMethod).sort((a, b) => b[1] - a[1]);
+          return (
+            <div style={{
+              padding: '6px 20px', borderBottom: '1px solid #e8ecf0', flexShrink: 0,
+              display: 'flex', flexWrap: 'wrap', gap: '6px 16px',
+            }}>
+              {entries.map(([method, total]) => (
+                <span key={method} style={{ fontSize: '11px', color: '#344054' }}>
+                  <span style={{ color: '#7B1FA2', fontWeight: 600 }}>{method}</span>
+                  {' '}
+                  <span style={{ fontWeight: 700 }}>{formatAmountKorean(total)}</span>
+                </span>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* 본문 */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px' }}>
