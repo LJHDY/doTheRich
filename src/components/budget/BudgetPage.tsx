@@ -430,6 +430,26 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           );
         })()}
 
+        {/* ── 지출처 분석 */}
+        {(() => {
+          const merchantEntries = entries.filter(e => e.entryType === 'EXPENSE' && e.merchant);
+          if (merchantEntries.length === 0) return null;
+
+          const map: Record<string, { count: number; total: number }> = {};
+          for (const e of merchantEntries) {
+            const key = e.merchant!;
+            if (!map[key]) map[key] = { count: 0, total: 0 };
+            map[key].count += 1;
+            map[key].total += e.amount;
+          }
+
+          const rows = Object.entries(map).map(([name, v]) => ({ name, ...v }));
+
+          return (
+            <MerchantStatsSection rows={rows} />
+          );
+        })()}
+
         {/* ── 고정비 관리 버튼 + 필터 탭 + 뷰 토글 */}
         <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
@@ -760,6 +780,94 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 };
 
 // ─── 하위 컴포넌트 ────────────────────────────────────────────
+
+// ─── 지출처 분석 섹션 ────────────────────────────────────────────
+type MerchantRow = { name: string; count: number; total: number };
+type MerchantSort = 'count' | 'total';
+
+const MerchantStatsSection: React.FC<{ rows: MerchantRow[] }> = ({ rows }) => {
+  const [open, setOpen] = useState(false);
+  const [sort, setSort] = useState<MerchantSort>('count');
+
+  const sorted = [...rows].sort((a, b) => b[sort] - a[sort]);
+  const maxVal = sorted[0]?.[sort] ?? 1;
+
+  return (
+    <div style={{ padding: '8px 20px 0', flexShrink: 0 }}>
+      {/* 헤더 — 클릭으로 펼침/닫힘 */}
+      <div
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          cursor: 'pointer', padding: '6px 0',
+        }}
+      >
+        <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>
+          🏪 지출처 분석
+          <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400, marginLeft: '6px' }}>
+            {rows.length}곳
+          </span>
+        </span>
+        <span style={{ fontSize: '11px', color: '#9aa0a6' }}>{open ? '▲' : '▼'}</span>
+      </div>
+
+      {open && (
+        <div style={{ marginTop: '8px' }}>
+          {/* 정렬 토글 */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+            {([['count', '빈도순'], ['total', '금액순']] as [MerchantSort, string][]).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setSort(val)}
+                style={{
+                  padding: '4px 12px', fontSize: '11px', fontWeight: sort === val ? 700 : 400,
+                  borderRadius: '20px',
+                  border: `1px solid ${sort === val ? '#4BAAD4' : '#dadce0'}`,
+                  background: sort === val ? '#e0f0ff' : '#fff',
+                  color: sort === val ? '#1a3a5c' : '#5f6368',
+                  cursor: 'pointer',
+                }}
+              >{label}</button>
+            ))}
+          </div>
+
+          {/* 지출처 목록 */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {sorted.map((row, i) => {
+              const barPct = Math.round((row[sort] / maxVal) * 100);
+              return (
+                <div key={row.name} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {/* 순위 */}
+                  <span style={{ fontSize: '11px', color: '#9aa0a6', minWidth: '16px', textAlign: 'right', flexShrink: 0 }}>
+                    {i + 1}
+                  </span>
+                  {/* 지출처명 */}
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#344054', minWidth: '70px', flexShrink: 0 }}>
+                    {row.name}
+                  </span>
+                  {/* 바 */}
+                  <div style={{ flex: 1, background: '#f0f0f0', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${barPct}%`, height: '100%', borderRadius: '4px',
+                      background: i === 0 ? '#4BAAD4' : i === 1 ? '#89CFF0' : '#b0d8f0',
+                    }} />
+                  </div>
+                  {/* 빈도 + 금액 */}
+                  <span style={{ fontSize: '11px', color: '#E06060', fontWeight: 700, minWidth: '28px', textAlign: 'right', flexShrink: 0 }}>
+                    {row.count}회
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#344054', minWidth: '72px', textAlign: 'right', flexShrink: 0 }}>
+                    {formatAmountShort(row.total)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SummaryCard: React.FC<{ label: string; amount: number; color: string; sign: string }> = ({ label, amount, color, sign }) => (
   <div style={{
