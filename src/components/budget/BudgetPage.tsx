@@ -188,9 +188,10 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
     const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
 
-    // 통장별 잔액 계산용 — 이체 포함 (계좌 간 이동도 잔액에 반영)
+    // 통장별 수입/지출 — 이체는 내 돈 이동이므로 제외 (합계가 요약과 일치하도록)
     const accountMap: Record<string, { income: number; expense: number }> = {};
     entries.forEach(e => {
+      if (isXfer(e)) return;
       const key = e.account || '미분류';
       if (!accountMap[key]) accountMap[key] = { income: 0, expense: 0 };
       if (e.entryType === 'INCOME') accountMap[key].income += e.amount;
