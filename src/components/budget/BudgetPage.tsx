@@ -3295,8 +3295,6 @@ const FixedExpenseModal: React.FC<{
   const handleSaveForm = async () => {
     if (!form.name.trim()) { alert('고정비 내역을 입력해주세요'); return; }
     const amount = Number(form.amountStr.replace(/,/g, '') || '0');
-    const amountOptional = ['공과금', '교통비'].includes(form.category);
-    if (!amountOptional && amount <= 0) { alert('금액을 입력해주세요'); return; }
     setSaving(true);
     try {
       const payload = {
@@ -3327,8 +3325,8 @@ const FixedExpenseModal: React.FC<{
   };
 
   const handleAmountSave = async (fe: FixedExpense) => {
-    const amount = Number(editingAmountStr.replace(/,/g, ''));
-    if (!amount || amount <= 0) { setEditingAmountId(null); return; }
+    const amount = Number(editingAmountStr.replace(/,/g, '') || '0');
+    if (editingAmountStr.trim() === '') { setEditingAmountId(null); return; }
     try {
       const updated = await updateFixedExpense(fe.id, { amount });
       setItems(prev => sortByPaymentDay(prev.map(i => i.id === fe.id ? updated : i)));
@@ -3467,11 +3465,9 @@ const FixedExpenseModal: React.FC<{
                         placeholder="예: 월세, 통신비" style={inputSt} />
                     </div>
                     <div>
-                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>
-                        금액 (원){['공과금', '교통비'].includes(form.category) ? '' : ' *'}
-                      </label>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>금액 (원)</label>
                       <input value={form.amountStr} onChange={e => setForm(f => ({ ...f, amountStr: e.target.value.replace(/[^0-9]/g, '') }))}
-                        placeholder={['공과금', '교통비'].includes(form.category) ? '매달 변동 (선택)' : '예: 800000'} style={inputSt} />
+                        placeholder="매달 변동 시 비워두기 가능" style={inputSt} />
                       {Number(form.amountStr) > 0 && (
                         <span style={{ fontSize: '11px', color: '#4BAAD4', fontWeight: 600, marginTop: '2px', display: 'block' }}>
                           = {formatAmountKorean(Number(form.amountStr))}
@@ -3568,8 +3564,8 @@ const FixedExpenseModal: React.FC<{
                         {fe.name}
                       </div>
                       <div style={{ fontSize: '11px', color: '#5f6368', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                        {/* 공과금·교통비는 금액 클릭 시 인라인 편집 */}
-                        {['공과금', '교통비'].includes(fe.category) && editingAmountId === fe.id ? (
+                        {/* 금액 클릭 시 인라인 편집 (모든 항목) */}
+                        {editingAmountId === fe.id ? (
                           <input
                             autoFocus
                             type="text" inputMode="numeric"
@@ -3587,12 +3583,9 @@ const FixedExpenseModal: React.FC<{
                           />
                         ) : (
                           <span
-                            onClick={['공과금', '교통비'].includes(fe.category) ? () => { setEditingAmountId(fe.id); setEditingAmountStr(String(fe.amount)); } : undefined}
-                            style={{
-                              cursor: ['공과금', '교통비'].includes(fe.category) ? 'text' : 'default',
-                              borderBottom: ['공과금', '교통비'].includes(fe.category) ? '1px dashed #89CFF0' : 'none',
-                            }}
-                            title={['공과금', '교통비'].includes(fe.category) ? '클릭하여 금액 수정' : undefined}
+                            onClick={() => { setEditingAmountId(fe.id); setEditingAmountStr(String(fe.amount)); }}
+                            style={{ cursor: 'text', borderBottom: '1px dashed #89CFF0' }}
+                            title="클릭하여 금액 수정"
                           >
                             {formatAmountShort(fe.amount)}원
                           </span>
