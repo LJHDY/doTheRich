@@ -375,64 +375,81 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           </div>
         )}
 
-        {/* ── 카테고리별 지출 파이 차트 */}
+        {/* ── 카테고리별 지출 & 투자 파이 차트 */}
         {(() => {
-          const expenseEntries = entries.filter(e => e.entryType === 'EXPENSE');
-          if (expenseEntries.length === 0) return null;
-          const catMap: Record<string, number> = {};
-          for (const e of expenseEntries) {
-            const key = e.category || '미분류';
-            catMap[key] = (catMap[key] ?? 0) + e.amount;
-          }
-          const chartData = Object.entries(catMap)
-            .sort((a, b) => b[1] - a[1])
-            .map(([name, value]) => ({ name, value }));
           const COLORS = [
             '#89CFF0','#FFD97D','#E06060','#9C27B0','#4CAF50',
             '#FF9800','#2196F3','#E91E63','#00BCD4','#8BC34A',
             '#FF5722','#607D8B','#795548','#673AB7','#03A9F4',
           ];
-          const total = chartData.reduce((s, d) => s + d.value, 0);
-          return (
-            <div style={{ padding: '8px 20px 0', flexShrink: 0 }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: '#344054', marginBottom: '4px' }}>카테고리별 지출</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {/* 파이 차트 */}
-                <PieChart width={130} height={130}>
-                  <Pie
-                    data={chartData} cx={60} cy={60}
-                    innerRadius={32} outerRadius={58}
-                    dataKey="value" stroke="none"
-                  >
-                    {chartData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <PieTooltip
-                    formatter={(value: number, name: string) => [
-                      `${formatAmountShort(value)}원 (${Math.round(value / total * 100)}%)`, name,
-                    ]}
-                    contentStyle={{ fontSize: '11px', padding: '4px 8px' }}
-                  />
-                </PieChart>
-                {/* 범례 */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px', flex: 1 }}>
-                  {chartData.map((d, i) => (
-                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '80px' }}>
-                      <span style={{
-                        width: '8px', height: '8px', borderRadius: '2px', flexShrink: 0,
-                        background: COLORS[i % COLORS.length],
-                      }} />
-                      <span style={{ fontSize: '11px', color: '#344054', whiteSpace: 'nowrap' }}>
-                        {d.name}
-                      </span>
-                      <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>
-                        {Math.round(d.value / total * 100)}%
-                      </span>
+          const INVEST_COLORS = [
+            '#2196F3','#1565c0','#4FC3F7','#0288D1','#29B6F6',
+            '#0097A7','#006064','#01579B',
+          ];
+
+          // 지출 (투자 제외)
+          const expenseMap: Record<string, number> = {};
+          for (const e of entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment)) {
+            const key = e.category || '미분류';
+            expenseMap[key] = (expenseMap[key] ?? 0) + e.amount;
+          }
+          const expenseData = Object.entries(expenseMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+          const expenseTotal = expenseData.reduce((s, d) => s + d.value, 0);
+
+          // 투자
+          const investMap: Record<string, number> = {};
+          for (const e of entries.filter(e => e.isInvestment)) {
+            const key = e.investmentType || e.category || '기타';
+            investMap[key] = (investMap[key] ?? 0) + e.amount;
+          }
+          const investData = Object.entries(investMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+          const investTotal = investData.reduce((s, d) => s + d.value, 0);
+
+          if (expenseData.length === 0 && investData.length === 0) return null;
+
+          // 파이 + 범례 렌더러
+          const renderChart = (
+            title: string,
+            data: { name: string; value: number }[],
+            total: number,
+            colors: string[],
+          ) => {
+            if (data.length === 0) return null;
+            return (
+              <div style={{ flex: 1, minWidth: isMobile ? '100%' : '220px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#344054', marginBottom: '4px' }}>{title}</div>
+                {/* 파이 */}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <PieChart width={120} height={120}>
+                    <Pie data={data} cx={55} cy={55} innerRadius={28} outerRadius={52} dataKey="value" stroke="none">
+                      {data.map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
+                    </Pie>
+                    <PieTooltip
+                      formatter={(value: number, name: string) => [
+                        `${formatAmountShort(value)}원 (${Math.round(value / total * 100)}%)`, name,
+                      ]}
+                      contentStyle={{ fontSize: '11px', padding: '4px 8px' }}
+                    />
+                  </PieChart>
+                </div>
+                {/* 범례 — 파이 아래 */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px', marginTop: '6px' }}>
+                  {data.map((d, i) => (
+                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '2px', flexShrink: 0, background: colors[i % colors.length] }} />
+                      <span style={{ fontSize: '11px', color: '#344054', whiteSpace: 'nowrap' }}>{d.name}</span>
+                      <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>{Math.round(d.value / total * 100)}%</span>
                     </div>
                   ))}
                 </div>
               </div>
+            );
+          };
+
+          return (
+            <div style={{ padding: '8px 20px 0', display: 'flex', gap: '20px', flexShrink: 0, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              {renderChart('카테고리별 지출', expenseData, expenseTotal, COLORS)}
+              {renderChart('카테고리별 투자', investData, investTotal, INVEST_COLORS)}
             </div>
           );
         })()}
