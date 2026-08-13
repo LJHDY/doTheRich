@@ -536,8 +536,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 Object.entries(summary.accountMap).forEach(([k, v]) => {
                   if (!knownNames.has(k)) { unassigned.income += v.income; unassigned.expense += v.expense; }
                 });
-                const unassignedBalance = unassigned.income - unassigned.expense;
-                const unassignedCard = (unassigned.income > 0 || unassigned.expense > 0) ? (
+                const unassignedCard =(unassigned.income > 0 || unassigned.expense > 0) ? (
                   <AccountCard key="미분류" accName="미분류 (통장 미지정)" opening={0} income={unassigned.income} expense={unassigned.expense} dimmed />
                 ) : null;
 
