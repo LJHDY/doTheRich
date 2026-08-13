@@ -124,6 +124,10 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [form, setForm] = useState(initialForm());
   const [isShared, setIsShared] = useState(false); // 공용 지출 — 두 유저에게 절반씩 저장
 
+  // 달력 뷰
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [calSelectedDate, setCalSelectedDate] = useState<string | null>(null); // "YYYY-MM-DD"
+
   // ─── 데이터 로드 ─────────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
@@ -425,7 +429,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           );
         })()}
 
-        {/* ── 고정비 관리 버튼 + 필터 탭 */}
+        {/* ── 고정비 관리 버튼 + 필터 탭 + 뷰 토글 */}
         <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             onClick={() => setFixedExpenseOpen(true)}
@@ -450,23 +454,50 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               {label}
             </button>
           ))}
-          <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#9aa0a6', alignSelf: 'center' }}>
-            {filtered.length}건
-          </span>
+          {/* 목록/달력 뷰 토글 */}
+          <button
+            onClick={() => {
+              setViewMode(v => v === 'list' ? 'calendar' : 'list');
+              setCalSelectedDate(null);
+            }}
+            style={{
+              marginLeft: 'auto', padding: '5px 12px', fontSize: '12px', borderRadius: '20px',
+              border: `1px solid ${viewMode === 'calendar' ? '#4BAAD4' : '#dadce0'}`,
+              background: viewMode === 'calendar' ? '#e0f0ff' : '#fff',
+              color: viewMode === 'calendar' ? '#1a3a5c' : '#5f6368',
+              cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            {viewMode === 'calendar' ? '📋 목록' : '📅 달력'}
+          </button>
         </div>
 
-        {/* ── 항목 목록 */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 20px' }}>
-          {loading && <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>불러오는 중…</div>}
-          {!loading && filtered.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
-              항목이 없습니다. + 추가로 기록을 시작하세요.
-            </div>
-          )}
-          {!loading && filtered.map(entry => (
-            <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete} />
-          ))}
-        </div>
+        {/* ── 달력 뷰 */}
+        {viewMode === 'calendar' ? (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 20px' }}>
+            <CalendarView
+              yearMonth={yearMonth}
+              entries={entries}
+              selectedDate={calSelectedDate}
+              onSelectDate={d => setCalSelectedDate(prev => prev === d ? null : d)}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+            />
+          </div>
+        ) : (
+          /* ── 목록 뷰 */
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 20px' }}>
+            {loading && <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>불러오는 중…</div>}
+            {!loading && filtered.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
+                항목이 없습니다. + 추가로 기록을 시작하세요.
+              </div>
+            )}
+            {!loading && filtered.map(entry => (
+              <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete} />
+            ))}
+          </div>
+        )}
       </>}
 
       {/* ══ 통장 관리 탭 ═════════════════════════════════════ */}
@@ -739,6 +770,139 @@ const SummaryCard: React.FC<{ label: string; amount: number; color: string; sign
     </div>
   </div>
 );
+
+// ─── 달력 뷰 ─────────────────────────────────────────────────
+const CalendarView: React.FC<{
+  yearMonth: string;
+  entries: BudgetEntry[];
+  selectedDate: string | null;
+  onSelectDate: (d: string) => void;
+  onEdit: (e: BudgetEntry) => void;
+  onDelete: (e: BudgetEntry) => void;
+}> = ({ yearMonth, entries, selectedDate, onSelectDate, onEdit, onDelete }) => {
+  const year = Number(yearMonth.slice(0, 4));
+  const month = Number(yearMonth.slice(4)) - 1; // 0-based
+
+  // 달의 첫 요일(0=일) + 총 일수
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // 날짜별 수입/지출 합산 맵
+  const dayMap: Record<string, { income: number; expense: number }> = {};
+  for (const e of entries) {
+    const d = e.entryDate; // "YYYY-MM-DD"
+    if (!dayMap[d]) dayMap[d] = { income: 0, expense: 0 };
+    if (e.entryType === 'INCOME') dayMap[d].income += e.amount;
+    else dayMap[d].expense += e.amount;
+  }
+
+  // 오늘 날짜 (같은 달 강조용)
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // 그리드 셀 배열 (앞쪽 빈 칸 + 날짜)
+  const cells: (number | null)[] = [
+    ...Array(firstWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
+  const toDateStr = (d: number) =>
+    `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+  // 선택된 날짜의 항목 목록
+  const selectedEntries = selectedDate
+    ? entries.filter(e => e.entryDate === selectedDate)
+    : [];
+
+  return (
+    <div>
+      {/* 요일 헤더 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '2px' }}>
+        {DAY_LABELS.map((d, i) => (
+          <div key={d} style={{
+            textAlign: 'center', fontSize: '11px', fontWeight: 700,
+            color: i === 0 ? '#E06060' : i === 6 ? '#4BAAD4' : '#5f6368',
+            padding: '4px 0',
+          }}>{d}</div>
+        ))}
+      </div>
+
+      {/* 날짜 그리드 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
+        {cells.map((day, idx) => {
+          if (!day) return <div key={idx} />;
+          const dateStr = toDateStr(day);
+          const data = dayMap[dateStr];
+          const isSelected = selectedDate === dateStr;
+          const isToday = dateStr === todayStr;
+          const dow = (firstWeekday + day - 1) % 7;
+
+          return (
+            <div
+              key={idx}
+              onClick={() => onSelectDate(dateStr)}
+              style={{
+                background: isSelected ? '#e0f0ff' : '#fff',
+                border: isSelected ? '1.5px solid #4BAAD4' : isToday ? '1.5px solid #89CFF0' : '1px solid #f0f0f0',
+                borderRadius: '8px',
+                padding: '5px 4px 6px',
+                cursor: 'pointer',
+                minHeight: '56px',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+              }}
+            >
+              {/* 날짜 숫자 */}
+              <span style={{
+                fontSize: '12px', fontWeight: isToday ? 800 : 600,
+                color: dow === 0 ? '#E06060' : dow === 6 ? '#4BAAD4' : isSelected ? '#1a3a5c' : '#344054',
+              }}>{day}</span>
+
+              {/* 수입 */}
+              {data?.income ? (
+                <span style={{ fontSize: '10px', color: '#4CAF50', fontWeight: 700, lineHeight: 1.2 }}>
+                  +{formatAmountShort(data.income)}
+                </span>
+              ) : null}
+
+              {/* 지출 */}
+              {data?.expense ? (
+                <span style={{ fontSize: '10px', color: '#E06060', fontWeight: 700, lineHeight: 1.2 }}>
+                  -{formatAmountShort(data.expense)}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 선택된 날짜의 항목 목록 */}
+      {selectedDate && (
+        <div style={{ marginTop: '16px' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: '8px', paddingBottom: '6px', borderBottom: '2px solid #e0f0ff',
+          }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>
+              {Number(selectedDate.slice(5, 7))}월 {Number(selectedDate.slice(8))}일 항목
+            </span>
+            <span style={{ fontSize: '12px', color: '#9aa0a6' }}>{selectedEntries.length}건</span>
+          </div>
+          {selectedEntries.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px', color: '#9aa0a6', fontSize: '13px' }}>
+              이 날 기록이 없습니다.
+            </div>
+          ) : (
+            selectedEntries.map(e => (
+              <EntryRow key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const EntryRow: React.FC<{
   entry: BudgetEntry;
