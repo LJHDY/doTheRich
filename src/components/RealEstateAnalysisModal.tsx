@@ -93,8 +93,10 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
     try {
       const result = await analyzeRealEstate(complexes.map(c => c.id));
       setContent(result);
-    } catch {
-      setError('분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } catch (e: any) {
+      // 백엔드 에러 메시지 표시 (원인 파악용)
+      const detail = e?.response?.data?.detail || e?.message || '';
+      setError(`분석 중 오류가 발생했습니다.${detail ? ` (${detail})` : ' 잠시 후 다시 시도해주세요.'}`);
     } finally {
       setLoading(false);
     }
