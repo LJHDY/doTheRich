@@ -629,11 +629,6 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               </div>
             )}
 
-            {/* 날짜 */}
-            <FieldRow label="날짜">
-              <input type="date" value={form.entryDate ?? today()} onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} style={inputStyle} />
-            </FieldRow>
-
             {/* 카테고리 + 지출처 (지출 시 나란히 표시, 투자 체크 시 숨김) */}
             {form.entryType === 'EXPENSE' && !form.isInvestment ? (
               <div style={{ marginBottom: '14px' }}>
@@ -678,65 +673,90 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               </FieldRow>
             )}
 
-            {/* 결제수단 — 등록된 통장/카드에서 선택 */}
-            <FieldRow label="결제수단">
-              <select
-                value={form.account ?? ''}
-                onChange={e => setForm(f => ({ ...f, account: e.target.value }))}
-                style={inputStyle}
-              >
-                <option value="">선택 안함</option>
-                {(['통장', '카드'] as const).map(type => {
-                  const group = paymentMethods.filter(p => p.type === type);
-                  if (group.length === 0) return null;
-                  return (
-                    <optgroup key={type} label={type}>
-                      {group.map(p => (
-                        <option key={p.id} value={p.name}>
-                          {p.name}{p.billingDay ? ` (결제일 ${p.billingDay}일)` : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                  );
-                })}
-              </select>
-            </FieldRow>
-
-            {/* 금액 + 공용 체크박스 */}
-            <div style={{ marginBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-                <label style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>금액 (원)</label>
-                {/* 공용 체크박스 — 지출일 때만 표시, 수정 모드에서는 비활성 */}
-                {form.entryType === 'EXPENSE' && editingId === null && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: isShared ? '#1a7c4a' : '#5f6368' }}>
-                    <input
-                      type="checkbox"
-                      checked={isShared}
-                      onChange={e => setIsShared(e.target.checked)}
-                      style={{ width: '14px', height: '14px', accentColor: '#2e7d32', cursor: 'pointer' }}
-                    />
-                    공용 (÷2)
-                  </label>
-                )}
+            {/* 데스크탑: 날짜 · 결제수단 · 금액 한 줄 / 모바일: 각 행으로 분리 */}
+            {isMobile ? (
+              <>
+                <FieldRow label="날짜">
+                  <input type="date" value={form.entryDate ?? today()} onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} style={inputStyle} />
+                </FieldRow>
+                <FieldRow label="결제수단">
+                  <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputStyle}>
+                    <option value="">선택 안함</option>
+                    {(['통장', '카드'] as const).map(type => {
+                      const group = paymentMethods.filter(p => p.type === type);
+                      if (group.length === 0) return null;
+                      return (
+                        <optgroup key={type} label={type}>
+                          {group.map(p => <option key={p.id} value={p.name}>{p.name}{p.billingDay ? ` (결제일 ${p.billingDay}일)` : ''}</option>)}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                </FieldRow>
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <label style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>금액 (원)</label>
+                    {form.entryType === 'EXPENSE' && editingId === null && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: isShared ? '#1a7c4a' : '#5f6368' }}>
+                        <input type="checkbox" checked={isShared} onChange={e => setIsShared(e.target.checked)} style={{ width: '14px', height: '14px', accentColor: '#2e7d32', cursor: 'pointer' }} />
+                        공용 (÷2)
+                      </label>
+                    )}
+                  </div>
+                  <input type="text" inputMode="numeric" value={form.amountStr ?? ''} placeholder="0"
+                    onChange={e => setForm(f => ({ ...f, amountStr: e.target.value.replace(/[^0-9]/g, '') }))} style={inputStyle} />
+                  {form.amountStr && Number(form.amountStr) > 0 && (
+                    <span style={{ fontSize: '12px', color: isShared ? '#1a7c4a' : '#4BAAD4', marginTop: '3px', display: 'block', fontWeight: 600 }}>
+                      {isShared ? `각 ${formatAmountKorean(Math.round(Number(form.amountStr) / 2))} (동영·주해 각각 저장)` : `= ${formatAmountKorean(Number(form.amountStr))}`}
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* 데스크탑: 3열 그리드 */
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                {/* 날짜 */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>날짜</label>
+                  <input type="date" value={form.entryDate ?? today()} onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} style={inputStyle} />
+                </div>
+                {/* 결제수단 */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>결제수단</label>
+                  <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputStyle}>
+                    <option value="">선택 안함</option>
+                    {(['통장', '카드'] as const).map(type => {
+                      const group = paymentMethods.filter(p => p.type === type);
+                      if (group.length === 0) return null;
+                      return (
+                        <optgroup key={type} label={type}>
+                          {group.map(p => <option key={p.id} value={p.name}>{p.name}{p.billingDay ? ` (${p.billingDay}일)` : ''}</option>)}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                </div>
+                {/* 금액 */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <label style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>금액 (원)</label>
+                    {form.entryType === 'EXPENSE' && editingId === null && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600, color: isShared ? '#1a7c4a' : '#5f6368' }}>
+                        <input type="checkbox" checked={isShared} onChange={e => setIsShared(e.target.checked)} style={{ width: '12px', height: '12px', accentColor: '#2e7d32', cursor: 'pointer' }} />
+                        공용(÷2)
+                      </label>
+                    )}
+                  </div>
+                  <input type="text" inputMode="numeric" value={form.amountStr ?? ''} placeholder="0"
+                    onChange={e => setForm(f => ({ ...f, amountStr: e.target.value.replace(/[^0-9]/g, '') }))} style={inputStyle} />
+                  {form.amountStr && Number(form.amountStr) > 0 && (
+                    <span style={{ fontSize: '11px', color: isShared ? '#1a7c4a' : '#4BAAD4', marginTop: '3px', display: 'block', fontWeight: 600 }}>
+                      {isShared ? `각 ${formatAmountKorean(Math.round(Number(form.amountStr) / 2))}` : `= ${formatAmountKorean(Number(form.amountStr))}`}
+                    </span>
+                  )}
+                </div>
               </div>
-              <input
-                type="text" inputMode="numeric"
-                value={form.amountStr ?? ''}
-                placeholder="0"
-                onChange={e => {
-                  const raw = e.target.value.replace(/[^0-9]/g, '');
-                  setForm(f => ({ ...f, amountStr: raw }));
-                }}
-                style={inputStyle}
-              />
-              {form.amountStr && Number(form.amountStr) > 0 && (
-                <span style={{ fontSize: '12px', color: isShared ? '#1a7c4a' : '#4BAAD4', marginTop: '3px', display: 'block', fontWeight: 600 }}>
-                  {isShared
-                    ? `각 ${formatAmountKorean(Math.round(Number(form.amountStr) / 2))} (동영·주해 각각 저장)`
-                    : `= ${formatAmountKorean(Number(form.amountStr))}`}
-                </span>
-              )}
-            </div>
+            )}
 
             {/* 투자 여부 */}
             <FieldRow label="투자">
