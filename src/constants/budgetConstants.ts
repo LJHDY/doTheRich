@@ -122,6 +122,7 @@ export const VARIABLE_EXPENSE_CATEGORIES: string[] = [
   '식비(배달)',
   '식비(외식)',
   '카페',
+  '간식',
   '병원/약국/의료',
   '미용/패션/쇼핑',
   '용돈',
