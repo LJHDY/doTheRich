@@ -717,6 +717,7 @@ const toEntry = (d: any): BudgetEntry => ({
   isFixed: d.is_fixed ?? false,
   isInvestment: d.is_investment ?? false,
   investmentType: d.investment_type,
+  isTransfer: d.is_transfer ?? false,
   merchant: d.merchant,
   memo: d.memo,
   createdAt: d.created_at,
@@ -741,6 +742,7 @@ export const createBudgetEntry = async (payload: Omit<BudgetEntry, 'id' | 'creat
     is_fixed: payload.isFixed,
     is_investment: payload.isInvestment,
     investment_type: payload.investmentType ?? null,
+    is_transfer: payload.isTransfer ?? false,
     merchant: payload.merchant ?? null,
     memo: payload.memo ?? null,
   });
@@ -759,6 +761,7 @@ export const updateBudgetEntry = async (id: number, payload: Partial<Omit<Budget
   if (payload.isFixed !== undefined) body.is_fixed = payload.isFixed;
   if (payload.isInvestment !== undefined) body.is_investment = payload.isInvestment;
   if (payload.investmentType !== undefined) body.investment_type = payload.investmentType;
+  if (payload.isTransfer !== undefined) body.is_transfer = payload.isTransfer;
   if (payload.merchant !== undefined) body.merchant = payload.merchant;
   if (payload.memo !== undefined) body.memo = payload.memo;
   const { data } = await api.patch(`/api/budget/entries/${id}`, body);
@@ -1041,6 +1044,21 @@ export const updatePaymentMethod = async (id: number, payload: {
 
 export const deletePaymentMethod = async (id: number): Promise<void> => {
   await api.delete(`/api/budget/payment-methods/${id}`);
+};
+
+// ── 통장 잔액 관리 ────────────────────────────────────────────────
+
+export const getAccountBalances = async (userId: string, yearMonth: string): Promise<{ accountName: string; openingBalance: number }[]> => {
+  const { data } = await api.get('/api/budget/account-balances', { params: { user_id: userId, year_month: yearMonth } });
+  return data.map((d: any) => ({ accountName: d.account_name, openingBalance: d.opening_balance }));
+};
+
+export const upsertAccountBalance = async (userId: string, accountName: string, yearMonth: string, openingBalance: number): Promise<void> => {
+  await api.put('/api/budget/account-balances', { user_id: userId, account_name: accountName, year_month: yearMonth, opening_balance: openingBalance });
+};
+
+export const carryOverAccountBalances = async (userId: string, fromMonth: string, toMonth: string, closingBalances: Record<string, number>): Promise<void> => {
+  await api.post('/api/budget/account-balances/carry-over', { user_id: userId, from_month: fromMonth, to_month: toMonth, closing_balances: closingBalances });
 };
 
 // ── 공통코드 ─────────────────────────────────────────────────────

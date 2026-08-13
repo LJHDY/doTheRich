@@ -39,6 +39,9 @@ import {
   createPaymentMethod,
   updatePaymentMethod,
   deletePaymentMethod,
+  getAccountBalances,
+  upsertAccountBalance,
+  carryOverAccountBalances,
   getCommonCodes,
   createCommonCode,
   updateCommonCode,
@@ -91,7 +94,7 @@ const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
   memo: '',
 });
 
-type Filter = 'ALL' | 'INCOME' | 'EXPENSE' | 'FIXED' | 'INVEST';
+type Filter = 'ALL' | 'INCOME' | 'EXPENSE' | 'FIXED' | 'INVEST' | 'TRANSFER';
 type Tab = 'ENTRIES' | 'ACCOUNTS' | 'ASSETS' | 'OVERVIEW' | 'AI'; // 가계부 내역 / 통장 관리 / 자산 관리 / 통합 보기 / AI 분석
 
 // ─── 컴포넌트 ─────────────────────────────────────────────────
@@ -119,6 +122,26 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   // 고정비 관리 모달
   const [fixedExpenseOpen, setFixedExpenseOpen] = useState(false);
+
+  // 통장 이월 잔액 (account_balance 테이블)
+  const [openingBalances, setOpeningBalances] = useState<Record<string, number>>({});
+  const [editingOpeningAccount, setEditingOpeningAccount] = useState<string | null>(null);
+  const [editingOpeningStr, setEditingOpeningStr] = useState('');
+
+  useEffect(() => {
+    getAccountBalances(userId, yearMonth)
+      .then(rows => {
+        const map: Record<string, number> = {};
+        rows.forEach(r => { map[r.accountName] = r.openingBalance; });
+        setOpeningBalances(map);
+      })
+      .catch(() => {});
+  }, [userId, yearMonth]);
+
+  // 이체 폼 상태
+  const [isTransfer, setIsTransfer] = useState(false);
+  const [transferFrom, setTransferFrom] = useState('');
+  const [transferTo, setTransferTo] = useState('');
 
   // 입력 폼
   const [formOpen, setFormOpen] = useState(false);
@@ -155,17 +178,17 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   // ─── 요약 계산 ───────────────────────────────────────────────
   const summary = useMemo(() => {
-    const totalIncome = entries.filter(e => e.entryType === 'INCOME').reduce((s, e) => s + e.amount, 0);
-    const totalInvest = entries.filter(e => e.isInvestment).reduce((s, e) => s + e.amount, 0);
-    // 투자 제외 순수 지출
-    const totalExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment).reduce((s, e) => s + e.amount, 0);
-    const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment).reduce((s, e) => s + e.amount, 0);
-    const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment).reduce((s, e) => s + e.amount, 0);
+    // 이체 항목은 수입/지출 집계에서 제외 (단순 계좌 이동)
+    const totalIncome = entries.filter(e => e.entryType === 'INCOME' && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
+    const totalInvest = entries.filter(e => e.isInvestment && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
+    const totalExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
+    const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
+    const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
 
-    // 통장 대분류 기준 합산
+    // 통장별 잔액 계산용 — 이체 포함 (계좌 간 이동도 잔액에 반영)
     const accountMap: Record<string, { income: number; expense: number }> = {};
     entries.forEach(e => {
-      const key = e.accountMain || e.account || '미분류';
+      const key = e.account || '미분류';
       if (!accountMap[key]) accountMap[key] = { income: 0, expense: 0 };
       if (e.entryType === 'INCOME') accountMap[key].income += e.amount;
       else accountMap[key].expense += e.amount;
@@ -181,19 +204,41 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     else if (filter === 'EXPENSE') base = base.filter(e => e.entryType === 'EXPENSE');
     else if (filter === 'FIXED') base = base.filter(e => e.entryType === 'EXPENSE' && e.isFixed);
     else if (filter === 'INVEST') base = base.filter(e => e.isInvestment);
+    else if (filter === 'TRANSFER') base = base.filter(e => e.isTransfer);
     if (categoryFilter) base = base.filter(e => e.category === categoryFilter);
     return base;
   }, [entries, filter, categoryFilter]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
-  const openAdd = () => { setEditingId(null); setForm(initialForm()); setIsShared(false); setFormOpen(true); };
+  const openAdd = () => { setEditingId(null); setForm(initialForm()); setIsShared(false); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); setFormOpen(true); };
   const openEdit = (e: BudgetEntry) => {
     setEditingId(e.id);
     setForm({ ...e, amountStr: String(e.amount) });
     setIsShared(false);
+    setIsTransfer(e.isTransfer ?? false);
     setFormOpen(true);
   };
-  const closeForm = () => { setFormOpen(false); setEditingId(null); };
+  const closeForm = () => { setFormOpen(false); setEditingId(null); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); };
+
+  // 이체 저장 — from 통장에서 출금(EXPENSE) + to 통장에 입금(INCOME) 두 항목 생성
+  const handleTransferSave = async () => {
+    const amount = Number(form.amountStr?.replace(/,/g, '') ?? 0);
+    if (!transferFrom || !transferTo) { alert('출금·입금 통장을 모두 선택해주세요'); return; }
+    if (transferFrom === transferTo) { alert('출금·입금 통장이 같습니다'); return; }
+    if (!amount) { alert('금액을 입력해주세요'); return; }
+    const entryDate = form.entryDate ?? today();
+    const resolvedYearMonth = entryDate.replace(/-/g, '').slice(0, 6);
+    const label = `이체: ${transferFrom} → ${transferTo}`;
+    const base = { userId, yearMonth: resolvedYearMonth, entryDate, isFixed: false, isInvestment: false, isTransfer: true, memo: form.memo || undefined };
+    try {
+      const [exp, inc] = await Promise.all([
+        createBudgetEntry({ ...base, entryType: 'EXPENSE', category: '이체', account: transferFrom, amount, merchant: label }),
+        createBudgetEntry({ ...base, entryType: 'INCOME',  category: '이체', account: transferTo,   amount, merchant: label }),
+      ]);
+      if (resolvedYearMonth === yearMonth) setEntries(prev => [exp, inc, ...prev]);
+      closeForm();
+    } catch { alert('이체 저장에 실패했습니다'); }
+  };
 
   // 지출: isFixed 값에 따라 고정비/변동비 카테고리 목록 결정
   const expenseCats = form.isFixed ? FIXED_EXPENSE_CATEGORIES : VARIABLE_EXPENSE_CATEGORIES;
@@ -372,21 +417,108 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           ))}
         </div>
 
-        {/* ── 통장별 현황 */}
-        {Object.keys(summary.accountMap).length > 0 && (
-          <div style={{ padding: '8px 20px 0', display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
-            {Object.entries(summary.accountMap).map(([acc, { income, expense }]) => (
-              <div key={acc} style={{
-                background: '#fff', border: '1px solid #dadce0', borderRadius: '8px',
-                padding: '6px 14px', fontSize: '12px',
-              }}>
-                <span style={{ fontWeight: 600, color: '#344054' }}>{acc}</span>
-                {income > 0 && <span style={{ color: '#4CAF50', marginLeft: '6px' }}>+{formatAmountShort(income)}</span>}
-                {expense > 0 && <span style={{ color: '#E06060', marginLeft: '4px' }}>-{formatAmountShort(expense)}</span>}
+        {/* ── 통장 잔액 현황 */}
+        {(() => {
+          // 등록된 통장(type='통장') 기준으로 잔액 표시
+          const bankAccounts = paymentMethods.filter(p => p.type === '통장');
+          if (bankAccounts.length === 0) return null;
+
+          const prevMonth = (() => {
+            const y = Number(yearMonth.slice(0, 4));
+            const m = Number(yearMonth.slice(4, 6));
+            const pm = m === 1 ? 12 : m - 1;
+            const py = m === 1 ? y - 1 : y;
+            return `${py}${String(pm).padStart(2, '0')}`;
+          })();
+
+          const handleCarryOver = async () => {
+            if (!window.confirm(`${prevMonth.slice(0,4)}년 ${Number(prevMonth.slice(4))}월 잔액을 ${yearMonth.slice(0,4)}년 ${Number(yearMonth.slice(4))}월 이월 잔액으로 가져올까요?`)) return;
+            // 이전달 종료 잔액 계산 (현재 openingBalances + 현재달 수입/지출 기준이 아닌 prev 데이터가 없으므로 안내)
+            alert('이전 달 잔액 데이터를 먼저 직접 입력하거나, 이전 달에서 저장한 잔액이 있어야 합니다.\n이월 잔액을 직접 입력해주세요.');
+          };
+
+          return (
+            <div style={{ padding: '8px 20px 0', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>통장 잔액</span>
+                <button
+                  onClick={async () => {
+                    // 이전 달 종료 잔액을 이번 달 이월로 자동 가져오기
+                    // 이전 달 openingBalances + 이전 달 entries 합산이 필요하므로 API로 처리
+                    const prevBalances = await getAccountBalances(userId, prevMonth);
+                    if (prevBalances.length === 0) { alert('이전 달 이월 잔액 데이터가 없습니다. 직접 입력해주세요.'); return; }
+                    const closing: Record<string, number> = {};
+                    prevBalances.forEach(r => { closing[r.accountName] = r.openingBalance; });
+                    await carryOverAccountBalances(userId, prevMonth, yearMonth, closing);
+                    const updated = await getAccountBalances(userId, yearMonth);
+                    const map: Record<string, number> = {};
+                    updated.forEach(r => { map[r.accountName] = r.openingBalance; });
+                    setOpeningBalances(map);
+                    alert('이월 잔액을 가져왔습니다.');
+                  }}
+                  style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', border: '1px solid #89CFF0', background: '#f0f8fd', color: '#1a3a5c', cursor: 'pointer' }}
+                >
+                  ← 이전달 이월
+                </button>
               </div>
-            ))}
-          </div>
-        )}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {bankAccounts.map(pm => {
+                  const accName = pm.name;
+                  const opening = openingBalances[accName] ?? 0;
+                  const { income = 0, expense = 0 } = summary.accountMap[accName] ?? {};
+                  const closing = opening + income - expense;
+                  const isEditing = editingOpeningAccount === accName;
+                  return (
+                    <div key={accName} style={{
+                      background: '#fff', border: '1px solid #e8ecf0', borderRadius: '10px',
+                      padding: '10px 14px', minWidth: '160px', fontSize: '12px',
+                    }}>
+                      <div style={{ fontWeight: 700, color: '#1a3a5c', marginBottom: '6px' }}>{accName}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#5f6368' }}>
+                        {/* 이월 잔액 — 클릭 시 인라인 편집 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ minWidth: '52px' }}>이월 잔액</span>
+                          {isEditing ? (
+                            <input
+                              autoFocus type="text" inputMode="numeric"
+                              value={editingOpeningStr}
+                              onChange={e => setEditingOpeningStr(e.target.value.replace(/[^0-9-]/g, ''))}
+                              onBlur={async () => {
+                                const v = Number(editingOpeningStr || '0');
+                                await upsertAccountBalance(userId, accName, yearMonth, v);
+                                setOpeningBalances(prev => ({ ...prev, [accName]: v }));
+                                setEditingOpeningAccount(null);
+                              }}
+                              onKeyDown={async e => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                if (e.key === 'Escape') setEditingOpeningAccount(null);
+                              }}
+                              style={{ width: '90px', padding: '1px 5px', fontSize: '11px', border: '1px solid #89CFF0', borderRadius: '4px', outline: 'none' }}
+                            />
+                          ) : (
+                            <span
+                              onClick={() => { setEditingOpeningAccount(accName); setEditingOpeningStr(String(opening)); }}
+                              style={{ cursor: 'text', borderBottom: '1px dashed #89CFF0', color: '#344054', fontWeight: 600 }}
+                              title="클릭하여 이월 잔액 수정"
+                            >
+                              {formatAmountShort(opening)}
+                            </span>
+                          )}
+                        </div>
+                        {income > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>+ 수입</span><span style={{ color: '#4CAF50', fontWeight: 600 }}>{formatAmountShort(income)}</span></div>}
+                        {expense > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>- 지출</span><span style={{ color: '#E06060', fontWeight: 600 }}>{formatAmountShort(expense)}</span></div>}
+                        <div style={{ borderTop: '1px solid #f0f0f0', marginTop: '4px', paddingTop: '4px' }}>
+                          <span style={{ minWidth: '52px', display: 'inline-block' }}>잔액</span>
+                          <span style={{ fontWeight: 700, color: closing >= 0 ? '#1565c0' : '#E06060', fontSize: '13px' }}>{formatAmountShort(closing)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── 카테고리별 지출 & 투자 파이 차트 */}
         {(() => {
@@ -534,7 +666,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           <div style={{ width: '1px', height: '16px', background: '#e0e0e0', flexShrink: 0 }} />
           {([
             ['ALL', '전체'], ['INCOME', '수입'], ['EXPENSE', '지출'],
-            ['FIXED', '고정비'], ['INVEST', '투자'],
+            ['FIXED', '고정비'], ['INVEST', '투자'], ['TRANSFER', '이체'],
           ] as [Filter, string][]).map(([val, label]) => (
             <button key={val} onClick={() => { setFilter(val); setCategoryFilter(null); }} style={{
               padding: '5px 12px', fontSize: '12px', borderRadius: '20px',
@@ -672,6 +804,59 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               </span>
               <button onClick={closeForm} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6' }}>×</button>
             </div>
+
+            {/* 이체 체크박스 (신규 추가 시에만 표시) */}
+            {editingId === null && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: isTransfer ? '#1565c0' : '#5f6368' }}>
+                <input type="checkbox" checked={isTransfer} onChange={e => { setIsTransfer(e.target.checked); setTransferFrom(''); setTransferTo(''); }}
+                  style={{ width: '15px', height: '15px', accentColor: '#1565c0', cursor: 'pointer' }} />
+                🔄 이체 (통장 간 자금 이동)
+              </label>
+            )}
+
+            {/* ── 이체 모드 폼 */}
+            {isTransfer && editingId === null ? (
+              <>
+                {/* 날짜 */}
+                <FieldRow label="날짜">
+                  <input type="date" value={form.entryDate ?? today()} onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} style={inputStyle} />
+                </FieldRow>
+                {/* from → to */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '8px', alignItems: 'end', marginBottom: '14px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>출금 통장 (From)</label>
+                    <select value={transferFrom} onChange={e => setTransferFrom(e.target.value)} style={inputStyle}>
+                      <option value="">선택</option>
+                      {paymentMethods.filter(p => p.type === '통장').map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <span style={{ fontSize: '20px', color: '#89CFF0', paddingBottom: '2px', textAlign: 'center' }}>→</span>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>입금 통장 (To)</label>
+                    <select value={transferTo} onChange={e => setTransferTo(e.target.value)} style={inputStyle}>
+                      <option value="">선택</option>
+                      {paymentMethods.filter(p => p.type === '통장').map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {/* 금액 */}
+                <FieldRow label="금액 (원)">
+                  <input type="text" inputMode="numeric" value={form.amountStr ?? ''} placeholder="0"
+                    onChange={e => setForm(f => ({ ...f, amountStr: e.target.value.replace(/[^0-9]/g, '') }))} style={inputStyle} />
+                  {form.amountStr && Number(form.amountStr) > 0 && (
+                    <span style={{ fontSize: '12px', color: '#4BAAD4', marginTop: '3px', display: 'block', fontWeight: 600 }}>= {formatAmountKorean(Number(form.amountStr))}</span>
+                  )}
+                </FieldRow>
+                {/* 메모 */}
+                <FieldRow label="메모 (선택)">
+                  <input type="text" value={form.memo ?? ''} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} style={inputStyle} />
+                </FieldRow>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
+                  <button onClick={closeForm} style={{ ...btnStyle('#f0f4f8', '#5f6368'), flex: 1, padding: '12px' }}>취소</button>
+                  <button onClick={handleTransferSave} style={{ ...btnStyle('#1565c0', '#fff'), flex: 2, padding: '12px', fontWeight: 700 }}>이체 저장</button>
+                </div>
+              </>
+            ) : (<>
 
             {/* 수입 / 지출 토글 */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
@@ -866,6 +1051,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               <button onClick={closeForm} style={{ ...btnStyle('#f0f4f8', '#5f6368'), flex: 1, padding: '12px' }}>취소</button>
               <button onClick={handleSave} style={{ ...btnStyle('#89CFF0', '#fff'), flex: 2, padding: '12px', fontWeight: 700 }}>저장</button>
             </div>
+            </>)}
           </div>
         </div>
       )}
@@ -1355,6 +1541,9 @@ const EntryRow: React.FC<{
           )}
           {entry.isInvestment && (
             <span style={{ fontSize: '10px', background: '#2196F320', color: '#2196F3', borderRadius: '4px', padding: '1px 5px' }}>투자</span>
+          )}
+          {entry.isTransfer && (
+            <span style={{ fontSize: '10px', background: '#E3F2FD', color: '#1565c0', borderRadius: '4px', padding: '1px 5px' }}>이체</span>
           )}
         </div>
         {(entry.merchant || entry.accountMain || entry.account || entry.memo) && (

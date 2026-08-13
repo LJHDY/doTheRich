@@ -577,9 +577,16 @@ export interface BudgetEntry {
   isFixed: boolean;
   isInvestment: boolean;
   investmentType?: string;
+  isTransfer?: boolean;  // 이체 여부
   merchant?: string;    // 지출처 (예: 스타벅스, 쿠팡)
   memo?: string;
   createdAt: string;
+}
+
+export interface AccountBalance {
+  accountName: string;
+  yearMonth: string;
+  openingBalance: number;  // 이월 잔액 (원)
 }
 
 export interface BudgetSummary {
