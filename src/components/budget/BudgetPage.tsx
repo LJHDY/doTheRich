@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell, Tooltip as PieTooltip,
 } from 'recharts';
 import {
   ACCOUNT_GROUPS,
@@ -341,6 +342,68 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             ))}
           </div>
         )}
+
+        {/* ── 카테고리별 지출 파이 차트 */}
+        {(() => {
+          const expenseEntries = entries.filter(e => e.entryType === 'EXPENSE');
+          if (expenseEntries.length === 0) return null;
+          const catMap: Record<string, number> = {};
+          for (const e of expenseEntries) {
+            const key = e.category || '미분류';
+            catMap[key] = (catMap[key] ?? 0) + e.amount;
+          }
+          const chartData = Object.entries(catMap)
+            .sort((a, b) => b[1] - a[1])
+            .map(([name, value]) => ({ name, value }));
+          const COLORS = [
+            '#89CFF0','#FFD97D','#E06060','#9C27B0','#4CAF50',
+            '#FF9800','#2196F3','#E91E63','#00BCD4','#8BC34A',
+            '#FF5722','#607D8B','#795548','#673AB7','#03A9F4',
+          ];
+          const total = chartData.reduce((s, d) => s + d.value, 0);
+          return (
+            <div style={{ padding: '8px 20px 0', flexShrink: 0 }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#344054', marginBottom: '4px' }}>카테고리별 지출</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* 파이 차트 */}
+                <PieChart width={130} height={130}>
+                  <Pie
+                    data={chartData} cx={60} cy={60}
+                    innerRadius={32} outerRadius={58}
+                    dataKey="value" stroke="none"
+                  >
+                    {chartData.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <PieTooltip
+                    formatter={(value: number, name: string) => [
+                      `${formatAmountShort(value)}원 (${Math.round(value / total * 100)}%)`, name,
+                    ]}
+                    contentStyle={{ fontSize: '11px', padding: '4px 8px' }}
+                  />
+                </PieChart>
+                {/* 범례 */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px', flex: 1 }}>
+                  {chartData.map((d, i) => (
+                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '80px' }}>
+                      <span style={{
+                        width: '8px', height: '8px', borderRadius: '2px', flexShrink: 0,
+                        background: COLORS[i % COLORS.length],
+                      }} />
+                      <span style={{ fontSize: '11px', color: '#344054', whiteSpace: 'nowrap' }}>
+                        {d.name}
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>
+                        {Math.round(d.value / total * 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── 고정비 관리 버튼 + 필터 탭 */}
         <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
