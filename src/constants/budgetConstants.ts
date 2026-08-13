@@ -152,6 +152,7 @@ export const INCOME_CATEGORIES: { name: string; subcategories: string[] }[] = [
 export const INVESTMENT_TYPES = [
   '주식',
   '펀드/ETF',
+  'ISA',
   '예금/적금',
   '부동산',
   '코인',
