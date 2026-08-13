@@ -20,53 +20,7 @@ function formatKST(iso: string | null): string {
   });
 }
 
-// 마크다운 → JSX
-function renderMarkdown(text: string): React.ReactNode[] {
-  return text.split('\n').map((line, i) => {
-    if (line.startsWith('## ')) {
-      return <h2 key={i} style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c', margin: '20px 0 8px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>{line.slice(3)}</h2>;
-    }
-    if (line.startsWith('### ')) {
-      return <h3 key={i} style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: '14px 0 6px' }}>{line.slice(4)}</h3>;
-    }
-    if (line.startsWith('#### ')) {
-      return <h4 key={i} style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: '10px 0 4px' }}>{line.slice(5)}</h4>;
-    }
-    if (line.startsWith('---')) {
-      return <hr key={i} style={{ border: 'none', borderTop: '1px solid #e8eaed', margin: '16px 0' }} />;
-    }
-    if (line.startsWith('- ') || line.startsWith('* ')) {
-      return (
-        <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
-          <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
-          <span>{inlineBold(line.slice(2))}</span>
-        </div>
-      );
-    }
-    if (/^\d+\. /.test(line)) {
-      return (
-        <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
-          <span style={{ color: '#4BAAD4', flexShrink: 0, fontWeight: 600 }}>{line.match(/^\d+/)![0]}.</span>
-          <span>{inlineBold(line.replace(/^\d+\. /, ''))}</span>
-        </div>
-      );
-    }
-    if (line.startsWith('|')) {
-      return (
-        <div key={i} style={{ fontFamily: 'monospace', fontSize: '12px', color: '#444', margin: '1px 0', whiteSpace: 'pre', overflowX: 'auto' }}>
-          {line}
-        </div>
-      );
-    }
-    if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
-    return (
-      <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.7' }}>
-        {inlineBold(line)}
-      </p>
-    );
-  });
-}
-
+// 인라인 **bold** 파싱
 function inlineBold(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   if (parts.length === 1) return text;
@@ -79,6 +33,122 @@ function inlineBold(text: string): React.ReactNode {
       )}
     </>
   );
+}
+
+// 마크다운 표 파싱 → <table> JSX
+function renderTable(tableLines: string[], key: number): React.ReactNode {
+  const parseRow = (line: string) =>
+    line.split('|').slice(1, -1).map(c => c.trim());
+
+  const isSeparator = (cells: string[]) =>
+    cells.length > 0 && cells.every(c => /^:?-+:?$/.test(c));
+
+  const getAlign = (cell: string): React.CSSProperties['textAlign'] => {
+    if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
+    if (cell.endsWith(':')) return 'right';
+    return 'left';
+  };
+
+  const rows = tableLines.map(parseRow);
+  const sepIdx = rows.findIndex(isSeparator);
+  const headerRows = sepIdx > 0 ? rows.slice(0, sepIdx) : [];
+  const aligns = sepIdx >= 0 ? rows[sepIdx].map(getAlign) : [];
+  const bodyRows = rows.slice(sepIdx >= 0 ? sepIdx + 1 : 0);
+
+  const cellStyle = (ci: number, isHead: boolean): React.CSSProperties => ({
+    border: '1px solid #d0e8f8',
+    padding: '7px 12px',
+    textAlign: aligns[ci] ?? 'left',
+    fontSize: '12px',
+    whiteSpace: 'nowrap',
+    background: isHead ? '#daf0fb' : undefined,
+    color: isHead ? '#1a3a5c' : '#344054',
+    fontWeight: isHead ? 700 : undefined,
+  });
+
+  return (
+    <div key={key} style={{ overflowX: 'auto', margin: '12px 0' }}>
+      <table style={{ borderCollapse: 'collapse', minWidth: '100%' }}>
+        {headerRows.length > 0 && (
+          <thead>
+            {headerRows.map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cell, ci) => (
+                  <th key={ci} style={cellStyle(ci, true)}>{inlineBold(cell)}</th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+        )}
+        <tbody>
+          {bodyRows.map((row, ri) => (
+            <tr key={ri} style={{ background: ri % 2 === 0 ? '#fff' : '#f5fbff' }}>
+              {row.map((cell, ci) => (
+                <td key={ci} style={cellStyle(ci, false)}>{inlineBold(cell)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// 마크다운 → JSX (표는 연속된 | 줄을 묶어서 <table>로 렌더링)
+function renderMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split('\n');
+  const result: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // 연속된 | 줄 → 표로 묶음
+    if (line.startsWith('|')) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].startsWith('|')) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      result.push(renderTable(tableLines, result.length));
+      continue;
+    }
+
+    if (line.startsWith('## ')) {
+      result.push(<h2 key={i} style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c', margin: '20px 0 8px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>{line.slice(3)}</h2>);
+    } else if (line.startsWith('### ')) {
+      result.push(<h3 key={i} style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: '14px 0 6px' }}>{line.slice(4)}</h3>);
+    } else if (line.startsWith('#### ')) {
+      result.push(<h4 key={i} style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: '10px 0 4px' }}>{line.slice(5)}</h4>);
+    } else if (line.startsWith('---')) {
+      result.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid #e8eaed', margin: '16px 0' }} />);
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      result.push(
+        <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
+          <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
+          <span>{inlineBold(line.slice(2))}</span>
+        </div>
+      );
+    } else if (/^\d+\. /.test(line)) {
+      result.push(
+        <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
+          <span style={{ color: '#4BAAD4', flexShrink: 0, fontWeight: 600 }}>{line.match(/^\d+/)![0]}.</span>
+          <span>{inlineBold(line.replace(/^\d+\. /, ''))}</span>
+        </div>
+      );
+    } else if (line.trim() === '') {
+      result.push(<div key={i} style={{ height: '6px' }} />);
+    } else {
+      result.push(
+        <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.7' }}>
+          {inlineBold(line)}
+        </p>
+      );
+    }
+    i++;
+  }
+
+  return result;
 }
 
 const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
