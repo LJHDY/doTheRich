@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -23,6 +23,7 @@ import {
   createBudgetEntry,
   updateBudgetEntry,
   deleteBudgetEntry,
+  bulkCreateBudgetEntries,
   getAllAssetSnapshots,
   upsertAssetSnapshotCell,
   copyAssetSnapshot,
@@ -482,6 +483,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               onSelectDate={d => setCalSelectedDate(prev => prev === d ? null : d)}
               onEdit={openEdit}
               onDelete={handleDelete}
+              userId={userId}
+              onEntriesAdded={newEntries => setEntries(prev => [...newEntries, ...prev])}
             />
           </div>
         ) : (
@@ -772,6 +775,20 @@ const SummaryCard: React.FC<{ label: string; amount: number; color: string; sign
 );
 
 // ─── 달력 뷰 ─────────────────────────────────────────────────
+
+type BulkRow = {
+  key: number;
+  entryType: 'INCOME' | 'EXPENSE';
+  category: string;
+  merchant: string;
+  amountStr: string;
+};
+
+let _bulkKey = 0;
+const mkBulkRow = (): BulkRow => ({
+  key: _bulkKey++, entryType: 'EXPENSE', category: '', merchant: '', amountStr: '',
+});
+
 const CalendarView: React.FC<{
   yearMonth: string;
   entries: BudgetEntry[];
@@ -779,27 +796,24 @@ const CalendarView: React.FC<{
   onSelectDate: (d: string) => void;
   onEdit: (e: BudgetEntry) => void;
   onDelete: (e: BudgetEntry) => void;
-}> = ({ yearMonth, entries, selectedDate, onSelectDate, onEdit, onDelete }) => {
+  userId: string;
+  onEntriesAdded: (newEntries: BudgetEntry[]) => void;
+}> = ({ yearMonth, entries, selectedDate, onSelectDate, onEdit, onDelete, userId, onEntriesAdded }) => {
   const year = Number(yearMonth.slice(0, 4));
-  const month = Number(yearMonth.slice(4)) - 1; // 0-based
+  const month = Number(yearMonth.slice(4)) - 1;
 
-  // 달의 첫 요일(0=일) + 총 일수
   const firstWeekday = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   // 날짜별 수입/지출 합산 맵
   const dayMap: Record<string, { income: number; expense: number }> = {};
   for (const e of entries) {
-    const d = e.entryDate; // "YYYY-MM-DD"
-    if (!dayMap[d]) dayMap[d] = { income: 0, expense: 0 };
-    if (e.entryType === 'INCOME') dayMap[d].income += e.amount;
-    else dayMap[d].expense += e.amount;
+    if (!dayMap[e.entryDate]) dayMap[e.entryDate] = { income: 0, expense: 0 };
+    if (e.entryType === 'INCOME') dayMap[e.entryDate].income += e.amount;
+    else dayMap[e.entryDate].expense += e.amount;
   }
 
-  // 오늘 날짜 (같은 달 강조용)
   const todayStr = new Date().toISOString().slice(0, 10);
-
-  // 그리드 셀 배열 (앞쪽 빈 칸 + 날짜)
   const cells: (number | null)[] = [
     ...Array(firstWeekday).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
@@ -807,14 +821,70 @@ const CalendarView: React.FC<{
   while (cells.length % 7 !== 0) cells.push(null);
 
   const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
-
   const toDateStr = (d: number) =>
     `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-  // 선택된 날짜의 항목 목록
-  const selectedEntries = selectedDate
-    ? entries.filter(e => e.entryDate === selectedDate)
-    : [];
+  const selectedEntries = selectedDate ? entries.filter(e => e.entryDate === selectedDate) : [];
+
+  // 날짜 선택 시 상세 영역으로 자동 스크롤
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selectedDate && detailRef.current) {
+      detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedDate]);
+
+  // 일괄 등록 폼 상태
+  const [showBulkForm, setShowBulkForm] = useState(false);
+  const [bulkRows, setBulkRows] = useState<BulkRow[]>([mkBulkRow()]);
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  // 날짜 변경 시 bulk form 초기화
+  useEffect(() => {
+    setShowBulkForm(false);
+    setBulkRows([mkBulkRow()]);
+  }, [selectedDate]);
+
+  const updateBulkRow = (key: number, patch: Partial<BulkRow>) =>
+    setBulkRows(prev => prev.map(r => r.key === key ? { ...r, ...patch } : r));
+
+  const handleBulkSave = async () => {
+    if (!selectedDate) return;
+    const validRows = bulkRows.filter(r => r.category && r.amountStr && Number(r.amountStr.replace(/,/g, '')) > 0);
+    if (validRows.length === 0) { alert('카테고리와 금액을 입력해주세요.'); return; }
+    setBulkSaving(true);
+    try {
+      const payload = validRows.map(r => ({
+        userId,
+        yearMonth,
+        entryDate: selectedDate,
+        entryType: r.entryType,
+        category: r.category,
+        merchant: r.merchant || undefined,
+        amount: Number(r.amountStr.replace(/,/g, '')),
+        isFixed: false,
+        isInvestment: false,
+        subcategory: undefined as string | undefined,
+        accountMain: undefined as string | undefined,
+        account: undefined as string | undefined,
+        investmentType: undefined as string | undefined,
+        memo: undefined as string | undefined,
+      }));
+      const created = await bulkCreateBudgetEntries(payload);
+      onEntriesAdded(created);
+      setShowBulkForm(false);
+      setBulkRows([mkBulkRow()]);
+    } catch {
+      alert('저장에 실패했습니다.');
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
+  const bulkInputStyle: React.CSSProperties = {
+    padding: '5px 7px', fontSize: '12px', borderRadius: '6px',
+    border: '1px solid #dadce0', outline: 'none', boxSizing: 'border-box',
+  };
 
   return (
     <div>
@@ -853,20 +923,15 @@ const CalendarView: React.FC<{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
               }}
             >
-              {/* 날짜 숫자 */}
               <span style={{
                 fontSize: '12px', fontWeight: isToday ? 800 : 600,
                 color: dow === 0 ? '#E06060' : dow === 6 ? '#4BAAD4' : isSelected ? '#1a3a5c' : '#344054',
               }}>{day}</span>
-
-              {/* 수입 */}
               {data?.income ? (
                 <span style={{ fontSize: '10px', color: '#4CAF50', fontWeight: 700, lineHeight: 1.2 }}>
                   +{formatAmountShort(data.income)}
                 </span>
               ) : null}
-
-              {/* 지출 */}
               {data?.expense ? (
                 <span style={{ fontSize: '10px', color: '#E06060', fontWeight: 700, lineHeight: 1.2 }}>
                   -{formatAmountShort(data.expense)}
@@ -877,21 +942,138 @@ const CalendarView: React.FC<{
         })}
       </div>
 
-      {/* 선택된 날짜의 항목 목록 */}
+      {/* 선택된 날짜 상세 */}
       {selectedDate && (
-        <div style={{ marginTop: '16px' }}>
+        <div ref={detailRef} style={{ marginTop: '16px' }}>
+          {/* 날짜 헤더 + 일괄 등록 버튼 */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             marginBottom: '8px', paddingBottom: '6px', borderBottom: '2px solid #e0f0ff',
           }}>
             <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>
-              {Number(selectedDate.slice(5, 7))}월 {Number(selectedDate.slice(8))}일 항목
+              {Number(selectedDate.slice(5, 7))}월 {Number(selectedDate.slice(8))}일
+              <span style={{ fontSize: '12px', color: '#9aa0a6', fontWeight: 400, marginLeft: '6px' }}>
+                {selectedEntries.length}건
+              </span>
             </span>
-            <span style={{ fontSize: '12px', color: '#9aa0a6' }}>{selectedEntries.length}건</span>
+            <button
+              onClick={() => setShowBulkForm(v => !v)}
+              style={{
+                padding: '5px 12px', fontSize: '12px', fontWeight: 600,
+                borderRadius: '20px', border: '1px solid #4BAAD4',
+                background: showBulkForm ? '#e0f0ff' : '#fff',
+                color: '#1a3a5c', cursor: 'pointer',
+              }}
+            >
+              {showBulkForm ? '✕ 닫기' : '+ 일괄 등록'}
+            </button>
           </div>
-          {selectedEntries.length === 0 ? (
+
+          {/* 일괄 등록 폼 */}
+          {showBulkForm && (
+            <div style={{
+              background: '#f7fafd', border: '1px solid #e0f0ff', borderRadius: '10px',
+              padding: '12px', marginBottom: '12px',
+            }}>
+              {/* 행 목록 */}
+              {bulkRows.map((row) => {
+                const cats = row.entryType === 'INCOME'
+                  ? INCOME_CATEGORIES.map(c => c.name)
+                  : VARIABLE_EXPENSE_CATEGORIES;
+                return (
+                  <div key={row.key} style={{ display: 'flex', gap: '4px', marginBottom: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* 수입/지출 토글 */}
+                    <div style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #dadce0', flexShrink: 0 }}>
+                      {(['EXPENSE', 'INCOME'] as const).map(t => (
+                        <button key={t} onClick={() => updateBulkRow(row.key, { entryType: t, category: '' })} style={{
+                          padding: '5px 8px', fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                          background: row.entryType === t ? (t === 'EXPENSE' ? '#E06060' : '#4CAF50') : '#fff',
+                          color: row.entryType === t ? '#fff' : '#9aa0a6',
+                        }}>
+                          {t === 'EXPENSE' ? '지출' : '수입'}
+                        </button>
+                      ))}
+                    </div>
+                    {/* 카테고리 */}
+                    <select
+                      value={row.category}
+                      onChange={e => updateBulkRow(row.key, { category: e.target.value })}
+                      style={{ ...bulkInputStyle, flex: '1 1 90px', minWidth: '80px' }}
+                    >
+                      <option value="">카테고리</option>
+                      {cats.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    {/* 지출처 (지출만) */}
+                    {row.entryType === 'EXPENSE' && (
+                      <input
+                        type="text"
+                        placeholder="지출처"
+                        value={row.merchant}
+                        onChange={e => updateBulkRow(row.key, { merchant: e.target.value })}
+                        style={{ ...bulkInputStyle, flex: '1 1 80px', minWidth: '70px' }}
+                      />
+                    )}
+                    {/* 금액 */}
+                    <input
+                      type="text" inputMode="numeric"
+                      placeholder="금액(원)"
+                      value={row.amountStr}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        updateBulkRow(row.key, { amountStr: raw });
+                      }}
+                      style={{ ...bulkInputStyle, flex: '1 1 80px', minWidth: '70px' }}
+                    />
+                    {/* 삭제 */}
+                    {bulkRows.length > 1 && (
+                      <button
+                        onClick={() => setBulkRows(prev => prev.filter(r => r.key !== row.key))}
+                        style={{ background: 'none', border: 'none', color: '#dadce0', cursor: 'pointer', fontSize: '16px', padding: '0 2px', flexShrink: 0 }}
+                      >×</button>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* 행 추가 + 저장 버튼 */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                <button
+                  onClick={() => setBulkRows(prev => [...prev, mkBulkRow()])}
+                  style={{
+                    padding: '5px 12px', fontSize: '12px', fontWeight: 600,
+                    borderRadius: '20px', border: '1px solid #dadce0',
+                    background: '#fff', color: '#5f6368', cursor: 'pointer',
+                  }}
+                >+ 행 추가</button>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    onClick={() => { setShowBulkForm(false); setBulkRows([mkBulkRow()]); }}
+                    style={{
+                      padding: '5px 12px', fontSize: '12px', fontWeight: 600,
+                      borderRadius: '20px', border: '1px solid #dadce0',
+                      background: '#fff', color: '#5f6368', cursor: 'pointer',
+                    }}
+                  >취소</button>
+                  <button
+                    onClick={handleBulkSave}
+                    disabled={bulkSaving}
+                    style={{
+                      padding: '5px 16px', fontSize: '12px', fontWeight: 700,
+                      borderRadius: '20px', border: 'none', cursor: bulkSaving ? 'default' : 'pointer',
+                      background: bulkSaving ? '#b0c4de' : '#4BAAD4', color: '#fff',
+                    }}
+                  >
+                    {bulkSaving ? '저장 중…' : `일괄 저장 ${bulkRows.filter(r => r.category && r.amountStr).length}건`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 항목 목록 */}
+          {selectedEntries.length === 0 && !showBulkForm ? (
             <div style={{ textAlign: 'center', padding: '24px', color: '#9aa0a6', fontSize: '13px' }}>
-              이 날 기록이 없습니다.
+              이 날 기록이 없습니다. 일괄 등록으로 추가해보세요.
             </div>
           ) : (
             selectedEntries.map(e => (

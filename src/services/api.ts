@@ -769,6 +769,31 @@ export const deleteBudgetEntry = async (id: number): Promise<void> => {
   await api.delete(`/api/budget/entries/${id}`);
 };
 
+// 여러 가계부 항목을 한 번에 저장 (달력 일괄 등록용)
+export const bulkCreateBudgetEntries = async (
+  entries: Omit<BudgetEntry, 'id' | 'createdAt'>[]
+): Promise<BudgetEntry[]> => {
+  const { data } = await api.post('/api/budget/entries/bulk', {
+    entries: entries.map(payload => ({
+      user_id: payload.userId,
+      year_month: payload.yearMonth,
+      entry_date: payload.entryDate,
+      entry_type: payload.entryType,
+      category: payload.category,
+      subcategory: payload.subcategory ?? null,
+      account_main: payload.accountMain ?? null,
+      account: payload.account ?? null,
+      amount: payload.amount,
+      is_fixed: payload.isFixed,
+      is_investment: payload.isInvestment,
+      investment_type: payload.investmentType ?? null,
+      merchant: payload.merchant ?? null,
+      memo: payload.memo ?? null,
+    })),
+  });
+  return data.map(toEntry);
+};
+
 export const getBudgetSummary = async (userId: string, yearMonth: string): Promise<BudgetSummary> => {
   const { data } = await api.get('/api/budget/summary', { params: { user_id: userId, year_month: yearMonth } });
   return data as BudgetSummary;
