@@ -29,6 +29,7 @@ import {
   AssetSnapshotCell,
   AssetSnapshotDetail,
   FixedExpense,
+  PaymentMethod,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -956,6 +957,50 @@ export const payFixedExpense = async (
     year_month: yearMonth, entry_date: entryDate,
   });
   return toEntry(data);
+};
+
+// ─── 결제수단 API ─────────────────────────────────────────────────
+// 백엔드 snake_case → camelCase 변환
+
+const toPaymentMethod = (d: any): PaymentMethod => ({
+  id: d.id,
+  userId: d.user_id,
+  name: d.name,
+  type: d.type,
+  billingDay: d.billing_day ?? undefined,
+  isActive: d.is_active,
+});
+
+export const getPaymentMethods = async (userId: string): Promise<PaymentMethod[]> => {
+  const { data } = await api.get('/api/budget/payment-methods', { params: { user_id: userId } });
+  return data.map(toPaymentMethod);
+};
+
+export const createPaymentMethod = async (payload: {
+  userId: string; name: string; type: string; billingDay?: number;
+}): Promise<PaymentMethod> => {
+  const { data } = await api.post('/api/budget/payment-methods', {
+    user_id: payload.userId,
+    name: payload.name,
+    type: payload.type,
+    billing_day: payload.billingDay ?? null,
+  });
+  return toPaymentMethod(data);
+};
+
+export const updatePaymentMethod = async (id: number, payload: {
+  name?: string; type?: string; billingDay?: number;
+}): Promise<PaymentMethod> => {
+  const { data } = await api.patch(`/api/budget/payment-methods/${id}`, {
+    name: payload.name,
+    type: payload.type,
+    billing_day: payload.billingDay,
+  });
+  return toPaymentMethod(data);
+};
+
+export const deletePaymentMethod = async (id: number): Promise<void> => {
+  await api.delete(`/api/budget/payment-methods/${id}`);
 };
 
 export default api;

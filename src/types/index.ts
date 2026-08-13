@@ -623,6 +623,16 @@ export interface AssetSnapshotDetail {
   amount: number;  // 원 단위
 }
 
+/** 결제수단 (통장/카드) — 가계부 및 고정비 납부 통장 선택에 사용 */
+export interface PaymentMethod {
+  id: number;
+  userId: string;
+  name: string;        // 예: "신한은행 고정비 통장"
+  type: '통장' | '카드';
+  billingDay?: number; // 카드 결제일 (카드만 해당, 1-31)
+  isActive: boolean;
+}
+
 /** 사용자별 고정비 템플릿 — 납부 버튼으로 지출 내역 자동 등록 */
 export interface FixedExpense {
   id: number;

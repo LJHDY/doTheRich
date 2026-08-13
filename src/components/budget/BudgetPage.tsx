@@ -32,8 +32,12 @@ import {
   updateFixedExpense,
   deleteFixedExpense,
   payFixedExpense,
+  getPaymentMethods,
+  createPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, FixedExpense, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, FixedExpense, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
@@ -92,6 +96,14 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
   const isMobile = useIsMobile();
+
+  // 결제수단 목록 (userId 변경 시 재로드)
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+
+  // 결제수단 로드
+  useEffect(() => {
+    getPaymentMethods(userId).then(setPaymentMethods).catch(() => {});
+  }, [userId]);
 
   // 고정비 관리 모달
   const [fixedExpenseOpen, setFixedExpenseOpen] = useState(false);
@@ -377,6 +389,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       {/* ══ 통장 관리 탭 ═════════════════════════════════════ */}
       {tab === 'ACCOUNTS' && (
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+          {/* 결제수단 관리 패널 (통장/카드 CRUD) */}
+          <PaymentMethodPanel userId={userId} paymentMethods={paymentMethods} onChanged={setPaymentMethods} />
           <AccountManagementView />
         </div>
       )}
@@ -478,39 +492,29 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               </FieldRow>
             )}
 
-            {/* 통장 대분류 */}
-            <FieldRow label="통장 (대분류)">
+            {/* 결제수단 — 등록된 통장/카드에서 선택 */}
+            <FieldRow label="결제수단">
               <select
-                value={form.accountMain ?? ''}
-                onChange={e => setForm(f => ({ ...f, accountMain: e.target.value, account: '' }))}
+                value={form.account ?? ''}
+                onChange={e => setForm(f => ({ ...f, account: e.target.value }))}
                 style={inputStyle}
               >
                 <option value="">선택 안함</option>
-                {ACCOUNT_GROUPS.map(g => <option key={g.main} value={g.main}>{g.main}</option>)}
+                {(['통장', '카드'] as const).map(type => {
+                  const group = paymentMethods.filter(p => p.type === type);
+                  if (group.length === 0) return null;
+                  return (
+                    <optgroup key={type} label={type}>
+                      {group.map(p => (
+                        <option key={p.id} value={p.name}>
+                          {p.name}{p.billingDay ? ` (결제일 ${p.billingDay}일)` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </select>
             </FieldRow>
-
-            {/* 통장 중분류 — 대분류 선택 시만 표시 */}
-            {form.accountMain && (() => {
-              const group = ACCOUNT_GROUPS.find(g => g.main === form.accountMain);
-              const accs = group?.accounts ?? [];
-              return accs.length > 0 ? (
-                <FieldRow label="통장 (중분류)">
-                  <select
-                    value={form.account ?? ''}
-                    onChange={e => setForm(f => ({ ...f, account: e.target.value }))}
-                    style={inputStyle}
-                  >
-                    <option value="">선택 안함</option>
-                    {accs.map(a => (
-                      <option key={a.name} value={a.name}>
-                        {a.name}{a.bankName ? ` (${a.bankName})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </FieldRow>
-              ) : null;
-            })()}
 
             {/* 금액 */}
             <FieldRow label="금액 (원)">
@@ -571,6 +575,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           userId={userId}
           userName={userName}
           yearMonth={yearMonth}
+          paymentMethods={paymentMethods}
           onClose={() => setFixedExpenseOpen(false)}
           onPaid={entry => { setEntries(prev => [entry, ...prev]); }}
         />
@@ -673,6 +678,162 @@ const inputStyle: React.CSSProperties = {
   width: '100%', padding: '9px 12px', fontSize: '14px',
   borderRadius: '8px', border: '1px solid #dadce0',
   boxSizing: 'border-box', outline: 'none',
+};
+
+// ─── 결제수단 관리 패널 ─────────────────────────────────────────
+// 통장 탭 상단에 표시되며, 결제수단(통장/카드) CRUD 기능 제공
+const PaymentMethodPanel: React.FC<{
+  userId: string;
+  paymentMethods: PaymentMethod[];
+  onChanged: (methods: PaymentMethod[]) => void;
+}> = ({ userId, paymentMethods, onChanged }) => {
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({ name: '', type: '통장' as '통장' | '카드', billingDayStr: '' });
+  const [saving, setSaving] = useState(false);
+
+  const inputSt: React.CSSProperties = {
+    width: '100%', padding: '7px 10px', fontSize: '13px',
+    border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
+    boxSizing: 'border-box',
+  };
+
+  const openAdd = () => {
+    setEditingId(null);
+    setForm({ name: '', type: '통장', billingDayStr: '' });
+    setFormOpen(true);
+  };
+
+  const openEdit = (pm: PaymentMethod) => {
+    setEditingId(pm.id);
+    setForm({ name: pm.name, type: pm.type, billingDayStr: pm.billingDay ? String(pm.billingDay) : '' });
+    setFormOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { alert('결제수단 이름을 입력해주세요'); return; }
+    setSaving(true);
+    try {
+      // 카드 유형일 때만 결제일 전달, 통장은 undefined
+      const billingDay = form.type === '카드' && form.billingDayStr ? Number(form.billingDayStr) : undefined;
+      if (editingId !== null) {
+        const updated = await updatePaymentMethod(editingId, { name: form.name.trim(), type: form.type, billingDay });
+        onChanged(paymentMethods.map(p => p.id === editingId ? updated : p));
+      } else {
+        const created = await createPaymentMethod({ userId, name: form.name.trim(), type: form.type, billingDay });
+        onChanged([...paymentMethods, created]);
+      }
+      setFormOpen(false);
+    } catch { alert('저장에 실패했습니다'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (pm: PaymentMethod) => {
+    if (!window.confirm(`"${pm.name}"을(를) 삭제할까요?`)) return;
+    try {
+      await deletePaymentMethod(pm.id);
+      onChanged(paymentMethods.filter(p => p.id !== pm.id));
+    } catch { alert('삭제에 실패했습니다'); }
+  };
+
+  const banks = paymentMethods.filter(p => p.type === '통장');
+  const cards = paymentMethods.filter(p => p.type === '카드');
+
+  return (
+    <div style={{ maxWidth: '900px', margin: '0 auto 24px' }}>
+      {/* 헤더 */}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+        <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', flex: 1 }}>💳 결제수단 관리</span>
+        <button onClick={openAdd} style={{
+          padding: '5px 12px', fontSize: '12px', fontWeight: 700,
+          background: '#89CFF0', color: '#fff', border: 'none',
+          borderRadius: '6px', cursor: 'pointer',
+        }}>+ 추가</button>
+      </div>
+
+      {/* 추가/수정 폼 */}
+      {formOpen && (
+        <div style={{
+          border: '1px solid #89CFF0', borderRadius: '10px',
+          padding: '12px 14px', marginBottom: '12px', background: '#f0f8fd',
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <div>
+              <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>이름 *</label>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="예: 신한 체크카드" style={inputSt} />
+            </div>
+            <div>
+              <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>종류</label>
+              <select value={form.type}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value as '통장' | '카드', billingDayStr: '' }))}
+                style={inputSt}>
+                <option value="통장">통장</option>
+                <option value="카드">카드</option>
+              </select>
+            </div>
+            {/* 카드 유형일 때만 결제일 입력란 표시 */}
+            {form.type === '카드' && (
+              <div>
+                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>결제일</label>
+                <input type="number" min={1} max={31} value={form.billingDayStr}
+                  onChange={e => setForm(f => ({ ...f, billingDayStr: e.target.value }))}
+                  placeholder="예: 14" style={inputSt} />
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+            <button onClick={() => setFormOpen(false)}
+              style={{ padding: '5px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}>
+              취소
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              style={{ padding: '5px 12px', fontSize: '12px', background: '#1a3a5c', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}>
+              {saving ? '저장 중…' : '저장'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 빈 상태 안내 */}
+      {paymentMethods.length === 0 && !formOpen && (
+        <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '10px 0' }}>
+          등록된 결제수단이 없습니다. + 추가 버튼으로 통장/카드를 등록하세요.
+        </div>
+      )}
+
+      {/* 통장 / 카드 그룹별 목록 */}
+      {[{ label: '통장', items: banks }, { label: '카드', items: cards }].map(({ label, items }) =>
+        items.length === 0 ? null : (
+          <div key={label} style={{ marginBottom: '10px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#5f6368', marginBottom: '4px' }}>{label}</div>
+            {items.map(pm => (
+              <div key={pm.id} style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '7px 10px', background: '#fff',
+                border: '1px solid #e8ecf0', borderRadius: '8px', marginBottom: '4px',
+              }}>
+                <span style={{ flex: 1, fontSize: '13px', color: '#344054' }}>{pm.name}</span>
+                {pm.billingDay && (
+                  <span style={{ fontSize: '11px', color: '#7B1FA2', background: '#f3e5f5', padding: '1px 7px', borderRadius: '10px' }}>
+                    결제일 {pm.billingDay}일
+                  </span>
+                )}
+                <button onClick={() => openEdit(pm)}
+                  style={{ padding: '3px 8px', fontSize: '11px', border: '1px solid #dadce0', borderRadius: '5px', background: '#fff', cursor: 'pointer' }}>
+                  ✏
+                </button>
+                <button onClick={() => handleDelete(pm)}
+                  style={{ padding: '3px 8px', fontSize: '11px', border: '1px solid #dadce0', borderRadius: '5px', background: '#fff', color: '#E06060', cursor: 'pointer' }}>
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
 };
 
 // ─── 통장 관리 뷰 ─────────────────────────────────────────────
@@ -1834,23 +1995,23 @@ const AssetCell: React.FC<{
 type FeForm = {
   name: string;
   amountStr: string;   // 원 단위 입력
-  accountMain: string;
-  account: string;
+  account: string;     // 결제수단 이름 (PaymentMethod.name)
   paymentDay: string;
   category: string;
 };
 
 const emptyFeForm = (): FeForm => ({
-  name: '', amountStr: '', accountMain: '', account: '', paymentDay: '', category: '',
+  name: '', amountStr: '', account: '', paymentDay: '', category: '',
 });
 
 const FixedExpenseModal: React.FC<{
   userId: string;
   userName: string;
   yearMonth: string;
+  paymentMethods: PaymentMethod[];
   onClose: () => void;
   onPaid: (entry: BudgetEntry) => void;
-}> = ({ userId, userName, yearMonth, onClose, onPaid }) => {
+}> = ({ userId, userName, yearMonth, paymentMethods, onClose, onPaid }) => {
   const [items, setItems] = useState<FixedExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -1884,7 +2045,6 @@ const FixedExpenseModal: React.FC<{
     setForm({
       name: fe.name,
       amountStr: fe.amount > 0 ? String(fe.amount) : '',
-      accountMain: fe.accountMain ?? '',
       account: fe.account ?? '',
       paymentDay: fe.paymentDay ? String(fe.paymentDay) : '',
       category: fe.category ?? '',
@@ -1901,7 +2061,6 @@ const FixedExpenseModal: React.FC<{
       const payload = {
         name: form.name.trim(),
         amount,
-        accountMain: form.accountMain || undefined,
         account: form.account || undefined,
         paymentDay: form.paymentDay ? Number(form.paymentDay) : undefined,
         category: form.category || '미분류',
@@ -2035,23 +2194,23 @@ const FixedExpenseModal: React.FC<{
                         </span>
                       )}
                     </div>
-                    <div>
-                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부 통장 대분류</label>
-                      <select value={form.accountMain} onChange={e => setForm(f => ({ ...f, accountMain: e.target.value, account: '' }))} style={inputSt}>
-                        <option value="">선택 안 함</option>
-                        {ACCOUNT_MAINS.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부 통장</label>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부 결제수단</label>
                       <select value={form.account} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputSt}>
                         <option value="">선택 안 함</option>
-                        {(form.accountMain
-                          ? ACCOUNT_GROUPS.filter(g => g.main === form.accountMain)
-                          : ACCOUNT_GROUPS
-                        ).flatMap(g => g.accounts).map(a => (
-                          <option key={a.name} value={a.name}>{a.name}</option>
-                        ))}
+                        {(['통장', '카드'] as const).map(type => {
+                          const group = paymentMethods.filter(p => p.type === type);
+                          if (group.length === 0) return null;
+                          return (
+                            <optgroup key={type} label={type}>
+                              {group.map(p => (
+                                <option key={p.id} value={p.name}>
+                                  {p.name}{p.billingDay ? ` (결제일 ${p.billingDay}일)` : ''}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
                       </select>
                     </div>
                     <div>
