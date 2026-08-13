@@ -2286,33 +2286,72 @@ const AssetDetailModal: React.FC<{
   const [cellCommonCode, setCellCommonCode] = useState<CommonCode | null>(null);
 
   useEffect(() => {
-    // 공통코드 조회 — detail_code = cellCode (예: STOCK_LDY)
-    getCommonCodes('ASSET_CELL').then(data => {
-      setCellCommonCode(data.find(c => c.detailCode === cellCode) ?? null);
-    });
-  }, [cellCode]);
+    // 공통코드 + 세부 내역 병렬 조회 후 머징
+    Promise.all([
+      getCommonCodes('ASSET_CELL'),
+      getAssetSnapshotDetails(snapshotDate),
+    ]).then(([codes, detailData]) => {
+      // 공통코드: ASSET_CELL 그룹에서 detail_code === cellCode 매칭
+      const cc = codes.find(c => c.detailCode === cellCode) ?? null;
+      setCellCommonCode(cc);
 
-  useEffect(() => {
-    getAssetSnapshotDetails(snapshotDate).then(data => {
+      // 다른 셀 항목 (저장 시 그대로 포함)
       setOtherItems(
-        data
+        detailData
           .filter(d => !(d.userId === userId && d.assetType === assetType))
           .map(d => ({ userId: d.userId, assetType: d.assetType, accountName: d.accountName, amountWon: d.amount }))
       );
-      setCellItems(
-        data
-          .filter(d => d.userId === userId && d.assetType === assetType)
+
+      // 이 셀의 기존 저장 데이터
+      const savedItems = detailData.filter(d => d.userId === userId && d.assetType === assetType);
+      // accountName → 저장 데이터 맵 (금액 조회용)
+      const savedMap = new Map(savedItems.map(d => [d.accountName, d]));
+
+      if (cc?.detailCodeName) {
+        // 공통코드 detail_code_name을 ','로 split → 템플릿 계좌명 목록
+        const templateNames = cc.detailCodeName.split(',').map(n => n.trim()).filter(Boolean);
+
+        // 템플릿 순서대로 행 생성, 기존 저장 금액이 있으면 매핑
+        const templateItems: LocalDetail[] = templateNames.map(name => {
+          const saved = savedMap.get(name);
+          return {
+            key: saved ? String(saved.id) : `new-${name}-${Date.now()}-${Math.random()}`,
+            userId,
+            assetType,
+            accountName: name,
+            amountStr: saved && saved.amount > 0 ? String(saved.amount) : '',
+          };
+        });
+
+        // 템플릿에 없는 추가 저장 항목도 유지 (수동 추가분)
+        const templateNameSet = new Set(templateNames);
+        const extraItems: LocalDetail[] = savedItems
+          .filter(d => !templateNameSet.has(d.accountName))
           .map(d => ({
+            key: String(d.id),
+            userId,
+            assetType,
+            accountName: d.accountName,
+            amountStr: d.amount > 0 ? String(d.amount) : '',
+          }));
+
+        setCellItems([...templateItems, ...extraItems]);
+      } else {
+        // 공통코드 미등록 시 기존 방식 그대로
+        setCellItems(
+          savedItems.map(d => ({
             key: String(d.id),
             userId: d.userId,
             assetType: d.assetType,
             accountName: d.accountName,
             amountStr: d.amount > 0 ? String(d.amount) : '',
           }))
-      );
+        );
+      }
+
       setLoading(false);
     });
-  }, [snapshotDate, userId, assetType]);
+  }, [snapshotDate, userId, assetType, cellCode]);
 
   const addItem = () => setCellItems(prev => [...prev, {
     key: `new-${Date.now()}-${Math.random()}`,
