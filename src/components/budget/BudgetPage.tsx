@@ -2132,7 +2132,8 @@ const FixedExpenseModal: React.FC<{
   const handleSaveForm = async () => {
     if (!form.name.trim()) { alert('고정비 내역을 입력해주세요'); return; }
     const amount = Number(form.amountStr.replace(/,/g, '') || '0');
-    if (amount <= 0) { alert('금액을 입력해주세요'); return; }
+    const amountOptional = ['공과금', '교통비'].includes(form.category);
+    if (!amountOptional && amount <= 0) { alert('금액을 입력해주세요'); return; }
     setSaving(true);
     try {
       const payload = {
@@ -2297,9 +2298,11 @@ const FixedExpenseModal: React.FC<{
                         placeholder="예: 월세, 통신비" style={inputSt} />
                     </div>
                     <div>
-                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>금액 (원) *</label>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>
+                        금액 (원){['공과금', '교통비'].includes(form.category) ? '' : ' *'}
+                      </label>
                       <input value={form.amountStr} onChange={e => setForm(f => ({ ...f, amountStr: e.target.value.replace(/[^0-9]/g, '') }))}
-                        placeholder="예: 800000" style={inputSt} />
+                        placeholder={['공과금', '교통비'].includes(form.category) ? '매달 변동 (선택)' : '예: 800000'} style={inputSt} />
                       {Number(form.amountStr) > 0 && (
                         <span style={{ fontSize: '11px', color: '#4BAAD4', fontWeight: 600, marginTop: '2px', display: 'block' }}>
                           = {formatAmountKorean(Number(form.amountStr))}
@@ -2333,13 +2336,27 @@ const FixedExpenseModal: React.FC<{
                     </div>
                     <div>
                       <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>카테고리</label>
+                      <select
+                        value={FIXED_EXPENSE_ITEM_CATEGORIES.includes(form.category) ? form.category : (form.category ? '__custom__' : '')}
+                        onChange={e => {
+                          if (e.target.value === '__custom__') return;
+                          setForm(f => ({ ...f, category: e.target.value }));
+                        }}
+                        style={inputSt}
+                      >
+                        <option value="">선택 안 함</option>
+                        {FIXED_EXPENSE_ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        {form.category && !FIXED_EXPENSE_ITEM_CATEGORIES.includes(form.category) && (
+                          <option value="__custom__">{form.category} (직접입력)</option>
+                        )}
+                      </select>
+                      {/* 직접 입력 필드 */}
                       <input
-                        list="fe-cats" value={form.category}
+                        value={form.category}
                         onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                        placeholder="카테고리 입력" style={inputSt} />
-                      <datalist id="fe-cats">
-                        {FIXED_EXPENSE_ITEM_CATEGORIES.map(c => <option key={c} value={c} />)}
-                      </datalist>
+                        placeholder="직접 입력 가능"
+                        style={{ ...inputSt, marginTop: '4px', fontSize: '12px' }}
+                      />
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '6px' }}>
@@ -2382,8 +2399,8 @@ const FixedExpenseModal: React.FC<{
                         {fe.name}
                       </div>
                       <div style={{ fontSize: '11px', color: '#5f6368', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                        {/* 공과금은 금액 클릭 시 인라인 편집 */}
-                        {fe.category === '공과금' && editingAmountId === fe.id ? (
+                        {/* 공과금·교통비는 금액 클릭 시 인라인 편집 */}
+                        {['공과금', '교통비'].includes(fe.category) && editingAmountId === fe.id ? (
                           <input
                             autoFocus
                             type="text" inputMode="numeric"
@@ -2401,12 +2418,12 @@ const FixedExpenseModal: React.FC<{
                           />
                         ) : (
                           <span
-                            onClick={fe.category === '공과금' ? () => { setEditingAmountId(fe.id); setEditingAmountStr(String(fe.amount)); } : undefined}
+                            onClick={['공과금', '교통비'].includes(fe.category) ? () => { setEditingAmountId(fe.id); setEditingAmountStr(String(fe.amount)); } : undefined}
                             style={{
-                              cursor: fe.category === '공과금' ? 'text' : 'default',
-                              borderBottom: fe.category === '공과금' ? '1px dashed #89CFF0' : 'none',
+                              cursor: ['공과금', '교통비'].includes(fe.category) ? 'text' : 'default',
+                              borderBottom: ['공과금', '교통비'].includes(fe.category) ? '1px dashed #89CFF0' : 'none',
                             }}
-                            title={fe.category === '공과금' ? '클릭하여 금액 수정' : undefined}
+                            title={['공과금', '교통비'].includes(fe.category) ? '클릭하여 금액 수정' : undefined}
                           >
                             {formatAmountShort(fe.amount)}원
                           </span>
