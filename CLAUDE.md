@@ -191,6 +191,12 @@ PropertyVisit { id, complexId, visitDate?, agentName?, officePhone?, mobilePhone
 // 공공단지 (건축물대장 API 수집, 150세대↑ 공동주택)
 PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, useAprDay?, latitude, longitude }
 // useAprDay: YYYYMMDD 형식 사용승인일
+
+// 공통코드 — DB로 관리하는 코드 그룹 테이블
+CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrder, createdAt }
+// UNIQUE(commonCode, detailCode) 제약
+// 자산 셀 복합키: common_code='ASSET_CELL', detail_code='{codeKey}_{USERID}' (예: STOCK_LDY)
+//   detailCodeName을 ','로 split → 세부 내역 모달 계좌명 템플릿으로 사용
 ```
 
 ### 유틸 함수
@@ -276,6 +282,10 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
 | DELETE | `/api/assets/snapshots/{snapshot_date}?user_id=` | 특정 날짜 스냅샷 전체 삭제 |
 | GET | `/api/assets/snapshots/details?snapshot_date=` | 특정 날짜 세부 항목 목록 (전체 유저) |
 | POST | `/api/assets/snapshots/details/bulk` | 세부 항목 일괄 저장 + 스냅샷 셀 합산 자동 업데이트 — `{snapshot_date, items:[{user_id, asset_type, account_name, amount}]}` |
+| GET | `/api/common-codes?common_code=` | 공통코드 목록 (그룹 필터 가능) |
+| POST | `/api/common-codes` | 공통코드 등록 (201) |
+| PATCH | `/api/common-codes/:id` | 공통코드 수정 |
+| DELETE | `/api/common-codes/:id` | 공통코드 삭제 (204) |
 
 ---
 
@@ -765,6 +775,19 @@ PublicComplex { id, guName?, bldNm?, address?, hhldCnt?, vlRat?, parkingCnt?, us
   - 재오픈 시 저장된 세부 항목 그대로 표시·수정 가능
   - `AssetSnapshotDetail` 타입, `getAssetSnapshotDetails` / `bulkSaveAssetSnapshotDetails` API
   - 백엔드: `asset_snapshot_detail` 테이블, `asset_snapshot_detail_service.py`, 라우트 2개
+- [x] 공통코드 관리 (`CommonCodeModal`, `common_code` 테이블)
+  - 통장 관리 탭 하단 "⚙ 공통코드 관리" 버튼 → `CommonCodeModal` 오픈
+  - 모달 구조: 좌측 공통코드 그룹 목록 / 우측 상세코드 테이블 (추가·인라인수정·삭제·정렬순서)
+  - 그룹은 첫 번째 상세코드 등록 시 자동 생성 (그룹만 단독 추가 불가)
+  - `CommonCode` 타입 (`types/index.ts`), CRUD API 4종 (`api.ts`)
+  - 백엔드: `common_code` 테이블, UNIQUE(common_code, detail_code), `common_code_service.py`, `routers/common_code.py`
+  - **자산 셀 공통코드 연동** (`ASSET_CELL` 그룹):
+    - `ASSET_COLUMNS`에 `codeKey` 필드 추가 (영문 식별자: STOCK, CASH, DEPOSIT 등)
+    - `buildAssetCellCode(codeKey, userId)` → `{codeKey}_{USERID}` 복합키 생성 (예: STOCK_LDY)
+    - 세부 내역 모달 오픈 시 `ASSET_CELL` 그룹에서 `detail_code === cellCode` 조회
+    - `detailCodeName`을 `,` 기준으로 split → 템플릿 계좌명 목록으로 행 자동 생성
+    - 기존 저장 금액은 accountName 매칭으로 자동 채움, 템플릿 외 수동 추가 항목도 유지
+    - 공통코드 미등록 셀은 기존 방식(빈 상태 시작) 그대로
 
 ## 미완성 / TODO
 
