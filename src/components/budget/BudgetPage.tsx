@@ -3075,7 +3075,7 @@ const AIReportView: React.FC = () => {
   const [reports, setReports] = useState<FinancialReportType[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [toast, setToast] = useState('');
 
   // 리포트 목록 불러오기
@@ -3084,7 +3084,7 @@ const AIReportView: React.FC = () => {
     try {
       const data = await getFinancialReports();
       setReports(data);
-      if (data.length > 0 && !selectedMonth) setSelectedMonth(data[0].reportMonth);
+      if (data.length > 0 && selectedId === null) setSelectedId(data[0].id);
     } finally {
       setLoading(false);
     }
@@ -3092,25 +3092,23 @@ const AIReportView: React.FC = () => {
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // AI 분석 생성 요청 → 5초 간격 폴링으로 완료 감지
+  // AI 분석 생성 요청 → 5초 간격 폴링으로 완료 감지 (새 id 등장 기준)
   const handleGenerate = async () => {
     setGenerating(true);
     setToast('분석 요청 중…');
     try {
       await generateFinancialReport();
       setToast('Gemini가 분석 중입니다. 잠시 후 자동으로 업데이트됩니다.');
-      // 최대 3분 폴링 (5초 간격, 36회)
+      const prevTopId = reports.length > 0 ? reports[0].id : null;
       let tries = 0;
-      const prev = reports.find(r => r.reportMonth === selectedMonth);
       const poll = setInterval(async () => {
         tries++;
         const data = await getFinancialReports();
-        const latest = data[0];
-        const isNew = !prev || (latest && latest.updatedAt !== prev.updatedAt);
+        const isNew = data.length > 0 && data[0].id !== prevTopId;
         if (isNew || tries >= 36) {
           clearInterval(poll);
           setReports(data);
-          if (data.length > 0) setSelectedMonth(data[0].reportMonth);
+          if (data.length > 0) setSelectedId(data[0].id);
           setGenerating(false);
           setToast(isNew ? '✅ 분석 완료!' : '⚠️ 분석 시간이 초과되었습니다. 잠시 후 새로고침해주세요.');
           setTimeout(() => setToast(''), 4000);
@@ -3163,9 +3161,25 @@ const AIReportView: React.FC = () => {
     });
   };
 
-  const selected = reports.find(r => r.reportMonth === selectedMonth);
+  const selected = reports.find(r => r.id === selectedId);
 
   const formatMonth = (ym: string) => `${ym.slice(0, 4)}년 ${Number(ym.slice(4))}월`;
+
+  // ISO 문자열(UTC, 'Z' 포함) → 한국 시간 표시
+  const formatKST = (iso: string | null) => {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // 드롭다운 옵션 레이블: "2025년 8월 (8월 13일 오후 03:22)"
+  const formatOptionLabel = (r: FinancialReportType) =>
+    `${formatMonth(r.reportMonth)} · ${formatKST(r.createdAt)}`;
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }}>
@@ -3174,15 +3188,15 @@ const AIReportView: React.FC = () => {
         {/* ── 컨트롤 바 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c' }}>🤖 AI 재무 분석</span>
-          {/* 월 선택 */}
+          {/* 리포트 선택 — 요청 건별로 표시 */}
           {reports.length > 0 && (
             <select
-              value={selectedMonth}
-              onChange={e => setSelectedMonth(e.target.value)}
-              style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054' }}
+              value={selectedId ?? ''}
+              onChange={e => setSelectedId(Number(e.target.value))}
+              style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: isMobile ? '200px' : '320px' }}
             >
               {reports.map(r => (
-                <option key={r.reportMonth} value={r.reportMonth}>{formatMonth(r.reportMonth)}</option>
+                <option key={r.id} value={r.id}>{formatOptionLabel(r)}</option>
               ))}
             </select>
           )}
@@ -3223,9 +3237,9 @@ const AIReportView: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: '2px solid #e0f0ff' }}>
               <div>
                 <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>{formatMonth(selected.reportMonth)} 재무 분석</span>
-                {selected.updatedAt && (
+                {selected.createdAt && (
                   <span style={{ fontSize: '11px', color: '#9aa0a6', marginLeft: '10px' }}>
-                    {new Date(selected.updatedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 생성
+                    {formatKST(selected.createdAt)} 생성
                   </span>
                 )}
               </div>
