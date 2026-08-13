@@ -1245,6 +1245,7 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
 type AssetSubTab = 'CURRENT' | 'HISTORY' | 'CHART';
 
 const AssetView: React.FC = () => {
+  const isMobile = useIsMobile();
   const [allSnapshots, setAllSnapshots] = useState<AssetSnapshotCell[]>([]);
   const [loading, setLoading] = useState(false);
   const [subTab, setSubTab] = useState<AssetSubTab>('CURRENT');
@@ -1648,35 +1649,70 @@ const AssetView: React.FC = () => {
                     );
                   })}
 
-                  <div style={{
-                    display: 'grid', ...COLS,
-                    padding: '9px 16px', fontSize: '13px', fontWeight: 700,
-                    background: lc.bg, color: lc.text,
-                  }}>
-                    <span>소계</span>
-                    <span style={{ textAlign: 'right' }}>{sub0 ? formatAmountShort(sub0) : '—'}</span>
-                    <span style={{ textAlign: 'right' }}>{sub1 ? formatAmountShort(sub1) : '—'}</span>
-                    <span style={{ textAlign: 'right', fontSize: '14px' }}>
-                      {(sub0 + sub1) ? formatAmountShort(sub0 + sub1) : '—'}
-                    </span>
-                  </div>
+                  {isMobile ? (
+                    /* 모바일: 소계 레이블 + 합계를 한 줄, 개인별은 아래 */
+                    <div style={{ padding: '8px 16px', background: lc.bg, color: lc.text }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 700 }}>소계</span>
+                        <span style={{ fontSize: '15px', fontWeight: 800 }}>
+                          {(sub0 + sub1) ? formatAmountKorean(sub0 + sub1) : '—'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', marginTop: '3px', justifyContent: 'flex-end' }}>
+                        <span style={{ fontSize: '11px', opacity: 0.8 }}>{u0.name} {sub0 ? formatAmountKorean(sub0) : '—'}</span>
+                        <span style={{ fontSize: '11px', opacity: 0.8 }}>{u1.name} {sub1 ? formatAmountKorean(sub1) : '—'}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'grid', ...COLS,
+                      padding: '9px 16px', fontSize: '13px', fontWeight: 700,
+                      background: lc.bg, color: lc.text,
+                    }}>
+                      <span>소계</span>
+                      <span style={{ textAlign: 'right' }}>{sub0 ? formatAmountShort(sub0) : '—'}</span>
+                      <span style={{ textAlign: 'right' }}>{sub1 ? formatAmountShort(sub1) : '—'}</span>
+                      <span style={{ textAlign: 'right', fontSize: '14px' }}>
+                        {(sub0 + sub1) ? formatAmountShort(sub0 + sub1) : '—'}
+                      </span>
+                    </div>
+                  )}
                 </React.Fragment>
               );
             })}
 
-            <div style={{
-              display: 'grid', ...COLS,
-              padding: '14px 16px', fontSize: '14px', fontWeight: 800,
-              background: '#f0f8fd', color: '#1a3a5c',
-              borderTop: '2px solid #89CFF060',
-            }}>
-              <span>총 자산</span>
-              <span style={{ textAlign: 'right' }}>{gt0 ? formatAmountShort(gt0) : '—'}</span>
-              <span style={{ textAlign: 'right' }}>{gt1 ? formatAmountShort(gt1) : '—'}</span>
-              <span style={{ textAlign: 'right', fontSize: '16px' }}>
-                {gtSum ? formatAmount(gtSum) : '—'}
-              </span>
-            </div>
+            {isMobile ? (
+              /* 모바일: 총 자산 카드형 */
+              <div style={{
+                padding: '10px 16px', background: '#f0f8fd', color: '#1a3a5c',
+                borderTop: '2px solid #89CFF060',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 800 }}>총 자산</span>
+                  <span style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '-0.5px' }}>
+                    {gtSum ? formatAmountKorean(gtSum) : '—'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '4px', justifyContent: 'flex-end' }}>
+                  <span style={{ fontSize: '12px', color: '#5f6368' }}>{u0.name} <b>{gt0 ? formatAmountKorean(gt0) : '—'}</b></span>
+                  <span style={{ fontSize: '12px', color: '#5f6368' }}>{u1.name} <b>{gt1 ? formatAmountKorean(gt1) : '—'}</b></span>
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid', ...COLS,
+                padding: '14px 16px', fontSize: '14px', fontWeight: 800,
+                background: '#f0f8fd', color: '#1a3a5c',
+                borderTop: '2px solid #89CFF060',
+              }}>
+                <span>총 자산</span>
+                <span style={{ textAlign: 'right' }}>{gt0 ? formatAmountShort(gt0) : '—'}</span>
+                <span style={{ textAlign: 'right' }}>{gt1 ? formatAmountShort(gt1) : '—'}</span>
+                <span style={{ textAlign: 'right', fontSize: '16px' }}>
+                  {gtSum ? formatAmountKorean(gtSum) : '—'}
+                </span>
+              </div>
+            )}
           </div>
           </div> {/* overflowX wrapper */}
         </>)}
