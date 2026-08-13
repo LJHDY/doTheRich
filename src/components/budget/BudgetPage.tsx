@@ -2037,15 +2037,22 @@ const FixedExpenseModal: React.FC<{
                     </div>
                     <div>
                       <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부 통장 대분류</label>
-                      <select value={form.accountMain} onChange={e => setForm(f => ({ ...f, accountMain: e.target.value }))} style={inputSt}>
+                      <select value={form.accountMain} onChange={e => setForm(f => ({ ...f, accountMain: e.target.value, account: '' }))} style={inputSt}>
                         <option value="">선택 안 함</option>
                         {ACCOUNT_MAINS.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
                     </div>
                     <div>
                       <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부 통장</label>
-                      <input value={form.account} onChange={e => setForm(f => ({ ...f, account: e.target.value }))}
-                        placeholder="예: 고정비 통장(주해)" style={inputSt} />
+                      <select value={form.account} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputSt}>
+                        <option value="">선택 안 함</option>
+                        {(form.accountMain
+                          ? ACCOUNT_GROUPS.filter(g => g.main === form.accountMain)
+                          : ACCOUNT_GROUPS
+                        ).flatMap(g => g.accounts).map(a => (
+                          <option key={a.name} value={a.name}>{a.name}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부일</label>
