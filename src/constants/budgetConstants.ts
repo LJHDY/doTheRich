@@ -159,6 +159,10 @@ export const INVESTMENT_TYPES = [
 
 export const BUDGET_USER_STORAGE_KEY = 'budget_user_id';
 
+// ─── 고정비 항목 카테고리 ─────────────────────────────────────────
+// 이 목록에 카테고리를 추가하면 고정비 관리 폼 드롭다운에 반영됨
+export const FIXED_EXPENSE_ITEM_CATEGORIES: string[] = [];
+
 // ─── 자산 항목 ────────────────────────────────────────────────
 // 즉시 사용 가능: 보증금·현금·주식·퇴직금(수령완료)
 // 즉시 사용 불가: 주택청약저축·퇴직연금·ISA·미국주식·국채·달러 현금

@@ -28,6 +28,7 @@ import {
   Asset,
   AssetSnapshotCell,
   AssetSnapshotDetail,
+  FixedExpense,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -899,6 +900,62 @@ export const bulkSaveAssetSnapshotDetails = async (
     })),
   });
   return data.map(toDetail);
+};
+
+// ── 고정비 관리 API ───────────────────────────────────────────────
+
+const toFixedExpense = (d: any): FixedExpense => ({
+  id: d.id,
+  userId: d.user_id,
+  name: d.name,
+  amount: d.amount,
+  accountMain: d.account_main ?? undefined,
+  account: d.account ?? undefined,
+  paymentDay: d.payment_day ?? undefined,
+  category: d.category,
+  isActive: d.is_active,
+});
+
+export const getFixedExpenses = async (userId: string): Promise<FixedExpense[]> => {
+  const { data } = await api.get('/api/budget/fixed-expenses', { params: { user_id: userId } });
+  return data.map(toFixedExpense);
+};
+
+export const createFixedExpense = async (payload: {
+  userId: string; name: string; amount: number;
+  accountMain?: string; account?: string; paymentDay?: number; category: string;
+}): Promise<FixedExpense> => {
+  const { data } = await api.post('/api/budget/fixed-expenses', {
+    user_id: payload.userId, name: payload.name, amount: payload.amount,
+    account_main: payload.accountMain ?? null, account: payload.account ?? null,
+    payment_day: payload.paymentDay ?? null, category: payload.category,
+  });
+  return toFixedExpense(data);
+};
+
+export const updateFixedExpense = async (id: number, payload: {
+  name?: string; amount?: number; accountMain?: string; account?: string;
+  paymentDay?: number; category?: string;
+}): Promise<FixedExpense> => {
+  const { data } = await api.patch(`/api/budget/fixed-expenses/${id}`, {
+    name: payload.name, amount: payload.amount,
+    account_main: payload.accountMain, account: payload.account,
+    payment_day: payload.paymentDay, category: payload.category,
+  });
+  return toFixedExpense(data);
+};
+
+export const deleteFixedExpense = async (id: number): Promise<void> => {
+  await api.delete(`/api/budget/fixed-expenses/${id}`);
+};
+
+export const payFixedExpense = async (
+  id: number, yearMonth: string, entryDate: string,
+): Promise<BudgetEntry> => {
+  const { data } = await api.post(`/api/budget/fixed-expenses/${id}/pay`, {
+    year_month: yearMonth, entry_date: entryDate,
+  });
+  return toEntry(data);
 };
 
 export default api;

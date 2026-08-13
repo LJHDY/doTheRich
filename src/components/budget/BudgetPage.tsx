@@ -5,11 +5,13 @@ import {
 } from 'recharts';
 import {
   ACCOUNT_GROUPS,
+  ACCOUNT_MAINS,
   ASSET_COLUMNS,
   ASSET_LIQUIDITY_COLORS,
   BUDGET_USER_STORAGE_KEY,
   BUDGET_USERS,
   FIXED_EXPENSE_CATEGORIES,
+  FIXED_EXPENSE_ITEM_CATEGORIES,
   VARIABLE_EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   INVESTMENT_TYPES,
@@ -25,8 +27,13 @@ import {
   deleteAssetSnapshotDate,
   getAssetSnapshotDetails,
   bulkSaveAssetSnapshotDetails,
+  getFixedExpenses,
+  createFixedExpense,
+  updateFixedExpense,
+  deleteFixedExpense,
+  payFixedExpense,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, FixedExpense, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
@@ -72,6 +79,9 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
   const isMobile = useIsMobile();
+
+  // 고정비 관리 모달
+  const [fixedExpenseOpen, setFixedExpenseOpen] = useState(false);
 
   // 입력 폼
   const [formOpen, setFormOpen] = useState(false);
@@ -307,8 +317,17 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           </div>
         )}
 
-        {/* ── 필터 탭 */}
-        <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexShrink: 0 }}>
+        {/* ── 고정비 관리 버튼 + 필터 탭 */}
+        <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={() => setFixedExpenseOpen(true)}
+            style={{
+              padding: '5px 12px', fontSize: '12px', borderRadius: '20px',
+              border: '1px solid #9C27B0', background: '#f3e5f5',
+              color: '#7B1FA2', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+            }}
+          >📌 고정비 관리</button>
+          <div style={{ width: '1px', height: '16px', background: '#e0e0e0', flexShrink: 0 }} />
           {([
             ['ALL', '전체'], ['INCOME', '수입'], ['EXPENSE', '지출'],
             ['FIXED', '고정비'], ['INVEST', '투자'],
@@ -531,6 +550,17 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 고정비 관리 모달 */}
+      {fixedExpenseOpen && (
+        <FixedExpenseModal
+          userId={userId}
+          userName={userName}
+          yearMonth={yearMonth}
+          onClose={() => setFixedExpenseOpen(false)}
+          onPaid={entry => { setEntries(prev => [entry, ...prev]); }}
+        />
       )}
     </div>
   );
@@ -1777,6 +1807,322 @@ const AssetCell: React.FC<{
         {value === 0 ? '—' : formatAmountShort(value)}
       </span>
       {detailBtn}
+    </div>
+  );
+};
+
+// ─── 고정비 관리 모달 ────────────────────────────────────────────
+
+type FeForm = {
+  name: string;
+  amountStr: string;   // 만원 단위 입력
+  accountMain: string;
+  account: string;
+  paymentDay: string;
+  category: string;
+};
+
+const emptyFeForm = (): FeForm => ({
+  name: '', amountStr: '', accountMain: '', account: '', paymentDay: '', category: '',
+});
+
+const FixedExpenseModal: React.FC<{
+  userId: string;
+  userName: string;
+  yearMonth: string;
+  onClose: () => void;
+  onPaid: (entry: BudgetEntry) => void;
+}> = ({ userId, userName, yearMonth, onClose, onPaid }) => {
+  const [items, setItems] = useState<FixedExpense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<FeForm>(emptyFeForm());
+  const [saving, setSaving] = useState(false);
+  // 납부 확인 중인 항목 ID → 납부일 입력값
+  const [payingId, setPayingId] = useState<number | null>(null);
+  const [payDate, setPayDate] = useState<string>(today());
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getFixedExpenses(userId);
+      setItems(data);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openAdd = () => {
+    setEditingId(null);
+    setForm(emptyFeForm());
+    setFormOpen(true);
+  };
+
+  const openEdit = (fe: FixedExpense) => {
+    setEditingId(fe.id);
+    setForm({
+      name: fe.name,
+      amountStr: fe.amount > 0 ? String(Math.round(fe.amount / 10000)) : '',
+      accountMain: fe.accountMain ?? '',
+      account: fe.account ?? '',
+      paymentDay: fe.paymentDay ? String(fe.paymentDay) : '',
+      category: fe.category ?? '',
+    });
+    setFormOpen(true);
+  };
+
+  const handleSaveForm = async () => {
+    if (!form.name.trim()) { alert('고정비 내역을 입력해주세요'); return; }
+    const amount = Math.round(Number(form.amountStr.replace(/,/g, '') || '0') * 10000);
+    if (amount <= 0) { alert('금액을 입력해주세요'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        amount,
+        accountMain: form.accountMain || undefined,
+        account: form.account || undefined,
+        paymentDay: form.paymentDay ? Number(form.paymentDay) : undefined,
+        category: form.category || '미분류',
+      };
+      if (editingId !== null) {
+        const updated = await updateFixedExpense(editingId, payload);
+        setItems(prev => prev.map(i => i.id === editingId ? updated : i));
+      } else {
+        const created = await createFixedExpense({ userId, ...payload });
+        setItems(prev => [...prev, created]);
+      }
+      setFormOpen(false);
+    } catch { alert('저장에 실패했습니다'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (fe: FixedExpense) => {
+    if (!window.confirm(`"${fe.name}" 고정비를 삭제할까요?`)) return;
+    try {
+      await deleteFixedExpense(fe.id);
+      setItems(prev => prev.filter(i => i.id !== fe.id));
+    } catch { alert('삭제에 실패했습니다'); }
+  };
+
+  const handlePay = async (fe: FixedExpense) => {
+    if (!payDate) { alert('납부일을 입력해주세요'); return; }
+    const ym = payDate.replace(/-/g, '').slice(0, 6);
+    try {
+      const entry = await payFixedExpense(fe.id, ym, payDate);
+      onPaid(entry);
+      setPayingId(null);
+      alert(`✓ "${fe.name}" 납부 처리 완료 (${formatAmountShort(fe.amount)}원)`);
+    } catch { alert('납부 처리에 실패했습니다'); }
+  };
+
+  const inputSt: React.CSSProperties = {
+    width: '100%', padding: '7px 10px', fontSize: '13px',
+    border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
+    boxSizing: 'border-box',
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9600,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: '#fff', borderRadius: '16px',
+        width: '480px', maxWidth: '96vw',
+        maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* 헤더 */}
+        <div style={{
+          padding: '14px 20px', borderBottom: '1px solid #e8ecf0', flexShrink: 0,
+          display: 'flex', alignItems: 'center', gap: '10px',
+        }}>
+          <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', flex: 1 }}>
+            📌 고정비 관리
+          </span>
+          <span style={{ fontSize: '12px', color: '#7B1FA2', fontWeight: 600, background: '#f3e5f5', padding: '2px 10px', borderRadius: '12px' }}>
+            {userName}
+          </span>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* 안내 */}
+        <div style={{ padding: '6px 20px', background: '#f3e5f5', borderBottom: '1px solid #e8ecf0', flexShrink: 0, fontSize: '11px', color: '#7B1FA2' }}>
+          납부 버튼을 누르면 지출 내역에 자동 등록됩니다
+        </div>
+
+        {/* 본문 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px' }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>불러오는 중…</div>
+          ) : (
+            <>
+              {/* 항목 추가 버튼 */}
+              {!formOpen && (
+                <button
+                  onClick={openAdd}
+                  style={{
+                    width: '100%', padding: '9px', marginBottom: '12px',
+                    fontSize: '13px', fontWeight: 600, border: '1px dashed #9C27B0',
+                    borderRadius: '8px', background: 'transparent', color: '#7B1FA2', cursor: 'pointer',
+                  }}
+                >+ 고정비 항목 추가</button>
+              )}
+
+              {/* 추가/수정 폼 */}
+              {formOpen && (
+                <div style={{
+                  border: '1px solid #CE93D8', borderRadius: '10px',
+                  padding: '14px 14px 10px', marginBottom: '14px', background: '#fdf6ff',
+                }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#7B1FA2', marginBottom: '10px' }}>
+                    {editingId !== null ? '✏ 항목 수정' : '+ 새 항목 추가'}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>고정비 내역 *</label>
+                      <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                        placeholder="예: 월세, 통신비" style={inputSt} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>금액 (만원) *</label>
+                      <input value={form.amountStr} onChange={e => setForm(f => ({ ...f, amountStr: e.target.value.replace(/[^0-9]/g, '') }))}
+                        placeholder="예: 80" style={inputSt} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부 통장 대분류</label>
+                      <select value={form.accountMain} onChange={e => setForm(f => ({ ...f, accountMain: e.target.value }))} style={inputSt}>
+                        <option value="">선택 안 함</option>
+                        {ACCOUNT_MAINS.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부 통장</label>
+                      <input value={form.account} onChange={e => setForm(f => ({ ...f, account: e.target.value }))}
+                        placeholder="예: 고정비 통장(주해)" style={inputSt} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부일</label>
+                      <input type="number" min={1} max={31} value={form.paymentDay}
+                        onChange={e => setForm(f => ({ ...f, paymentDay: e.target.value }))}
+                        placeholder="예: 25" style={inputSt} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>카테고리</label>
+                      <input
+                        list="fe-cats" value={form.category}
+                        onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                        placeholder="카테고리 입력" style={inputSt} />
+                      <datalist id="fe-cats">
+                        {FIXED_EXPENSE_ITEM_CATEGORIES.map(c => <option key={c} value={c} />)}
+                      </datalist>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '6px' }}>
+                    <button onClick={() => setFormOpen(false)} style={{ ...btnStyle('#f0f4f8', '#5f6368'), padding: '6px 16px' }}>취소</button>
+                    <button onClick={handleSaveForm} disabled={saving}
+                      style={{ ...btnStyle('#7B1FA2', '#fff'), padding: '6px 16px', fontWeight: 700 }}>
+                      {saving ? '저장 중…' : '저장'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 고정비 목록 */}
+              {items.length === 0 && !formOpen && (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6', fontSize: '13px' }}>
+                  등록된 고정비가 없습니다.
+                </div>
+              )}
+              {items.map(fe => (
+                <div key={fe.id} style={{
+                  border: '1px solid #e8ecf0', borderRadius: '10px',
+                  marginBottom: '8px', overflow: 'hidden',
+                }}>
+                  {/* 항목 행 */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '10px 14px', background: '#fff',
+                  }}>
+                    {/* 납부일 배지 */}
+                    <span style={{
+                      fontSize: '11px', fontWeight: 700, color: '#7B1FA2',
+                      background: '#f3e5f5', padding: '2px 8px', borderRadius: '10px',
+                      whiteSpace: 'nowrap', flexShrink: 0,
+                    }}>
+                      {fe.paymentDay ? `${fe.paymentDay}일` : '—'}
+                    </span>
+                    {/* 내역 + 금액 */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {fe.name}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#5f6368', marginTop: '2px' }}>
+                        {formatAmountShort(fe.amount)}원
+                        {fe.account && <span style={{ marginLeft: '6px', color: '#9aa0a6' }}>· {fe.account}</span>}
+                        {fe.category && fe.category !== '미분류' && <span style={{ marginLeft: '6px', color: '#CE93D8' }}>#{fe.category}</span>}
+                      </div>
+                    </div>
+                    {/* 버튼들 */}
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <button
+                        onClick={() => { setPayingId(payingId === fe.id ? null : fe.id); setPayDate(today()); }}
+                        style={{
+                          padding: '4px 10px', fontSize: '12px', fontWeight: 700,
+                          border: '1px solid #4CAF50', borderRadius: '6px',
+                          background: payingId === fe.id ? '#4CAF50' : '#fff',
+                          color: payingId === fe.id ? '#fff' : '#2e7d32',
+                          cursor: 'pointer',
+                        }}
+                      >납부</button>
+                      <button
+                        onClick={() => { openEdit(fe); setPayingId(null); }}
+                        style={{ padding: '4px 8px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', background: '#fff', color: '#5f6368', cursor: 'pointer' }}
+                      >✏</button>
+                      <button
+                        onClick={() => handleDelete(fe)}
+                        style={{ padding: '4px 8px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', background: '#fff', color: '#E06060', cursor: 'pointer' }}
+                      >×</button>
+                    </div>
+                  </div>
+
+                  {/* 납부 확인 행 (납부 버튼 클릭 시 펼침) */}
+                  {payingId === fe.id && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '8px 14px', background: '#f1fdf3', borderTop: '1px solid #C8E6C9',
+                    }}>
+                      <span style={{ fontSize: '12px', color: '#2e7d32', fontWeight: 600, whiteSpace: 'nowrap' }}>📅 납부일</span>
+                      <input
+                        type="date" value={payDate}
+                        onChange={e => setPayDate(e.target.value)}
+                        style={{ padding: '4px 8px', fontSize: '12px', border: '1px solid #A5D6A7', borderRadius: '6px', outline: 'none' }}
+                      />
+                      <button
+                        onClick={() => handlePay(fe)}
+                        style={{ ...btnStyle('#2e7d32', '#fff'), padding: '5px 14px', fontWeight: 700, fontSize: '12px' }}
+                      >✓ 납부 처리</button>
+                      <button
+                        onClick={() => setPayingId(null)}
+                        style={{ ...btnStyle('#f0f4f8', '#5f6368'), padding: '5px 10px', fontSize: '12px' }}
+                      >취소</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

@@ -623,6 +623,19 @@ export interface AssetSnapshotDetail {
   amount: number;  // 원 단위
 }
 
+/** 사용자별 고정비 템플릿 — 납부 버튼으로 지출 내역 자동 등록 */
+export interface FixedExpense {
+  id: number;
+  userId: string;
+  name: string;          // 고정비 내역
+  amount: number;        // 원 단위
+  accountMain?: string;  // 납부 통장 대분류
+  account?: string;      // 납부 통장
+  paymentDay?: number;   // 납부일 (1-31)
+  category: string;
+  isActive: boolean;
+}
+
 /** 금액을 "0,000원" 형식으로 포맷 */
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';
