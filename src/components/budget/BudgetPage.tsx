@@ -178,12 +178,15 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   // ─── 요약 계산 ───────────────────────────────────────────────
   const summary = useMemo(() => {
-    // 이체 항목은 수입/지출 집계에서 제외 (단순 계좌 이동)
-    const totalIncome = entries.filter(e => e.entryType === 'INCOME' && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
-    const totalInvest = entries.filter(e => e.isInvestment && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
-    const totalExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
-    const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
-    const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment && !e.isTransfer).reduce((s, e) => s + e.amount, 0);
+    // isTransfer 플래그 또는 category='이체' 두 조건 모두 이체로 판정
+    // (is_transfer DB 컬럼 마이그레이션 이전에 생성된 항목도 대응)
+    const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+
+    const totalIncome = entries.filter(e => e.entryType === 'INCOME' && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+    const totalInvest = entries.filter(e => e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+    const totalExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+    const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+    const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
 
     // 통장별 잔액 계산용 — 이체 포함 (계좌 간 이동도 잔액에 반영)
     const accountMap: Record<string, { income: number; expense: number }> = {};
@@ -199,12 +202,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   // ─── 필터링된 항목 ───────────────────────────────────────────
   const filtered = useMemo(() => {
+    const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
     let base = entries;
-    if (filter === 'INCOME') base = base.filter(e => e.entryType === 'INCOME');
-    else if (filter === 'EXPENSE') base = base.filter(e => e.entryType === 'EXPENSE');
-    else if (filter === 'FIXED') base = base.filter(e => e.entryType === 'EXPENSE' && e.isFixed);
-    else if (filter === 'INVEST') base = base.filter(e => e.isInvestment);
-    else if (filter === 'TRANSFER') base = base.filter(e => e.isTransfer);
+    if (filter === 'TRANSFER') {
+      base = base.filter(e => isXfer(e));
+    } else {
+      // 이체는 내 돈 이동이므로 수입/지출 목록에서 제외
+      base = base.filter(e => !isXfer(e));
+      if (filter === 'INCOME') base = base.filter(e => e.entryType === 'INCOME');
+      else if (filter === 'EXPENSE') base = base.filter(e => e.entryType === 'EXPENSE');
+      else if (filter === 'FIXED') base = base.filter(e => e.entryType === 'EXPENSE' && e.isFixed);
+      else if (filter === 'INVEST') base = base.filter(e => e.isInvestment);
+    }
     if (categoryFilter) base = base.filter(e => e.category === categoryFilter);
     return base;
   }, [entries, filter, categoryFilter]);
@@ -390,9 +399,10 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       </div>
 
       {/* ══ 내역 탭 ══════════════════════════════════════════ */}
-      {tab === 'ENTRIES' && <>
+      {tab === 'ENTRIES' && (
+      <div style={{ flex: 1, overflowY: 'auto' }}>
         {/* ── 요약 카드 */}
-        <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <SummaryCard label="총 수입" amount={summary.totalIncome} color="#4CAF50" sign="+" />
           <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-" />
           <SummaryCard label="투자" amount={summary.totalInvest} color="#2196F3" sign="" />
@@ -401,7 +411,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         </div>
 
         {/* ── 고정/변동/투자 소요약 */}
-        <div style={{ padding: '8px 20px 0', display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ padding: '8px 20px 0', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {[
             { label: '고정비', val: summary.fixedExpense, color: '#9C27B0' },
             { label: '변동비', val: summary.varExpense,   color: '#FF9800' },
@@ -432,7 +442,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           })();
 
           return (
-            <div style={{ padding: '8px 20px 0', flexShrink: 0 }}>
+            <div style={{ padding: '8px 20px 0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>통장 잔액</span>
                 <button
@@ -526,18 +536,20 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             '#0097A7','#006064','#01579B',
           ];
 
-          // 지출 (투자 제외)
+          const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+
+          // 지출 (투자·이체 제외)
           const expenseMap: Record<string, number> = {};
-          for (const e of entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment)) {
+          for (const e of entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment && !isXfer(e))) {
             const key = e.category || '미분류';
             expenseMap[key] = (expenseMap[key] ?? 0) + e.amount;
           }
           const expenseData = Object.entries(expenseMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
           const expenseTotal = expenseData.reduce((s, d) => s + d.value, 0);
 
-          // 투자
+          // 투자 (이체 제외)
           const investMap: Record<string, number> = {};
-          for (const e of entries.filter(e => e.isInvestment)) {
+          for (const e of entries.filter(e => e.isInvestment && !isXfer(e))) {
             const key = e.investmentType || e.category || '기타';
             investMap[key] = (investMap[key] ?? 0) + e.amount;
           }
@@ -600,7 +612,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           const expenseChart = renderChart('카테고리별 지출', expenseData, expenseTotal, COLORS);
           const investChart = renderChart('카테고리별 투자', investData, investTotal, INVEST_COLORS);
           return (
-            <div style={{ padding: '8px 20px 0', display: 'flex', gap: '0', flexShrink: 0, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <div style={{ padding: '8px 20px 0', display: 'flex', gap: '0', flexWrap: 'wrap', alignItems: 'flex-start' }}>
               {expenseChart && <div style={{ flex: 1, minWidth: isMobile ? '100%' : '220px', paddingRight: investChart ? '20px' : 0 }}>{expenseChart}</div>}
               {expenseChart && investChart && (
                 <div style={{ width: '1px', background: '#e8ecf0', alignSelf: 'stretch', flexShrink: 0, marginRight: '20px' }} />
@@ -612,7 +624,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
         {/* ── 지출처 분석 */}
         {(() => {
-          const merchantEntries = entries.filter(e => e.entryType === 'EXPENSE' && e.merchant);
+          const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+          const merchantEntries = entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e) && e.merchant);
           if (merchantEntries.length === 0) return null;
 
           const map: Record<string, { count: number; total: number }> = {};
@@ -632,7 +645,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
         {/* 카테고리 필터 활성 배지 */}
         {categoryFilter && (
-          <div style={{ padding: '6px 20px 0', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ padding: '6px 20px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '11px', color: '#5f6368' }}>카테고리 필터:</span>
             <span
               onClick={() => setCategoryFilter(null)}
@@ -648,7 +661,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         )}
 
         {/* ── 고정비 관리 버튼 + 필터 탭 + 뷰 토글 */}
-        <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ padding: '10px 20px 0', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             onClick={() => setFixedExpenseOpen(true)}
             style={{
@@ -692,7 +705,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
         {/* ── 달력 뷰 */}
         {viewMode === 'calendar' ? (
-          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 20px' }}>
+          <div style={{ padding: '10px 20px 20px' }}>
             <CalendarView
               yearMonth={yearMonth}
               entries={entries}
@@ -707,7 +720,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           </div>
         ) : (
           /* ── 목록 뷰 */
-          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 20px' }}>
+          <div style={{ padding: '10px 20px 20px' }}>
             {/* 데스크탑: 목록 바로 위 추가 버튼 */}
             {!isMobile && (
               <button
@@ -733,7 +746,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             ))}
           </div>
         )}
-      </>}
+      </div>
+      )}
 
       {/* ══ 통장 관리 탭 ═════════════════════════════════════ */}
       {tab === 'ACCOUNTS' && (
@@ -2292,12 +2306,14 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
 
   // 가계부 요약
   const entrySummary = useMemo(() => {
+    // isTransfer 플래그 또는 category='이체' 두 조건 모두 이체로 판정
+    const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
     const calc = (list: BudgetEntry[]) => ({
-      income:   list.filter(e => e.entryType === 'INCOME').reduce((s, e) => s + e.amount, 0),
-      expense:  list.filter(e => e.entryType === 'EXPENSE').reduce((s, e) => s + e.amount, 0),
-      fixed:    list.filter(e => e.entryType === 'EXPENSE' && e.isFixed).reduce((s, e) => s + e.amount, 0),
-      variable: list.filter(e => e.entryType === 'EXPENSE' && !e.isFixed).reduce((s, e) => s + e.amount, 0),
-      invest:   list.filter(e => e.isInvestment).reduce((s, e) => s + e.amount, 0),
+      income:   list.filter(e => e.entryType === 'INCOME' && !isXfer(e)).reduce((s, e) => s + e.amount, 0),
+      expense:  list.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0),
+      fixed:    list.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0),
+      variable: list.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0),
+      invest:   list.filter(e => e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0),
     });
     return { ldy: calc(entries.ldy), juhae: calc(entries.juhae) };
   }, [entries]);
