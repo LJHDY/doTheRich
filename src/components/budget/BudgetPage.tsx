@@ -1491,6 +1491,12 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
   // 모바일: "즉시 O/X" 같은 짧은 레이블 → 첫 열 좁게, 숫자 열 공간 최대화
   const GRID = isMobile ? '62px 1fr 1fr 1fr' : '120px 1fr 1fr 1fr';
 
+  // 열 구분선 공통 스타일
+  const cellBorder = '1px solid #e8ecf0';
+  const numCell = (extra?: React.CSSProperties): React.CSSProperties => ({
+    textAlign: 'right', borderLeft: cellBorder, padding: '0 10px', ...extra,
+  });
+
   // 3열 행 렌더 헬퍼
   const Row3 = ({
     label, v0, v1, bold = false, colored = false, isBalance = false,
@@ -1503,15 +1509,15 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
     return (
       <div style={{
         display: 'grid', gridTemplateColumns: GRID,
-        padding: '10px 16px', fontSize: '13px',
-        borderBottom: '1px solid #f0f0f0',
+        fontSize: '13px', borderBottom: '1px solid #f0f0f0',
         fontWeight: bold ? 700 : 400,
         background: bold ? '#fafbfc' : '#fff',
+        minHeight: '40px', alignItems: 'center',
       }}>
-        <span style={{ color: '#5f6368' }}>{label}</span>
-        <span style={{ textAlign: 'right', color: color(v0) }}>{fmt(v0)}</span>
-        <span style={{ textAlign: 'right', color: color(v1) }}>{fmt(v1)}</span>
-        <span style={{ textAlign: 'right', color: color(sum), fontWeight: 700 }}>{fmt(sum)}</span>
+        <span style={{ color: '#5f6368', padding: '0 8px 0 12px' }}>{label}</span>
+        <span style={numCell({ color: color(v0) })}>{fmt(v0)}</span>
+        <span style={numCell({ color: color(v1) })}>{fmt(v1)}</span>
+        <span style={numCell({ color: color(sum), fontWeight: 700 })}>{fmt(sum)}</span>
       </div>
     );
   };
@@ -1522,13 +1528,14 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
       <div style={{ fontSize: '14px', fontWeight: 800, color: '#1a3a5c', marginBottom: '8px', marginTop: '24px' }}>{title}</div>
       <div style={{
         display: 'grid', gridTemplateColumns: GRID,
-        padding: '8px 16px', fontSize: '12px', fontWeight: 700, color: '#fff',
+        fontSize: '12px', fontWeight: 700, color: '#fff',
         background: '#89CFF0', borderRadius: '8px 8px 0 0',
+        minHeight: '36px', alignItems: 'center',
       }}>
-        <span>항목</span>
-        <span style={{ textAlign: 'right' }}>{u0.name}</span>
-        <span style={{ textAlign: 'right' }}>{u1.name}</span>
-        <span style={{ textAlign: 'right' }}>합산</span>
+        <span style={{ padding: '0 8px 0 12px' }}>항목</span>
+        <span style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.3)', padding: '0 10px' }}>{u0.name}</span>
+        <span style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.3)', padding: '0 10px' }}>{u1.name}</span>
+        <span style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.3)', padding: '0 10px' }}>합산</span>
       </div>
     </>
   );
@@ -1552,25 +1559,28 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
           return (
             <div key={g} style={{
               display: 'grid', gridTemplateColumns: GRID,
-              padding: '10px 16px', fontSize: '13px',
-              borderBottom: '1px solid #f0f0f0', background: '#fff',
+              fontSize: '13px', borderBottom: '1px solid #f0f0f0', background: '#fff',
+              minHeight: '40px', alignItems: 'center',
             }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: lc.bg, color: lc.text, alignSelf: 'center', width: 'fit-content', whiteSpace: 'nowrap' }}>{label}</span>
-              <span style={{ textAlign: 'right', color: '#344054' }}>{v0 ? formatAmountShort(v0) : '—'}</span>
-              <span style={{ textAlign: 'right', color: '#344054' }}>{v1 ? formatAmountShort(v1) : '—'}</span>
-              <span style={{ textAlign: 'right', fontWeight: 700, color: '#1a3a5c' }}>{(v0 + v1) ? formatAmountShort(v0 + v1) : '—'}</span>
+              <span style={{ padding: '0 8px 0 12px', display: 'flex', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: lc.bg, color: lc.text, whiteSpace: 'nowrap' }}>{label}</span>
+              </span>
+              <span style={numCell({ color: '#344054' })}>{v0 ? formatAmountShort(v0) : '—'}</span>
+              <span style={numCell({ color: '#344054' })}>{v1 ? formatAmountShort(v1) : '—'}</span>
+              <span style={numCell({ fontWeight: 700, color: '#1a3a5c' })}>{(v0 + v1) ? formatAmountShort(v0 + v1) : '—'}</span>
             </div>
           );
         })}
         <div style={{
           display: 'grid', gridTemplateColumns: GRID,
-          padding: '12px 16px', fontSize: '13px', fontWeight: 800,
+          fontSize: '13px', fontWeight: 800,
           background: '#f0f8fd', borderTop: '2px solid #89CFF040',
+          minHeight: '44px', alignItems: 'center',
         }}>
-          <span style={{ color: '#1a3a5c' }}>총 자산</span>
-          <span style={{ textAlign: 'right', color: '#1565c0' }}>{assetGrandTotal(u0.id) ? formatAmountShort(assetGrandTotal(u0.id)) : '—'}</span>
-          <span style={{ textAlign: 'right', color: '#1565c0' }}>{assetGrandTotal(u1.id) ? formatAmountShort(assetGrandTotal(u1.id)) : '—'}</span>
-          <span style={{ textAlign: 'right', color: '#1a3a5c', fontSize: '15px' }}>
+          <span style={{ color: '#1a3a5c', padding: '0 8px 0 12px' }}>총 자산</span>
+          <span style={numCell({ color: '#1565c0' })}>{assetGrandTotal(u0.id) ? formatAmountShort(assetGrandTotal(u0.id)) : '—'}</span>
+          <span style={numCell({ color: '#1565c0' })}>{assetGrandTotal(u1.id) ? formatAmountShort(assetGrandTotal(u1.id)) : '—'}</span>
+          <span style={numCell({ color: '#1a3a5c', fontSize: '14px' })}>
             {formatAmountShort(assetGrandTotal(u0.id) + assetGrandTotal(u1.id))}
           </span>
         </div>
@@ -1947,7 +1957,7 @@ const AssetView: React.FC = () => {
                     display: 'flex', flexDirection: 'column', gap: '3px',
                   }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: lc.text, whiteSpace: 'nowrap' }}>{g}</span>
-                    <span style={{ fontSize: '15px', fontWeight: 800, color: lc.text }}>{formatAmountCompact(v)}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: lc.text }}>{formatAmountShort(v)}원</span>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: lc.border }}>{pct}%</span>
                   </div>
                 ) : (
