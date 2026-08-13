@@ -623,6 +623,17 @@ export interface AssetSnapshotDetail {
   amount: number;  // 원 단위
 }
 
+/** 공통코드 — DB로 관리하는 코드 테이블 (공통코드그룹 + 상세코드) */
+export interface CommonCode {
+  id: number;
+  commonCode: string;       // 그룹 식별자 (예: FIXED_EXPENSE_CATEGORY)
+  commonCodeName: string;   // 그룹 표시명 (예: 고정비 카테고리)
+  detailCode: string;       // 상세 코드
+  detailCodeName: string;   // 상세 표시명
+  sortOrder: number;
+  createdAt: string;
+}
+
 /** 결제수단 (통장/카드) — 가계부 및 고정비 납부 통장 선택에 사용 */
 export interface PaymentMethod {
   id: number;

@@ -30,6 +30,7 @@ import {
   AssetSnapshotDetail,
   FixedExpense,
   PaymentMethod,
+  CommonCode,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1012,6 +1013,52 @@ export const updatePaymentMethod = async (id: number, payload: {
 
 export const deletePaymentMethod = async (id: number): Promise<void> => {
   await api.delete(`/api/budget/payment-methods/${id}`);
+};
+
+// ── 공통코드 ─────────────────────────────────────────────────────
+
+const toCommonCode = (item: any): CommonCode => ({
+  id: item.id,
+  commonCode: item.common_code,
+  commonCodeName: item.common_code_name,
+  detailCode: item.detail_code,
+  detailCodeName: item.detail_code_name,
+  sortOrder: item.sort_order,
+  createdAt: item.created_at,
+});
+
+/** 공통코드 목록 조회 — common_code 파라미터로 그룹 필터 가능 */
+export const getCommonCodes = async (commonCode?: string): Promise<CommonCode[]> => {
+  const params = commonCode ? { common_code: commonCode } : {};
+  const { data } = await api.get('/api/common-codes', { params });
+  return data.map(toCommonCode);
+};
+
+/** 공통코드 등록 */
+export const createCommonCode = async (payload: {
+  common_code: string;
+  common_code_name: string;
+  detail_code: string;
+  detail_code_name: string;
+  sort_order?: number;
+}): Promise<CommonCode> => {
+  const { data } = await api.post('/api/common-codes', payload);
+  return toCommonCode(data);
+};
+
+/** 공통코드 수정 */
+export const updateCommonCode = async (id: number, payload: {
+  common_code_name?: string;
+  detail_code_name?: string;
+  sort_order?: number;
+}): Promise<CommonCode> => {
+  const { data } = await api.patch(`/api/common-codes/${id}`, payload);
+  return toCommonCode(data);
+};
+
+/** 공통코드 삭제 */
+export const deleteCommonCode = async (id: number): Promise<void> => {
+  await api.delete(`/api/common-codes/${id}`);
 };
 
 export default api;

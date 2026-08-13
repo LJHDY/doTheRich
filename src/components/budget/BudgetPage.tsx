@@ -37,8 +37,12 @@ import {
   createPaymentMethod,
   updatePaymentMethod,
   deletePaymentMethod,
+  getCommonCodes,
+  createCommonCode,
+  updateCommonCode,
+  deleteCommonCode,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, FixedExpense, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
@@ -964,6 +968,309 @@ const PaymentMethodPanel: React.FC<{
   );
 };
 
+// ─── 공통코드 관리 모달 ────────────────────────────────────────
+
+const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const [codes, setCodes] = useState<CommonCode[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 선택된 그룹 (공통코드)
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+
+  // 그룹 추가 폼
+  const [showGroupForm, setShowGroupForm] = useState(false);
+  const [newGroupCode, setNewGroupCode] = useState('');
+  const [newGroupName, setNewGroupName] = useState('');
+
+  // 상세코드 추가 폼
+  const [showDetailForm, setShowDetailForm] = useState(false);
+  const [newDetailCode, setNewDetailCode] = useState('');
+  const [newDetailName, setNewDetailName] = useState('');
+  const [newDetailSort, setNewDetailSort] = useState('0');
+
+  // 인라인 수정 상태
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [editingSort, setEditingSort] = useState('');
+
+  useEffect(() => {
+    getCommonCodes().then(data => {
+      setCodes(data);
+      if (data.length > 0) setSelectedGroup(data[0].commonCode);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  // 그룹 목록 (distinct)
+  const groups = useMemo(() => {
+    const seen = new Map<string, string>();
+    codes.forEach(c => { if (!seen.has(c.commonCode)) seen.set(c.commonCode, c.commonCodeName); });
+    return Array.from(seen.entries()).map(([code, name]) => ({ code, name }));
+  }, [codes]);
+
+  // 선택 그룹의 상세코드 목록
+  const details = useMemo(() =>
+    codes.filter(c => c.commonCode === selectedGroup),
+    [codes, selectedGroup]
+  );
+
+  const reload = async () => {
+    const data = await getCommonCodes();
+    setCodes(data);
+  };
+
+  // 그룹 코드/명 확인 후 상세코드 추가 폼으로 전환 (그룹은 첫 상세코드 등록 시 함께 생성)
+  const handleAddGroup = () => {
+    const gc = newGroupCode.trim().toUpperCase();
+    const gn = newGroupName.trim();
+    if (!gc || !gn) return alert('공통코드와 공통코드명을 입력하세요.');
+    setSelectedGroup(gc);
+    setShowGroupForm(false);
+    setShowDetailForm(true);
+    setNewDetailCode('');
+    setNewDetailName('');
+    setNewDetailSort('0');
+  };
+
+  // 실제 그룹+첫 상세코드 함께 등록
+  const handleAddDetail = async () => {
+    const dc = newDetailCode.trim();
+    const dn = newDetailName.trim();
+    if (!dc || !dn) return alert('상세코드와 상세코드명을 입력하세요.');
+
+    // 선택된 그룹 정보 조회
+    const grp = groups.find(g => g.code === selectedGroup);
+    const gc = grp?.code ?? newGroupCode.trim().toUpperCase();
+    const gn = grp?.name ?? newGroupName.trim();
+    if (!gc || !gn) return alert('공통코드명을 확인할 수 없습니다.');
+
+    await createCommonCode({
+      common_code: gc,
+      common_code_name: gn,
+      detail_code: dc,
+      detail_code_name: dn,
+      sort_order: Number(newDetailSort) || 0,
+    });
+    setNewDetailCode('');
+    setNewDetailName('');
+    setNewDetailSort('0');
+    setShowDetailForm(false);
+    setNewGroupCode('');
+    setNewGroupName('');
+    const data = await getCommonCodes();
+    setCodes(data);
+    setSelectedGroup(gc);
+  };
+
+  const handleEditSave = async (id: number) => {
+    const dn = editingName.trim();
+    if (!dn) return;
+    await updateCommonCode(id, { detail_code_name: dn, sort_order: Number(editingSort) || 0 });
+    setEditingId(null);
+    await reload();
+  };
+
+  const handleDelete = async (id: number, name: string) => {
+    if (!window.confirm(`'${name}' 상세코드를 삭제하시겠습니까?`)) return;
+    await deleteCommonCode(id);
+    await reload();
+  };
+
+  const inputStyle: React.CSSProperties = {
+    padding: '6px 10px', fontSize: '13px', border: '1px solid #dadce0',
+    borderRadius: '6px', outline: 'none', background: '#fff',
+  };
+  const btnStyle = (bg: string, color: string): React.CSSProperties => ({
+    padding: '6px 12px', fontSize: '12px', fontWeight: 600,
+    border: 'none', borderRadius: '6px', background: bg, color, cursor: 'pointer',
+  });
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9500,
+      background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '20px',
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '820px',
+        maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+      }}>
+        {/* 헤더 */}
+        <div style={{
+          padding: '18px 24px', borderBottom: '1px solid #e8ecf0',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div>
+            <div style={{ fontSize: '17px', fontWeight: 800, color: '#1a3a5c' }}>공통코드 관리</div>
+            <div style={{ fontSize: '12px', color: '#9aa0a6', marginTop: '2px' }}>그룹(공통코드) 및 상세코드를 등록·수정·삭제합니다.</div>
+          </div>
+          <button onClick={onClose} style={{ fontSize: '20px', background: 'none', border: 'none', cursor: 'pointer', color: '#9aa0a6', lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* 좌측: 그룹 목록 */}
+          <div style={{
+            width: '220px', flexShrink: 0, borderRight: '1px solid #e8ecf0',
+            display: 'flex', flexDirection: 'column', overflowY: 'auto',
+          }}>
+            <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f0f0f0' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#5f6368' }}>공통코드 그룹</span>
+              <button onClick={() => { setShowGroupForm(v => !v); setShowDetailForm(false); }} style={btnStyle('#e8f5e9', '#2e7d32')}>+ 그룹</button>
+            </div>
+
+            {/* 그룹 추가 폼 */}
+            {showGroupForm && (
+              <div style={{ padding: '10px 12px', background: '#f8fffe', borderBottom: '1px solid #e8ecf0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <input placeholder="그룹코드 (영문대문자)" value={newGroupCode}
+                  onChange={e => setNewGroupCode(e.target.value.toUpperCase())}
+                  style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+                <input placeholder="그룹명" value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button onClick={handleAddGroup} style={{ ...btnStyle('#1a3a5c', '#fff'), flex: 1 }}>다음 →</button>
+                  <button onClick={() => setShowGroupForm(false)} style={{ ...btnStyle('#f0f0f0', '#5f6368'), flex: 1 }}>취소</button>
+                </div>
+              </div>
+            )}
+
+            {/* 그룹 목록 */}
+            {loading ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#9aa0a6', fontSize: '13px' }}>로딩 중...</div>
+            ) : groups.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#9aa0a6', fontSize: '12px' }}>등록된 그룹이 없습니다.</div>
+            ) : (
+              groups.map(g => (
+                <div key={g.code} onClick={() => { setSelectedGroup(g.code); setShowDetailForm(false); }}
+                  style={{
+                    padding: '10px 16px', cursor: 'pointer',
+                    background: selectedGroup === g.code ? '#e8f0fe' : '#fff',
+                    borderLeft: selectedGroup === g.code ? '3px solid #1565c0' : '3px solid transparent',
+                    borderBottom: '1px solid #f5f5f5',
+                  }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: selectedGroup === g.code ? '#1565c0' : '#344054' }}>{g.code}</div>
+                  <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '1px' }}>{g.name}</div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 우측: 상세코드 목록 */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {selectedGroup ? (
+              <>
+                {/* 상세코드 헤더 */}
+                <div style={{
+                  padding: '12px 16px', borderBottom: '1px solid #f0f0f0',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fafafa',
+                }}>
+                  <div>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>{selectedGroup}</span>
+                    <span style={{ fontSize: '12px', color: '#9aa0a6', marginLeft: '8px' }}>
+                      {groups.find(g => g.code === selectedGroup)?.name ?? newGroupName}
+                    </span>
+                  </div>
+                  <button onClick={() => { setShowDetailForm(v => !v); setNewDetailCode(''); setNewDetailName(''); setNewDetailSort('0'); }}
+                    style={btnStyle('#e8f0fe', '#1565c0')}>+ 상세코드</button>
+                </div>
+
+                {/* 상세코드 추가 폼 */}
+                {showDetailForm && (
+                  <div style={{ padding: '10px 16px', background: '#f0f8ff', borderBottom: '1px solid #e8ecf0', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>상세코드</label>
+                      <input placeholder="예: HOUSING" value={newDetailCode}
+                        onChange={e => setNewDetailCode(e.target.value.toUpperCase())}
+                        style={{ ...inputStyle, width: '140px' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>상세코드명</label>
+                      <input placeholder="예: 주거비" value={newDetailName}
+                        onChange={e => setNewDetailName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleAddDetail()}
+                        style={{ ...inputStyle, width: '150px' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>정렬</label>
+                      <input type="number" placeholder="0" value={newDetailSort}
+                        onChange={e => setNewDetailSort(e.target.value)}
+                        style={{ ...inputStyle, width: '60px' }} />
+                    </div>
+                    <button onClick={handleAddDetail} style={btnStyle('#1a3a5c', '#fff')}>등록</button>
+                    <button onClick={() => setShowDetailForm(false)} style={btnStyle('#f0f0f0', '#5f6368')}>취소</button>
+                  </div>
+                )}
+
+                {/* 상세코드 테이블 헤더 */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '1fr 2fr 60px 80px',
+                  padding: '8px 16px', fontSize: '11px', fontWeight: 700,
+                  color: '#fff', background: '#1a3a5c',
+                }}>
+                  <span>상세코드</span>
+                  <span>상세코드명</span>
+                  <span style={{ textAlign: 'center' }}>정렬</span>
+                  <span style={{ textAlign: 'center' }}>액션</span>
+                </div>
+
+                {/* 상세코드 행 목록 */}
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {details.length === 0 ? (
+                    <div style={{ padding: '32px', textAlign: 'center', color: '#9aa0a6', fontSize: '13px' }}>
+                      상세코드가 없습니다. "+ 상세코드" 버튼으로 추가하세요.
+                    </div>
+                  ) : (
+                    details.map((d, i) => (
+                      <div key={d.id} style={{
+                        display: 'grid', gridTemplateColumns: '1fr 2fr 60px 80px',
+                        padding: '10px 16px', fontSize: '13px', alignItems: 'center',
+                        background: i % 2 === 0 ? '#fff' : '#fafafa',
+                        borderBottom: '1px solid #f0f0f0',
+                      }}>
+                        <span style={{ fontWeight: 600, color: '#344054', fontFamily: 'monospace', fontSize: '12px' }}>{d.detailCode}</span>
+
+                        {editingId === d.id ? (
+                          <>
+                            <input value={editingName} onChange={e => setEditingName(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') handleEditSave(d.id); if (e.key === 'Escape') setEditingId(null); }}
+                              style={{ ...inputStyle, padding: '4px 8px' }} autoFocus />
+                            <input type="number" value={editingSort} onChange={e => setEditingSort(e.target.value)}
+                              style={{ ...inputStyle, padding: '4px 6px', textAlign: 'center' }} />
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                              <button onClick={() => handleEditSave(d.id)} style={btnStyle('#1a3a5c', '#fff')}>저장</button>
+                              <button onClick={() => setEditingId(null)} style={btnStyle('#f0f0f0', '#5f6368')}>취소</button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ color: '#344054' }}>{d.detailCodeName}</span>
+                            <span style={{ textAlign: 'center', color: '#9aa0a6', fontSize: '12px' }}>{d.sortOrder}</span>
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                              <button onClick={() => { setEditingId(d.id); setEditingName(d.detailCodeName); setEditingSort(String(d.sortOrder)); }}
+                                style={{ padding: '3px 8px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '5px', background: '#fff', cursor: 'pointer' }}>✏</button>
+                              <button onClick={() => handleDelete(d.id, d.detailCodeName)}
+                                style={{ padding: '3px 8px', fontSize: '12px', border: '1px solid #fecaca', borderRadius: '5px', background: '#fff', color: '#E06060', cursor: 'pointer' }}>×</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            ) : (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa0a6', fontSize: '13px' }}>
+                좌측에서 그룹을 선택하세요.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── 통장 관리 뷰 ─────────────────────────────────────────────
 const GROUP_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   '고정비 통장':  { bg: '#FFF3E0', border: '#FF9800', text: '#E65100' },
@@ -973,6 +1280,7 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string }>
 
 const AccountManagementView: React.FC = () => {
   const totalBudget = ACCOUNT_GROUPS.flatMap(g => g.accounts).reduce((s, a) => s + a.budget, 0);
+  const [showCommonCode, setShowCommonCode] = useState(false);
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
@@ -1072,6 +1380,23 @@ const AccountManagementView: React.FC = () => {
           </div>
         );
       })}
+
+      {/* 공통코드 관리 버튼 */}
+      <div style={{ marginTop: '28px', textAlign: 'center' }}>
+        <button
+          onClick={() => setShowCommonCode(true)}
+          style={{
+            padding: '10px 24px', fontSize: '13px', fontWeight: 600,
+            border: '1.5px dashed #b0c4de', borderRadius: '10px',
+            background: '#f8fafd', color: '#5f7fa0', cursor: 'pointer',
+          }}
+        >
+          ⚙ 공통코드 관리
+        </button>
+      </div>
+
+      {/* 공통코드 관리 모달 */}
+      {showCommonCode && <CommonCodeModal onClose={() => setShowCommonCode(false)} />}
     </div>
   );
 };
