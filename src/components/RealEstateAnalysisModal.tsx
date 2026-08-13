@@ -1,36 +1,36 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-import { analyzeRealEstate } from '../services/api';
+import { analyzeRealEstate, ComplexAnalysis, getComplexAnalyses } from '../services/api';
 import { ApartmentComplex } from '../types';
 
 interface Props {
-  complexes: ApartmentComplex[];  // 비교 중인 단지 목록 (2~3개)
+  complexes: ApartmentComplex[];  // 현재 비교 중인 단지 목록 (2~3개)
   onClose: () => void;
 }
 
-// 마크다운 → JSX (financial_report_service와 동일 패턴)
+// ISO UTC 문자열 → 한국 시간 표시
+function formatKST(iso: string | null): string {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// 마크다운 → JSX
 function renderMarkdown(text: string): React.ReactNode[] {
   return text.split('\n').map((line, i) => {
     if (line.startsWith('## ')) {
-      return (
-        <h2 key={i} style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c', margin: '20px 0 8px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>
-          {line.slice(3)}
-        </h2>
-      );
+      return <h2 key={i} style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c', margin: '20px 0 8px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>{line.slice(3)}</h2>;
     }
     if (line.startsWith('### ')) {
-      return (
-        <h3 key={i} style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: '14px 0 6px' }}>
-          {line.slice(4)}
-        </h3>
-      );
+      return <h3 key={i} style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: '14px 0 6px' }}>{line.slice(4)}</h3>;
     }
     if (line.startsWith('#### ')) {
-      return (
-        <h4 key={i} style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: '10px 0 4px' }}>
-          {line.slice(5)}
-        </h4>
-      );
+      return <h4 key={i} style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: '10px 0 4px' }}>{line.slice(5)}</h4>;
     }
     if (line.startsWith('---')) {
       return <hr key={i} style={{ border: 'none', borderTop: '1px solid #e8eaed', margin: '16px 0' }} />;
@@ -51,15 +51,14 @@ function renderMarkdown(text: string): React.ReactNode[] {
         </div>
       );
     }
-    if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
-    // 표(|로 시작) 그대로 pre 처리
     if (line.startsWith('|')) {
       return (
-        <div key={i} style={{ fontFamily: 'monospace', fontSize: '12px', color: '#444', margin: '1px 0', overflowX: 'auto' }}>
+        <div key={i} style={{ fontFamily: 'monospace', fontSize: '12px', color: '#444', margin: '1px 0', whiteSpace: 'pre', overflowX: 'auto' }}>
           {line}
         </div>
       );
     }
+    if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
     return (
       <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.7' }}>
         {inlineBold(line)}
@@ -83,27 +82,42 @@ function inlineBold(text: string): React.ReactNode {
 }
 
 const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
-  const [content, setContent] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [histories, setHistories] = useState<ComplexAnalysis[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
 
+  // 모달 열릴 때 이력 로드
+  useEffect(() => {
+    getComplexAnalyses().then(data => {
+      setHistories(data);
+      // 현재 비교 단지와 동일한 최신 이력이 있으면 자동 선택
+      if (data.length > 0) setSelectedId(data[0].id);
+    }).catch(() => {});
+  }, []);
+
   const handleAnalyze = async () => {
-    setLoading(true);
+    setAnalyzing(true);
     setError('');
     try {
       const result = await analyzeRealEstate(complexes.map(c => c.id));
-      setContent(result);
+      setHistories(prev => [result, ...prev]);
+      setSelectedId(result.id);
     } catch (e: any) {
-      // 백엔드 에러 메시지 표시 (원인 파악용)
       const detail = e?.response?.data?.detail || e?.message || '';
-      setError(`분석 중 오류가 발생했습니다.${detail ? ` (${detail})` : ' 잠시 후 다시 시도해주세요.'}`);
+      setError(`분석 중 오류가 발생했습니다.${detail ? ` (${detail})` : ''}`);
     } finally {
-      setLoading(false);
+      setAnalyzing(false);
     }
   };
 
+  const selected = histories.find(h => h.id === selectedId);
+
+  // 드롭다운 레이블: "단지A vs 단지B · 8월 13일 오후 03:22"
+  const historyLabel = (h: ComplexAnalysis) =>
+    `${h.complexNames.join(' vs ')} · ${formatKST(h.createdAt)}`;
+
   return (
-    // 딤 배경
     <div
       onClick={onClose}
       style={{
@@ -113,11 +127,10 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
         overflowY: 'auto', padding: '40px 16px',
       }}
     >
-      {/* 모달 본체 */}
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: '100%', maxWidth: '820px',
+          width: '100%', maxWidth: '840px',
           background: '#fff', borderRadius: '16px',
           boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
           overflow: 'hidden', flexShrink: 0,
@@ -126,112 +139,127 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
         {/* 헤더 */}
         <div style={{
           padding: '18px 24px', borderBottom: '1px solid #e0f0ff',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: 'linear-gradient(135deg, #f0f8fd 0%, #fff 100%)',
         }}>
-          <div>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c' }}>
-              🤖 AI 부동산 투자 분석
-            </div>
-            <div style={{ fontSize: '12px', color: '#9aa0a6', marginTop: '3px' }}>
-              {complexes.map(c => c.complexName).join(' vs ')}
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c' }}>🤖 AI 부동산 투자 분석</div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6', padding: '4px 8px' }}>×</button>
           </div>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6', padding: '4px 8px' }}
-          >×</button>
+
+          {/* 컨트롤 바: 이력 선택 + 새 분석 버튼 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* 현재 비교 단지 칩 */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {complexes.map(c => (
+                <span key={c.id} style={{
+                  padding: '4px 10px', borderRadius: '12px',
+                  background: '#e0f0ff', color: '#1a3a5c',
+                  fontSize: '12px', fontWeight: 600,
+                }}>
+                  📍 {c.complexName}
+                </span>
+              ))}
+            </div>
+
+            {/* 이력 드롭다운 */}
+            {histories.length > 0 && (
+              <select
+                value={selectedId ?? ''}
+                onChange={e => setSelectedId(Number(e.target.value))}
+                style={{
+                  padding: '5px 10px', fontSize: '12px',
+                  border: '1px solid #dadce0', borderRadius: '8px',
+                  background: '#fff', color: '#344054',
+                  maxWidth: '320px', marginLeft: 'auto',
+                }}
+              >
+                {histories.map(h => (
+                  <option key={h.id} value={h.id}>{historyLabel(h)}</option>
+                ))}
+              </select>
+            )}
+
+            {/* 분석 버튼 */}
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              style={{
+                padding: '7px 18px', fontSize: '13px', fontWeight: 600,
+                border: 'none', borderRadius: '10px', cursor: analyzing ? 'default' : 'pointer',
+                background: analyzing ? '#b0c4de' : '#89CFF0', color: '#fff',
+                marginLeft: histories.length > 0 ? undefined : 'auto',
+                flexShrink: 0,
+              }}
+            >
+              {analyzing ? '⚙️ 분석 중…' : '✨ 지금 분석'}
+            </button>
+          </div>
         </div>
 
         {/* 본문 */}
         <div style={{ padding: '24px' }}>
-          {!content && !loading && (
-            /* 분석 시작 화면 */
-            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+          {error && (
+            <div style={{ background: '#fde8e8', border: '1px solid #e88', borderRadius: '8px', padding: '12px 16px', color: '#c62828', fontSize: '13px', marginBottom: '16px' }}>
+              {error}
+            </div>
+          )}
+
+          {analyzing && (
+            <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+              <div style={{ fontSize: '36px', marginBottom: '12px' }}>⚙️</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#344054' }}>Gemini가 분석 중입니다…</div>
+              <div style={{ fontSize: '12px', color: '#9aa0a6', marginTop: '8px' }}>약 20~40초 소요됩니다</div>
+            </div>
+          )}
+
+          {!analyzing && !selected && histories.length === 0 && (
+            /* 첫 분석 안내 */
+            <div style={{ textAlign: 'center', padding: '48px 20px' }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
               <div style={{ fontSize: '15px', fontWeight: 600, color: '#1a3a5c', marginBottom: '8px' }}>
-                부동산 투자 AI 분석을 시작합니다
+                아직 분석 이력이 없어요
               </div>
-              <div style={{ fontSize: '13px', color: '#9aa0a6', marginBottom: '24px', lineHeight: 1.6 }}>
-                입지, 가격, 학군, 인프라, 전고점/전저점 대비 현재가,<br />
-                미래 투자 가치를 종합 분석합니다. (약 20~40초 소요)
+              <div style={{ fontSize: '13px', color: '#9aa0a6', lineHeight: 1.6 }}>
+                위의 <strong>✨ 지금 분석</strong> 버튼을 눌러<br />
+                입지·가격·투자 가치를 AI로 비교해보세요.
               </div>
-              {/* 단지 목록 */}
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '28px' }}>
-                {complexes.map(c => (
-                  <div key={c.id} style={{
-                    padding: '8px 16px', borderRadius: '20px',
-                    background: '#e0f0ff', color: '#1a3a5c',
-                    fontSize: '13px', fontWeight: 600,
-                  }}>
-                    📍 {c.complexName}
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={handleAnalyze}
-                style={{
-                  padding: '12px 32px', fontSize: '14px', fontWeight: 700,
-                  background: '#89CFF0', color: '#fff',
-                  border: 'none', borderRadius: '12px', cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(137,207,240,0.4)',
-                }}
-              >
-                ✨ 지금 분석하기
-              </button>
-              <div style={{ fontSize: '11px', color: '#bbb', marginTop: '12px' }}>
+              <div style={{ fontSize: '11px', color: '#bbb', marginTop: '20px' }}>
                 * Gemini AI 분석 결과는 투자 참고용이며, 전문 금융 조언을 대체하지 않습니다.
               </div>
             </div>
           )}
 
-          {loading && (
-            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-              <div style={{ fontSize: '40px', marginBottom: '16px', animation: 'spin 2s linear infinite' }}>⚙️</div>
-              <div style={{ fontSize: '14px', color: '#344054', fontWeight: 600 }}>Gemini가 분석 중입니다…</div>
-              <div style={{ fontSize: '12px', color: '#9aa0a6', marginTop: '8px' }}>
-                {complexes.map(c => c.complexName).join(' vs ')} 데이터를 검토하고 있어요
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div style={{ background: '#fde8e8', border: '1px solid #e88', borderRadius: '8px', padding: '12px 16px', color: '#c62828', fontSize: '13px', marginBottom: '16px' }}>
-              {error}
-              <button onClick={handleAnalyze} style={{ marginLeft: '12px', padding: '4px 12px', fontSize: '12px', border: '1px solid #c62828', borderRadius: '6px', background: 'none', cursor: 'pointer', color: '#c62828' }}>
-                다시 시도
-              </button>
-            </div>
-          )}
-
-          {content && (
+          {!analyzing && selected && (
             <div>
-              {/* 재분석 버튼 */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-                <button
-                  onClick={handleAnalyze}
-                  disabled={loading}
-                  style={{
-                    padding: '6px 16px', fontSize: '12px', fontWeight: 600,
-                    background: '#fff', border: '1px solid #89CFF0',
-                    borderRadius: '8px', cursor: 'pointer', color: '#4BAAD4',
-                  }}
-                >
-                  🔄 재분석
-                </button>
+              {/* 분석 정보 헤더 */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: '16px', paddingBottom: '12px', borderBottom: '2px solid #e0f0ff',
+              }}>
+                <div>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c' }}>
+                    {selected.complexNames.join(' vs ')}
+                  </span>
+                  {selected.createdAt && (
+                    <span style={{ fontSize: '11px', color: '#9aa0a6', marginLeft: '10px' }}>
+                      {formatKST(selected.createdAt)} 분석
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: '11px', color: '#bbb' }}>
+                  #{selected.id}
+                </span>
               </div>
-              {/* 분석 결과 */}
+              {/* 분석 내용 */}
               <div style={{ lineHeight: 1.7 }}>
-                {renderMarkdown(content)}
+                {renderMarkdown(selected.content)}
               </div>
             </div>
           )}
         </div>
       </div>
 
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };

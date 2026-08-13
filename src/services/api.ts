@@ -1084,12 +1084,25 @@ export const generateFinancialReport = async (reportMonth?: string): Promise<voi
 };
 
 // ── AI 부동산 투자 분석 ─────────────────────────────────────────────────────
-export const analyzeRealEstate = async (complexIds: number[]): Promise<string> => {
+export interface ComplexAnalysis {
+  id: number;
+  complexIds: number[];
+  complexNames: string[];
+  content: string;
+  createdAt: string | null;
+}
+
+export const getComplexAnalyses = async (): Promise<ComplexAnalysis[]> => {
+  const res = await api.get<ComplexAnalysis[]>('/api/ai/real-estate/analyses');
+  return res.data;
+};
+
+export const analyzeRealEstate = async (complexIds: number[]): Promise<ComplexAnalysis> => {
   // Gemini 응답에 최대 60초 소요 → 기본 10초 타임아웃 대신 90초로 지정
-  const res = await api.post<{ content: string }>('/api/ai/real-estate/analyze', {
+  const res = await api.post<ComplexAnalysis>('/api/ai/real-estate/analyze', {
     complex_ids: complexIds,
   }, { timeout: 90_000 });
-  return res.data.content;
+  return res.data;
 };
 
 export default api;
