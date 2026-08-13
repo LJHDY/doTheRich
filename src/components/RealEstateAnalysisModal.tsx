@@ -218,18 +218,20 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
 
           {/* 컨트롤 바: 이력 선택 + 새 분석 버튼 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            {/* 현재 비교 단지 칩 */}
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {complexes.map(c => (
-                <span key={c.id} style={{
-                  padding: '4px 10px', borderRadius: '12px',
-                  background: '#e0f0ff', color: '#1a3a5c',
-                  fontSize: '12px', fontWeight: 600,
-                }}>
-                  📍 {c.complexName}
-                </span>
-              ))}
-            </div>
+            {/* 현재 비교 단지 칩 (2개 이상일 때만 표시) */}
+            {complexes.length >= 2 && (
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {complexes.map(c => (
+                  <span key={c.id} style={{
+                    padding: '4px 10px', borderRadius: '12px',
+                    background: '#e0f0ff', color: '#1a3a5c',
+                    fontSize: '12px', fontWeight: 600,
+                  }}>
+                    📍 {c.complexName}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {/* 이력 드롭다운 */}
             {histories.length > 0 && (
@@ -249,20 +251,22 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
               </select>
             )}
 
-            {/* 분석 버튼 */}
-            <button
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              style={{
-                padding: '7px 18px', fontSize: '13px', fontWeight: 600,
-                border: 'none', borderRadius: '10px', cursor: analyzing ? 'default' : 'pointer',
-                background: analyzing ? '#b0c4de' : '#89CFF0', color: '#fff',
-                marginLeft: histories.length > 0 ? undefined : 'auto',
-                flexShrink: 0,
-              }}
-            >
-              {analyzing ? '⚙️ 분석 중…' : '✨ 지금 분석'}
-            </button>
+            {/* 분석 버튼 — 단지 2개 이상 선택 시에만 표시 */}
+            {complexes.length >= 2 && (
+              <button
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                style={{
+                  padding: '7px 18px', fontSize: '13px', fontWeight: 600,
+                  border: 'none', borderRadius: '10px', cursor: analyzing ? 'default' : 'pointer',
+                  background: analyzing ? '#b0c4de' : '#89CFF0', color: '#fff',
+                  marginLeft: histories.length > 0 ? undefined : 'auto',
+                  flexShrink: 0,
+                }}
+              >
+                {analyzing ? '⚙️ 분석 중…' : '✨ 지금 분석'}
+              </button>
+            )}
           </div>
         </div>
 

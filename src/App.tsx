@@ -1184,6 +1184,7 @@ const App: React.FC = () => {
           onModeChange={handleCompareModeChange}
           onSelectComparison={handleSelectComparison}
           top={headerHeight}
+          onOpenAiHistory={() => { setCompareOpen(false); setRealEstateAiOpen(true); }}
         />
       )}
 
@@ -1343,8 +1344,8 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* AI 부동산 투자 분석 모달 */}
-      {realEstateAiOpen && compareIds.length >= 2 && (
+      {/* AI 부동산 투자 분석 모달 — 이력 조회는 단지 선택 없이도 가능 */}
+      {realEstateAiOpen && (
         <RealEstateAnalysisModal
           complexes={compareIds.map(id => complexes.find(c => c.id === id)!).filter(Boolean)}
           onClose={() => setRealEstateAiOpen(false)}

@@ -12,6 +12,8 @@ interface CompareListModalProps {
   onModeChange: (mode: 'normal' | 'evaluation') => void;
   // 저장된 비교평가 선택 시 두 단지를 비교평가 모드로 바로 진입
   onSelectComparison: (complexId1: number, complexId2: number) => void;
+  // AI 분석 이력 모달 열기
+  onOpenAiHistory: () => void;
   top?: number;
 }
 
@@ -29,7 +31,7 @@ const getPriceForAreaType = (complex: ApartmentComplex, at: string | null): numb
 
 const CompareListModal: React.FC<CompareListModalProps> = ({
   complexes, priceRanges, selectedIds, onToggle, onClose,
-  compareMode, onModeChange, onSelectComparison, top = 56,
+  compareMode, onModeChange, onSelectComparison, onOpenAiHistory, top = 56,
 }) => {
   const [selectedRange, setSelectedRange] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -136,6 +138,20 @@ const CompareListModal: React.FC<CompareListModalProps> = ({
                 }}
               >
                 조회
+              </button>
+
+              {/* AI 분석 이력 바로 보기 */}
+              <button
+                onClick={onOpenAiHistory}
+                style={{
+                  ...btnBase,
+                  borderColor: '#89CFF0',
+                  backgroundColor: '#f0f8fd',
+                  color: '#4BAAD4',
+                  fontWeight: 600,
+                }}
+              >
+                🤖 AI 분석
               </button>
 
               {/* 즐겨찾기 필터 */}
