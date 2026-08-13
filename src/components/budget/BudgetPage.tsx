@@ -44,6 +44,19 @@ interface Props {
 
 // ─── 유틸 ────────────────────────────────────────────────────
 const today = () => new Date().toISOString().slice(0, 10);
+
+/** 원 단위 금액을 한글로 표기 — 예: 1500000 → "150만원", 150000000 → "1억 5000만원" */
+const formatAmountKorean = (won: number): string => {
+  if (!won || won <= 0) return '';
+  const uk = Math.floor(won / 1e8);
+  const man = Math.floor((won % 1e8) / 1e4);
+  const remainder = won % 1e4;
+  const parts: string[] = [];
+  if (uk > 0) parts.push(`${uk}억`);
+  if (man > 0) parts.push(`${man}만`);
+  if (remainder > 0) parts.push(`${remainder}원`);
+  return parts.join(' ');
+};
 const toYearMonth = (d: Date) =>
   `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
 const displayYearMonth = (ym: string) =>
@@ -512,8 +525,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 style={inputStyle}
               />
               {form.amountStr && Number(form.amountStr) > 0 && (
-                <span style={{ fontSize: '12px', color: '#9aa0a6', marginTop: '2px', display: 'block' }}>
-                  = {formatAmount(Number(form.amountStr))}
+                <span style={{ fontSize: '12px', color: '#4BAAD4', marginTop: '3px', display: 'block', fontWeight: 600 }}>
+                  = {formatAmountKorean(Number(form.amountStr))}
                 </span>
               )}
             </FieldRow>
@@ -1523,7 +1536,7 @@ type LocalDetail = {
   userId: string;
   assetType: string;
   accountName: string;
-  amountStr: string; // 만원 단위 입력값
+  amountStr: string; // 원 단위 입력값
 };
 
 const AssetDetailModal: React.FC<{
@@ -1539,7 +1552,7 @@ const AssetDetailModal: React.FC<{
   const [saving, setSaving] = useState(false);
   // 다른 셀의 기존 데이터 (저장 시 그대로 포함, 원 단위)
   const [otherItems, setOtherItems] = useState<Array<{ userId: string; assetType: string; accountName: string; amountWon: number }>>([]);
-  // 이 셀의 편집 가능 항목 (만원 단위 입력)
+  // 이 셀의 편집 가능 항목 (원 단위 입력)
   const [cellItems, setCellItems] = useState<LocalDetail[]>([]);
 
   useEffect(() => {
@@ -1557,7 +1570,7 @@ const AssetDetailModal: React.FC<{
             userId: d.userId,
             assetType: d.assetType,
             accountName: d.accountName,
-            amountStr: d.amount > 0 ? String(Math.round(d.amount / 10000)) : '',
+            amountStr: d.amount > 0 ? String(d.amount) : '',
           }))
       );
       setLoading(false);
@@ -1574,7 +1587,7 @@ const AssetDetailModal: React.FC<{
   const updateItem = (key: string, field: 'accountName' | 'amountStr', value: string) =>
     setCellItems(prev => prev.map(i => i.key === key ? { ...i, [field]: value } : i));
 
-  // 현재 셀 합산 (만원 단위) — 실시간 미리보기
+  // 현재 셀 합산 (원 단위) — 실시간 미리보기
   const total = useMemo(
     () => cellItems.reduce((s, i) => s + (Number(i.amountStr.replace(/,/g, '')) || 0), 0),
     [cellItems]
@@ -1593,7 +1606,7 @@ const AssetDetailModal: React.FC<{
         .map(i => ({
           userId: i.userId, assetType: i.assetType,
           accountName: i.accountName.trim(),
-          amount: Math.round(Number(i.amountStr.replace(/,/g, '')) * 10000), // 만원 → 원
+          amount: Number(i.amountStr.replace(/,/g, '')) || 0,
         }));
       await bulkSaveAssetSnapshotDetails(snapshotDate, [...othersPayload, ...thisPayload]);
       onSaved();
@@ -1633,7 +1646,7 @@ const AssetDetailModal: React.FC<{
 
         {/* 안내 */}
         <div style={{ padding: '7px 20px', background: '#f0f8fd', borderBottom: '1px solid #e8ecf0', flexShrink: 0, fontSize: '11px', color: '#4BAAD4' }}>
-          금액 단위: <strong>만원</strong> · 저장 시 합산이 자산 현황에 자동 반영됩니다
+          금액 단위: <strong>원</strong> · 저장 시 합산이 자산 현황에 자동 반영됩니다
         </div>
 
         {/* 본문 */}
@@ -1652,14 +1665,19 @@ const AssetDetailModal: React.FC<{
                     onChange={e => updateItem(item.key, 'accountName', e.target.value)}
                     style={{ flex: 2, padding: '6px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none' }}
                   />
-                  <input
-                    type="text"
-                    placeholder="금액"
-                    value={item.amountStr}
-                    onChange={e => updateItem(item.key, 'amountStr', e.target.value.replace(/[^0-9]/g, ''))}
-                    style={{ width: '90px', padding: '6px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', textAlign: 'right' }}
-                  />
-                  <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>만원</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                    <input
+                      type="text"
+                      placeholder="금액"
+                      value={item.amountStr}
+                      onChange={e => updateItem(item.key, 'amountStr', e.target.value.replace(/[^0-9]/g, ''))}
+                      style={{ width: '110px', padding: '6px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', textAlign: 'right' }}
+                    />
+                    {Number(item.amountStr) > 0 && (
+                      <span style={{ fontSize: '10px', color: '#4BAAD4', fontWeight: 600 }}>{formatAmountKorean(Number(item.amountStr))}</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>원</span>
                   <button
                     onClick={() => removeItem(item.key)}
                     style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#bdbdbd', fontSize: '18px', padding: '0 2px', lineHeight: 1 }}
@@ -1678,7 +1696,7 @@ const AssetDetailModal: React.FC<{
               {/* 합산 미리보기 */}
               {total > 0 && (
                 <div style={{ marginTop: '12px', padding: '8px 12px', background: '#f0f8fd', borderRadius: '8px', fontSize: '13px', textAlign: 'right', color: '#1a3a5c', fontWeight: 700 }}>
-                  합계: {total.toLocaleString('ko-KR')} 만원
+                  합계: {total.toLocaleString('ko-KR')} 원
                 </div>
               )}
             </>
@@ -1815,7 +1833,7 @@ const AssetCell: React.FC<{
 
 type FeForm = {
   name: string;
-  amountStr: string;   // 만원 단위 입력
+  amountStr: string;   // 원 단위 입력
   accountMain: string;
   account: string;
   paymentDay: string;
@@ -1865,7 +1883,7 @@ const FixedExpenseModal: React.FC<{
     setEditingId(fe.id);
     setForm({
       name: fe.name,
-      amountStr: fe.amount > 0 ? String(Math.round(fe.amount / 10000)) : '',
+      amountStr: fe.amount > 0 ? String(fe.amount) : '',
       accountMain: fe.accountMain ?? '',
       account: fe.account ?? '',
       paymentDay: fe.paymentDay ? String(fe.paymentDay) : '',
@@ -1876,7 +1894,7 @@ const FixedExpenseModal: React.FC<{
 
   const handleSaveForm = async () => {
     if (!form.name.trim()) { alert('고정비 내역을 입력해주세요'); return; }
-    const amount = Math.round(Number(form.amountStr.replace(/,/g, '') || '0') * 10000);
+    const amount = Number(form.amountStr.replace(/,/g, '') || '0');
     if (amount <= 0) { alert('금액을 입력해주세요'); return; }
     setSaving(true);
     try {
@@ -1994,9 +2012,14 @@ const FixedExpenseModal: React.FC<{
                         placeholder="예: 월세, 통신비" style={inputSt} />
                     </div>
                     <div>
-                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>금액 (만원) *</label>
+                      <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>금액 (원) *</label>
                       <input value={form.amountStr} onChange={e => setForm(f => ({ ...f, amountStr: e.target.value.replace(/[^0-9]/g, '') }))}
-                        placeholder="예: 80" style={inputSt} />
+                        placeholder="예: 800000" style={inputSt} />
+                      {Number(form.amountStr) > 0 && (
+                        <span style={{ fontSize: '11px', color: '#4BAAD4', fontWeight: 600, marginTop: '2px', display: 'block' }}>
+                          = {formatAmountKorean(Number(form.amountStr))}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>납부 통장 대분류</label>
