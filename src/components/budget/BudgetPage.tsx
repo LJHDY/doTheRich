@@ -462,6 +462,23 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
           {/* 결제수단 관리 패널 (통장/카드 CRUD) */}
           <PaymentMethodPanel userId={userId} paymentMethods={paymentMethods} onChanged={setPaymentMethods} />
+
+          {/* 섹션 구분선 */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px',
+            margin: '8px 0 24px',
+          }}>
+            <div style={{ flex: 1, height: '2px', background: 'linear-gradient(to right, #89CFF0, #e0f0ff)' }} />
+            <span style={{
+              fontSize: '12px', fontWeight: 700, color: '#4BAAD4',
+              padding: '4px 14px', border: '1.5px solid #89CFF0',
+              borderRadius: '20px', background: '#f0f8fd', whiteSpace: 'nowrap',
+            }}>
+              통장 배분 현황 (예시)
+            </span>
+            <div style={{ flex: 1, height: '2px', background: 'linear-gradient(to left, #89CFF0, #e0f0ff)' }} />
+          </div>
+
           <AccountManagementView />
         </div>
       )}
