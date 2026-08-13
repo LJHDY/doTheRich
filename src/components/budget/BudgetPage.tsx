@@ -1525,24 +1525,42 @@ const AssetView: React.FC = () => {
           )}
 
           {/* 총 자산 요약 카드 */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
-            {[
-              { label: `총 자산 합산 (${selectedDate})`, amount: gtSum, large: true, color: '#1a3a5c' },
-              { label: u0.name, amount: gt0, large: false, color: '#1565c0' },
-              { label: u1.name, amount: gt1, large: false, color: '#1565c0' },
-            ].map(({ label, amount, large, color }) => (
-              <div key={label} style={{
-                flex: large ? 2 : 1,
-                background: '#fff', borderRadius: '12px', padding: '12px 16px',
-                border: '1px solid #e8ecf0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-              }}>
-                <div style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, marginBottom: '5px' }}>{label}</div>
-                <div style={{ fontSize: large ? '18px' : '14px', fontWeight: 800, color }}>
-                  {amount === 0 ? '—' : (large ? formatAmount(amount) : formatAmountShort(amount))}
-                </div>
+          {isMobile ? (
+            /* 모바일: 합산 full width 상단, 동영/주해 나란히 하단 */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+              <div style={{ background: '#fff', borderRadius: '12px', padding: '12px 16px', border: '1px solid #e8ecf0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, marginBottom: '5px' }}>{`총 자산 합산 (${selectedDate})`}</div>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: '#1a3a5c' }}>{gtSum === 0 ? '—' : formatAmount(gtSum)}</div>
               </div>
-            ))}
-          </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[{ label: u0.name, amount: gt0 }, { label: u1.name, amount: gt1 }].map(({ label, amount }) => (
+                  <div key={label} style={{ flex: 1, background: '#fff', borderRadius: '12px', padding: '12px 16px', border: '1px solid #e8ecf0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                    <div style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, marginBottom: '5px' }}>{label}</div>
+                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#1565c0' }}>{amount === 0 ? '—' : formatAmountKorean(amount)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
+              {[
+                { label: `총 자산 합산 (${selectedDate})`, amount: gtSum, large: true, color: '#1a3a5c' },
+                { label: u0.name, amount: gt0, large: false, color: '#1565c0' },
+                { label: u1.name, amount: gt1, large: false, color: '#1565c0' },
+              ].map(({ label, amount, large, color }) => (
+                <div key={label} style={{
+                  flex: large ? 2 : 1,
+                  background: '#fff', borderRadius: '12px', padding: '12px 16px',
+                  border: '1px solid #e8ecf0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                }}>
+                  <div style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, marginBottom: '5px' }}>{label}</div>
+                  <div style={{ fontSize: large ? '18px' : '14px', fontWeight: 800, color }}>
+                    {amount === 0 ? '—' : (large ? formatAmount(amount) : formatAmountShort(amount))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 유동성 비율 바 */}
           {gtSum > 0 && (
@@ -1732,20 +1750,9 @@ const AssetView: React.FC = () => {
 
         {/* ══ 이력 탭 ═══════════════════════════════════════════ */}
         {subTab === 'HISTORY' && (
-          <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: '420px' }}>
-            <div style={{
-              display: 'grid', gridTemplateColumns: '130px 1fr 1fr 1fr 100px',
-              padding: '10px 16px', fontSize: '12px', fontWeight: 700, color: '#fff',
-              background: '#1a3a5c', borderRadius: '8px 8px 0 0',
-            }}>
-              <span>날짜</span>
-              <span style={{ textAlign: 'right' }}>{u0.name}</span>
-              <span style={{ textAlign: 'right' }}>{u1.name}</span>
-              <span style={{ textAlign: 'right' }}>합산</span>
-              <span style={{ textAlign: 'right' }}>변동</span>
-            </div>
-            <div style={{ border: '1px solid #e8ecf0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+          isMobile ? (
+            /* 모바일: 카드형 이력 목록 */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {dates.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6', fontSize: '13px' }}>
                   스냅샷 이력이 없습니다.
@@ -1756,38 +1763,93 @@ const AssetView: React.FC = () => {
                 const v1 = grandKrw(date, u1.id);
                 const total = v0 + v1;
                 const prevDate = dates[i + 1];
-                const prevTotal = prevDate
-                  ? grandKrw(prevDate, u0.id) + grandKrw(prevDate, u1.id)
-                  : null;
+                const prevTotal = prevDate ? grandKrw(prevDate, u0.id) + grandKrw(prevDate, u1.id) : null;
                 const diff = prevTotal !== null ? total - prevTotal : null;
                 return (
                   <div key={date}
                     onClick={() => { setSelectedDate(date); setSubTab('CURRENT'); }}
                     style={{
-                      display: 'grid', gridTemplateColumns: '130px 1fr 1fr 1fr 100px',
-                      padding: '11px 16px', fontSize: '13px',
-                      borderBottom: i < dates.length - 1 ? '1px solid #f0f0f0' : 'none',
-                      background: '#fff', cursor: 'pointer', alignItems: 'center',
+                      background: '#fff', borderRadius: '10px', padding: '12px 16px',
+                      border: '1px solid #e8ecf0', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                      cursor: 'pointer',
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#f0f8fd')}
-                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
                   >
-                    <span style={{ fontWeight: 700, color: '#1565c0' }}>{date}</span>
-                    <span style={{ textAlign: 'right', color: '#344054' }}>{v0 ? formatAmountShort(v0) : '—'}</span>
-                    <span style={{ textAlign: 'right', color: '#344054' }}>{v1 ? formatAmountShort(v1) : '—'}</span>
-                    <span style={{ textAlign: 'right', fontWeight: 700, color: '#1a3a5c' }}>{total ? formatAmountShort(total) : '—'}</span>
-                    <span style={{
-                      textAlign: 'right', fontWeight: 600,
-                      color: diff === null ? '#9aa0a6' : diff >= 0 ? '#4CAF50' : '#E06060',
-                    }}>
-                      {diff === null ? '—' : `${diff >= 0 ? '+' : ''}${(diff / 1e8).toFixed(2)}억`}
-                    </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#1565c0' }}>{date}</span>
+                      <span style={{ fontSize: '15px', fontWeight: 800, color: '#1a3a5c' }}>{total ? formatAmountKorean(total) : '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#5f6368' }}>
+                        {u0.name} <b style={{ color: '#344054' }}>{v0 ? formatAmountKorean(v0) : '—'}</b>
+                        <span style={{ margin: '0 6px', color: '#ddd' }}>|</span>
+                        {u1.name} <b style={{ color: '#344054' }}>{v1 ? formatAmountKorean(v1) : '—'}</b>
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: diff === null ? '#9aa0a6' : diff >= 0 ? '#4CAF50' : '#E06060' }}>
+                        {diff === null ? '—' : `${diff >= 0 ? '+' : ''}${(diff / 1e8).toFixed(1)}억`}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
             </div>
-            </div> {/* minWidth wrapper */}
-          </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <div style={{ minWidth: '420px' }}>
+              <div style={{
+                display: 'grid', gridTemplateColumns: '130px 1fr 1fr 1fr 100px',
+                padding: '10px 16px', fontSize: '12px', fontWeight: 700, color: '#fff',
+                background: '#1a3a5c', borderRadius: '8px 8px 0 0',
+              }}>
+                <span>날짜</span>
+                <span style={{ textAlign: 'right' }}>{u0.name}</span>
+                <span style={{ textAlign: 'right' }}>{u1.name}</span>
+                <span style={{ textAlign: 'right' }}>합산</span>
+                <span style={{ textAlign: 'right' }}>변동</span>
+              </div>
+              <div style={{ border: '1px solid #e8ecf0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                {dates.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6', fontSize: '13px' }}>
+                    스냅샷 이력이 없습니다.
+                  </div>
+                )}
+                {dates.map((date, i) => {
+                  const v0 = grandKrw(date, u0.id);
+                  const v1 = grandKrw(date, u1.id);
+                  const total = v0 + v1;
+                  const prevDate = dates[i + 1];
+                  const prevTotal = prevDate
+                    ? grandKrw(prevDate, u0.id) + grandKrw(prevDate, u1.id)
+                    : null;
+                  const diff = prevTotal !== null ? total - prevTotal : null;
+                  return (
+                    <div key={date}
+                      onClick={() => { setSelectedDate(date); setSubTab('CURRENT'); }}
+                      style={{
+                        display: 'grid', gridTemplateColumns: '130px 1fr 1fr 1fr 100px',
+                        padding: '11px 16px', fontSize: '13px',
+                        borderBottom: i < dates.length - 1 ? '1px solid #f0f0f0' : 'none',
+                        background: '#fff', cursor: 'pointer', alignItems: 'center',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#f0f8fd')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                    >
+                      <span style={{ fontWeight: 700, color: '#1565c0' }}>{date}</span>
+                      <span style={{ textAlign: 'right', color: '#344054' }}>{v0 ? formatAmountShort(v0) : '—'}</span>
+                      <span style={{ textAlign: 'right', color: '#344054' }}>{v1 ? formatAmountShort(v1) : '—'}</span>
+                      <span style={{ textAlign: 'right', fontWeight: 700, color: '#1a3a5c' }}>{total ? formatAmountShort(total) : '—'}</span>
+                      <span style={{
+                        textAlign: 'right', fontWeight: 600,
+                        color: diff === null ? '#9aa0a6' : diff >= 0 ? '#4CAF50' : '#E06060',
+                      }}>
+                        {diff === null ? '—' : `${diff >= 0 ? '+' : ''}${(diff / 1e8).toFixed(2)}억`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              </div> {/* minWidth wrapper */}
+            </div>
+          )
         )}
 
         {/* ══ 그래프 탭 ═════════════════════════════════════════ */}
