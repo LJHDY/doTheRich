@@ -42,6 +42,9 @@ import {
   createCommonCode,
   updateCommonCode,
   deleteCommonCode,
+  getFinancialReports,
+  generateFinancialReport,
+  FinancialReport as FinancialReportType,
 } from '../../services/api';
 import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
@@ -87,7 +90,7 @@ const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
 });
 
 type Filter = 'ALL' | 'INCOME' | 'EXPENSE' | 'FIXED' | 'INVEST';
-type Tab = 'ENTRIES' | 'ACCOUNTS' | 'ASSETS' | 'OVERVIEW'; // 가계부 내역 / 통장 관리 / 자산 관리 / 통합 보기
+type Tab = 'ENTRIES' | 'ACCOUNTS' | 'ASSETS' | 'OVERVIEW' | 'AI'; // 가계부 내역 / 통장 관리 / 자산 관리 / 통합 보기 / AI 분석
 
 // ─── 컴포넌트 ─────────────────────────────────────────────────
 const BudgetPage: React.FC<Props> = ({ onClose }) => {
@@ -253,7 +256,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             {/* 행 2: 탭 전환 */}
             <div style={{ padding: '0 14px 6px' }}>
               <div style={{ display: 'flex', gap: '3px', background: '#f0f4f8', borderRadius: '8px', padding: '3px' }}>
-                {([['ENTRIES', '내역'], ['ACCOUNTS', '통장'], ['ASSETS', '자산'], ['OVERVIEW', '통합']] as [Tab, string][]).map(([t, label]) => (
+                {([['ENTRIES', '내역'], ['ACCOUNTS', '통장'], ['ASSETS', '자산'], ['OVERVIEW', '통합'], ['AI', '🤖']] as [Tab, string][]).map(([t, label]) => (
                   <button key={t} onClick={() => setTab(t)} style={{
                     flex: 1, padding: '6px 4px', fontSize: '12px', fontWeight: tab === t ? 700 : 400,
                     borderRadius: '6px', border: 'none', cursor: 'pointer',
@@ -282,7 +285,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             <button onClick={onClose} style={btnStyle('#e0f0ff', '#1a3a5c')}>← 닫기</button>
             <span style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a5c', flexGrow: 1 }}>💰 가계부</span>
             <div style={{ display: 'flex', gap: '4px', background: '#f0f4f8', borderRadius: '8px', padding: '3px' }}>
-              {([['ENTRIES', '내역'], ['ACCOUNTS', '통장 관리'], ['ASSETS', '자산'], ['OVERVIEW', '통합 보기']] as [Tab, string][]).map(([t, label]) => (
+              {([['ENTRIES', '내역'], ['ACCOUNTS', '통장 관리'], ['ASSETS', '자산'], ['OVERVIEW', '통합 보기'], ['AI', '🤖 AI 분석']] as [Tab, string][]).map(([t, label]) => (
                 <button key={t} onClick={() => setTab(t)} style={{
                   padding: '4px 10px', fontSize: '12px', fontWeight: tab === t ? 700 : 400,
                   borderRadius: '6px', border: 'none', cursor: 'pointer',
@@ -472,6 +475,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       {/* ══ 통합 보기 탭 ═════════════════════════════════════ */}
       {tab === 'OVERVIEW' && (
         <OverviewView yearMonth={yearMonth} />
+      )}
+
+      {/* ══ AI 재무 분석 탭 ══════════════════════════════════ */}
+      {tab === 'AI' && (
+        <AIReportView />
       )}
 
       {/* ── 사용자 선택 모달 ─────────────────────────────────── */}
@@ -1014,11 +1022,6 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     [codes, selectedGroup]
   );
 
-  const reload = async () => {
-    const data = await getCommonCodes();
-    setCodes(data);
-  };
-
   // 그룹 코드/명 확인 후 상세코드 추가 폼으로 전환 (그룹은 첫 상세코드 등록 시 함께 생성)
   const handleAddGroup = () => {
     const gc = newGroupCode.trim().toUpperCase();
@@ -1044,36 +1047,35 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const gn = grp?.name ?? newGroupName.trim();
     if (!gc || !gn) return alert('공통코드명을 확인할 수 없습니다.');
 
-    await createCommonCode({
+    const created = await createCommonCode({
       common_code: gc,
       common_code_name: gn,
       detail_code: dc,
       detail_code_name: dn,
       sort_order: Number(newDetailSort) || 0,
     });
+    setCodes(prev => [...prev, created]);
     setNewDetailCode('');
     setNewDetailName('');
     setNewDetailSort('0');
     setShowDetailForm(false);
     setNewGroupCode('');
     setNewGroupName('');
-    const data = await getCommonCodes();
-    setCodes(data);
     setSelectedGroup(gc);
   };
 
   const handleEditSave = async (id: number) => {
     const dn = editingName.trim();
     if (!dn) return;
-    await updateCommonCode(id, { detail_code_name: dn, sort_order: Number(editingSort) || 0 });
+    const updated = await updateCommonCode(id, { detail_code_name: dn, sort_order: Number(editingSort) || 0 });
+    setCodes(prev => prev.map(c => c.id === id ? updated : c));
     setEditingId(null);
-    await reload();
   };
 
   const handleDelete = async (id: number, name: string) => {
     if (!window.confirm(`'${name}' 상세코드를 삭제하시겠습니까?`)) return;
     await deleteCommonCode(id);
-    await reload();
+    setCodes(prev => prev.filter(c => c.id !== id));
   };
 
   const inputStyle: React.CSSProperties = {
@@ -1412,14 +1414,17 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
   // 통합 보기에서도 최신 스냅샷 사용 (localStorage의 환율 참조)
   const exchangeRate = Number(localStorage.getItem(EXCHANGE_RATE_KEY)) || 1450;
 
+  // 스냅샷은 월별 가계부와 독립 — 마운트 시 1회만 조회
+  useEffect(() => {
+    getAllAssetSnapshots().then(setAllSnapshots);
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      getAllAssetSnapshots(),
       getBudgetEntries(BUDGET_USERS[0].id, yearMonth),
       getBudgetEntries(BUDGET_USERS[1].id, yearMonth),
-    ]).then(([snapshots, le, je]) => {
-      setAllSnapshots(snapshots);
+    ]).then(([le, je]) => {
       setEntries({ ldy: le, juhae: je });
     }).finally(() => setLoading(false));
   }, [yearMonth]);
@@ -1587,6 +1592,12 @@ const AssetView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   // 셀별 세부 내역 모달 대상 (null=닫힘)
   const [detailTarget, setDetailTarget] = useState<{ userId: string; assetType: string; userName: string; assetLabel: string; cellCode: string } | null>(null);
+  // ASSET_CELL 공통코드 — 마운트 시 1회 조회, AssetDetailModal에 주입
+  const [assetCellCodes, setAssetCellCodes] = useState<CommonCode[]>([]);
+
+  useEffect(() => {
+    getCommonCodes('ASSET_CELL').then(setAssetCellCodes);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1718,11 +1729,15 @@ const AssetView: React.FC = () => {
   const gt1 = grandKrw(selectedDate, u1.id);
   const gtSum = gt0 + gt1;
 
-  // ── 차트 데이터 계산 ──────────────────────────────────────────
+  // ── 차트 데이터 계산 — cellMap/dates를 직접 참조해 deps 명시 (eslint-disable 불필요) ──
   const chartDataByUser = useMemo(() => {
+    const toKrwLocal = (assetType: string, amount: number) =>
+      assetType === '달러 현금' ? Math.round(amount * exchangeRate) : amount;
+    const grandKrwLocal = (date: string, userId: string) =>
+      ASSET_COLUMNS.reduce((s, c) => s + toKrwLocal(c.key, cellMap[date]?.[userId]?.[c.key] ?? 0), 0);
     return [...dates].reverse().map(date => {
-      const v0 = grandKrw(date, u0.id);
-      const v1 = grandKrw(date, u1.id);
+      const v0 = grandKrwLocal(date, u0.id);
+      const v1 = grandKrwLocal(date, u1.id);
       const toUk = (v: number) => Math.round(v / 1e6) / 100;
       return {
         label: date.slice(5),
@@ -1732,18 +1747,21 @@ const AssetView: React.FC = () => {
         '합산': toUk(v0 + v1),
       };
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allSnapshots, exchangeRate]);
+  }, [cellMap, dates, exchangeRate]);
 
   const chartDataByLiquidity = useMemo(() => {
+    const toKrwLocal = (assetType: string, amount: number) =>
+      assetType === '달러 현금' ? Math.round(amount * exchangeRate) : amount;
+    const getKrwLocal = (date: string, userId: string, key: string) =>
+      toKrwLocal(key, cellMap[date]?.[userId]?.[key] ?? 0);
     return [...dates].reverse().map(date => {
       const toUk = (v: number) => Math.round(v / 1e6) / 100;
       const liquid = ASSET_COLUMNS
         .filter(c => c.group === '즉시 사용 가능')
-        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrw(date, u.id, c.key), 0), 0);
+        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrwLocal(date, u.id, c.key), 0), 0);
       const illiquid = ASSET_COLUMNS
         .filter(c => c.group === '즉시 사용 불가')
-        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrw(date, u.id, c.key), 0), 0);
+        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrwLocal(date, u.id, c.key), 0), 0);
       return {
         label: date.slice(5),
         fullDate: date,
@@ -1752,8 +1770,7 @@ const AssetView: React.FC = () => {
         '합산': toUk(liquid + illiquid),
       };
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allSnapshots, exchangeRate]);
+  }, [cellMap, dates, exchangeRate]);
 
   const [chartMode, setChartMode] = useState<'USER' | 'LIQUIDITY'>('USER');
 
@@ -2248,6 +2265,7 @@ const AssetView: React.FC = () => {
         userName={detailTarget.userName}
         assetLabel={detailTarget.assetLabel}
         cellCode={detailTarget.cellCode}
+        assetCellCodes={assetCellCodes}
         onClose={() => setDetailTarget(null)}
         onSaved={() => { load(); }}
       />
@@ -2272,10 +2290,11 @@ const AssetDetailModal: React.FC<{
   assetType: string;
   userName: string;
   assetLabel: string;
-  cellCode: string;   // 공통코드 복합키 — ASSET_CELL 그룹의 detail_code (예: STOCK_LDY)
+  cellCode: string;          // 공통코드 복합키 — ASSET_CELL 그룹의 detail_code (예: STOCK_LDY)
+  assetCellCodes: CommonCode[]; // 상위(AssetView)에서 1회 조회 후 주입 — 모달 열 때마다 재조회 방지
   onClose: () => void;
   onSaved: () => void;
-}> = ({ snapshotDate, userId, assetType, userName, assetLabel, cellCode, onClose, onSaved }) => {
+}> = ({ snapshotDate, userId, assetType, userName, assetLabel, cellCode, assetCellCodes, onClose, onSaved }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // 다른 셀의 기존 데이터 (저장 시 그대로 포함, 원 단위)
@@ -2286,13 +2305,10 @@ const AssetDetailModal: React.FC<{
   const [cellCommonCode, setCellCommonCode] = useState<CommonCode | null>(null);
 
   useEffect(() => {
-    // 공통코드 + 세부 내역 병렬 조회 후 머징
-    Promise.all([
-      getCommonCodes('ASSET_CELL'),
-      getAssetSnapshotDetails(snapshotDate),
-    ]).then(([codes, detailData]) => {
+    // 세부 내역 조회 후 공통코드(상위 주입)와 머징
+    getAssetSnapshotDetails(snapshotDate).then(detailData => {
       // 공통코드: ASSET_CELL 그룹에서 detail_code === cellCode 매칭
-      const cc = codes.find(c => c.detailCode === cellCode) ?? null;
+      const cc = assetCellCodes.find(c => c.detailCode === cellCode) ?? null;
       setCellCommonCode(cc);
 
       // 다른 셀 항목 (저장 시 그대로 포함)
@@ -2351,7 +2367,7 @@ const AssetDetailModal: React.FC<{
 
       setLoading(false);
     });
-  }, [snapshotDate, userId, assetType, cellCode]);
+  }, [snapshotDate, userId, assetType, cellCode, assetCellCodes]);
 
   const addItem = () => setCellItems(prev => [...prev, {
     key: `new-${Date.now()}-${Math.random()}`,
@@ -3047,6 +3063,177 @@ const FixedExpenseModal: React.FC<{
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── AI 재무 분석 탭 ─────────────────────────────────────────
+
+const AIReportView: React.FC = () => {
+  const isMobile = useIsMobile();
+  const [reports, setReports] = useState<FinancialReportType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [toast, setToast] = useState('');
+
+  // 리포트 목록 불러오기
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await getFinancialReports();
+      setReports(data);
+      if (data.length > 0 && !selectedMonth) setSelectedMonth(data[0].reportMonth);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // AI 분석 생성 요청 → 5초 간격 폴링으로 완료 감지
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setToast('분석 요청 중…');
+    try {
+      await generateFinancialReport();
+      setToast('Gemini가 분석 중입니다. 잠시 후 자동으로 업데이트됩니다.');
+      // 최대 3분 폴링 (5초 간격, 36회)
+      let tries = 0;
+      const prev = reports.find(r => r.reportMonth === selectedMonth);
+      const poll = setInterval(async () => {
+        tries++;
+        const data = await getFinancialReports();
+        const latest = data[0];
+        const isNew = !prev || (latest && latest.updatedAt !== prev.updatedAt);
+        if (isNew || tries >= 36) {
+          clearInterval(poll);
+          setReports(data);
+          if (data.length > 0) setSelectedMonth(data[0].reportMonth);
+          setGenerating(false);
+          setToast(isNew ? '✅ 분석 완료!' : '⚠️ 분석 시간이 초과되었습니다. 잠시 후 새로고침해주세요.');
+          setTimeout(() => setToast(''), 4000);
+        }
+      }, 5000);
+    } catch {
+      setGenerating(false);
+      setToast('❌ 요청에 실패했습니다.');
+      setTimeout(() => setToast(''), 3000);
+    }
+  };
+
+  // 마크다운 → 간단한 JSX 변환 (굵기·줄바꿈·헤더만 처리)
+  const renderContent = (text: string) => {
+    const lines = text.split('\n');
+    return lines.map((line, i) => {
+      if (line.startsWith('## ')) {
+        return <h2 key={i} style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c', margin: '20px 0 8px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>{line.slice(3)}</h2>;
+      }
+      if (line.startsWith('### ')) {
+        return <h3 key={i} style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: '14px 0 6px' }}>{line.slice(4)}</h3>;
+      }
+      if (line.startsWith('**') && line.endsWith('**') && line.length > 4) {
+        return <p key={i} style={{ fontWeight: 700, color: '#1a3a5c', margin: '8px 0 4px', fontSize: '13px' }}>{line.slice(2, -2)}</p>;
+      }
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        // 인라인 **bold** 처리
+        const parts = line.slice(2).split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
+            <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
+            <span>{parts.map((p, j) => p.startsWith('**') && p.endsWith('**')
+              ? <strong key={j}>{p.slice(2, -2)}</strong>
+              : p
+            )}</span>
+          </div>
+        );
+      }
+      if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
+      // 일반 텍스트 — 인라인 **bold** 처리
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      return (
+        <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.6' }}>
+          {parts.map((p, j) => p.startsWith('**') && p.endsWith('**')
+            ? <strong key={j}>{p.slice(2, -2)}</strong>
+            : p
+          )}
+        </p>
+      );
+    });
+  };
+
+  const selected = reports.find(r => r.reportMonth === selectedMonth);
+
+  const formatMonth = (ym: string) => `${ym.slice(0, 4)}년 ${Number(ym.slice(4))}월`;
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }}>
+      <div style={{ maxWidth: '780px', margin: '0 auto' }}>
+
+        {/* ── 컨트롤 바 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c' }}>🤖 AI 재무 분석</span>
+          {/* 월 선택 */}
+          {reports.length > 0 && (
+            <select
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054' }}
+            >
+              {reports.map(r => (
+                <option key={r.reportMonth} value={r.reportMonth}>{formatMonth(r.reportMonth)}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            style={{
+              marginLeft: 'auto', padding: '6px 16px', fontSize: '13px', fontWeight: 600,
+              border: 'none', borderRadius: '8px', cursor: generating ? 'default' : 'pointer',
+              background: generating ? '#b0c4de' : '#89CFF0', color: '#fff',
+            }}
+          >
+            {generating ? '분석 중…' : '✨ 지금 분석'}
+          </button>
+          <button onClick={load} style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>↺</button>
+        </div>
+
+        {/* ── toast */}
+        {toast && (
+          <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: '8px', padding: '10px 16px', marginBottom: '14px', fontSize: '13px', color: '#1b5e20' }}>
+            {toast}
+          </div>
+        )}
+
+        {/* ── 본문 */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6' }}>불러오는 중…</div>
+        ) : reports.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
+            <div style={{ fontSize: '40px', marginBottom: '16px' }}>🤖</div>
+            <div>아직 분석 리포트가 없어요.</div>
+            <div style={{ marginTop: '8px', fontSize: '12px' }}>위의 <strong>✨ 지금 분석</strong> 버튼을 눌러 첫 번째 리포트를 생성해보세요!</div>
+            <div style={{ marginTop: '6px', fontSize: '12px' }}>매달 25일 오전 9시에 자동으로 생성됩니다.</div>
+          </div>
+        ) : selected ? (
+          <div style={{ background: '#fff', borderRadius: '12px', padding: isMobile ? '16px' : '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #e0f0ff' }}>
+            {/* 리포트 헤더 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: '2px solid #e0f0ff' }}>
+              <div>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>{formatMonth(selected.reportMonth)} 재무 분석</span>
+                {selected.updatedAt && (
+                  <span style={{ fontSize: '11px', color: '#9aa0a6', marginLeft: '10px' }}>
+                    {new Date(selected.updatedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 생성
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* 리포트 본문 */}
+            <div>{renderContent(selected.content)}</div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -1061,4 +1061,26 @@ export const deleteCommonCode = async (id: number): Promise<void> => {
   await api.delete(`/api/common-codes/${id}`);
 };
 
+// ─── AI 재무 분석 리포트 ──────────────────────────────────────
+
+export interface FinancialReport {
+  id: number;
+  reportMonth: string;   // YYYYMM
+  content: string;       // 마크다운 텍스트
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** AI 재무 분석 리포트 목록 조회 (최신순) */
+export const getFinancialReports = async (): Promise<FinancialReport[]> => {
+  const { data } = await api.get('/api/financial-reports');
+  return data;
+};
+
+/** AI 재무 분석 즉시 생성 요청 (백그라운드, 202) — reportMonth 미지정 시 이번 달 */
+export const generateFinancialReport = async (reportMonth?: string): Promise<void> => {
+  const params = reportMonth ? { report_month: reportMonth } : {};
+  await api.post('/api/financial-reports/generate', null, { params });
+};
+
 export default api;

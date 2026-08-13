@@ -775,6 +775,15 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
   - 재오픈 시 저장된 세부 항목 그대로 표시·수정 가능
   - `AssetSnapshotDetail` 타입, `getAssetSnapshotDetails` / `bulkSaveAssetSnapshotDetails` API
   - 백엔드: `asset_snapshot_detail` 테이블, `asset_snapshot_detail_service.py`, 라우트 2개
+- [x] AI 재무 분석 리포트 (`AIReportView`, `financial_report` 테이블)
+  - 가계부 "🤖 AI 분석" 탭 — 월별 리포트 선택·조회, "✨ 지금 분석" 버튼으로 즉시 생성 요청
+  - 매달 25일 오전 9시 APScheduler 자동 생성 (직전 3개월 가계부 + 최근 6개 자산 스냅샷 → Claude API)
+  - DB 월별 1건 upsert, 마크다운 렌더링 (헤더·굵기·글머리)
+  - 백엔드: `financial_report` 테이블, `financial_report_service.py`, `routers/financial_report.py`
+    - `GET /api/financial-reports` — 저장 리포트 목록 (최신순)
+    - `POST /api/financial-reports/generate?report_month=YYYYMM` — 즉시 생성 (202 백그라운드)
+  - `GEMINI_API_KEY` 환경변수 필요 (Railway에 추가, `aistudio.google.com` → Get API Key)
+  - `google-generativeai==0.8.3` 패키지 추가 (requirements.txt), 모델: `gemini-1.5-flash` (무료 티어)
 - [x] 공통코드 관리 (`CommonCodeModal`, `common_code` 테이블)
   - 통장 관리 탭 하단 "⚙ 공통코드 관리" 버튼 → `CommonCodeModal` 오픈
   - 모달 구조: 좌측 공통코드 그룹 목록 / 우측 상세코드 테이블 (추가·인라인수정·삭제·정렬순서)
