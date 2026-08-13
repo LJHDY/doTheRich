@@ -106,6 +106,7 @@ export const FIXED_EXPENSE_CATEGORIES: string[] = [
   '월세',
   '통신비',
   '관리비',
+  '공과금',
   '정기구독',
   '회비',
   '보험',
