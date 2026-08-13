@@ -337,7 +337,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexShrink: 0, flexWrap: 'wrap' }}>
           <SummaryCard label="총 수입" amount={summary.totalIncome} color="#4CAF50" sign="+" />
           <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-" />
-          <SummaryCard label="투자" amount={summary.totalInvest} color="#2196F3" sign="-" />
+          <SummaryCard label="투자" amount={summary.totalInvest} color="#2196F3" sign="" />
           <SummaryCard label="잔액" amount={summary.totalIncome - summary.totalExpense - summary.totalInvest}
             color={summary.totalIncome >= summary.totalExpense + summary.totalInvest ? '#1565c0' : '#E06060'} sign="" />
         </div>
