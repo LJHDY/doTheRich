@@ -967,6 +967,9 @@ const toPaymentMethod = (d: any): PaymentMethod => ({
   userId: d.user_id,
   name: d.name,
   type: d.type,
+  accountMain: d.account_main ?? undefined,
+  accountNumber: d.account_number ?? undefined,
+  cardAlias: d.card_alias ?? undefined,
   billingDay: d.billing_day ?? undefined,
   isActive: d.is_active,
 });
@@ -977,23 +980,31 @@ export const getPaymentMethods = async (userId: string): Promise<PaymentMethod[]
 };
 
 export const createPaymentMethod = async (payload: {
-  userId: string; name: string; type: string; billingDay?: number;
+  userId: string; name: string; type: string;
+  accountMain?: string; accountNumber?: string; cardAlias?: string; billingDay?: number;
 }): Promise<PaymentMethod> => {
   const { data } = await api.post('/api/budget/payment-methods', {
     user_id: payload.userId,
     name: payload.name,
     type: payload.type,
+    account_main: payload.accountMain ?? null,
+    account_number: payload.accountNumber ?? null,
+    card_alias: payload.cardAlias ?? null,
     billing_day: payload.billingDay ?? null,
   });
   return toPaymentMethod(data);
 };
 
 export const updatePaymentMethod = async (id: number, payload: {
-  name?: string; type?: string; billingDay?: number;
+  name?: string; type?: string;
+  accountMain?: string; accountNumber?: string; cardAlias?: string; billingDay?: number;
 }): Promise<PaymentMethod> => {
   const { data } = await api.patch(`/api/budget/payment-methods/${id}`, {
     name: payload.name,
     type: payload.type,
+    account_main: payload.accountMain,
+    account_number: payload.accountNumber,
+    card_alias: payload.cardAlias,
     billing_day: payload.billingDay,
   });
   return toPaymentMethod(data);

@@ -682,6 +682,21 @@ const inputStyle: React.CSSProperties = {
 
 // ─── 결제수단 관리 패널 ─────────────────────────────────────────
 // 통장 탭 상단에 표시되며, 결제수단(통장/카드) CRUD 기능 제공
+type PmForm = {
+  name: string;
+  type: '통장' | '카드';
+  // 통장 전용
+  accountMain: string;
+  accountNumber: string;
+  // 카드 전용
+  cardAlias: string;
+  billingDayStr: string;
+};
+
+const emptyPmForm = (): PmForm => ({
+  name: '', type: '통장', accountMain: '', accountNumber: '', cardAlias: '', billingDayStr: '',
+});
+
 const PaymentMethodPanel: React.FC<{
   userId: string;
   paymentMethods: PaymentMethod[];
@@ -689,7 +704,7 @@ const PaymentMethodPanel: React.FC<{
 }> = ({ userId, paymentMethods, onChanged }) => {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', type: '통장' as '통장' | '카드', billingDayStr: '' });
+  const [form, setForm] = useState<PmForm>(emptyPmForm());
   const [saving, setSaving] = useState(false);
 
   const inputSt: React.CSSProperties = {
@@ -700,13 +715,20 @@ const PaymentMethodPanel: React.FC<{
 
   const openAdd = () => {
     setEditingId(null);
-    setForm({ name: '', type: '통장', billingDayStr: '' });
+    setForm(emptyPmForm());
     setFormOpen(true);
   };
 
   const openEdit = (pm: PaymentMethod) => {
     setEditingId(pm.id);
-    setForm({ name: pm.name, type: pm.type, billingDayStr: pm.billingDay ? String(pm.billingDay) : '' });
+    setForm({
+      name: pm.name,
+      type: pm.type,
+      accountMain: pm.accountMain ?? '',
+      accountNumber: pm.accountNumber ?? '',
+      cardAlias: pm.cardAlias ?? '',
+      billingDayStr: pm.billingDay ? String(pm.billingDay) : '',
+    });
     setFormOpen(true);
   };
 
@@ -714,13 +736,19 @@ const PaymentMethodPanel: React.FC<{
     if (!form.name.trim()) { alert('결제수단 이름을 입력해주세요'); return; }
     setSaving(true);
     try {
-      // 카드 유형일 때만 결제일 전달, 통장은 undefined
-      const billingDay = form.type === '카드' && form.billingDayStr ? Number(form.billingDayStr) : undefined;
+      const payload = {
+        name: form.name.trim(),
+        type: form.type,
+        accountMain: form.type === '통장' ? (form.accountMain || undefined) : undefined,
+        accountNumber: form.type === '통장' ? (form.accountNumber.trim() || undefined) : undefined,
+        cardAlias: form.type === '카드' ? (form.cardAlias.trim() || undefined) : undefined,
+        billingDay: form.type === '카드' && form.billingDayStr ? Number(form.billingDayStr) : undefined,
+      };
       if (editingId !== null) {
-        const updated = await updatePaymentMethod(editingId, { name: form.name.trim(), type: form.type, billingDay });
+        const updated = await updatePaymentMethod(editingId, payload);
         onChanged(paymentMethods.map(p => p.id === editingId ? updated : p));
       } else {
-        const created = await createPaymentMethod({ userId, name: form.name.trim(), type: form.type, billingDay });
+        const created = await createPaymentMethod({ userId, ...payload });
         onChanged([...paymentMethods, created]);
       }
       setFormOpen(false);
@@ -758,29 +786,53 @@ const PaymentMethodPanel: React.FC<{
           padding: '12px 14px', marginBottom: '12px', background: '#f0f8fd',
         }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            {/* 공통 */}
             <div>
               <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>이름 *</label>
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="예: 신한 체크카드" style={inputSt} />
+                placeholder={form.type === '통장' ? '예: 신한 입출금 통장' : '예: KB국민 체크카드'}
+                style={inputSt} />
             </div>
             <div>
               <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>종류</label>
               <select value={form.type}
-                onChange={e => setForm(f => ({ ...f, type: e.target.value as '통장' | '카드', billingDayStr: '' }))}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value as '통장' | '카드' }))}
                 style={inputSt}>
                 <option value="통장">통장</option>
                 <option value="카드">카드</option>
               </select>
             </div>
-            {/* 카드 유형일 때만 결제일 입력란 표시 */}
-            {form.type === '카드' && (
+
+            {/* 통장 전용 */}
+            {form.type === '통장' && (<>
+              <div>
+                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>통장 구분</label>
+                <select value={form.accountMain} onChange={e => setForm(f => ({ ...f, accountMain: e.target.value }))} style={inputSt}>
+                  <option value="">선택 안 함</option>
+                  {ACCOUNT_MAINS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>계좌번호</label>
+                <input value={form.accountNumber} onChange={e => setForm(f => ({ ...f, accountNumber: e.target.value }))}
+                  placeholder="예: 110-123-456789" style={inputSt} />
+              </div>
+            </>)}
+
+            {/* 카드 전용 */}
+            {form.type === '카드' && (<>
+              <div>
+                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>카드번호 / 별칭</label>
+                <input value={form.cardAlias} onChange={e => setForm(f => ({ ...f, cardAlias: e.target.value }))}
+                  placeholder="예: 1234 또는 주해 생활비카드" style={inputSt} />
+              </div>
               <div>
                 <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>결제일</label>
                 <input type="number" min={1} max={31} value={form.billingDayStr}
                   onChange={e => setForm(f => ({ ...f, billingDayStr: e.target.value }))}
                   placeholder="예: 14" style={inputSt} />
               </div>
-            )}
+            </>)}
           </div>
           <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
             <button onClick={() => setFormOpen(false)}
@@ -813,18 +865,31 @@ const PaymentMethodPanel: React.FC<{
                 padding: '7px 10px', background: '#fff',
                 border: '1px solid #e8ecf0', borderRadius: '8px', marginBottom: '4px',
               }}>
-                <span style={{ flex: 1, fontSize: '13px', color: '#344054' }}>{pm.name}</span>
-                {pm.billingDay && (
-                  <span style={{ fontSize: '11px', color: '#7B1FA2', background: '#f3e5f5', padding: '1px 7px', borderRadius: '10px' }}>
-                    결제일 {pm.billingDay}일
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', color: '#344054', fontWeight: 600 }}>{pm.name}</div>
+                  <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '1px' }}>
+                    {pm.type === '통장' && pm.accountMain && <span style={{ marginRight: '8px' }}>{pm.accountMain}</span>}
+                    {pm.type === '통장' && pm.accountNumber && <span>{pm.accountNumber}</span>}
+                    {pm.type === '카드' && pm.cardAlias && <span style={{ marginRight: '8px' }}>{pm.cardAlias}</span>}
+                    {pm.type === '카드' && pm.billingDay && <span>결제일 {pm.billingDay}일</span>}
+                  </div>
+                </div>
+                {pm.type === '카드' && pm.billingDay && (
+                  <span style={{ fontSize: '11px', color: '#7B1FA2', background: '#f3e5f5', padding: '1px 7px', borderRadius: '10px', whiteSpace: 'nowrap' }}>
+                    {pm.billingDay}일
+                  </span>
+                )}
+                {pm.type === '통장' && pm.accountMain && (
+                  <span style={{ fontSize: '11px', color: '#1565c0', background: '#e3f2fd', padding: '1px 7px', borderRadius: '10px', whiteSpace: 'nowrap' }}>
+                    {pm.accountMain}
                   </span>
                 )}
                 <button onClick={() => openEdit(pm)}
-                  style={{ padding: '3px 8px', fontSize: '11px', border: '1px solid #dadce0', borderRadius: '5px', background: '#fff', cursor: 'pointer' }}>
+                  style={{ padding: '3px 8px', fontSize: '11px', border: '1px solid #dadce0', borderRadius: '5px', background: '#fff', cursor: 'pointer', flexShrink: 0 }}>
                   ✏
                 </button>
                 <button onClick={() => handleDelete(pm)}
-                  style={{ padding: '3px 8px', fontSize: '11px', border: '1px solid #dadce0', borderRadius: '5px', background: '#fff', color: '#E06060', cursor: 'pointer' }}>
+                  style={{ padding: '3px 8px', fontSize: '11px', border: '1px solid #dadce0', borderRadius: '5px', background: '#fff', color: '#E06060', cursor: 'pointer', flexShrink: 0 }}>
                   ×
                 </button>
               </div>

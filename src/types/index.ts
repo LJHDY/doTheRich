@@ -627,9 +627,12 @@ export interface AssetSnapshotDetail {
 export interface PaymentMethod {
   id: number;
   userId: string;
-  name: string;        // 예: "신한은행 고정비 통장"
+  name: string;             // 예: "신한은행 고정비 통장"
   type: '통장' | '카드';
-  billingDay?: number; // 카드 결제일 (카드만 해당, 1-31)
+  accountMain?: string;     // 통장 대분류 (고정비/변동비/이벤트 통장)
+  accountNumber?: string;   // 계좌번호
+  cardAlias?: string;       // 카드 별칭 or 카드번호
+  billingDay?: number;      // 카드 결제일 (1-31)
   isActive: boolean;
 }
 
