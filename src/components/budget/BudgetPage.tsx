@@ -431,12 +431,6 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             return `${py}${String(pm).padStart(2, '0')}`;
           })();
 
-          const handleCarryOver = async () => {
-            if (!window.confirm(`${prevMonth.slice(0,4)}년 ${Number(prevMonth.slice(4))}월 잔액을 ${yearMonth.slice(0,4)}년 ${Number(yearMonth.slice(4))}월 이월 잔액으로 가져올까요?`)) return;
-            // 이전달 종료 잔액 계산 (현재 openingBalances + 현재달 수입/지출 기준이 아닌 prev 데이터가 없으므로 안내)
-            alert('이전 달 잔액 데이터를 먼저 직접 입력하거나, 이전 달에서 저장한 잔액이 있어야 합니다.\n이월 잔액을 직접 입력해주세요.');
-          };
-
           return (
             <div style={{ padding: '8px 20px 0', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
