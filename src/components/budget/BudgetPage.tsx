@@ -1488,13 +1488,15 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
 
   const LIQUIDITY_GROUPS = ['즉시 사용 가능', '즉시 사용 불가'] as const;
 
-  // 모바일: "즉시 O/X" 같은 짧은 레이블 → 첫 열 좁게, 숫자 열 공간 최대화
-  const GRID = isMobile ? '62px 1fr 1fr 1fr' : '120px 1fr 1fr 1fr';
+  // 모바일: 숫자 열 고정폭(최소 보장) → 넘치면 가로 스크롤
+  const GRID = isMobile ? '58px 95px 95px 95px' : '120px 1fr 1fr 1fr';
+  const FS = isMobile ? '11px' : '13px'; // 행 폰트 크기
+  const ROW_H = isMobile ? '34px' : '40px';
 
   // 열 구분선 공통 스타일
   const cellBorder = '1px solid #e8ecf0';
   const numCell = (extra?: React.CSSProperties): React.CSSProperties => ({
-    textAlign: 'right', borderLeft: cellBorder, padding: '0 10px', ...extra,
+    textAlign: 'right', borderLeft: cellBorder, padding: '0 8px', ...extra,
   });
 
   // 3열 행 렌더 헬퍼
@@ -1509,12 +1511,12 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
     return (
       <div style={{
         display: 'grid', gridTemplateColumns: GRID,
-        fontSize: '13px', borderBottom: '1px solid #f0f0f0',
+        fontSize: FS, borderBottom: '1px solid #f0f0f0',
         fontWeight: bold ? 700 : 400,
         background: bold ? '#fafbfc' : '#fff',
-        minHeight: '40px', alignItems: 'center',
+        minHeight: ROW_H, alignItems: 'center',
       }}>
-        <span style={{ color: '#5f6368', padding: '0 8px 0 12px' }}>{label}</span>
+        <span style={{ color: '#5f6368', padding: '0 6px 0 10px' }}>{label}</span>
         <span style={numCell({ color: color(v0) })}>{fmt(v0)}</span>
         <span style={numCell({ color: color(v1) })}>{fmt(v1)}</span>
         <span style={numCell({ color: color(sum), fontWeight: 700 })}>{fmt(sum)}</span>
@@ -1525,17 +1527,17 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
   // 테이블 헤더
   const TableHeader = ({ title }: { title: string }) => (
     <>
-      <div style={{ fontSize: '14px', fontWeight: 800, color: '#1a3a5c', marginBottom: '8px', marginTop: '24px' }}>{title}</div>
+      <div style={{ fontSize: isMobile ? '13px' : '14px', fontWeight: 800, color: '#1a3a5c', marginBottom: '8px', marginTop: '24px' }}>{title}</div>
       <div style={{
         display: 'grid', gridTemplateColumns: GRID,
-        fontSize: '12px', fontWeight: 700, color: '#fff',
+        fontSize: isMobile ? '11px' : '12px', fontWeight: 700, color: '#fff',
         background: '#89CFF0', borderRadius: '8px 8px 0 0',
-        minHeight: '36px', alignItems: 'center',
+        minHeight: isMobile ? '30px' : '36px', alignItems: 'center',
       }}>
-        <span style={{ padding: '0 8px 0 12px' }}>항목</span>
-        <span style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.3)', padding: '0 10px' }}>{u0.name}</span>
-        <span style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.3)', padding: '0 10px' }}>{u1.name}</span>
-        <span style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.3)', padding: '0 10px' }}>합산</span>
+        <span style={{ padding: '0 6px 0 10px' }}>항목</span>
+        <span style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.3)', padding: '0 8px' }}>{u0.name}</span>
+        <span style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.3)', padding: '0 8px' }}>{u1.name}</span>
+        <span style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,0.3)', padding: '0 8px' }}>합산</span>
       </div>
     </>
   );
@@ -1546,60 +1548,63 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }}>
 
       {/* ── 자산 현황 테이블 (유동성 그룹별 소계) */}
-      <TableHeader title={`💰 자산 현황${latestDate ? ` (${latestDate})` : ''}`} />
-      <div style={{ border: '1px solid #f0f0f0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
-        {LIQUIDITY_GROUPS.map(g => {
-          const v0 = assetGroupSubtotal(g, u0.id);
-          const v1 = assetGroupSubtotal(g, u1.id);
-          const lc = ASSET_LIQUIDITY_COLORS[g];
-          // 모바일: "즉시 O" / "즉시 X" 로 축약해 숫자 열 공간 확보
-          const label = isMobile
-            ? (g === '즉시 사용 가능' ? '즉시 O' : '즉시 X')
-            : g;
-          return (
-            <div key={g} style={{
-              display: 'grid', gridTemplateColumns: GRID,
-              fontSize: '13px', borderBottom: '1px solid #f0f0f0', background: '#fff',
-              minHeight: '40px', alignItems: 'center',
-            }}>
-              <span style={{ padding: '0 8px 0 12px', display: 'flex', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: lc.bg, color: lc.text, whiteSpace: 'nowrap' }}>{label}</span>
-              </span>
-              <span style={numCell({ color: '#344054' })}>{v0 ? formatAmountShort(v0) : '—'}</span>
-              <span style={numCell({ color: '#344054' })}>{v1 ? formatAmountShort(v1) : '—'}</span>
-              <span style={numCell({ fontWeight: 700, color: '#1a3a5c' })}>{(v0 + v1) ? formatAmountShort(v0 + v1) : '—'}</span>
-            </div>
-          );
-        })}
-        <div style={{
-          display: 'grid', gridTemplateColumns: GRID,
-          fontSize: '13px', fontWeight: 800,
-          background: '#f0f8fd', borderTop: '2px solid #89CFF040',
-          minHeight: '44px', alignItems: 'center',
-        }}>
-          <span style={{ color: '#1a3a5c', padding: '0 8px 0 12px' }}>총 자산</span>
-          <span style={numCell({ color: '#1565c0' })}>{assetGrandTotal(u0.id) ? formatAmountShort(assetGrandTotal(u0.id)) : '—'}</span>
-          <span style={numCell({ color: '#1565c0' })}>{assetGrandTotal(u1.id) ? formatAmountShort(assetGrandTotal(u1.id)) : '—'}</span>
-          <span style={numCell({ color: '#1a3a5c', fontSize: '14px' })}>
-            {formatAmountShort(assetGrandTotal(u0.id) + assetGrandTotal(u1.id))}
-          </span>
+      <div style={{ overflowX: 'auto' }}>
+        <TableHeader title={`💰 자산 현황${latestDate ? ` (${latestDate})` : ''}`} />
+        <div style={{ border: '1px solid #f0f0f0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+          {LIQUIDITY_GROUPS.map(g => {
+            const v0 = assetGroupSubtotal(g, u0.id);
+            const v1 = assetGroupSubtotal(g, u1.id);
+            const lc = ASSET_LIQUIDITY_COLORS[g];
+            const label = isMobile
+              ? (g === '즉시 사용 가능' ? '즉시 O' : '즉시 X')
+              : g;
+            return (
+              <div key={g} style={{
+                display: 'grid', gridTemplateColumns: GRID,
+                fontSize: FS, borderBottom: '1px solid #f0f0f0', background: '#fff',
+                minHeight: ROW_H, alignItems: 'center',
+              }}>
+                <span style={{ padding: '0 6px 0 10px', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 5px', borderRadius: '4px', background: lc.bg, color: lc.text, whiteSpace: 'nowrap' }}>{label}</span>
+                </span>
+                <span style={numCell({ color: '#344054' })}>{v0 ? formatAmountShort(v0) : '—'}</span>
+                <span style={numCell({ color: '#344054' })}>{v1 ? formatAmountShort(v1) : '—'}</span>
+                <span style={numCell({ fontWeight: 700, color: '#1a3a5c' })}>{(v0 + v1) ? formatAmountShort(v0 + v1) : '—'}</span>
+              </div>
+            );
+          })}
+          <div style={{
+            display: 'grid', gridTemplateColumns: GRID,
+            fontSize: FS, fontWeight: 800,
+            background: '#f0f8fd', borderTop: '2px solid #89CFF040',
+            minHeight: ROW_H, alignItems: 'center',
+          }}>
+            <span style={{ color: '#1a3a5c', padding: '0 6px 0 10px' }}>총 자산</span>
+            <span style={numCell({ color: '#1565c0' })}>{assetGrandTotal(u0.id) ? formatAmountShort(assetGrandTotal(u0.id)) : '—'}</span>
+            <span style={numCell({ color: '#1565c0' })}>{assetGrandTotal(u1.id) ? formatAmountShort(assetGrandTotal(u1.id)) : '—'}</span>
+            <span style={numCell({ color: '#1a3a5c' })}>
+              {formatAmountShort(assetGrandTotal(u0.id) + assetGrandTotal(u1.id))}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* ── 월별 가계부 테이블 */}
-      <TableHeader title={`📒 가계부 — ${displayYearMonth(yearMonth)}`} />
-      <div style={{ border: '1px solid #f0f0f0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
-        <Row3 label="총 수입" v0={entrySummary.ldy.income} v1={entrySummary.juhae.income} bold />
-        <Row3 label="총 지출" v0={entrySummary.ldy.expense} v1={entrySummary.juhae.expense} colored />
-        <Row3
-          label="잔액"
-          v0={entrySummary.ldy.income - entrySummary.ldy.expense}
-          v1={entrySummary.juhae.income - entrySummary.juhae.expense}
-          bold isBalance
-        />
-        <Row3 label="고정비" v0={entrySummary.ldy.fixed} v1={entrySummary.juhae.fixed} />
-        <Row3 label="변동비" v0={entrySummary.ldy.variable} v1={entrySummary.juhae.variable} />
-        <Row3 label="투자" v0={entrySummary.ldy.invest} v1={entrySummary.juhae.invest} />
+      <div style={{ overflowX: 'auto' }}>
+        <TableHeader title={`📒 가계부 — ${displayYearMonth(yearMonth)}`} />
+        <div style={{ border: '1px solid #f0f0f0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+          <Row3 label="총 수입" v0={entrySummary.ldy.income} v1={entrySummary.juhae.income} bold />
+          <Row3 label="총 지출" v0={entrySummary.ldy.expense} v1={entrySummary.juhae.expense} colored />
+          <Row3
+            label="잔액"
+            v0={entrySummary.ldy.income - entrySummary.ldy.expense}
+            v1={entrySummary.juhae.income - entrySummary.juhae.expense}
+            bold isBalance
+          />
+          <Row3 label="고정비" v0={entrySummary.ldy.fixed} v1={entrySummary.juhae.fixed} />
+          <Row3 label="변동비" v0={entrySummary.ldy.variable} v1={entrySummary.juhae.variable} />
+          <Row3 label="투자" v0={entrySummary.ldy.invest} v1={entrySummary.juhae.invest} />
+        </div>
       </div>
 
     </div>
