@@ -833,7 +833,7 @@ const MerchantStatsSection: React.FC<{ rows: MerchantRow[] }> = ({ rows }) => {
           </div>
 
           {/* 지출처 목록 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '240px', overflowY: 'auto' }}>
             {sorted.map((row, i) => {
               const barPct = Math.round((row[sort] / maxVal) * 100);
               return (
