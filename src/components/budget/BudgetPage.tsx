@@ -49,8 +49,10 @@ import {
   getFinancialReports,
   generateFinancialReport,
   FinancialReport as FinancialReportType,
+  getMarketReports,
+  generateMarketReport,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, MarketReport, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
@@ -2170,6 +2172,225 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
+// ─── 시장 리포트 모달 ─────────────────────────────────────────
+
+// 티커 그룹 정의 (화면 표시용)
+const TICKER_GROUPS = [
+  { label: '미국 증시', keys: ['sp500', 'nasdaq', 'dow'] },
+  { label: '공포 / 채권', keys: ['vix', 'us10y', 'us30y', 'us3m'] },
+  { label: '한국 증시', keys: ['kospi', 'kosdaq'] },
+  { label: '환율', keys: ['usdkrw'] },
+];
+
+const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const [reports, setReports] = useState<MarketReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [toast, setToast] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await getMarketReports();
+      setReports(data);
+      if (data.length > 0 && selectedId === null) setSelectedId(data[0].id);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 생성 요청 → 5초 폴링으로 새 id 등장 감지
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setToast('분석 요청 중…');
+    try {
+      await generateMarketReport();
+      setToast('시장 데이터를 수집하고 분석 중입니다. 잠시 후 업데이트됩니다.');
+      const prevTopId = reports.length > 0 ? reports[0].id : null;
+      let tries = 0;
+      const poll = setInterval(async () => {
+        tries++;
+        const data = await getMarketReports();
+        const isNew = data.length > 0 && data[0].id !== prevTopId;
+        if (isNew || tries >= 36) {
+          clearInterval(poll);
+          setReports(data);
+          if (data.length > 0) setSelectedId(data[0].id);
+          setGenerating(false);
+          setToast(isNew ? '✅ 분석 완료!' : '⚠️ 시간 초과. 잠시 후 새로고침해주세요.');
+          setTimeout(() => setToast(''), 4000);
+        }
+      }, 5000);
+    } catch {
+      setGenerating(false);
+      setToast('❌ 요청에 실패했습니다.');
+      setTimeout(() => setToast(''), 3000);
+    }
+  };
+
+  // 마크다운 → JSX (AIReportView와 동일 패턴)
+  const renderContent = (text: string) => {
+    const lines = text.split('\n');
+    return lines.map((line, i) => {
+      if (line.startsWith('## ')) {
+        return <h2 key={i} style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', margin: '18px 0 8px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>{line.slice(3)}</h2>;
+      }
+      if (line.startsWith('### ')) {
+        return <h3 key={i} style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: '12px 0 5px' }}>{line.slice(4)}</h3>;
+      }
+      if (line.startsWith('**') && line.endsWith('**') && line.length > 4) {
+        return <p key={i} style={{ fontWeight: 700, color: '#1a3a5c', margin: '8px 0 4px', fontSize: '13px' }}>{line.slice(2, -2)}</p>;
+      }
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        const parts = line.slice(2).split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
+            <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
+            <span>{parts.map((p, j) => p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : p)}</span>
+          </div>
+        );
+      }
+      if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      return (
+        <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.6' }}>
+          {parts.map((p, j) => p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : p)}
+        </p>
+      );
+    });
+  };
+
+  const selected = reports.find(r => r.id === selectedId);
+
+  const formatKST = (iso: string | null) => {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  // change_pct 양수=초록, 음수=빨강, 0=회색
+  const changeColor = (v: number | null) => v == null ? '#9aa0a6' : v > 0 ? '#2e7d32' : v < 0 ? '#c62828' : '#9aa0a6';
+  const changeSign = (v: number | null) => v == null ? '' : v > 0 ? '+' : '';
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 10000,
+      background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }} onClick={onClose}>
+      <div style={{
+        background: '#fff', borderRadius: '16px', width: '92vw', maxWidth: '780px',
+        maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* 헤더 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', borderBottom: '1px solid #e0f0ff', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c' }}>📈 시장 리포트</span>
+          {reports.length > 0 && (
+            <select
+              value={selectedId ?? ''}
+              onChange={e => setSelectedId(Number(e.target.value))}
+              style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '260px' }}
+            >
+              {reports.map(r => (
+                <option key={r.id} value={r.id}>{r.reportDate} · {formatKST(r.createdAt)}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            style={{
+              padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
+              borderRadius: '8px', cursor: generating ? 'default' : 'pointer',
+              background: generating ? '#b0c4de' : '#89CFF0', color: '#fff',
+            }}
+          >
+            {generating ? '생성 중…' : '✨ 즉시 생성'}
+          </button>
+          <button onClick={load} style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>↺</button>
+          <button onClick={onClose} style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>✕ 닫기</button>
+        </div>
+
+        {/* 본문 스크롤 영역 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 32px' }}>
+          {toast && (
+            <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: '8px', padding: '10px 16px', marginBottom: '14px', fontSize: '13px', color: '#1b5e20' }}>
+              {toast}
+            </div>
+          )}
+
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6' }}>불러오는 중…</div>
+          ) : reports.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
+              <div style={{ fontSize: '40px', marginBottom: '16px' }}>📊</div>
+              <div>아직 시장 리포트가 없어요.</div>
+              <div style={{ marginTop: '8px', fontSize: '12px' }}><strong>✨ 즉시 생성</strong> 버튼으로 첫 번째 리포트를 만들어보세요.</div>
+            </div>
+          ) : selected ? (
+            <div>
+              {/* 시장 데이터 티커 그리드 */}
+              {Object.keys(selected.marketData).length > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                  {TICKER_GROUPS.map(group => {
+                    const tickers = group.keys.map(k => ({ key: k, data: selected.marketData[k] })).filter(t => t.data);
+                    if (tickers.length === 0) return null;
+                    return (
+                      <div key={group.label} style={{ marginBottom: '14px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#5f7fa0', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {group.label}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
+                          {tickers.map(({ key, data }) => (
+                            <div key={key} style={{
+                              background: '#f8fafd', borderRadius: '10px', padding: '10px 12px',
+                              border: '1px solid #e0eaf5',
+                            }}>
+                              <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '2px' }}>{data.label}</div>
+                              <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
+                                {data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
+                              </div>
+                              <div style={{ fontSize: '12px', color: changeColor(data.changePct), fontWeight: 600 }}>
+                                {changeSign(data.changePct)}{data.changePct?.toFixed(2) ?? '-'}%
+                                {data.change != null && (
+                                  <span style={{ fontWeight: 400, marginLeft: '4px', color: changeColor(data.change) }}>
+                                    ({changeSign(data.change)}{data.change.toLocaleString('ko-KR', { maximumFractionDigits: 4 })})
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px' }}>{data.date}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Gemini 분석 본문 */}
+              {selected.content && (
+                <div style={{ background: '#fff', borderRadius: '12px', padding: '20px 24px', border: '1px solid #e0f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '12px', paddingBottom: '8px', borderBottom: '2px solid #e0f0ff' }}>
+                    AI 시장 분석 · {selected.reportDate}
+                    {selected.createdAt && (
+                      <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400, marginLeft: '10px' }}>{formatKST(selected.createdAt)} 생성</span>
+                    )}
+                  </div>
+                  <div>{renderContent(selected.content)}</div>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── 통장 관리 뷰 ─────────────────────────────────────────────
 const GROUP_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   '고정비 통장':  { bg: '#FFF3E0', border: '#FF9800', text: '#E65100' },
@@ -2180,6 +2401,7 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string }>
 const AccountManagementView: React.FC = () => {
   const totalBudget = ACCOUNT_GROUPS.flatMap(g => g.accounts).reduce((s, a) => s + a.budget, 0);
   const [showCommonCode, setShowCommonCode] = useState(false);
+  const [showMarketReport, setShowMarketReport] = useState(false);
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
@@ -2280,8 +2502,8 @@ const AccountManagementView: React.FC = () => {
         );
       })}
 
-      {/* 공통코드 관리 버튼 */}
-      <div style={{ marginTop: '28px', textAlign: 'center' }}>
+      {/* 하단 버튼 행 */}
+      <div style={{ marginTop: '28px', display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <button
           onClick={() => setShowCommonCode(true)}
           style={{
@@ -2292,10 +2514,22 @@ const AccountManagementView: React.FC = () => {
         >
           ⚙ 공통코드 관리
         </button>
+        <button
+          onClick={() => setShowMarketReport(true)}
+          style={{
+            padding: '10px 24px', fontSize: '13px', fontWeight: 600,
+            border: '1.5px dashed #89CFF0', borderRadius: '10px',
+            background: '#f0f8fd', color: '#1a6fa0', cursor: 'pointer',
+          }}
+        >
+          📈 시장 리포트
+        </button>
       </div>
 
       {/* 공통코드 관리 모달 */}
       {showCommonCode && <CommonCodeModal onClose={() => setShowCommonCode(false)} />}
+      {/* 시장 리포트 모달 */}
+      {showMarketReport && <MarketReportModal onClose={() => setShowMarketReport(false)} />}
     </div>
   );
 };

@@ -668,6 +668,26 @@ export interface FixedExpense {
   isActive: boolean;
 }
 
+/** 시장 데이터 단일 티커 */
+export interface MarketTicker {
+  label: string;
+  close: number;
+  prevClose: number | null;
+  change: number | null;
+  changePct: number | null;
+  date: string;
+}
+
+/** 시장 리포트 — 매일 KST 08:00 자동 생성 */
+export interface MarketReport {
+  id: number;
+  reportDate: string;                         // YYYY-MM-DD
+  marketData: Record<string, MarketTicker>;   // sp500, nasdaq, kospi 등
+  content: string;                            // Gemini 분석 마크다운
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 /** 금액을 "0,000원" 형식으로 포맷 */
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';

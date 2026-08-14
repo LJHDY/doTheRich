@@ -1133,6 +1133,38 @@ export const generateFinancialReport = async (reportMonth?: string, includeCurre
   await api.post('/api/financial-reports/generate', null, { params });
 };
 
+// ─── 시장 리포트 ──────────────────────────────────────────────
+
+import { MarketReport } from '../types';
+
+/** 시장 리포트 목록 조회 (최신순) — snake_case → camelCase 변환 */
+export const getMarketReports = async (): Promise<MarketReport[]> => {
+  const { data } = await api.get('/api/market-reports');
+  return data.map((r: any) => ({
+    id: r.id,
+    reportDate: r.reportDate,
+    marketData: Object.fromEntries(
+      Object.entries(r.marketData || {}).map(([k, v]: [string, any]) => [k, {
+        label: v.label,
+        close: v.close,
+        prevClose: v.prev_close,
+        change: v.change,
+        changePct: v.change_pct,
+        date: v.date,
+      }])
+    ),
+    content: r.content,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  }));
+};
+
+/** 시장 리포트 즉시 생성 요청 (백그라운드, 202) */
+export const generateMarketReport = async (reportDate?: string): Promise<void> => {
+  const params = reportDate ? { report_date: reportDate } : {};
+  await api.post('/api/market-reports/generate', null, { params });
+};
+
 // ── AI 부동산 투자 분석 ─────────────────────────────────────────────────────
 export interface ComplexAnalysis {
   id: number;
