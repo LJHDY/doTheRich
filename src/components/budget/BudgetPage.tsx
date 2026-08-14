@@ -2368,6 +2368,8 @@ const MarketReportView: React.FC = () => {
       {/* 컨트롤 바 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {reports.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매일 오전 7시 자동 생성</span>
           <select
             value={selectedId ?? ''}
             onChange={e => setSelectedId(Number(e.target.value))}
@@ -2377,6 +2379,7 @@ const MarketReportView: React.FC = () => {
               <option key={r.id} value={r.id}>{r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}</option>
             ))}
           </select>
+          </div>
         )}
         <button
           onClick={handleGenerate}
@@ -4576,15 +4579,18 @@ const AIReportView: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
           {/* 리포트 선택 — 요청 건별로 표시 */}
           {reports.length > 0 && (
-            <select
-              value={selectedId ?? ''}
-              onChange={e => setSelectedId(Number(e.target.value))}
-              style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: isMobile ? '200px' : '320px' }}
-            >
-              {reports.map(r => (
-                <option key={r.id} value={r.id}>{formatOptionLabel(r)}</option>
-              ))}
-            </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매월 25일 오전 9시 자동 생성</span>
+              <select
+                value={selectedId ?? ''}
+                onChange={e => setSelectedId(Number(e.target.value))}
+                style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: isMobile ? '200px' : '320px' }}
+              >
+                {reports.map(r => (
+                  <option key={r.id} value={r.id}>{formatOptionLabel(r)}</option>
+                ))}
+              </select>
+            </div>
           )}
           {/* 분석 기간 토글 */}
           <div style={{ display: 'flex', border: '1px solid #dadce0', borderRadius: '8px', overflow: 'hidden', fontSize: '12px' }}>
