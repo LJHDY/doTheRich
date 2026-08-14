@@ -2238,6 +2238,17 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   // 마크다운 → JSX (AIReportView와 동일 패턴)
+  // **bold** 및 [text](url) 마크다운을 JSX로 변환하는 인라인 렌더러
+  const renderInline = (text: string) => {
+    const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g);
+    return parts.map((p, j) => {
+      if (p.startsWith('**') && p.endsWith('**')) return <strong key={j}>{p.slice(2, -2)}</strong>;
+      const linkMatch = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (linkMatch) return <a key={j} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" style={{ color: '#1a6fa0', textDecoration: 'underline' }}>{linkMatch[1]}</a>;
+      return p;
+    });
+  };
+
   const renderContent = (text: string) => {
     const lines = text.split('\n');
     return lines.map((line, i) => {
@@ -2251,19 +2262,17 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         return <p key={i} style={{ fontWeight: 700, color: '#1a3a5c', margin: '8px 0 4px', fontSize: '13px' }}>{line.slice(2, -2)}</p>;
       }
       if (line.startsWith('- ') || line.startsWith('* ')) {
-        const parts = line.slice(2).split(/(\*\*[^*]+\*\*)/g);
         return (
           <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
             <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
-            <span>{parts.map((p, j) => p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : p)}</span>
+            <span>{renderInline(line.slice(2))}</span>
           </div>
         );
       }
       if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
-      const parts = line.split(/(\*\*[^*]+\*\*)/g);
       return (
         <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.6' }}>
-          {parts.map((p, j) => p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : p)}
+          {renderInline(line)}
         </p>
       );
     });
