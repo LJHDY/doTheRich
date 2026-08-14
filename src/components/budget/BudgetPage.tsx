@@ -2181,7 +2181,7 @@ const TICKER_GROUPS = [
   { label: '미국 채권',     keys: ['us10y', 'us30y', 'us3m'],         accent: '#2a9d8f' },
   { label: '미국 증시',     keys: ['sp500', 'nasdaq', 'dow'],          accent: '#40a060' },
   { label: '원자재',        keys: ['wti', 'gold'],                     accent: '#c8882a' },
-  { label: '환율 / 달러',  keys: ['dxy', 'usdkrw'],                   accent: '#d4704a' },
+  { label: '환율 / 달러',  keys: ['dxy', 'usdkrw', 'usdjpy'],         accent: '#d4704a' },
   { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'],       accent: '#c0404a' },
 ];
 
