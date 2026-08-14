@@ -2174,15 +2174,15 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
 // ─── 시장 리포트 뷰 (AIReportView 내 서브탭으로 표시) ──────────
 
-// 티커 그룹 정의 (화면 표시용)
+// 티커 그룹 정의 (화면 표시용) — accent: 섹션 헤더 및 카드 왼쪽 테두리 색상
 // 기준금리 → 채권 → 증시 순서, vix는 별도 공포/변동성 섹션에서 F&G와 함께 표시
 const TICKER_GROUPS = [
-  { label: '기준금리',      keys: ['rate_us', 'rate_kr', 'rate_jp'] },
-  { label: '미국 채권',     keys: ['us10y', 'us30y', 'us3m'] },
-  { label: '미국 증시',     keys: ['sp500', 'nasdaq', 'dow'] },
-  { label: '원자재',        keys: ['wti', 'gold'] },
-  { label: '환율 / 달러',  keys: ['dxy', 'usdkrw'] },
-  { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'] },
+  { label: '기준금리',      keys: ['rate_us', 'rate_kr', 'rate_jp'],  accent: '#3b7dd8' },
+  { label: '미국 채권',     keys: ['us10y', 'us30y', 'us3m'],         accent: '#2a9d8f' },
+  { label: '미국 증시',     keys: ['sp500', 'nasdaq', 'dow'],          accent: '#40a060' },
+  { label: '원자재',        keys: ['wti', 'gold'],                     accent: '#c8882a' },
+  { label: '환율 / 달러',  keys: ['dxy', 'usdkrw'],                   accent: '#d4704a' },
+  { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'],       accent: '#c0404a' },
 ];
 
 const MarketReportView: React.FC = () => {
@@ -2386,17 +2386,31 @@ const MarketReportView: React.FC = () => {
                   {TICKER_GROUPS.map((group) => {
                     const tickers = group.keys.map(k => ({ key: k, data: selected.marketData[k] })).filter(t => t.data);
                     if (tickers.length === 0) return null;
-                    const sectionHeader = (label: string) => (
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#5f7fa0', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        {label}
+
+                    // 섹션 헤더: 액센트 컬러 왼쪽 바 + 라벨
+                    const sectionHeader = (label: string, accent: string) => (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
+                        <div style={{ width: '3px', height: '14px', borderRadius: '2px', background: accent, flexShrink: 0 }} />
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054', letterSpacing: '0.3px' }}>{label}</span>
                       </div>
                     );
+
+                    // 공통 카드 쉘: 흰 배경 + 그림자 + 액센트 왼쪽 테두리
+                    const cardStyle = (accent: string): React.CSSProperties => ({
+                      background: '#fff',
+                      borderRadius: '10px',
+                      padding: '10px 12px',
+                      border: '1px solid #dde4ed',
+                      borderLeft: `3px solid ${accent}`,
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.07)',
+                    });
+
                     const tickerCard = (key: string, data: typeof tickers[0]['data']) => {
                       // rate_ 접두사: 기준금리 — close에 % 단위, 변화량은 pp로 표시
                       const isRate = key.startsWith('rate_');
                       return (
-                        <div key={key} style={{ background: '#f8fafd', borderRadius: '10px', padding: '10px 12px', border: '1px solid #e0eaf5' }}>
-                          <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '2px' }}>{data.label}</div>
+                        <div key={key} style={cardStyle(group.accent)}>
+                          <div style={{ fontSize: '11px', color: '#7a8fa6', marginBottom: '2px' }}>{data.label}</div>
                           <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
                             {data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}{isRate ? '%' : ''}
                           </div>
@@ -2420,10 +2434,13 @@ const MarketReportView: React.FC = () => {
                         </div>
                       );
                     };
+
+                    const FEAR_ACCENT = '#8e44ad';
+
                     return (
                       <React.Fragment key={group.label}>
-                        <div style={{ marginBottom: '14px' }}>
-                          {sectionHeader(group.label)}
+                        <div style={{ marginBottom: '16px' }}>
+                          {sectionHeader(group.label, group.accent)}
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
                             {tickers.map(({ key, data }) => tickerCard(key, data))}
                           </div>
@@ -2431,15 +2448,15 @@ const MarketReportView: React.FC = () => {
 
                         {/* 미국 증시 다음에 공포/변동성 섹션 (VIX + F&G) 삽입 */}
                         {group.label === '미국 증시' && (
-                          <div style={{ marginBottom: '14px' }}>
-                            {sectionHeader('공포 / 변동성')}
+                          <div style={{ marginBottom: '16px' }}>
+                            {sectionHeader('공포 / 변동성', FEAR_ACCENT)}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
 
                               {/* VIX 카드 — 우측 상단 ℹ 툴팁 */}
                               {selected.marketData.vix && (() => {
                                 const vix = selected.marketData.vix!;
                                 return (
-                                  <div style={{ position: 'relative', background: '#f8fafd', borderRadius: '10px', padding: '10px 12px', border: '1px solid #e0eaf5' }}>
+                                  <div style={{ position: 'relative', ...cardStyle(FEAR_ACCENT) }}>
                                     {/* ⓘ 버튼: 탭/클릭으로 팝오버 토글 (모바일 hover 미지원 대응) */}
                                     <div style={{ position: 'absolute', top: '6px', right: '8px' }}>
                                       <div
@@ -2459,7 +2476,7 @@ const MarketReportView: React.FC = () => {
                                         </div>
                                       )}
                                     </div>
-                                    <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '2px' }}>{vix.label}</div>
+                                    <div style={{ fontSize: '11px', color: '#7a8fa6', marginBottom: '2px' }}>{vix.label}</div>
                                     <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
                                       {vix.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
                                     </div>
@@ -2488,8 +2505,8 @@ const MarketReportView: React.FC = () => {
                                 };
                                 const info = FG_LABEL[fg.rating] ?? { ko: fg.rating, emoji: '📊', color: '#888' };
                                 return (
-                                  <div style={{ background: '#f8fafd', borderRadius: '10px', padding: '10px 12px', border: '1px solid #e0eaf5' }}>
-                                    <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '3px' }}>CNN Fear &amp; Greed</div>
+                                  <div style={cardStyle(FEAR_ACCENT)}>
+                                    <div style={{ fontSize: '11px', color: '#7a8fa6', marginBottom: '3px' }}>CNN Fear &amp; Greed</div>
                                     <div style={{ fontSize: '15px', fontWeight: 700, color: info.color }}>{info.emoji} {fg.score.toFixed(1)}</div>
                                     <div style={{ fontSize: '12px', color: info.color, fontWeight: 600, marginBottom: '5px' }}>{info.ko}</div>
                                     {/* 미니 게이지 */}
