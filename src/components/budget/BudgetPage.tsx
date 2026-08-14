@@ -2203,7 +2203,8 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 생성 요청 → 5초 폴링으로 새 id 등장 감지
+  // 생성 요청 → 5초 폴링으로 완료 감지
+  // 신규: id 변경 / 재생성(upsert): updatedAt 변경 둘 다 감지
   const handleGenerate = async () => {
     setGenerating(true);
     setToast('분석 요청 중…');
@@ -2211,11 +2212,15 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       await generateMarketReport();
       setToast('시장 데이터를 수집하고 분석 중입니다. 잠시 후 업데이트됩니다.');
       const prevTopId = reports.length > 0 ? reports[0].id : null;
+      const prevTopUpdatedAt = reports.length > 0 ? reports[0].updatedAt : null;
       let tries = 0;
       const poll = setInterval(async () => {
         tries++;
         const data = await getMarketReports();
-        const isNew = data.length > 0 && data[0].id !== prevTopId;
+        const isNew = data.length > 0 && (
+          data[0].id !== prevTopId ||
+          data[0].updatedAt !== prevTopUpdatedAt
+        );
         if (isNew || tries >= 36) {
           clearInterval(poll);
           setReports(data);
