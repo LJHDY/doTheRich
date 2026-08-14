@@ -2240,10 +2240,10 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   // 마크다운 → JSX (AIReportView와 동일 패턴)
   // **bold** 및 [text](url) 마크다운을 JSX로 변환하는 인라인 렌더러
   const renderInline = (text: string) => {
-    const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g);
+    const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]*\]\([^)]+\))/g);
     return parts.map((p, j) => {
       if (p.startsWith('**') && p.endsWith('**')) return <strong key={j}>{p.slice(2, -2)}</strong>;
-      const linkMatch = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      const linkMatch = p.match(/^\[([^\]]*)\]\(([^)]+)\)$/);
       if (linkMatch) return <a key={j} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" style={{ color: '#1a6fa0', textDecoration: 'underline' }}>{linkMatch[1]}</a>;
       return p;
     });
@@ -2262,10 +2262,38 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         return <p key={i} style={{ fontWeight: 700, color: '#1a3a5c', margin: '8px 0 4px', fontSize: '13px' }}>{line.slice(2, -2)}</p>;
       }
       if (line.startsWith('- ') || line.startsWith('* ')) {
+        const content = line.slice(2);
+        // 뉴스 시사점 카드 패턴: [제목](url) → 시장영향
+        const newsMatch = content.match(/^\[([^\]]*)\]\(([^)]+)\)\s*(?:→|->)\s*(.+)$/);
+        if (newsMatch) {
+          // Gemini가 [- 제목](url) 형식으로 줄 때 앞의 '- ' 제거
+          const title = newsMatch[1].replace(/^[-·\s]+/, '').trim();
+          const url = newsMatch[2];
+          const impact = newsMatch[3];
+          return (
+            <div key={i} style={{
+              background: '#f8fcff', border: '1px solid #dceefa',
+              borderLeft: '3px solid #89CFF0', borderRadius: '8px',
+              padding: '11px 14px', margin: '6px 0',
+            }}>
+              <div style={{ fontWeight: 700, color: '#1a3a5c', fontSize: '13px', marginBottom: '5px', lineHeight: '1.5' }}>
+                {title}
+              </div>
+              <p style={{ fontSize: '12px', color: '#444', margin: '0 0 8px', lineHeight: '1.65' }}>
+                {impact}
+              </p>
+              <a href={url} target="_blank" rel="noopener noreferrer"
+                 style={{ fontSize: '12px', color: '#4baad4', textDecoration: 'underline' }}>
+                🔗 기사 보기
+              </a>
+            </div>
+          );
+        }
+        // 일반 bullet
         return (
           <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
             <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
-            <span>{renderInline(line.slice(2))}</span>
+            <span>{renderInline(content)}</span>
           </div>
         );
       }
