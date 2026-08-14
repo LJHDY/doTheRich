@@ -2187,16 +2187,21 @@ const TICKER_GROUPS = [
 const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [reports, setReports] = useState<MarketReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [generating, setGenerating] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [toast, setToast] = useState('');
 
   const load = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await getMarketReports();
       setReports(data);
       if (data.length > 0 && selectedId === null) setSelectedId(data[0].id);
+    } catch (e: any) {
+      // 네트워크 오류나 파싱 오류 시 에러 메시지 표시 (빈 목록으로 오인하지 않도록)
+      setLoadError(e?.message || '데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -2368,6 +2373,13 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
           {loading ? (
             <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6' }}>불러오는 중…</div>
+          ) : loadError ? (
+            <div style={{ textAlign: 'center', padding: '60px', color: '#c0392b', fontSize: '14px' }}>
+              <div style={{ fontSize: '40px', marginBottom: '16px' }}>⚠️</div>
+              <div>데이터를 불러오지 못했습니다.</div>
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#9aa0a6' }}>{loadError}</div>
+              <button onClick={load} style={{ marginTop: '16px', padding: '8px 20px', background: '#89CFF0', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>다시 시도</button>
+            </div>
           ) : reports.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
               <div style={{ fontSize: '40px', marginBottom: '16px' }}>📊</div>

@@ -1147,7 +1147,8 @@ export const getMarketReports = async (): Promise<MarketReport[]> => {
       reportDate: r.reportDate,
       marketData: Object.fromEntries(
         Object.entries(raw)
-          .filter(([k]) => k !== 'fear_greed')
+          // null이거나 객체가 아닌 값(fear_greed 포함) 제외 — 수집 실패 티커가 null로 저장된 경우 방어
+          .filter(([k, v]) => k !== 'fear_greed' && v !== null && typeof v === 'object')
           .map(([k, v]: [string, any]) => [k, {
             label: v.label,
             close: v.close,
