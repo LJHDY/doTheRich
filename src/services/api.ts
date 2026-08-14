@@ -31,6 +31,7 @@ import {
   FixedExpense,
   PaymentMethod,
   CommonCode,
+  MarketReport,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1134,8 +1135,6 @@ export const generateFinancialReport = async (reportMonth?: string, includeCurre
 };
 
 // ─── 시장 리포트 ──────────────────────────────────────────────
-
-import { MarketReport } from '../types';
 
 /** 시장 리포트 목록 조회 (최신순) — snake_case → camelCase 변환 */
 export const getMarketReports = async (): Promise<MarketReport[]> => {
