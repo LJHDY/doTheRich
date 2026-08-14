@@ -99,6 +99,43 @@ const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
 type Filter = 'ALL' | 'INCOME' | 'EXPENSE' | 'FIXED' | 'INVEST' | 'TRANSFER';
 type Tab = 'ENTRIES' | 'ACCOUNTS' | 'ASSETS' | 'OVERVIEW' | 'AI'; // 가계부 내역 / 통장 관리 / 자산 관리 / 통합 보기 / AI 분석
 
+// 파이차트 범례 항목 — 모듈 레벨 정의로 IIFE 내 재마운트 방지
+// hover 시 즉시 금액/건수 툴팁 표시 (title 속성의 브라우저 딜레이 없음)
+const CategoryTip: React.FC<{
+  color: string; name: string; pct: number; tipLabel: string;
+  isActive: boolean; onClick: () => void;
+}> = ({ color, name, pct, tipLabel, isActive, onClick }) => {
+  const [show, setShow] = React.useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      style={{
+        position: 'relative', display: 'flex', alignItems: 'center', gap: '4px',
+        cursor: 'pointer', borderRadius: '4px', padding: '2px 4px',
+        background: isActive ? `${color}22` : 'transparent',
+        border: isActive ? `1px solid ${color}` : '1px solid transparent',
+      }}
+    >
+      <span style={{ width: '8px', height: '8px', borderRadius: '2px', flexShrink: 0, background: color }} />
+      <span style={{ fontSize: '11px', color: '#344054', whiteSpace: 'nowrap' }}>{name}</span>
+      <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>{pct}%</span>
+      {show && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 5px)', left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(40,40,40,0.88)', color: '#fff',
+          fontSize: '11px', padding: '3px 8px', borderRadius: '4px',
+          whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 9999,
+        }}>
+          {tipLabel}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── 컴포넌트 ─────────────────────────────────────────────────
 const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [userId, setUserId] = useState<string>(
@@ -644,26 +681,17 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 </div>
                 {/* 범례 — 파이 아래, 클릭 시 카테고리 필터 적용 */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px', marginTop: '6px' }}>
-                  {data.map((d, i) => {
-                    const isActive = categoryFilter === d.name;
-                    return (
-                      <div
-                        key={d.name}
-                        onClick={() => setCategoryFilter(isActive ? null : d.name)}
-                        title={`${d.value.toLocaleString()}원 / ${d.count}건`}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: '4px',
-                          cursor: 'pointer', borderRadius: '4px', padding: '2px 4px',
-                          background: isActive ? `${colors[i % colors.length]}22` : 'transparent',
-                          border: isActive ? `1px solid ${colors[i % colors.length]}` : '1px solid transparent',
-                        }}
-                      >
-                        <span style={{ width: '8px', height: '8px', borderRadius: '2px', flexShrink: 0, background: colors[i % colors.length] }} />
-                        <span style={{ fontSize: '11px', color: '#344054', whiteSpace: 'nowrap' }}>{d.name}</span>
-                        <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>{Math.round(d.value / total * 100)}%</span>
-                      </div>
-                    );
-                  })}
+                  {data.map((d, i) => (
+                    <CategoryTip
+                      key={d.name}
+                      color={colors[i % colors.length]}
+                      name={d.name}
+                      pct={Math.round(d.value / total * 100)}
+                      tipLabel={`${d.value.toLocaleString()}원 / ${d.count}건`}
+                      isActive={categoryFilter === d.name}
+                      onClick={() => setCategoryFilter(categoryFilter === d.name ? null : d.name)}
+                    />
+                  ))}
                 </div>
               </div>
             );
