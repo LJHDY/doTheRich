@@ -2175,11 +2175,12 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 // ─── 시장 리포트 모달 ─────────────────────────────────────────
 
 // 티커 그룹 정의 (화면 표시용)
+// 채권 맨 위, vix는 별도 공포/변동성 섹션에서 F&G와 함께 표시
 const TICKER_GROUPS = [
-  { label: '미국 증시', keys: ['sp500', 'nasdaq', 'dow'] },
-  { label: '공포 / 채권', keys: ['vix', 'us10y', 'us30y', 'us3m'] },
-  { label: '원자재', keys: ['wti', 'gold'] },
-  { label: '환율 / 달러', keys: ['dxy', 'usdkrw'] },
+  { label: '미국 채권',     keys: ['us10y', 'us30y', 'us3m'] },
+  { label: '미국 증시',     keys: ['sp500', 'nasdaq', 'dow'] },
+  { label: '원자재',        keys: ['wti', 'gold'] },
+  { label: '환율 / 달러',  keys: ['dxy', 'usdkrw'] },
   { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'] },
 ];
 
@@ -2378,37 +2379,110 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               {/* 시장 데이터 티커 그리드 */}
               {Object.keys(selected.marketData).length > 0 && (
                 <div style={{ marginBottom: '20px' }}>
-                  {TICKER_GROUPS.map(group => {
+                  {TICKER_GROUPS.map((group) => {
                     const tickers = group.keys.map(k => ({ key: k, data: selected.marketData[k] })).filter(t => t.data);
                     if (tickers.length === 0) return null;
-                    return (
-                      <div key={group.label} style={{ marginBottom: '14px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#5f7fa0', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          {group.label}
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
-                          {tickers.map(({ key, data }) => (
-                            <div key={key} style={{
-                              background: '#f8fafd', borderRadius: '10px', padding: '10px 12px',
-                              border: '1px solid #e0eaf5',
-                            }}>
-                              <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '2px' }}>{data.label}</div>
-                              <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
-                                {data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
-                              </div>
-                              <div style={{ fontSize: '12px', color: changeColor(data.changePct), fontWeight: 600 }}>
-                                {changeSign(data.changePct)}{data.changePct?.toFixed(2) ?? '-'}%
-                                {data.change != null && (
-                                  <span style={{ fontWeight: 400, marginLeft: '4px', color: changeColor(data.change) }}>
-                                    ({changeSign(data.change)}{data.change.toLocaleString('ko-KR', { maximumFractionDigits: 4 })})
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px' }}>{data.date}</div>
-                            </div>
-                          ))}
-                        </div>
+                    const sectionHeader = (label: string) => (
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#5f7fa0', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {label}
                       </div>
+                    );
+                    const tickerCard = (key: string, data: typeof tickers[0]['data']) => (
+                      <div key={key} style={{ background: '#f8fafd', borderRadius: '10px', padding: '10px 12px', border: '1px solid #e0eaf5' }}>
+                        <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '2px' }}>{data.label}</div>
+                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
+                          {data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
+                        </div>
+                        <div style={{ fontSize: '12px', color: changeColor(data.changePct), fontWeight: 600 }}>
+                          {changeSign(data.changePct)}{data.changePct?.toFixed(2) ?? '-'}%
+                          {data.change != null && (
+                            <span style={{ fontWeight: 400, marginLeft: '4px', color: changeColor(data.change) }}>
+                              ({changeSign(data.change)}{data.change.toLocaleString('ko-KR', { maximumFractionDigits: 4 })})
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px' }}>{data.date}</div>
+                      </div>
+                    );
+                    return (
+                      <React.Fragment key={group.label}>
+                        <div style={{ marginBottom: '14px' }}>
+                          {sectionHeader(group.label)}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
+                            {tickers.map(({ key, data }) => tickerCard(key, data))}
+                          </div>
+                        </div>
+
+                        {/* 미국 증시 다음에 공포/변동성 섹션 (VIX + F&G) 삽입 */}
+                        {group.label === '미국 증시' && (
+                          <div style={{ marginBottom: '14px' }}>
+                            {sectionHeader('공포 / 변동성')}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
+
+                              {/* VIX 카드 — 우측 상단 ℹ 툴팁 */}
+                              {selected.marketData.vix && (() => {
+                                const vix = selected.marketData.vix!;
+                                return (
+                                  <div style={{ position: 'relative', background: '#f8fafd', borderRadius: '10px', padding: '10px 12px', border: '1px solid #e0eaf5' }}>
+                                    <div
+                                      title={"VIX 수준 해석\n──────────────────\n20 미만  │ 안정적, 낮은 불안감\n30 이상  │ 불안감 증가, 높은 변동성\n40 이상  │ 극도 불안, 공포 지배\n60 이상  │ 극단적 시장 위기"}
+                                      style={{ position: 'absolute', top: '6px', right: '8px', fontSize: '12px', color: '#c0c8d0', cursor: 'help', userSelect: 'none', lineHeight: 1 }}
+                                    >ⓘ</div>
+                                    <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '2px' }}>{vix.label}</div>
+                                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
+                                      {vix.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: changeColor(vix.changePct), fontWeight: 600 }}>
+                                      {changeSign(vix.changePct)}{vix.changePct?.toFixed(2) ?? '-'}%
+                                      {vix.change != null && (
+                                        <span style={{ fontWeight: 400, marginLeft: '4px', color: changeColor(vix.change) }}>
+                                          ({changeSign(vix.change)}{vix.change.toLocaleString('ko-KR', { maximumFractionDigits: 4 })})
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px' }}>{vix.date}</div>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Fear & Greed 카드 — 미니 게이지 + 이전값 */}
+                              {selected.fearGreed && (() => {
+                                const fg = selected.fearGreed!;
+                                const FG_LABEL: Record<string, { ko: string; emoji: string; color: string }> = {
+                                  'Extreme Fear': { ko: '극도의 공포', emoji: '😱', color: '#c62828' },
+                                  'Fear':         { ko: '공포',        emoji: '😟', color: '#e65100' },
+                                  'Neutral':      { ko: '중립',        emoji: '😐', color: '#f9a825' },
+                                  'Greed':        { ko: '탐욕',        emoji: '😊', color: '#558b2f' },
+                                  'Extreme Greed':{ ko: '극도의 탐욕', emoji: '🤑', color: '#1b5e20' },
+                                };
+                                const info = FG_LABEL[fg.rating] ?? { ko: fg.rating, emoji: '📊', color: '#888' };
+                                return (
+                                  <div style={{ background: '#f8fafd', borderRadius: '10px', padding: '10px 12px', border: '1px solid #e0eaf5' }}>
+                                    <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '3px' }}>CNN Fear &amp; Greed</div>
+                                    <div style={{ fontSize: '15px', fontWeight: 700, color: info.color }}>{info.emoji} {fg.score.toFixed(1)}</div>
+                                    <div style={{ fontSize: '12px', color: info.color, fontWeight: 600, marginBottom: '5px' }}>{info.ko}</div>
+                                    {/* 미니 게이지 */}
+                                    <div style={{ position: 'relative', height: '5px', borderRadius: '3px',
+                                      background: 'linear-gradient(to right, #c62828 0%, #e65100 25%, #f9a825 50%, #7cb342 75%, #1b5e20 100%)',
+                                    }}>
+                                      <div style={{
+                                        position: 'absolute', top: '50%',
+                                        left: `clamp(4px, ${fg.score}%, calc(100% - 4px))`,
+                                        transform: 'translate(-50%, -50%)',
+                                        width: '9px', height: '9px', borderRadius: '50%',
+                                        background: info.color, border: '2px solid #fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                                      }} />
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '5px' }}>
+                                      전일 {fg.previousClose.toFixed(1)} · 1주 {fg.previous1Week.toFixed(1)} · 1개월 {fg.previous1Month.toFixed(1)}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </div>

@@ -1139,23 +1139,36 @@ export const generateFinancialReport = async (reportMonth?: string, includeCurre
 /** 시장 리포트 목록 조회 (최신순) — snake_case → camelCase 변환 */
 export const getMarketReports = async (): Promise<MarketReport[]> => {
   const { data } = await api.get('/api/market-reports');
-  return data.map((r: any) => ({
-    id: r.id,
-    reportDate: r.reportDate,
-    marketData: Object.fromEntries(
-      Object.entries(r.marketData || {}).map(([k, v]: [string, any]) => [k, {
-        label: v.label,
-        close: v.close,
-        prevClose: v.prev_close,
-        change: v.change,
-        changePct: v.change_pct,
-        date: v.date,
-      }])
-    ),
-    content: r.content,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-  }));
+  return data.map((r: any) => {
+    const raw = r.marketData || {};
+    const fg = raw.fear_greed;
+    return {
+      id: r.id,
+      reportDate: r.reportDate,
+      marketData: Object.fromEntries(
+        Object.entries(raw)
+          .filter(([k]) => k !== 'fear_greed')
+          .map(([k, v]: [string, any]) => [k, {
+            label: v.label,
+            close: v.close,
+            prevClose: v.prev_close,
+            change: v.change,
+            changePct: v.change_pct,
+            date: v.date,
+          }])
+      ),
+      fearGreed: fg ? {
+        score: fg.score,
+        rating: fg.rating,
+        previousClose: fg.previous_close,
+        previous1Week: fg.previous_1_week,
+        previous1Month: fg.previous_1_month,
+      } : null,
+      content: r.content,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    };
+  });
 };
 
 /** 시장 리포트 즉시 생성 요청 (백그라운드, 202) */

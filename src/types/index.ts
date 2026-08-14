@@ -668,6 +668,15 @@ export interface FixedExpense {
   isActive: boolean;
 }
 
+/** CNN Fear & Greed Index */
+export interface FearGreedData {
+  score: number;
+  rating: string;          // "Extreme Fear" | "Fear" | "Neutral" | "Greed" | "Extreme Greed"
+  previousClose: number;
+  previous1Week: number;
+  previous1Month: number;
+}
+
 /** 시장 데이터 단일 티커 */
 export interface MarketTicker {
   label: string;
@@ -683,6 +692,7 @@ export interface MarketReport {
   id: number;
   reportDate: string;                         // YYYY-MM-DD
   marketData: Record<string, MarketTicker>;   // sp500, nasdaq, kospi 등
+  fearGreed: FearGreedData | null;            // CNN Fear & Greed Index
   content: string;                            // Gemini 분석 마크다운
   createdAt: string | null;
   updatedAt: string | null;
