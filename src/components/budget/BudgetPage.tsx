@@ -2366,7 +2366,7 @@ const MarketReportView: React.FC = () => {
     <div style={{ maxWidth: '780px', margin: '0 auto' }}>
 
       {/* 컨트롤 바 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {reports.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매일 오전 7시 자동 생성</span>
@@ -4576,7 +4576,7 @@ const AIReportView: React.FC = () => {
         {aiSubTab === 'financial' && <>
 
         {/* ── 컨트롤 바 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
           {/* 리포트 선택 — 요청 건별로 표시 */}
           {reports.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
