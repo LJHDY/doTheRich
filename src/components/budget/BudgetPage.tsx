@@ -2536,7 +2536,20 @@ const MarketReportView: React.FC = () => {
                 </div>
               )}
 
-              {/* 국내 부동산 뉴스 */}
+              {/* Gemini 분석 본문 */}
+              {selected.content && (
+                <div style={{ background: '#fff', borderRadius: '12px', padding: '20px 24px', border: '1px solid #e0f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '12px', paddingBottom: '8px', borderBottom: '2px solid #e0f0ff' }}>
+                    AI 시장 분석 · {selected.reportDate}
+                    {(selected.updatedAt ?? selected.createdAt) && (
+                      <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400, marginLeft: '10px' }}>{formatKST(selected.updatedAt ?? selected.createdAt)} 업데이트</span>
+                    )}
+                  </div>
+                  <div>{renderContent(selected.content)}</div>
+                </div>
+              )}
+
+              {/* 국내 부동산 뉴스 원문 목록 */}
               {selected.realtyNews && selected.realtyNews.length > 0 && (
                 <div style={{ marginBottom: '20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
@@ -2571,19 +2584,6 @@ const MarketReportView: React.FC = () => {
                       </a>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* Gemini 분석 본문 */}
-              {selected.content && (
-                <div style={{ background: '#fff', borderRadius: '12px', padding: '20px 24px', border: '1px solid #e0f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '12px', paddingBottom: '8px', borderBottom: '2px solid #e0f0ff' }}>
-                    AI 시장 분석 · {selected.reportDate}
-                    {(selected.updatedAt ?? selected.createdAt) && (
-                      <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400, marginLeft: '10px' }}>{formatKST(selected.updatedAt ?? selected.createdAt)} 업데이트</span>
-                    )}
-                  </div>
-                  <div>{renderContent(selected.content)}</div>
                 </div>
               )}
             </div>
