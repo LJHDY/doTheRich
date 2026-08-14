@@ -286,6 +286,9 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 | POST | `/api/common-codes` | 공통코드 등록 (201) |
 | PATCH | `/api/common-codes/:id` | 공통코드 수정 |
 | DELETE | `/api/common-codes/:id` | 공통코드 삭제 (204) |
+| GET | `/api/market-reports` | 시장 리포트 목록 (최신순) |
+| GET | `/api/market-reports/latest` | 최신 시장 리포트 1건 |
+| POST | `/api/market-reports/generate?report_date=YYYY-MM-DD` | 시장 리포트 즉시 생성 (202 백그라운드, 같은 날짜 재생성 시 덮어씀) |
 
 ---
 
@@ -811,6 +814,19 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
     - `detailCodeName`을 `,` 기준으로 split → 템플릿 계좌명 목록으로 행 자동 생성
     - 기존 저장 금액은 accountName 매칭으로 자동 채움, 템플릿 외 수동 추가 항목도 유지
     - 공통코드 미등록 셀은 기존 방식(빈 상태 시작) 그대로
+- [x] 시장 리포트 (`MarketReportModal`, `market_report` 테이블)
+  - 통장 관리 탭 하단 "📈 시장 리포트" 버튼 → `MarketReportModal` 오픈
+  - 모달: 리포트 선택 드롭다운 + "✨ 즉시 생성" 버튼(5초 폴링) + 새로고침
+  - **티커 그리드** 5개 그룹: 미국 증시(sp500/nasdaq/dow) / 공포·채권(vix/us10y/us30y/us3m) / 원자재(wti/gold) / 환율·달러(dxy/usdkrw) / 한국·아시아(kospi/kosdaq/nikkei)
+    - 종가·변동·변동% 표시, 양수=초록/음수=빨강
+  - **Gemini 분석 7개 섹션**: 전일 시장 총평 / 핵심 지표 심층 분석(금리·달러·VIX·원자재) / 시장 구조 분석 / 국내 시장 전망 / 투자 방향성(단기·중기·리스크관리) / 주요 리스크 / 뉴스 시사점
+  - `MarketReport` / `MarketTicker` 타입 (`types/index.ts`), `getMarketReports` / `generateMarketReport` API (`api.ts`)
+  - 백엔드: `market_report` 테이블 (report_date UNIQUE upsert), `market_data_service.py`, `market_report_service.py`, `routers/market_report.py`
+    - yfinance 14개 티커 + RSS 5개 피드 수집
+    - 파생 지표 자동 계산: 10Y-3M 수익률 곡선 상태, VIX 레벨 해석
+    - Goldman Sachs 수석 전략가 페르소나 프롬프트 → Gemini `gemini-3.5-flash`
+    - 지수 백오프 5회 재시도 (503 오류 대응)
+    - 매일 22:00 UTC(07:00 KST) APScheduler 자동 생성
 
 ## 미완성 / TODO
 
