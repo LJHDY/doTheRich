@@ -2175,8 +2175,9 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 // ─── 시장 리포트 모달 ─────────────────────────────────────────
 
 // 티커 그룹 정의 (화면 표시용)
-// 채권 맨 위, vix는 별도 공포/변동성 섹션에서 F&G와 함께 표시
+// 기준금리 → 채권 → 증시 순서, vix는 별도 공포/변동성 섹션에서 F&G와 함께 표시
 const TICKER_GROUPS = [
+  { label: '기준금리',      keys: ['rate_us', 'rate_kr', 'rate_jp'] },
   { label: '미국 채권',     keys: ['us10y', 'us30y', 'us3m'] },
   { label: '미국 증시',     keys: ['sp500', 'nasdaq', 'dow'] },
   { label: '원자재',        keys: ['wti', 'gold'] },
@@ -2400,23 +2401,35 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         {label}
                       </div>
                     );
-                    const tickerCard = (key: string, data: typeof tickers[0]['data']) => (
-                      <div key={key} style={{ background: '#f8fafd', borderRadius: '10px', padding: '10px 12px', border: '1px solid #e0eaf5' }}>
-                        <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '2px' }}>{data.label}</div>
-                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
-                          {data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
+                    const tickerCard = (key: string, data: typeof tickers[0]['data']) => {
+                      // rate_ 접두사: 기준금리 — close에 % 단위, 변화량은 pp로 표시
+                      const isRate = key.startsWith('rate_');
+                      return (
+                        <div key={key} style={{ background: '#f8fafd', borderRadius: '10px', padding: '10px 12px', border: '1px solid #e0eaf5' }}>
+                          <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '2px' }}>{data.label}</div>
+                          <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
+                            {data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}{isRate ? '%' : ''}
+                          </div>
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: changeColor(isRate ? data.change : data.changePct) }}>
+                            {isRate ? (
+                              data.change != null
+                                ? <>{changeSign(data.change)}{data.change.toFixed(2)}<span style={{ fontSize: '10px', fontWeight: 400 }}>pp</span></>
+                                : <span style={{ color: '#9aa0a6' }}>-</span>
+                            ) : (
+                              <>
+                                {changeSign(data.changePct)}{data.changePct?.toFixed(2) ?? '-'}%
+                                {data.change != null && (
+                                  <span style={{ fontWeight: 400, marginLeft: '4px', color: changeColor(data.change) }}>
+                                    ({changeSign(data.change)}{data.change.toLocaleString('ko-KR', { maximumFractionDigits: 4 })})
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px' }}>{data.date}</div>
                         </div>
-                        <div style={{ fontSize: '12px', color: changeColor(data.changePct), fontWeight: 600 }}>
-                          {changeSign(data.changePct)}{data.changePct?.toFixed(2) ?? '-'}%
-                          {data.change != null && (
-                            <span style={{ fontWeight: 400, marginLeft: '4px', color: changeColor(data.change) }}>
-                              ({changeSign(data.change)}{data.change.toLocaleString('ko-KR', { maximumFractionDigits: 4 })})
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px' }}>{data.date}</div>
-                      </div>
-                    );
+                      );
+                    };
                     return (
                       <React.Fragment key={group.label}>
                         <div style={{ marginBottom: '14px' }}>
