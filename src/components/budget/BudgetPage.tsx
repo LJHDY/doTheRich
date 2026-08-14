@@ -2178,8 +2178,9 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 const TICKER_GROUPS = [
   { label: '미국 증시', keys: ['sp500', 'nasdaq', 'dow'] },
   { label: '공포 / 채권', keys: ['vix', 'us10y', 'us30y', 'us3m'] },
-  { label: '한국 증시', keys: ['kospi', 'kosdaq'] },
-  { label: '환율', keys: ['usdkrw'] },
+  { label: '원자재', keys: ['wti', 'gold'] },
+  { label: '환율 / 달러', keys: ['dxy', 'usdkrw'] },
+  { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'] },
 ];
 
 const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
