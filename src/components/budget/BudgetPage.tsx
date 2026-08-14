@@ -2346,7 +2346,7 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '260px' }}
             >
               {reports.map(r => (
-                <option key={r.id} value={r.id}>{r.reportDate} · {formatKST(r.createdAt)}</option>
+                <option key={r.id} value={r.id}>{r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}</option>
               ))}
             </select>
           )}
@@ -2534,8 +2534,8 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div style={{ background: '#fff', borderRadius: '12px', padding: '20px 24px', border: '1px solid #e0f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '12px', paddingBottom: '8px', borderBottom: '2px solid #e0f0ff' }}>
                     AI 시장 분석 · {selected.reportDate}
-                    {selected.createdAt && (
-                      <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400, marginLeft: '10px' }}>{formatKST(selected.createdAt)} 생성</span>
+                    {(selected.updatedAt ?? selected.createdAt) && (
+                      <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400, marginLeft: '10px' }}>{formatKST(selected.updatedAt ?? selected.createdAt)} 업데이트</span>
                     )}
                   </div>
                   <div>{renderContent(selected.content)}</div>
