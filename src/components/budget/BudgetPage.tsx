@@ -2369,7 +2369,7 @@ const MarketReportView: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {reports.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매일 오전 7시 자동 생성</span>
+            <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매일 오전 7시 / 오후 9시 자동 생성</span>
           <select
             value={selectedId ?? ''}
             onChange={e => setSelectedId(Number(e.target.value))}
