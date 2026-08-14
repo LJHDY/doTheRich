@@ -2387,7 +2387,7 @@ const MarketReportView: React.FC = () => {
             background: generating ? '#b0c4de' : '#89CFF0', color: '#fff',
           }}
         >
-          {generating ? '생성 중…' : '✨ 즉시 생성'}
+          {generating ? '생성 중…' : '✨ 리포트 생성'}
         </button>
         <button onClick={load} style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>↺</button>
       </div>
