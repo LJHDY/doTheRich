@@ -1142,13 +1142,15 @@ export const getMarketReports = async (): Promise<MarketReport[]> => {
   return data.map((r: any) => {
     const raw = r.marketData || {};
     const fg = raw.fear_greed;
+    const rn = raw.realty_news;
+    // ticker 데이터만 추출 (fear_greed, realty_news 등 특수 키 제외)
+    const EXCLUDED_KEYS = new Set(['fear_greed', 'realty_news']);
     return {
       id: r.id,
       reportDate: r.reportDate,
       marketData: Object.fromEntries(
         Object.entries(raw)
-          // null이거나 객체가 아닌 값(fear_greed 포함) 제외 — 수집 실패 티커가 null로 저장된 경우 방어
-          .filter(([k, v]) => k !== 'fear_greed' && v !== null && typeof v === 'object')
+          .filter(([k, v]) => !EXCLUDED_KEYS.has(k) && v !== null && typeof v === 'object')
           .map(([k, v]: [string, any]) => [k, {
             label: v.label,
             close: v.close,
@@ -1165,6 +1167,12 @@ export const getMarketReports = async (): Promise<MarketReport[]> => {
         previous1Week: fg.previous_1_week,
         previous1Month: fg.previous_1_month,
       } : null,
+      realtyNews: Array.isArray(rn) ? rn.map((n: any) => ({
+        source: n.source,
+        category: n.category,
+        title: n.title,
+        link: n.link,
+      })) : null,
       content: r.content,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,

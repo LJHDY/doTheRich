@@ -687,12 +687,20 @@ export interface MarketTicker {
   date: string;
 }
 
+export interface RealtyNewsItem {
+  source: string;
+  category: string;
+  title: string;
+  link: string;
+}
+
 /** 시장 리포트 — 매일 KST 08:00 자동 생성 */
 export interface MarketReport {
   id: number;
   reportDate: string;                         // YYYY-MM-DD
   marketData: Record<string, MarketTicker>;   // sp500, nasdaq, kospi 등
   fearGreed: FearGreedData | null;            // CNN Fear & Greed Index
+  realtyNews: RealtyNewsItem[] | null;        // 국내 부동산 뉴스
   content: string;                            // Gemini 분석 마크다운
   createdAt: string | null;
   updatedAt: string | null;

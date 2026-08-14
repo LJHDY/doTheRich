@@ -2536,6 +2536,44 @@ const MarketReportView: React.FC = () => {
                 </div>
               )}
 
+              {/* 국내 부동산 뉴스 */}
+              {selected.realtyNews && selected.realtyNews.length > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
+                    <div style={{ width: '3px', height: '14px', borderRadius: '2px', background: '#2a7a4a', flexShrink: 0 }} />
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#344054' }}>🏘 국내 부동산 뉴스</span>
+                    <span style={{ fontSize: '11px', color: '#9aa0a6' }}>{selected.realtyNews.length}건</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {selected.realtyNews.map((n, i) => (
+                      <a
+                        key={i}
+                        href={n.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ textDecoration: 'none' }}
+                      >
+                        <div style={{
+                          background: '#fff', borderRadius: '8px', padding: '10px 14px',
+                          border: '1px solid #dde4ed', borderLeft: '3px solid #2a7a4a',
+                          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                          display: 'flex', alignItems: 'flex-start', gap: '10px',
+                        }}>
+                          <span style={{
+                            fontSize: '10px', fontWeight: 700, color: '#fff',
+                            background: '#2a7a4a', borderRadius: '4px',
+                            padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0, marginTop: '1px',
+                          }}>{n.source}</span>
+                          <span style={{ fontSize: '13px', color: '#1a3a5c', lineHeight: '1.5', fontWeight: 500 }}>
+                            {n.title}
+                          </span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Gemini 분석 본문 */}
               {selected.content && (
                 <div style={{ background: '#fff', borderRadius: '12px', padding: '20px 24px', border: '1px solid #e0f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
