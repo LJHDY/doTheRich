@@ -2191,6 +2191,7 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [generating, setGenerating] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [toast, setToast] = useState('');
+  const [vixTipOpen, setVixTipOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -2436,10 +2437,25 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 const vix = selected.marketData.vix!;
                                 return (
                                   <div style={{ position: 'relative', background: '#f8fafd', borderRadius: '10px', padding: '10px 12px', border: '1px solid #e0eaf5' }}>
-                                    <div
-                                      title={"VIX 수준 해석\n──────────────────\n20 미만  │ 안정적, 낮은 불안감\n30 이상  │ 불안감 증가, 높은 변동성\n40 이상  │ 극도 불안, 공포 지배\n60 이상  │ 극단적 시장 위기"}
-                                      style={{ position: 'absolute', top: '6px', right: '8px', fontSize: '12px', color: '#c0c8d0', cursor: 'help', userSelect: 'none', lineHeight: 1 }}
-                                    >ⓘ</div>
+                                    {/* ⓘ 버튼: 탭/클릭으로 팝오버 토글 (모바일 hover 미지원 대응) */}
+                                    <div style={{ position: 'absolute', top: '6px', right: '8px' }}>
+                                      <div
+                                        onClick={() => setVixTipOpen(v => !v)}
+                                        style={{ fontSize: '12px', color: '#c0c8d0', cursor: 'pointer', userSelect: 'none', lineHeight: 1 }}
+                                      >ⓘ</div>
+                                      {vixTipOpen && (
+                                        <div
+                                          onClick={() => setVixTipOpen(false)}
+                                          style={{ position: 'absolute', right: 0, top: '18px', zIndex: 99, background: '#1a3a5c', color: '#fff', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', lineHeight: '1.8', whiteSpace: 'nowrap', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}
+                                        >
+                                          <div style={{ fontWeight: 700, marginBottom: '6px' }}>VIX 수준 해석</div>
+                                          <div>20 미만 &nbsp;│ 안정적, 낮은 불안감</div>
+                                          <div>30 이상 &nbsp;│ 불안감 증가, 높은 변동성</div>
+                                          <div>40 이상 &nbsp;│ 극도 불안, 공포 지배</div>
+                                          <div>60 이상 &nbsp;│ 극단적 시장 위기</div>
+                                        </div>
+                                      )}
+                                    </div>
                                     <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '2px' }}>{vix.label}</div>
                                     <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
                                       {vix.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
