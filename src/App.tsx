@@ -140,6 +140,12 @@ const App: React.FC = () => {
     [complexes, activeFilters]
   );
 
+  // 현재 지도에 표시 중인 경로만 추출 — 매 렌더마다 filter() 새 배열 생성 방지
+  const activeRoutes = useMemo(
+    () => routes.filter(r => activeRouteIds.has(r.id)),
+    [routes, activeRouteIds]
+  );
+
   // 구매 가능 분석 패널 — 생활권·단지패널과 상호 배타
   const [affordOpen, setAffordOpen] = useState(() => sessionStorage.getItem('panel_afford') === 'true');
 
@@ -1028,7 +1034,7 @@ const App: React.FC = () => {
               focusLocation={focusLocation}
               overlayMarkers={overlayMarkers}
               radiusCenter={radiusCenter}
-              routes={routePanelOpen ? routes.filter(r => activeRouteIds.has(r.id)) : []}
+              routes={routePanelOpen ? activeRoutes : []}
               drawingPoints={drawingPoints}
               isDrawingRoute={isDrawingRoute}
               onRoutePointAdd={handleRoutePointAdd}
