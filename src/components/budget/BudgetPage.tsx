@@ -2172,7 +2172,7 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-// ─── 시장 리포트 모달 ─────────────────────────────────────────
+// ─── 시장 리포트 뷰 (AIReportView 내 서브탭으로 표시) ──────────
 
 // 티커 그룹 정의 (화면 표시용)
 // 기준금리 → 채권 → 증시 순서, vix는 별도 공포/변동성 섹션에서 F&G와 함께 표시
@@ -2185,7 +2185,7 @@ const TICKER_GROUPS = [
   { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'] },
 ];
 
-const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const MarketReportView: React.FC = () => {
   const [reports, setReports] = useState<MarketReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -2326,47 +2326,37 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const changeSign = (v: number | null) => v == null ? '' : v > 0 ? '+' : '';
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 10000,
-      background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }} onClick={onClose}>
-      <div style={{
-        background: '#fff', borderRadius: '16px', width: '92vw', maxWidth: '780px',
-        maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
-      }} onClick={e => e.stopPropagation()}>
+    <div style={{ maxWidth: '780px', margin: '0 auto' }}>
 
-        {/* 헤더 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', borderBottom: '1px solid #e0f0ff', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c' }}>📈 시장 리포트</span>
-          {reports.length > 0 && (
-            <select
-              value={selectedId ?? ''}
-              onChange={e => setSelectedId(Number(e.target.value))}
-              style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '260px' }}
-            >
-              {reports.map(r => (
-                <option key={r.id} value={r.id}>{r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}</option>
-              ))}
-            </select>
-          )}
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            style={{
-              padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
-              borderRadius: '8px', cursor: generating ? 'default' : 'pointer',
-              background: generating ? '#b0c4de' : '#89CFF0', color: '#fff',
-            }}
+      {/* 컨트롤 바 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {reports.length > 0 && (
+          <select
+            value={selectedId ?? ''}
+            onChange={e => setSelectedId(Number(e.target.value))}
+            style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '260px' }}
           >
-            {generating ? '생성 중…' : '✨ 즉시 생성'}
-          </button>
-          <button onClick={load} style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>↺</button>
-          <button onClick={onClose} style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>✕ 닫기</button>
-        </div>
+            {reports.map(r => (
+              <option key={r.id} value={r.id}>{r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}</option>
+            ))}
+          </select>
+        )}
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          style={{
+            padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
+            borderRadius: '8px', cursor: generating ? 'default' : 'pointer',
+            background: generating ? '#b0c4de' : '#89CFF0', color: '#fff',
+          }}
+        >
+          {generating ? '생성 중…' : '✨ 즉시 생성'}
+        </button>
+        <button onClick={load} style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>↺</button>
+      </div>
 
-        {/* 본문 스크롤 영역 */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 32px' }}>
+      {/* 본문 */}
+      <div>
           {toast && (
             <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: '8px', padding: '10px 16px', marginBottom: '14px', fontSize: '13px', color: '#1b5e20' }}>
               {toast}
@@ -2543,7 +2533,6 @@ const MarketReportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               )}
             </div>
           ) : null}
-        </div>
       </div>
     </div>
   );
@@ -2559,7 +2548,6 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string }>
 const AccountManagementView: React.FC = () => {
   const totalBudget = ACCOUNT_GROUPS.flatMap(g => g.accounts).reduce((s, a) => s + a.budget, 0);
   const [showCommonCode, setShowCommonCode] = useState(false);
-  const [showMarketReport, setShowMarketReport] = useState(false);
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
@@ -2672,22 +2660,10 @@ const AccountManagementView: React.FC = () => {
         >
           ⚙ 공통코드 관리
         </button>
-        <button
-          onClick={() => setShowMarketReport(true)}
-          style={{
-            padding: '10px 24px', fontSize: '13px', fontWeight: 600,
-            border: '1.5px dashed #89CFF0', borderRadius: '10px',
-            background: '#f0f8fd', color: '#1a6fa0', cursor: 'pointer',
-          }}
-        >
-          📈 시장 리포트
-        </button>
       </div>
 
       {/* 공통코드 관리 모달 */}
       {showCommonCode && <CommonCodeModal onClose={() => setShowCommonCode(false)} />}
-      {/* 시장 리포트 모달 */}
-      {showMarketReport && <MarketReportModal onClose={() => setShowMarketReport(false)} />}
     </div>
   );
 };
@@ -4401,6 +4377,9 @@ const FixedExpenseModal: React.FC<{
 
 const AIReportView: React.FC = () => {
   const isMobile = useIsMobile();
+  // 서브탭: AI 재무분석 / 시장 리포트
+  const [aiSubTab, setAiSubTab] = useState<'financial' | 'market'>('financial');
+
   const [reports, setReports] = useState<FinancialReportType[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -4516,9 +4495,30 @@ const AIReportView: React.FC = () => {
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }}>
       <div style={{ maxWidth: '780px', margin: '0 auto' }}>
 
+        {/* ── 서브탭 */}
+        <div style={{ display: 'flex', border: '1px solid #dadce0', borderRadius: '10px', overflow: 'hidden', marginBottom: '18px', alignSelf: 'flex-start', width: 'fit-content' }}>
+          {([['financial', '🤖 AI 재무분석'], ['market', '📈 시장 리포트']] as const).map(([tab, label]) => (
+            <button
+              key={tab}
+              onClick={() => setAiSubTab(tab)}
+              style={{
+                padding: '8px 20px', border: 'none', cursor: 'pointer',
+                fontSize: '13px', fontWeight: aiSubTab === tab ? 700 : 400,
+                background: aiSubTab === tab ? '#89CFF0' : '#fff',
+                color: aiSubTab === tab ? '#fff' : '#5f6368',
+              }}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* ── 시장 리포트 탭 */}
+        {aiSubTab === 'market' && <MarketReportView />}
+
+        {/* ── AI 재무분석 탭 */}
+        {aiSubTab === 'financial' && <>
+
         {/* ── 컨트롤 바 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c' }}>🤖 AI 재무 분석</span>
           {/* 리포트 선택 — 요청 건별로 표시 */}
           {reports.length > 0 && (
             <select
@@ -4595,6 +4595,9 @@ const AIReportView: React.FC = () => {
             <div>{renderContent(selected.content)}</div>
           </div>
         ) : null}
+
+        </> /* aiSubTab === 'financial' */}
+
       </div>
     </div>
   );
