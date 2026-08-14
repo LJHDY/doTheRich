@@ -589,22 +589,30 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
           const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
 
-          // 지출 (투자·이체 제외)
-          const expenseMap: Record<string, number> = {};
+          // 지출 (투자·이체 제외) — 금액 + 건수 집계
+          const expenseMap: Record<string, { value: number; count: number }> = {};
           for (const e of entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment && !isXfer(e))) {
             const key = e.category || '미분류';
-            expenseMap[key] = (expenseMap[key] ?? 0) + e.amount;
+            if (!expenseMap[key]) expenseMap[key] = { value: 0, count: 0 };
+            expenseMap[key].value += e.amount;
+            expenseMap[key].count += 1;
           }
-          const expenseData = Object.entries(expenseMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+          const expenseData = Object.entries(expenseMap)
+            .sort((a, b) => b[1].value - a[1].value)
+            .map(([name, { value, count }]) => ({ name, value, count }));
           const expenseTotal = expenseData.reduce((s, d) => s + d.value, 0);
 
-          // 투자 (이체 제외)
-          const investMap: Record<string, number> = {};
+          // 투자 (이체 제외) — 금액 + 건수 집계
+          const investMap: Record<string, { value: number; count: number }> = {};
           for (const e of entries.filter(e => e.isInvestment && !isXfer(e))) {
             const key = e.investmentType || e.category || '기타';
-            investMap[key] = (investMap[key] ?? 0) + e.amount;
+            if (!investMap[key]) investMap[key] = { value: 0, count: 0 };
+            investMap[key].value += e.amount;
+            investMap[key].count += 1;
           }
-          const investData = Object.entries(investMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+          const investData = Object.entries(investMap)
+            .sort((a, b) => b[1].value - a[1].value)
+            .map(([name, { value, count }]) => ({ name, value, count }));
           const investTotal = investData.reduce((s, d) => s + d.value, 0);
 
           if (expenseData.length === 0 && investData.length === 0) return null;
@@ -612,7 +620,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           // 파이 + 범례 렌더러
           const renderChart = (
             title: string,
-            data: { name: string; value: number }[],
+            data: { name: string; value: number; count: number }[],
             total: number,
             colors: string[],
           ) => {
@@ -642,6 +650,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                       <div
                         key={d.name}
                         onClick={() => setCategoryFilter(isActive ? null : d.name)}
+                        title={`${d.value.toLocaleString()}원 / ${d.count}건`}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '4px',
                           cursor: 'pointer', borderRadius: '4px', padding: '2px 4px',
