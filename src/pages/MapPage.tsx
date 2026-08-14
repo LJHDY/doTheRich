@@ -331,7 +331,7 @@ const MapPage: React.FC<MapPageProps> = ({
       mapInstanceRef.current.fitBounds(bounds, { padding: 60 });
       boundsInitializedRef.current = true;
     }
-  }, [complexes, selectedComplex]); // createMarkerIcon은 useCallback([])으로 안정 참조 — 의존배열 불필요
+  }, [complexes, selectedComplex, createMarkerIcon]);
 
   // 선택된 단지로 지도 이동
   useEffect(() => {
