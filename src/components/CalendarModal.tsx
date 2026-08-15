@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Schedule } from '../types';
 import {
   disconnectNaverCalendar,
@@ -20,6 +20,13 @@ const CAT_COLORS = ['#89CFF0', '#FFD97D', '#E06060', '#7DC8A0', '#BA8BD8', '#FF9
 const catColor = (cat: string | null, idx: number) =>
   cat ? CAT_COLORS[Math.abs(cat.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % CAT_COLORS.length]
       : CAT_COLORS[idx % CAT_COLORS.length];
+
+// 다일 이벤트 바 정보
+interface BarInfo {
+  event: Schedule;
+  startCol: number; // 0~6
+  endCol: number;   // 0~6
+}
 
 // 네이버 캘린더 연동 상태 + 캘린더 선택 뱃지
 const NaverStatusBadge: React.FC<{
@@ -102,13 +109,11 @@ const NaverStatusBadge: React.FC<{
         )}
       </div>
 
-      {/* 캘린더 설정 패널 — 기본 / 직접 입력 */}
       {showPicker && connected && (
         <div style={{
           marginLeft: '76px', border: '1px solid #dadce0', borderRadius: '8px',
           background: '#fff', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         }}>
-          {/* 기본 캘린더 */}
           <div
             onClick={() => handleSave('defaultCalendarId')}
             style={{
@@ -123,7 +128,6 @@ const NaverStatusBadge: React.FC<{
             <span>📅</span><span>내 캘린더 (기본)</span>
             {(!calendarId || calendarId === 'defaultCalendarId') && <span style={{ marginLeft: 'auto', color: '#2e7d32' }}>✓</span>}
           </div>
-          {/* calendarId 직접 입력 */}
           <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ fontSize: '11px', color: '#5f6368' }}>
               다른 캘린더 ID 직접 입력<br />
@@ -158,15 +162,63 @@ const NaverStatusBadge: React.FC<{
   );
 };
 
+// 주(week) 단위 렌더링 상수
+const DAY_NUM_H = 26; // 날짜 숫자 영역 높이 (px)
+const BAR_H     = 18; // 다일 이벤트 바 높이 (px)
+const BAR_GAP   =  2; // 바 사이 간격 (px)
+const GRID_GAP  =  4; // 셀 간격 (px) — 모바일/데스크탑 공통
+
+/** 주(week) 내에서 다일 이벤트를 레인에 배치 */
+function buildLanes(
+  week: (number | null)[],
+  dates: (string | null)[],
+  schedules: Schedule[],
+): BarInfo[][] {
+  const validDates = dates.filter(Boolean) as string[];
+  if (validDates.length === 0) return [];
+
+  const weekStart = validDates[0];
+  const weekEnd   = validDates[validDates.length - 1];
+
+  // 다일 이벤트만 추출 (종료일이 시작일보다 늦은 경우)
+  const multiDay = schedules
+    .filter(s => s.endDate && s.endDate > s.eventDate)
+    .filter(s => s.eventDate <= weekEnd && s.endDate! >= weekStart)
+    .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+
+  const lanes: BarInfo[][] = [];
+
+  multiDay.forEach(event => {
+    const clampedStart = event.eventDate < weekStart ? weekStart : event.eventDate;
+    const clampedEnd   = event.endDate! > weekEnd    ? weekEnd   : event.endDate!;
+
+    const startCol = dates.indexOf(clampedStart);
+    const endCol   = dates.indexOf(clampedEnd);
+    if (startCol === -1 || endCol === -1) return;
+
+    const bar: BarInfo = { event, startCol, endCol };
+
+    // 겹치지 않는 첫 번째 레인에 배치
+    let placed = false;
+    for (const lane of lanes) {
+      const conflicts = lane.some(b => !(b.endCol < startCol || b.startCol > endCol));
+      if (!conflicts) { lane.push(bar); placed = true; break; }
+    }
+    if (!placed) lanes.push([bar]);
+  });
+
+  return lanes;
+}
+
 const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const isMobile = useIsMobile();
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1); // 1~12
-  const [schedules, setSchedules]     = useState<Schedule[]>([]);
-  const [loading, setLoading]         = useState(false);
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [schedules, setSchedules]       = useState<Schedule[]>([]);
+  const [loading, setLoading]           = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [naverStatus, setNaverStatus] = useState<NaverCalendarStatus | null>(null);
+  const [naverStatus, setNaverStatus]   = useState<NaverCalendarStatus | null>(null);
   const [showNaverPanel, setShowNaverPanel] = useState(false);
 
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
@@ -174,65 +226,61 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const rows = await getSchedules(yearMonth);
-      setSchedules(rows);
-    } finally {
-      setLoading(false);
-    }
+    try { setSchedules(await getSchedules(yearMonth)); }
+    finally { setLoading(false); }
   }, [yearMonth]);
 
   useEffect(() => { load(); }, [load]);
 
   const loadNaverStatus = useCallback(async () => {
-    try {
-      const s = await getNaverCalendarStatus();
-      setNaverStatus(s);
-    } catch { /* 무시 */ }
+    try { setNaverStatus(await getNaverCalendarStatus()); } catch { /* 무시 */ }
   }, []);
 
-  // OAuth 성공 콜백 감지 (같은 origin postMessage 또는 URL 파라미터)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('naverCalendar') === 'success') {
       loadNaverStatus();
-      // URL 파라미터 제거
       window.history.replaceState({}, '', window.location.pathname);
     }
     loadNaverStatus();
   }, [loadNaverStatus]);
 
-  // 날짜별 일정 맵
-  const byDate = schedules.reduce<Record<string, Schedule[]>>((acc, s) => {
-    (acc[s.eventDate] ??= []).push(s);
-    return acc;
-  }, {});
+  // 날짜 → 해당 날짜에 걸치는 모든 일정 맵 (다일 이벤트도 모든 날짜에 포함)
+  const schedulesByDate = useMemo(() => {
+    const map: Record<string, Schedule[]> = {};
+    schedules.forEach(s => {
+      const start = new Date(s.eventDate + 'T00:00:00');
+      const end   = new Date((s.endDate || s.eventDate) + 'T00:00:00');
+      const cur   = new Date(start);
+      while (cur <= end) {
+        const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+        (map[ds] ??= []).push(s);
+        cur.setDate(cur.getDate() + 1);
+      }
+    });
+    return map;
+  }, [schedules]);
 
-  // 달력 날짜 배열 생성 (앞뒤 빈칸 포함)
-  const firstDay = new Date(year, month - 1, 1).getDay(); // 0=일
+  // 달력 셀 배열 (null=빈칸)
+  const firstDay    = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
-  // 6행 맞추기 위해 패딩
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const prevMonth = () => {
-    if (month === 1) { setYear(y => y - 1); setMonth(12); }
-    else setMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (month === 12) { setYear(y => y + 1); setMonth(1); }
-    else setMonth(m => m + 1);
-  };
+  // 주 단위로 분할
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
-  const handleDayClick = (day: number) => {
-    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    setSelectedDate(dateStr);
-  };
+  const prevMonth = () => { if (month === 1) { setYear(y => y - 1); setMonth(12); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 12) { setYear(y => y + 1); setMonth(1); } else setMonth(m => m + 1); };
 
-  const selectedSchedules = selectedDate ? (byDate[selectedDate] ?? []) : [];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const toDateStr = (day: number) => `${year}-${pad(month)}-${pad(day)}`;
+
+  const selectedSchedules = selectedDate ? (schedulesByDate[selectedDate] ?? []) : [];
 
   return (
     <>
@@ -265,7 +313,6 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {loading && <span style={{ fontSize: '12px', color: '#9aa0a6' }}>불러오는 중…</span>}
-              {/* 네이버 캘린더 연동 버튼 */}
               <button
                 onClick={() => setShowNaverPanel(v => !v)}
                 style={{
@@ -296,7 +343,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
               <NaverStatusBadge userId="ldy"   label="🐴 동영" status={naverStatus} onRefresh={loadNaverStatus} />
               <NaverStatusBadge userId="juhae" label="☀️ 주해" status={naverStatus} onRefresh={loadNaverStatus} />
               <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '2px' }}>
-                * "N 연동" 클릭 → 네이버 로그인 → 자동으로 연동됩니다. 연동 후 창을 닫고 새로고침하면 상태가 업데이트됩니다.
+                * "N 연동" 클릭 → 네이버 로그인 → 자동으로 연동됩니다.
               </div>
             </div>
           )}
@@ -305,7 +352,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
             padding: isMobile ? '8px 12px 4px' : '10px 20px 6px',
-            gap: '4px',
+            gap: `${GRID_GAP}px`,
           }}>
             {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
               <div key={d} style={{
@@ -316,67 +363,143 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
             ))}
           </div>
 
-          {/* 날짜 그리드 */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-            padding: isMobile ? '0 12px 16px' : '0 20px 20px',
-            gap: isMobile ? '3px' : '5px',
-          }}>
-            {cells.map((day, idx) => {
-              if (!day) return <div key={idx} />;
-              const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const daySched = byDate[dateStr] ?? [];
-              const isToday  = dateStr === todayStr;
-              const isSun = idx % 7 === 0;
-              const isSat = idx % 7 === 6;
+          {/* 주 단위 렌더링 */}
+          <div style={{ padding: isMobile ? '0 12px 16px' : '0 20px 20px', display: 'flex', flexDirection: 'column', gap: `${GRID_GAP}px` }}>
+            {weeks.map((week, weekIdx) => {
+              const dates = week.map(day => day ? toDateStr(day) : null);
+              const lanes = buildLanes(week, dates, schedules);
+              const barsH = lanes.length * (BAR_H + BAR_GAP);
+
               return (
-                <div
-                  key={idx}
-                  onClick={() => handleDayClick(day)}
-                  style={{
-                    minHeight: isMobile ? '72px' : '108px',
-                    padding: isMobile ? '5px 5px 4px' : '7px 7px 5px',
-                    borderRadius: '8px', cursor: 'pointer',
-                    border: `1.5px solid ${isToday ? '#89CFF0' : '#f0f0f0'}`,
-                    background: isToday ? '#f0f8fd' : '#fff',
-                    transition: 'background 0.1s',
-                    overflow: 'hidden',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#e0f4fc' : '#f8fbff'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#f0f8fd' : '#fff'; }}
-                >
+                <div key={weekIdx} style={{ position: 'relative' }}>
+                  {/* 날짜 셀 그리드 */}
                   <div style={{
-                    fontWeight: isToday ? 800 : 500,
-                    fontSize: isMobile ? '13px' : '15px',
-                    color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
-                    marginBottom: '4px',
-                  }}>{day}</div>
-                  {/* 일정 칩 — 최대 3개(모바일) / 4개(데스크탑) 표시 후 +N */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    {daySched.slice(0, isMobile ? 3 : 4).map((s, si) => (
-                      <div key={s.id} style={{
-                        fontSize: isMobile ? '10px' : '11px', lineHeight: isMobile ? '14px' : '16px',
-                        background: catColor(s.category, si),
-                        color: '#fff', borderRadius: '3px',
-                        padding: isMobile ? '1px 4px' : '2px 5px',
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        fontWeight: 600,
-                      }}>
-                        {USER_EMOJI[s.userId] ?? ''}{s.eventTime ? ` ${s.eventTime}` : ''} {s.title}
-                      </div>
-                    ))}
-                    {daySched.length > 3 && (
-                      <div style={{ fontSize: '10px', color: '#9aa0a6', paddingLeft: '2px' }}>
-                        +{daySched.length - 3}개
-                      </div>
-                    )}
+                    display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+                    gap: `${GRID_GAP}px`,
+                  }}>
+                    {week.map((day, colIdx) => {
+                      if (!day) return <div key={colIdx} style={{ minHeight: DAY_NUM_H + barsH + 4 }} />;
+                      const dateStr = dates[colIdx]!;
+                      const isToday = dateStr === todayStr;
+                      const isSun   = colIdx === 0;
+                      const isSat   = colIdx === 6;
+                      // 해당 날짜의 단일일 이벤트만 (다일은 바로 표시)
+                      const singleDay = (schedulesByDate[dateStr] ?? []).filter(
+                        s => !s.endDate || s.endDate <= s.eventDate
+                      );
+                      const maxChips = isMobile ? 2 : 3;
+
+                      return (
+                        <div
+                          key={colIdx}
+                          onClick={() => setSelectedDate(dateStr)}
+                          style={{
+                            minHeight: DAY_NUM_H + barsH + (isMobile ? 50 : 60),
+                            padding: '5px 5px 4px',
+                            borderRadius: '8px', cursor: 'pointer',
+                            border: `1.5px solid ${isToday ? '#89CFF0' : '#f0f0f0'}`,
+                            background: isToday ? '#f0f8fd' : '#fff',
+                            overflow: 'hidden',
+                          }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#e0f4fc' : '#f8fbff'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#f0f8fd' : '#fff'; }}
+                        >
+                          {/* 날짜 숫자 */}
+                          <div style={{
+                            height: DAY_NUM_H,
+                            fontWeight: isToday ? 800 : 500,
+                            fontSize: isMobile ? '13px' : '15px',
+                            color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
+                          }}>{day}</div>
+
+                          {/* 다일 이벤트 바 영역 높이 확보 */}
+                          <div style={{ height: barsH }} />
+
+                          {/* 단일일 이벤트 칩 */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {singleDay.slice(0, maxChips).map((s, si) => (
+                              <div key={s.id} style={{
+                                fontSize: isMobile ? '10px' : '11px', lineHeight: '15px',
+                                background: catColor(s.category, si),
+                                color: '#fff', borderRadius: '3px',
+                                padding: isMobile ? '1px 4px' : '2px 5px',
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                fontWeight: 600,
+                              }}>
+                                {USER_EMOJI[s.userId] ?? ''}{s.eventTime ? ` ${s.eventTime}` : ''} {s.title}
+                              </div>
+                            ))}
+                            {singleDay.length > maxChips && (
+                              <div style={{ fontSize: '10px', color: '#9aa0a6', paddingLeft: '2px' }}>
+                                +{singleDay.length - maxChips}개
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+
+                  {/* 다일 이벤트 바 레이어 (절대 위치로 셀 위에 오버레이) */}
+                  {lanes.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: DAY_NUM_H + 5, // 날짜 숫자 아래
+                      left: 0, right: 0,
+                      pointerEvents: 'none',
+                    }}>
+                      {lanes.map((lane, laneIdx) => (
+                        <div key={laneIdx} style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(7, 1fr)',
+                          gap: `${GRID_GAP}px`,
+                          marginBottom: `${BAR_GAP}px`,
+                        }}>
+                          {lane.map(bar => {
+                            const { event, startCol, endCol } = bar;
+                            const color = catColor(event.category, 0);
+                            const isStart = true; // 이 주에서의 시작 여부 (항상 true — 레인 내 유일)
+                            const isContinued = event.eventDate < (dates.find(Boolean) ?? '');
+                            return (
+                              <div
+                                key={event.id}
+                                onClick={() => setSelectedDate(dates[startCol]!)}
+                                style={{
+                                  gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
+                                  height: BAR_H,
+                                  background: color,
+                                  // 주 경계에서 잘린 경우 좌측 radius 제거
+                                  borderRadius: isContinued
+                                    ? `0 ${BAR_H / 2}px ${BAR_H / 2}px 0`
+                                    : `${BAR_H / 2}px`,
+                                  color: '#fff',
+                                  fontSize: isMobile ? '10px' : '11px',
+                                  fontWeight: 700,
+                                  padding: '0 7px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  overflow: 'hidden',
+                                  whiteSpace: 'nowrap',
+                                  textOverflow: 'ellipsis',
+                                  cursor: 'pointer',
+                                  pointerEvents: 'auto',
+                                  boxSizing: 'border-box',
+                                }}
+                              >
+                                {USER_EMOJI[event.userId] ?? ''} {event.title}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
 
-          {/* 하단 이번 달 일정 요약 */}
+          {/* 이번 달 일정 요약 */}
           {schedules.length > 0 && (
             <div style={{ padding: isMobile ? '0 16px 16px' : '0 20px 20px' }}>
               <div style={{ fontSize: isMobile ? '12px' : '13px', color: '#9aa0a6', fontWeight: 600, marginBottom: '8px' }}>
@@ -396,6 +519,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                     <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[s.userId] ?? ''}</span>
                     <span style={{ color: '#9aa0a6', flexShrink: 0 }}>
                       {s.eventDate.slice(5).replace('-', '/')}
+                      {s.endDate && s.endDate > s.eventDate ? ` ~ ${s.endDate.slice(5).replace('-', '/')}` : ''}
                       {s.eventTime ? ` ${s.eventTime}` : ''}
                     </span>
                     {s.category && (
@@ -404,6 +528,11 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                       </span>
                     )}
                     <span style={{ color: '#344054', fontWeight: 600 }}>{s.title}</span>
+                    {s.repeatType && (
+                      <span style={{ color: '#6a1b9a', fontSize: '10px', background: '#f3e5f5', borderRadius: '3px', padding: '0 4px', flexShrink: 0 }}>
+                        반복
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

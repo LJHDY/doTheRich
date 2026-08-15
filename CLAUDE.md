@@ -828,6 +828,18 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
     - 지수 백오프 5회 재시도 (503 오류 대응)
     - 매일 22:00 UTC(07:00 KST) APScheduler 자동 생성
 
+- [x] 네이버 캘린더 OAuth 연동 (`CalendarModal` 내 네이버 연동 패널)
+  - OAuth 2.0 흐름: `GET /api/naver-calendar/auth/{user_id}` → 네이버 인증 → 콜백 → 토큰 저장
+  - `NaverCalendarToken` 모델 (`naver_calendar_token` 테이블): user_id, access/refresh_token, expires_at, calendar_id
+  - 토큰 자동 갱신 (만료 5분 전 refresh_token으로 재발급)
+  - 일정 저장 시 `_push_to_naver()` 자동 호출 — `common` 일정은 ldy·juhae 모두에게 push
+  - iCal 형식 공식 문서 준수: `DTSTART;TZID=Asia/Seoul:YYYYMMDDTHHMMSS` + VTIMEZONE 블록
+  - **캘린더 선택**: Naver Calendar API는 목록 조회 API가 없음 → 기본(`defaultCalendarId`) + 직접 calendarId 입력 방식으로 우회
+  - calendarId 저장: `PATCH /api/naver-calendar/calendars/{user_id}` → DB 저장 → push 시 해당 캘린더에 등록
+  - UI: `CalendarModal` 상단 "N 네이버" 토글 → ldy/juhae 각 연동 상태 배지 + 연동/해제/캘린더선택 버튼
+  - 백엔드 환경변수: `NAVER_CALENDAR_CLIENT_ID`, `NAVER_CALENDAR_CLIENT_SECRET`, `NAVER_CALENDAR_REDIRECT_URI`, `FRONTEND_URL`
+  - Client ID: `WBfVi2rORQVH_MpbPv4q` (Railway 환경변수에 설정)
+
 ## 미완성 / TODO
 
 - [x] 학군·인프라 검색 드롭다운 이중표시 버그 수정 — IME Enter 이중발화(`isComposing` 가드) + 시퀀스 번호로 stale 비동기 결과 폐기 + 결과 1건이면 자동선택
