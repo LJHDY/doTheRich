@@ -25,6 +25,7 @@ import BudgetPage from './components/budget/BudgetPage';
 import UserSelectModal from './components/budget/UserSelectModal';
 import { BUDGET_USER_STORAGE_KEY } from './constants/budgetConstants';
 import RealEstateAnalysisModal from './components/RealEstateAnalysisModal';
+import CalendarModal from './components/CalendarModal';
 
 const App: React.FC = () => {
   const isMobile = useIsMobile();
@@ -111,6 +112,7 @@ const App: React.FC = () => {
 
   // 가계부 — 새로고침 후에도 열린 상태 복원
   const [budgetOpen, setBudgetOpen] = useState(() => sessionStorage.getItem('budget_open') === 'true');
+  const [calendarOpen, setCalendarOpen] = useState(false);
   useEffect(() => { sessionStorage.setItem('budget_open', String(budgetOpen)); }, [budgetOpen]);
 
   // 유저 미선택 시 선택 모달 표시 — 가계부 열기 시점에 확인
@@ -853,6 +855,16 @@ const App: React.FC = () => {
                   color: affordOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >대출분석</button>
+              {/* 달력 */}
+              <button
+                onClick={() => setCalendarOpen(v => !v)}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: `1px solid ${calendarOpen ? '#89CFF0' : '#dadce0'}`,
+                  borderRadius: '6px', backgroundColor: calendarOpen ? '#e0f8ff' : '#fff',
+                  color: calendarOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >📅 달력</button>
               {/* 가계부 */}
               <button
                 onClick={() => {
@@ -1169,6 +1181,9 @@ const App: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* 달력 모달 */}
+      {calendarOpen && <CalendarModal onClose={() => setCalendarOpen(false)} />}
 
       {/* 가계부 전체화면 */}
       {budgetOpen && <BudgetPage onClose={() => setBudgetOpen(false)} />}

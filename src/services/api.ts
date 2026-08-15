@@ -1206,4 +1206,56 @@ export const analyzeRealEstate = async (complexIds: number[]): Promise<ComplexAn
   return res.data;
 };
 
+// ─── 일정 관리 ─────────────────────────────────────────────────────────────
+import { Schedule } from '../types';
+
+const toSchedule = (item: any): Schedule => ({
+  id:          item.id,
+  userId:      item.user_id,
+  title:       item.title,
+  description: item.description ?? null,
+  eventDate:   item.event_date,
+  eventTime:   item.event_time ?? null,
+  category:    item.category ?? null,
+  createdAt:   item.created_at ?? null,
+});
+
+export const getSchedules = async (yearMonth: string): Promise<Schedule[]> => {
+  const { data } = await api.get('/api/schedules', { params: { year_month: yearMonth } });
+  return data.map(toSchedule);
+};
+
+export const createSchedule = async (payload: {
+  userId: string; title: string; description?: string;
+  eventDate: string; eventTime?: string; category?: string;
+}): Promise<Schedule> => {
+  const { data } = await api.post('/api/schedules', {
+    user_id:     payload.userId,
+    title:       payload.title,
+    description: payload.description,
+    event_date:  payload.eventDate,
+    event_time:  payload.eventTime,
+    category:    payload.category,
+  });
+  return toSchedule(data);
+};
+
+export const updateSchedule = async (id: number, payload: {
+  title?: string; description?: string;
+  eventDate?: string; eventTime?: string; category?: string;
+}): Promise<Schedule> => {
+  const body: any = {};
+  if (payload.title       !== undefined) body.title       = payload.title;
+  if (payload.description !== undefined) body.description = payload.description;
+  if (payload.eventDate   !== undefined) body.event_date  = payload.eventDate;
+  if (payload.eventTime   !== undefined) body.event_time  = payload.eventTime;
+  if (payload.category    !== undefined) body.category    = payload.category;
+  const { data } = await api.patch(`/api/schedules/${id}`, body);
+  return toSchedule(data);
+};
+
+export const deleteSchedule = async (id: number): Promise<void> => {
+  await api.delete(`/api/schedules/${id}`);
+};
+
 export default api;

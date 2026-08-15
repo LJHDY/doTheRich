@@ -698,6 +698,18 @@ export interface MarketReport {
   updatedAt: string | null;
 }
 
+// 일정 관리
+export interface Schedule {
+  id: number;
+  userId: string;
+  title: string;
+  description: string | null;
+  eventDate: string;        // "YYYY-MM-DD"
+  eventTime: string | null; // "HH:MM"
+  category: string | null;
+  createdAt: string | null;
+}
+
 /** 금액을 "0,000원" 형식으로 포맷 */
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';
