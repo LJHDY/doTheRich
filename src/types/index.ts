@@ -708,6 +708,8 @@ export interface Schedule {
   endDate: string | null;    // "YYYY-MM-DD" 종료일 (null이면 단일일)
   eventTime: string | null;  // "HH:MM"
   category: string | null;
+  repeatType: string | null; // weekly / monthly / yearly
+  naverUid: string | null;   // 네이버 캘린더 iCal UID
   createdAt: string | null;
 }
 

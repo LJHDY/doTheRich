@@ -43,9 +43,16 @@ const USER_COLOR: Record<string, string> = {
   common: '#E06060',
 };
 
+const REPEAT_OPTIONS = [
+  { value: '',        label: '반복 없음' },
+  { value: 'weekly',  label: '매주' },
+  { value: 'monthly', label: '매달' },
+  { value: 'yearly',  label: '매년' },
+];
+
 const emptyForm = (date: string, userId: string) => ({
-  userId, title: '', description: '', eventDate: date, endDate: '', eventTime: '', category: '',
-  pushToNaver: true,
+  userId, title: '', description: '', eventDate: date, endDate: '', eventTime: '',
+  category: '', repeatType: '', pushToNaver: true,
 });
 
 const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved }) => {
@@ -81,6 +88,7 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
       endDate:     s.endDate || '',
       eventTime:   s.eventTime || '',
       category:    s.category || '',
+      repeatType:  s.repeatType || '',
       pushToNaver: true,
     });
     titleRef.current?.focus();
@@ -100,6 +108,7 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
         endDate,
         eventTime:   form.eventTime || undefined,
         category:    form.category || undefined,
+        repeatType:  form.repeatType || undefined,
         pushToNaver: form.pushToNaver,
       };
       if (editingId) {
@@ -178,6 +187,11 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
                         {codeToName(s.category)}
                       </span>
                     )}
+                    {s.repeatType && (
+                      <span style={{ fontSize: '11px', color: '#6a1b9a', background: '#f3e5f5', borderRadius: '4px', padding: '1px 5px' }}>
+                        {REPEAT_OPTIONS.find(o => o.value === s.repeatType)?.label ?? s.repeatType}
+                      </span>
+                    )}
                     <span style={{ fontSize: '13px', fontWeight: 600, color: '#1a3a5c' }}>{s.title}</span>
                   </div>
                   {s.description && (
@@ -253,18 +267,28 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
               type="time"
               value={form.eventTime}
               onChange={e => setForm(f => ({ ...f, eventTime: e.target.value }))}
-              style={{ ...INPUT_STYLE, flex: '0 0 120px' }}
+              style={{ ...INPUT_STYLE, flex: '0 0 110px' }}
             />
             <select
               value={form.category}
               onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
               style={{ ...INPUT_STYLE, flex: 1 }}
             >
-              <option value="">카테고리 선택</option>
+              <option value="">카테고리</option>
               {catCodes.map(c => (
                 <option key={c.detailCode} value={c.detailCode}>
                   {c.detailCodeName}
                 </option>
+              ))}
+            </select>
+            {/* 반복 설정 */}
+            <select
+              value={form.repeatType}
+              onChange={e => setForm(f => ({ ...f, repeatType: e.target.value }))}
+              style={{ ...INPUT_STYLE, flex: '0 0 90px' }}
+            >
+              {REPEAT_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </div>

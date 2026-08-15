@@ -1234,6 +1234,8 @@ const toSchedule = (item: any): Schedule => ({
   endDate:     item.end_date ?? null,
   eventTime:   item.event_time ?? null,
   category:    item.category ?? null,
+  repeatType:  item.repeat_type ?? null,
+  naverUid:    item.naver_uid ?? null,
   createdAt:   item.created_at ?? null,
 });
 
@@ -1245,7 +1247,7 @@ export const getSchedules = async (yearMonth: string): Promise<Schedule[]> => {
 export const createSchedule = async (payload: {
   userId: string; title: string; description?: string;
   eventDate: string; endDate?: string; eventTime?: string;
-  category?: string; pushToNaver?: boolean;
+  category?: string; repeatType?: string; pushToNaver?: boolean;
 }): Promise<Schedule> => {
   const { data } = await api.post('/api/schedules', {
     user_id:       payload.userId,
@@ -1255,6 +1257,7 @@ export const createSchedule = async (payload: {
     end_date:      payload.endDate || undefined,
     event_time:    payload.eventTime,
     category:      payload.category,
+    repeat_type:   payload.repeatType || undefined,
     push_to_naver: payload.pushToNaver ?? true,
   });
   return toSchedule(data);
@@ -1263,7 +1266,7 @@ export const createSchedule = async (payload: {
 export const updateSchedule = async (id: number, payload: {
   title?: string; description?: string;
   eventDate?: string; endDate?: string; eventTime?: string;
-  category?: string; pushToNaver?: boolean;
+  category?: string; repeatType?: string; pushToNaver?: boolean;
 }): Promise<Schedule> => {
   const body: any = { push_to_naver: payload.pushToNaver ?? true };
   if (payload.title       !== undefined) body.title       = payload.title;
@@ -1272,6 +1275,7 @@ export const updateSchedule = async (id: number, payload: {
   if (payload.endDate     !== undefined) body.end_date    = payload.endDate || null;
   if (payload.eventTime   !== undefined) body.event_time  = payload.eventTime;
   if (payload.category    !== undefined) body.category    = payload.category;
+  if (payload.repeatType  !== undefined) body.repeat_type = payload.repeatType || null;
   const { data } = await api.patch(`/api/schedules/${id}`, body);
   return toSchedule(data);
 };
