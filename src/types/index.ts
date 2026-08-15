@@ -704,8 +704,9 @@ export interface Schedule {
   userId: string;
   title: string;
   description: string | null;
-  eventDate: string;        // "YYYY-MM-DD"
-  eventTime: string | null; // "HH:MM"
+  eventDate: string;         // "YYYY-MM-DD" 시작일
+  endDate: string | null;    // "YYYY-MM-DD" 종료일 (null이면 단일일)
+  eventTime: string | null;  // "HH:MM"
   category: string | null;
   createdAt: string | null;
 }

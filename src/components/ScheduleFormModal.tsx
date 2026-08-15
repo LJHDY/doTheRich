@@ -44,7 +44,8 @@ const USER_COLOR: Record<string, string> = {
 };
 
 const emptyForm = (date: string, userId: string) => ({
-  userId, title: '', description: '', eventDate: date, eventTime: '', category: '',
+  userId, title: '', description: '', eventDate: date, endDate: '', eventTime: '', category: '',
+  pushToNaver: true,
 });
 
 const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved }) => {
@@ -77,8 +78,10 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
       title:       s.title,
       description: s.description || '',
       eventDate:   s.eventDate,
+      endDate:     s.endDate || '',
       eventTime:   s.eventTime || '',
       category:    s.category || '',
+      pushToNaver: true,
     });
     titleRef.current?.focus();
   };
@@ -87,13 +90,17 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
     if (!form.title.trim()) { alert('제목을 입력해주세요.'); return; }
     setSaving(true);
     try {
+      // endDate가 시작일과 같거나 비어있으면 단일일로 처리
+      const endDate = form.endDate && form.endDate > form.eventDate ? form.endDate : undefined;
       const payload = {
         userId:      form.userId,
         title:       form.title.trim(),
         description: form.description.trim() || undefined,
         eventDate:   form.eventDate,
+        endDate,
         eventTime:   form.eventTime || undefined,
         category:    form.category || undefined,
+        pushToNaver: form.pushToNaver,
       };
       if (editingId) {
         await updateSchedule(editingId, payload);
@@ -221,6 +228,25 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
             style={INPUT_STYLE}
           />
 
+          {/* 날짜 범위 — 시작일 ~ 종료일 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="date"
+              value={form.eventDate}
+              onChange={e => setForm(f => ({ ...f, eventDate: e.target.value }))}
+              style={{ ...INPUT_STYLE, flex: 1 }}
+            />
+            <span style={{ fontSize: '12px', color: '#9aa0a6', flexShrink: 0 }}>~</span>
+            <input
+              type="date"
+              value={form.endDate}
+              min={form.eventDate}
+              onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+              style={{ ...INPUT_STYLE, flex: 1 }}
+              placeholder="종료일 (선택)"
+            />
+          </div>
+
           {/* 시간 + 카테고리 */}
           <div style={{ display: 'flex', gap: '8px' }}>
             <input
@@ -251,6 +277,17 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
             rows={2}
             style={{ ...INPUT_STYLE, resize: 'vertical', fontFamily: 'inherit' }}
           />
+
+          {/* 네이버 캘린더 연동 여부 */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', color: '#344054' }}>
+            <input
+              type="checkbox"
+              checked={form.pushToNaver}
+              onChange={e => setForm(f => ({ ...f, pushToNaver: e.target.checked }))}
+              style={{ width: '15px', height: '15px', accentColor: '#03C75A', cursor: 'pointer' }}
+            />
+            <span>N 네이버 캘린더에 등록</span>
+          </label>
 
           {/* 버튼 */}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>

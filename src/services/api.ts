@@ -1231,6 +1231,7 @@ const toSchedule = (item: any): Schedule => ({
   title:       item.title,
   description: item.description ?? null,
   eventDate:   item.event_date,
+  endDate:     item.end_date ?? null,
   eventTime:   item.event_time ?? null,
   category:    item.category ?? null,
   createdAt:   item.created_at ?? null,
@@ -1243,27 +1244,32 @@ export const getSchedules = async (yearMonth: string): Promise<Schedule[]> => {
 
 export const createSchedule = async (payload: {
   userId: string; title: string; description?: string;
-  eventDate: string; eventTime?: string; category?: string;
+  eventDate: string; endDate?: string; eventTime?: string;
+  category?: string; pushToNaver?: boolean;
 }): Promise<Schedule> => {
   const { data } = await api.post('/api/schedules', {
-    user_id:     payload.userId,
-    title:       payload.title,
-    description: payload.description,
-    event_date:  payload.eventDate,
-    event_time:  payload.eventTime,
-    category:    payload.category,
+    user_id:       payload.userId,
+    title:         payload.title,
+    description:   payload.description,
+    event_date:    payload.eventDate,
+    end_date:      payload.endDate || undefined,
+    event_time:    payload.eventTime,
+    category:      payload.category,
+    push_to_naver: payload.pushToNaver ?? true,
   });
   return toSchedule(data);
 };
 
 export const updateSchedule = async (id: number, payload: {
   title?: string; description?: string;
-  eventDate?: string; eventTime?: string; category?: string;
+  eventDate?: string; endDate?: string; eventTime?: string;
+  category?: string; pushToNaver?: boolean;
 }): Promise<Schedule> => {
-  const body: any = {};
+  const body: any = { push_to_naver: payload.pushToNaver ?? true };
   if (payload.title       !== undefined) body.title       = payload.title;
   if (payload.description !== undefined) body.description = payload.description;
   if (payload.eventDate   !== undefined) body.event_date  = payload.eventDate;
+  if (payload.endDate     !== undefined) body.end_date    = payload.endDate || null;
   if (payload.eventTime   !== undefined) body.event_time  = payload.eventTime;
   if (payload.category    !== undefined) body.category    = payload.category;
   const { data } = await api.patch(`/api/schedules/${id}`, body);
