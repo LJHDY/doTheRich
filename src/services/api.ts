@@ -1297,6 +1297,16 @@ export const disconnectNaverCalendar = async (userId: string): Promise<void> => 
   await api.delete(`/api/naver-calendar/disconnect/${userId}`);
 };
 
+export interface NaverCalendarItem {
+  calendarId:   string;
+  calendarName: string;
+}
+
+export const getNaverCalendars = async (userId: string): Promise<NaverCalendarItem[]> => {
+  const { data } = await api.get(`/api/naver-calendar/calendars/${userId}`);
+  return data.calendars ?? [];
+};
+
 export const selectNaverCalendar = async (userId: string, calendarId: string): Promise<void> => {
   await api.patch(`/api/naver-calendar/calendars/${userId}`, { calendarId });
 };
