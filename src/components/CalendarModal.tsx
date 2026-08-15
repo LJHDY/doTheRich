@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Schedule } from '../types';
+import { CommonCode, Schedule } from '../types';
 import {
   disconnectNaverCalendar,
+  getCommonCodes,
   getNaverCalendarAuthUrl,
   getNaverCalendarStatus,
   getSchedules,
@@ -226,7 +227,17 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const [showNaverPanel, setShowNaverPanel] = useState(false);
   const [showPicker, setShowPicker]     = useState(false);
   const [pickerYear, setPickerYear]     = useState(now.getFullYear());
+  const [listOpen, setListOpen]         = useState(true);  // 월별 일정 목록 펼침 여부
+  const [catCodes, setCatCodes]         = useState<CommonCode[]>([]);
   const pickerRef = useRef<HTMLDivElement>(null);
+
+  // CALENDAR_CATEGORY 공통코드 로드 (detailCode → detailCodeName 변환용)
+  useEffect(() => {
+    getCommonCodes('CALENDAR_CATEGORY').then(setCatCodes).catch(() => {});
+  }, []);
+
+  const catName = (code: string | null) =>
+    code ? (catCodes.find(c => c.detailCode === code)?.detailCodeName ?? code) : null;
 
   // 피커 바깥 클릭 시 닫기
   useEffect(() => {
@@ -432,6 +443,80 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
             </div>
           )}
 
+          {/* 월별 일정 목록 — 달력 위, 접었다 폈다 가능 */}
+          <div style={{ borderBottom: '1px solid #f0f0f0' }}>
+            {/* 섹션 헤더 — 항상 표시 */}
+            <button
+              onClick={() => setListOpen(v => !v)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: isMobile ? '10px 16px' : '10px 20px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: isMobile ? '12px' : '13px', color: '#5f6368', fontWeight: 600,
+              }}
+            >
+              <span>{month}월 전체 일정 ({schedules.length}건)</span>
+              <span style={{ fontSize: '12px', color: '#9aa0a6' }}>{listOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+            </button>
+
+            {listOpen && (
+              <div style={{
+                padding: isMobile ? '0 16px 10px' : '0 20px 10px',
+                display: 'flex', flexDirection: 'column', gap: '4px',
+                maxHeight: isMobile ? '200px' : '240px', overflowY: 'auto',
+              }}>
+                {schedules.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '4px 2px' }}>이번 달 일정이 없습니다.</div>
+                ) : schedules.map((s, si) => {
+                  const name = catName(s.category);
+                  const isImportant = s.category === 'IMPORTANT';
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => setSelectedDate(s.eventDate)}
+                      style={{
+                        display: 'flex', gap: '8px', alignItems: 'center',
+                        padding: '5px 10px', borderRadius: '7px',
+                        background: isImportant ? '#fff5f5' : '#f9f9fb',
+                        border: isImportant ? '1px solid #ffcdd2' : '1px solid transparent',
+                        fontSize: '12px', cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{
+                        width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
+                        background: catColor(s.category, si),
+                      }} />
+                      <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[s.userId] ?? ''}</span>
+                      <span style={{ color: '#9aa0a6', flexShrink: 0, fontSize: '11px' }}>
+                        {s.eventDate.slice(5).replace('-', '/')}
+                        {s.endDate && s.endDate > s.eventDate ? ` ~ ${s.endDate.slice(5).replace('-', '/')}` : ''}
+                        {s.eventTime ? ` ${s.eventTime}` : ''}
+                      </span>
+                      {name && (
+                        <span style={{
+                          fontSize: '10px', borderRadius: '4px', padding: '0 5px', flexShrink: 0,
+                          background: isImportant ? '#ffcdd2' : '#e8f0fe',
+                          color: isImportant ? '#c62828' : '#1565c0',
+                          fontWeight: 600,
+                        }}>
+                          {name}
+                        </span>
+                      )}
+                      <span style={{ color: '#344054', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {scheduleTitle(s)}
+                      </span>
+                      {s.repeatType && (
+                        <span style={{ color: '#6a1b9a', fontSize: '10px', background: '#f3e5f5', borderRadius: '3px', padding: '0 4px', flexShrink: 0 }}>
+                          반복
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* 요일 헤더 */}
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
@@ -582,45 +667,6 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
             })}
           </div>
 
-          {/* 이번 달 일정 요약 */}
-          {schedules.length > 0 && (
-            <div style={{ padding: isMobile ? '0 16px 16px' : '0 20px 20px' }}>
-              <div style={{ fontSize: isMobile ? '12px' : '13px', color: '#9aa0a6', fontWeight: 600, marginBottom: '8px' }}>
-                {month}월 전체 일정 ({schedules.length}건)
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: isMobile ? '160px' : '200px', overflowY: 'auto' }}>
-                {schedules.map((s, si) => (
-                  <div key={s.id} style={{
-                    display: 'flex', gap: '8px', alignItems: 'center',
-                    padding: '5px 10px', borderRadius: '7px', background: '#f9f9fb',
-                    fontSize: '12px',
-                  }}>
-                    <span style={{
-                      width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
-                      background: catColor(s.category, si),
-                    }} />
-                    <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[s.userId] ?? ''}</span>
-                    <span style={{ color: '#9aa0a6', flexShrink: 0 }}>
-                      {s.eventDate.slice(5).replace('-', '/')}
-                      {s.endDate && s.endDate > s.eventDate ? ` ~ ${s.endDate.slice(5).replace('-', '/')}` : ''}
-                      {s.eventTime ? ` ${s.eventTime}` : ''}
-                    </span>
-                    {s.category && (
-                      <span style={{ color: '#1565c0', fontSize: '11px', background: '#e8f0fe', borderRadius: '4px', padding: '0 4px' }}>
-                        {s.category}
-                      </span>
-                    )}
-                    <span style={{ color: '#344054', fontWeight: 600 }}>{scheduleTitle(s)}</span>
-                    {s.repeatType && (
-                      <span style={{ color: '#6a1b9a', fontSize: '10px', background: '#f3e5f5', borderRadius: '3px', padding: '0 4px', flexShrink: 0 }}>
-                        반복
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
