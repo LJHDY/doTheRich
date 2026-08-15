@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Schedule } from '../types';
 import { getSchedules } from '../services/api';
 import ScheduleFormModal, { USER_EMOJI } from './ScheduleFormModal';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface Props {
   onClose: () => void;
@@ -14,6 +15,7 @@ const catColor = (cat: string | null, idx: number) =>
       : CAT_COLORS[idx % CAT_COLORS.length];
 
 const CalendarModal: React.FC<Props> = ({ onClose }) => {
+  const isMobile = useIsMobile();
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1); // 1~12
@@ -79,27 +81,28 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
         onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       >
         <div style={{
-          background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '560px',
+          background: '#fff', borderRadius: '16px', width: '100%',
+          maxWidth: isMobile ? '560px' : '860px',
           maxHeight: '92vh', overflowY: 'auto',
           boxShadow: '0 12px 48px rgba(0,0,0,0.18)',
         }}>
           {/* 헤더 */}
           <div style={{
-            padding: '16px 20px', borderBottom: '1px solid #f0f0f0',
+            padding: isMobile ? '16px 20px' : '20px 28px', borderBottom: '1px solid #f0f0f0',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             position: 'sticky', top: 0, background: '#fff', zIndex: 1,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button onClick={prevMonth} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#5f6368', lineHeight: 1 }}>‹</button>
-              <span style={{ fontWeight: 800, fontSize: '16px', color: '#1a3a5c', minWidth: '110px', textAlign: 'center' }}>
+              <button onClick={prevMonth} style={{ background: 'none', border: 'none', fontSize: isMobile ? '18px' : '22px', cursor: 'pointer', color: '#5f6368', lineHeight: 1 }}>‹</button>
+              <span style={{ fontWeight: 800, fontSize: isMobile ? '16px' : '20px', color: '#1a3a5c', minWidth: isMobile ? '110px' : '140px', textAlign: 'center' }}>
                 {year}년 {month}월
               </span>
-              <button onClick={nextMonth} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#5f6368', lineHeight: 1 }}>›</button>
+              <button onClick={nextMonth} style={{ background: 'none', border: 'none', fontSize: isMobile ? '18px' : '22px', cursor: 'pointer', color: '#5f6368', lineHeight: 1 }}>›</button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {loading && <span style={{ fontSize: '12px', color: '#9aa0a6' }}>불러오는 중…</span>}
               <button onClick={() => { setYear(now.getFullYear()); setMonth(now.getMonth() + 1); }}
-                style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dadce0', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>
+                style={{ padding: '4px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #dadce0', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>
                 오늘
               </button>
               <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6' }}>×</button>
@@ -109,12 +112,12 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
           {/* 요일 헤더 */}
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-            padding: '8px 12px 4px',
-            gap: '2px',
+            padding: isMobile ? '8px 12px 4px' : '10px 20px 6px',
+            gap: '4px',
           }}>
             {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
               <div key={d} style={{
-                textAlign: 'center', fontSize: '11px', fontWeight: 700,
+                textAlign: 'center', fontSize: isMobile ? '11px' : '13px', fontWeight: 700,
                 color: i === 0 ? '#E06060' : i === 6 ? '#1565c0' : '#9aa0a6',
                 padding: '4px 0',
               }}>{d}</div>
@@ -124,8 +127,8 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
           {/* 날짜 그리드 */}
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-            padding: '0 12px 16px',
-            gap: '3px',
+            padding: isMobile ? '0 12px 16px' : '0 20px 20px',
+            gap: isMobile ? '3px' : '5px',
           }}>
             {cells.map((day, idx) => {
               if (!day) return <div key={idx} />;
@@ -139,7 +142,8 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                   key={idx}
                   onClick={() => handleDayClick(day)}
                   style={{
-                    minHeight: '72px', padding: '5px 5px 4px',
+                    minHeight: isMobile ? '72px' : '108px',
+                    padding: isMobile ? '5px 5px 4px' : '7px 7px 5px',
                     borderRadius: '8px', cursor: 'pointer',
                     border: `1.5px solid ${isToday ? '#89CFF0' : '#f0f0f0'}`,
                     background: isToday ? '#f0f8fd' : '#fff',
@@ -151,18 +155,18 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                 >
                   <div style={{
                     fontWeight: isToday ? 800 : 500,
-                    fontSize: '13px',
+                    fontSize: isMobile ? '13px' : '15px',
                     color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
-                    marginBottom: '3px',
+                    marginBottom: '4px',
                   }}>{day}</div>
-                  {/* 일정 칩 — 최대 3개 표시 후 +N */}
+                  {/* 일정 칩 — 최대 3개(모바일) / 4개(데스크탑) 표시 후 +N */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    {daySched.slice(0, 3).map((s, si) => (
+                    {daySched.slice(0, isMobile ? 3 : 4).map((s, si) => (
                       <div key={s.id} style={{
-                        fontSize: '10px', lineHeight: '14px',
+                        fontSize: isMobile ? '10px' : '11px', lineHeight: isMobile ? '14px' : '16px',
                         background: catColor(s.category, si),
                         color: '#fff', borderRadius: '3px',
-                        padding: '1px 4px',
+                        padding: isMobile ? '1px 4px' : '2px 5px',
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         fontWeight: 600,
                       }}>
@@ -182,11 +186,11 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
 
           {/* 하단 이번 달 일정 요약 */}
           {schedules.length > 0 && (
-            <div style={{ padding: '0 16px 16px' }}>
-              <div style={{ fontSize: '12px', color: '#9aa0a6', fontWeight: 600, marginBottom: '8px' }}>
+            <div style={{ padding: isMobile ? '0 16px 16px' : '0 20px 20px' }}>
+              <div style={{ fontSize: isMobile ? '12px' : '13px', color: '#9aa0a6', fontWeight: 600, marginBottom: '8px' }}>
                 {month}월 전체 일정 ({schedules.length}건)
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '160px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: isMobile ? '160px' : '200px', overflowY: 'auto' }}>
                 {schedules.map((s, si) => (
                   <div key={s.id} style={{
                     display: 'flex', gap: '8px', alignItems: 'center',
