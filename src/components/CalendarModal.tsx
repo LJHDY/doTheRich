@@ -34,6 +34,8 @@ const NaverStatusBadge: React.FC<{
   const [calendars, setCalendars]               = useState<NaverCalendarItem[]>([]);
   const [loadingCals, setLoadingCals]           = useState(false);
   const [showCalPicker, setShowCalPicker]       = useState(false);
+  const [calError, setCalError]                 = useState(false);
+  const [manualId, setManualId]                 = useState('');
 
   const userStatus   = status?.[userId as 'ldy' | 'juhae'];
   const connected    = userStatus?.connected && userStatus?.valid;
@@ -55,11 +57,17 @@ const NaverStatusBadge: React.FC<{
   };
 
   const handleShowPicker = async () => {
-    if (showCalPicker) { setShowCalPicker(false); return; }
+    if (showCalPicker) { setShowCalPicker(false); setCalError(false); return; }
     setLoadingCals(true);
+    setCalError(false);
     try {
       const list = await getNaverCalendars(userId);
       setCalendars(list);
+      setShowCalPicker(true);
+      if (list.length === 0) setCalError(true);
+    } catch {
+      setCalendars([]);
+      setCalError(true);
       setShowCalPicker(true);
     } finally {
       setLoadingCals(false);
@@ -119,14 +127,14 @@ const NaverStatusBadge: React.FC<{
       </div>
 
       {/* 캘린더 목록 드롭다운 */}
-      {showCalPicker && calendars.length > 0 && (
+      {showCalPicker && (
         <div style={{
           marginLeft: '76px',
           border: '1px solid #dadce0', borderRadius: '8px',
           background: '#fff', overflow: 'hidden',
           boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
         }}>
-          {calendars.map(c => (
+          {calendars.length > 0 ? calendars.map(c => (
             <div
               key={c.calendarId}
               onClick={() => handleSelect(c.calendarId)}
@@ -145,7 +153,39 @@ const NaverStatusBadge: React.FC<{
               <span>{c.calendarName}</span>
               {c.calendarId === calendarId && <span style={{ marginLeft: 'auto', color: '#2e7d32' }}>✓</span>}
             </div>
-          ))}
+          )) : (
+            /* 목록 조회 실패 시 calendarId 직접 입력 */
+            <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {calError && (
+                <div style={{ fontSize: '11px', color: '#c00' }}>
+                  캘린더 목록을 불러오지 못했습니다. Calendar ID를 직접 입력해주세요.
+                </div>
+              )}
+              <div style={{ fontSize: '11px', color: '#5f6368' }}>
+                네이버 캘린더 앱 → 설정 → 캘린더 정보에서 ID를 확인할 수 있습니다.
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <input
+                  value={manualId}
+                  onChange={e => setManualId(e.target.value)}
+                  placeholder="예: AAAA-1234-BBBB"
+                  style={{
+                    flex: 1, padding: '5px 8px', fontSize: '12px',
+                    border: '1px solid #dadce0', borderRadius: '5px', outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => { if (manualId.trim()) handleSelect(manualId.trim()); }}
+                  disabled={!manualId.trim()}
+                  style={{
+                    padding: '5px 10px', fontSize: '12px', borderRadius: '5px',
+                    border: 'none', background: '#03C75A', color: '#fff',
+                    cursor: manualId.trim() ? 'pointer' : 'not-allowed', fontWeight: 700,
+                  }}
+                >저장</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
