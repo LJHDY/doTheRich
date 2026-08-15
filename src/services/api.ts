@@ -1277,8 +1277,14 @@ export const deleteSchedule = async (id: number): Promise<void> => {
 // ─── 네이버 캘린더 연동 ──────────────────────────────────────────────────────
 
 export interface NaverCalendarStatus {
-  ldy:   { connected: boolean; valid: boolean; expiresAt: string | null };
-  juhae: { connected: boolean; valid: boolean; expiresAt: string | null };
+  ldy:   { connected: boolean; valid: boolean; expiresAt: string | null; calendarId: string | null };
+  juhae: { connected: boolean; valid: boolean; expiresAt: string | null; calendarId: string | null };
+}
+
+export interface NaverCalendarItem {
+  calendarId:   string;
+  calendarName: string;
+  calendarType: string;
 }
 
 export const getNaverCalendarStatus = async (): Promise<NaverCalendarStatus> => {
@@ -1294,6 +1300,15 @@ export const getNaverCalendarAuthUrl = (userId: string): string => {
 
 export const disconnectNaverCalendar = async (userId: string): Promise<void> => {
   await api.delete(`/api/naver-calendar/disconnect/${userId}`);
+};
+
+export const getNaverCalendars = async (userId: string): Promise<NaverCalendarItem[]> => {
+  const { data } = await api.get(`/api/naver-calendar/calendars/${userId}`);
+  return data.calendars;
+};
+
+export const selectNaverCalendar = async (userId: string, calendarId: string): Promise<void> => {
+  await api.patch(`/api/naver-calendar/calendars/${userId}`, { calendarId });
 };
 
 export default api;

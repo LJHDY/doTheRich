@@ -1,6 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Schedule } from '../types';
-import { getNaverCalendarAuthUrl, getNaverCalendarStatus, getSchedules, NaverCalendarStatus, disconnectNaverCalendar } from '../services/api';
+import {
+  disconnectNaverCalendar,
+  getNaverCalendarAuthUrl,
+  getNaverCalendars,
+  getNaverCalendarStatus,
+  getSchedules,
+  NaverCalendarItem,
+  NaverCalendarStatus,
+  selectNaverCalendar,
+} from '../services/api';
 import ScheduleFormModal, { USER_EMOJI } from './ScheduleFormModal';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -14,20 +23,23 @@ const catColor = (cat: string | null, idx: number) =>
   cat ? CAT_COLORS[Math.abs(cat.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % CAT_COLORS.length]
       : CAT_COLORS[idx % CAT_COLORS.length];
 
-// 네이버 캘린더 연동 상태 뱃지
+// 네이버 캘린더 연동 상태 + 캘린더 선택 뱃지
 const NaverStatusBadge: React.FC<{
   userId: string;
   label: string;
   status: NaverCalendarStatus | null;
   onRefresh: () => void;
 }> = ({ userId, label, status, onRefresh }) => {
-  const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnecting, setDisconnecting]       = useState(false);
+  const [calendars, setCalendars]               = useState<NaverCalendarItem[]>([]);
+  const [loadingCals, setLoadingCals]           = useState(false);
+  const [showCalPicker, setShowCalPicker]       = useState(false);
 
-  const userStatus = status?.[userId as 'ldy' | 'juhae'];
-  const connected  = userStatus?.connected && userStatus?.valid;
+  const userStatus   = status?.[userId as 'ldy' | 'juhae'];
+  const connected    = userStatus?.connected && userStatus?.valid;
+  const calendarId   = userStatus?.calendarId;
 
   const handleConnect = () => {
-    // OAuth 시작 — 새 탭에서 열어 현재 앱 상태 유지
     window.open(getNaverCalendarAuthUrl(userId), '_blank', 'width=500,height=700');
   };
 
@@ -42,34 +54,99 @@ const NaverStatusBadge: React.FC<{
     }
   };
 
+  const handleShowPicker = async () => {
+    if (showCalPicker) { setShowCalPicker(false); return; }
+    setLoadingCals(true);
+    try {
+      const list = await getNaverCalendars(userId);
+      setCalendars(list);
+      setShowCalPicker(true);
+    } finally {
+      setLoadingCals(false);
+    }
+  };
+
+  const handleSelect = async (id: string) => {
+    await selectNaverCalendar(userId, id);
+    setShowCalPicker(false);
+    onRefresh();
+  };
+
+  const selectedName = calendars.find(c => c.calendarId === calendarId)?.calendarName;
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-      <span style={{ fontSize: '13px', color: '#344054' }}>{label}</span>
-      {connected ? (
-        <>
-          <span style={{
-            fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-            background: '#d4edda', color: '#155724', fontWeight: 600,
-          }}>연동됨</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span style={{ fontSize: '13px', color: '#344054', minWidth: '70px' }}>{label}</span>
+        {connected ? (
+          <>
+            <span style={{
+              fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+              background: '#d4edda', color: '#155724', fontWeight: 600,
+            }}>연동됨</span>
+            {/* 캘린더 선택 버튼 */}
+            <button
+              onClick={handleShowPicker}
+              disabled={loadingCals}
+              style={{
+                fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+                border: '1px solid #03C75A', background: showCalPicker ? '#03C75A' : '#fff',
+                color: showCalPicker ? '#fff' : '#03C75A', cursor: 'pointer', fontWeight: 600,
+              }}
+            >
+              {loadingCals ? '…' : (selectedName ? `📅 ${selectedName}` : '캘린더 선택')}
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              style={{
+                fontSize: '11px', padding: '2px 7px', borderRadius: '4px',
+                border: '1px solid #f5c6cb', background: '#fff8f8',
+                color: '#721c24', cursor: 'pointer',
+              }}
+            >해제</button>
+          </>
+        ) : (
           <button
-            onClick={handleDisconnect}
-            disabled={disconnecting}
+            onClick={handleConnect}
             style={{
-              fontSize: '11px', padding: '2px 7px', borderRadius: '4px',
-              border: '1px solid #f5c6cb', background: '#fff8f8',
-              color: '#721c24', cursor: 'pointer',
+              fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+              border: '1px solid #03C75A', background: '#fff',
+              color: '#03C75A', fontWeight: 700, cursor: 'pointer',
             }}
-          >해제</button>
-        </>
-      ) : (
-        <button
-          onClick={handleConnect}
-          style={{
-            fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-            border: '1px solid #03C75A', background: '#fff',
-            color: '#03C75A', fontWeight: 700, cursor: 'pointer',
-          }}
-        >N 연동</button>
+          >N 연동</button>
+        )}
+      </div>
+
+      {/* 캘린더 목록 드롭다운 */}
+      {showCalPicker && calendars.length > 0 && (
+        <div style={{
+          marginLeft: '76px',
+          border: '1px solid #dadce0', borderRadius: '8px',
+          background: '#fff', overflow: 'hidden',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+        }}>
+          {calendars.map(c => (
+            <div
+              key={c.calendarId}
+              onClick={() => handleSelect(c.calendarId)}
+              style={{
+                padding: '7px 12px', fontSize: '12px', cursor: 'pointer',
+                background: c.calendarId === calendarId ? '#e8f5e9' : '#fff',
+                color: c.calendarId === calendarId ? '#2e7d32' : '#344054',
+                fontWeight: c.calendarId === calendarId ? 700 : 400,
+                borderBottom: '1px solid #f0f0f0',
+                display: 'flex', alignItems: 'center', gap: '6px',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = c.calendarId === calendarId ? '#c8e6c9' : '#f8fbff'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = c.calendarId === calendarId ? '#e8f5e9' : '#fff'; }}
+            >
+              <span>📅</span>
+              <span>{c.calendarName}</span>
+              {c.calendarId === calendarId && <span style={{ marginLeft: 'auto', color: '#2e7d32' }}>✓</span>}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
