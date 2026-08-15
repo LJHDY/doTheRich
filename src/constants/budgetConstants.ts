@@ -191,6 +191,7 @@ export interface AssetColumn {
   label: string;    // 화면 표시명
   group: '즉시 사용 가능' | '즉시 사용 불가';
   codeKey: string;  // 공통코드 detail_code 영문 접두사 (ASSET_CELL 그룹, {codeKey}_{USER} 조합)
+  isDollar?: boolean; // true이면 USD로 입력·저장, 표시 시 KRW 환산 병기
 }
 
 export const ASSET_COLUMNS: AssetColumn[] = [
@@ -201,9 +202,9 @@ export const ASSET_COLUMNS: AssetColumn[] = [
   { key: '주택청약저축', label: '주택청약저축', group: '즉시 사용 불가', codeKey: 'HOUSING_SAVINGS' },
   { key: '퇴직연금',     label: '퇴직연금',     group: '즉시 사용 불가', codeKey: 'PENSION'        },
   { key: 'ISA',          label: 'ISA',          group: '즉시 사용 불가', codeKey: 'ISA'            },
-  { key: '미국주식',     label: '미국주식',     group: '즉시 사용 불가', codeKey: 'US_STOCK'       },
+  { key: '미국주식',     label: '미국주식',     group: '즉시 사용 불가', codeKey: 'US_STOCK',  isDollar: true },
   { key: '국채',         label: '국채',         group: '즉시 사용 불가', codeKey: 'GOV_BOND'       },
-  { key: '달러 현금',    label: '달러 현금',    group: '즉시 사용 불가', codeKey: 'DOLLAR_CASH'    },
+  { key: '달러 현금',    label: '달러 현금',    group: '즉시 사용 불가', codeKey: 'DOLLAR_CASH', isDollar: true },
 ];
 
 /**

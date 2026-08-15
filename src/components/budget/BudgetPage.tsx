@@ -2790,9 +2790,10 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
     return cell?.amount ?? 0;
   };
 
-  // 달러 현금은 USD → KRW 환산
+  // USD 컬럼(미국주식·달러 현금) → KRW 환산, 그 외 원화 그대로
+  const isUsdCol = (key: string) => ASSET_COLUMNS.find(c => c.key === key)?.isDollar === true;
   const toKrw = (key: string, amount: number) =>
-    key === '달러 현금' ? Math.round(amount * exchangeRate) : amount;
+    isUsdCol(key) ? Math.round(amount * exchangeRate) : amount;
 
   const assetGroupSubtotal = (group: string, userId: string) =>
     ASSET_COLUMNS.filter(c => c.group === group).reduce(
@@ -3006,9 +3007,10 @@ const AssetView: React.FC = () => {
   const getAmt = (date: string, userId: string, key: string) =>
     cellMap[date]?.[userId]?.[key] ?? 0;
 
-  // 달러 현금은 USD → KRW 환산, 그 외 원화 그대로
+  // USD 컬럼(미국주식·달러 현금) → KRW 환산, 그 외 원화 그대로
+  const isUsdCol = (key: string) => ASSET_COLUMNS.find(c => c.key === key)?.isDollar === true;
   const toKrw = (assetType: string, amount: number) =>
-    assetType === '달러 현금' ? Math.round(amount * exchangeRate) : amount;
+    isUsdCol(assetType) ? Math.round(amount * exchangeRate) : amount;
 
   const getKrw = (date: string, userId: string, key: string) =>
     toKrw(key, getAmt(date, userId, key));
@@ -3102,7 +3104,7 @@ const AssetView: React.FC = () => {
   // ── 차트 데이터 계산 — cellMap/dates를 직접 참조해 deps 명시 (eslint-disable 불필요) ──
   const chartDataByUser = useMemo(() => {
     const toKrwLocal = (assetType: string, amount: number) =>
-      assetType === '달러 현금' ? Math.round(amount * exchangeRate) : amount;
+      ASSET_COLUMNS.find(c => c.key === assetType)?.isDollar ? Math.round(amount * exchangeRate) : amount;
     const grandKrwLocal = (date: string, userId: string) =>
       ASSET_COLUMNS.reduce((s, c) => s + toKrwLocal(c.key, cellMap[date]?.[userId]?.[c.key] ?? 0), 0);
     return [...dates].reverse().map(date => {
@@ -3121,7 +3123,7 @@ const AssetView: React.FC = () => {
 
   const chartDataByLiquidity = useMemo(() => {
     const toKrwLocal = (assetType: string, amount: number) =>
-      assetType === '달러 현금' ? Math.round(amount * exchangeRate) : amount;
+      ASSET_COLUMNS.find(c => c.key === assetType)?.isDollar ? Math.round(amount * exchangeRate) : amount;
     const getKrwLocal = (date: string, userId: string, key: string) =>
       toKrwLocal(key, cellMap[date]?.[userId]?.[key] ?? 0);
     return [...dates].reverse().map(date => {
@@ -3313,7 +3315,7 @@ const AssetView: React.FC = () => {
 
           {/* 안내 */}
           <div style={{ fontSize: '11px', color: '#b0b8c4', textAlign: 'right', marginBottom: '6px' }}>
-            ✏️ 금액 셀 클릭하여 수정 · 달러 현금은 USD 금액 입력
+            ✏️ 금액 셀 클릭하여 수정 · 미국주식·달러 현금은 USD($) 금액 입력
           </div>
 
           {/* 메인 테이블 */}
@@ -3363,7 +3365,7 @@ const AssetView: React.FC = () => {
                   )}
 
                   {cols.map(col => {
-                    const isDollar = col.key === '달러 현금';
+                    const isDollar = col.isDollar === true;
                     const raw0 = getAmt(selectedDate, u0.id, col.key);
                     const raw1 = getAmt(selectedDate, u1.id, col.key);
                     const krw0 = toKrw(col.key, raw0);
@@ -3389,6 +3391,7 @@ const AssetView: React.FC = () => {
                         >
                           <span>{col.label}</span>
                           {isDollar && <span style={{ fontSize: '10px', color: '#9aa0a6', marginTop: '2px' }}>USD 입력 · 환율 {exchangeRate.toLocaleString()}원/$</span>}
+
                         </div>
                         <AssetCell
                           value={raw0} isEditing={isEdit0} editValue={editValue}
@@ -3640,7 +3643,7 @@ const AssetView: React.FC = () => {
                   </LineChart>
                 </ResponsiveContainer>
                 <div style={{ fontSize: '11px', color: '#9aa0a6', textAlign: 'right', marginTop: '8px' }}>
-                  Y축: 억 단위 · 달러 현금은 {exchangeRate.toLocaleString()}원/$ 환율 적용
+                  Y축: 억 단위 · 미국주식·달러 현금은 {exchangeRate.toLocaleString()}원/$ 환율 적용
                 </div>
               </div>
             )}
