@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Schedule } from '../types';
 import {
   disconnectNaverCalendar,
@@ -220,6 +220,21 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [naverStatus, setNaverStatus]   = useState<NaverCalendarStatus | null>(null);
   const [showNaverPanel, setShowNaverPanel] = useState(false);
+  const [showPicker, setShowPicker]     = useState(false);
+  const [pickerYear, setPickerYear]     = useState(now.getFullYear());
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  // 피커 바깥 클릭 시 닫기
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showPicker]);
 
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
   const todayStr  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -308,12 +323,73 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             position: 'sticky', top: 0, background: '#fff', zIndex: 1,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }} ref={pickerRef}>
               <button onClick={prevMonth} style={{ background: 'none', border: 'none', fontSize: isMobile ? '18px' : '22px', cursor: 'pointer', color: '#5f6368', lineHeight: 1 }}>‹</button>
-              <span style={{ fontWeight: 800, fontSize: isMobile ? '16px' : '20px', color: '#1a3a5c', minWidth: isMobile ? '110px' : '140px', textAlign: 'center' }}>
-                {year}년 {month}월
-              </span>
+
+              {/* 연월 클릭 → 피커 드롭다운 */}
+              <button
+                onClick={() => { setPickerYear(year); setShowPicker(v => !v); }}
+                style={{
+                  background: showPicker ? '#f0f8fd' : 'none',
+                  border: showPicker ? '1px solid #89CFF0' : '1px solid transparent',
+                  borderRadius: '8px',
+                  padding: '4px 10px',
+                  fontWeight: 800, fontSize: isMobile ? '16px' : '20px',
+                  color: '#1a3a5c',
+                  minWidth: isMobile ? '110px' : '140px', textAlign: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                {year}년 {month}월 ▾
+              </button>
+
               <button onClick={nextMonth} style={{ background: 'none', border: 'none', fontSize: isMobile ? '18px' : '22px', cursor: 'pointer', color: '#5f6368', lineHeight: 1 }}>›</button>
+
+              {/* 연월 피커 드롭다운 */}
+              {showPicker && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 200,
+                  background: '#fff', border: '1px solid #dadce0', borderRadius: '14px',
+                  boxShadow: '0 6px 24px rgba(0,0,0,0.14)', padding: '16px 14px',
+                  minWidth: '220px',
+                }}>
+                  {/* 연도 선택 */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                    <button
+                      onClick={() => setPickerYear(y => y - 1)}
+                      style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#5f6368', lineHeight: 1, padding: '2px 8px' }}
+                    >‹</button>
+                    <span style={{ fontWeight: 800, fontSize: '16px', color: '#1a3a5c' }}>{pickerYear}년</span>
+                    <button
+                      onClick={() => setPickerYear(y => y + 1)}
+                      style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#5f6368', lineHeight: 1, padding: '2px 8px' }}
+                    >›</button>
+                  </div>
+
+                  {/* 월 그리드 4×3 */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                      const isSelected = pickerYear === year && m === month;
+                      const isToday    = pickerYear === now.getFullYear() && m === now.getMonth() + 1;
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => { setYear(pickerYear); setMonth(m); setShowPicker(false); }}
+                          style={{
+                            padding: '8px 2px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer',
+                            border: isToday && !isSelected ? '1px solid #89CFF0' : '1px solid transparent',
+                            background: isSelected ? '#89CFF0' : '#fff',
+                            color:      isSelected ? '#fff' : '#344054',
+                            fontWeight: isSelected ? 700 : 400,
+                          }}
+                        >
+                          {m}월
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {loading && <span style={{ fontSize: '12px', color: '#9aa0a6' }}>불러오는 중…</span>}
