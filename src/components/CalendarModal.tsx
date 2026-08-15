@@ -462,7 +462,6 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                           {lane.map(bar => {
                             const { event, startCol, endCol } = bar;
                             const color = catColor(event.category, 0);
-                            const isStart = true; // 이 주에서의 시작 여부 (항상 true — 레인 내 유일)
                             const isContinued = event.eventDate < (dates.find(Boolean) ?? '');
                             return (
                               <div
