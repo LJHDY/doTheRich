@@ -293,9 +293,13 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
         onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       >
         <div style={{
-          background: '#fff', borderRadius: '16px', width: '100%',
-          maxWidth: isMobile ? '560px' : '860px',
-          maxHeight: '92vh', overflowY: 'auto',
+          background: '#fff',
+          borderRadius: isMobile ? '0' : '16px',
+          width: '100%',
+          maxWidth: isMobile ? '100%' : '860px',
+          height: isMobile ? '100%' : undefined,
+          maxHeight: isMobile ? '100%' : '92vh',
+          overflowY: 'auto',
           boxShadow: '0 12px 48px rgba(0,0,0,0.18)',
         }}>
           {/* 헤더 */}

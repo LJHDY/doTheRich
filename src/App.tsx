@@ -644,6 +644,12 @@ const App: React.FC = () => {
                       setMobileMenuOpen(false);
                     },
                   },
+                  {
+                    label: '📅 달력',
+                    active: calendarOpen,
+                    activeColor: '#2a6090', activeBg: '#e0f8ff',
+                    onClick: () => { setCalendarOpen(v => !v); setMobileMenuOpen(false); },
+                  },
                 ] as { label: string; active: boolean; activeColor: string; activeBg: string; onClick: () => void }[]).map(item => (
                   <button
                     key={item.label}
