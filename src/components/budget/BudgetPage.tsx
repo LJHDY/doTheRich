@@ -3102,12 +3102,28 @@ const AssetView: React.FC = () => {
   const gt1 = grandKrw(selectedDate, u1.id);
   const gtSum = gt0 + gt1;
 
-  // ── 차트 데이터 계산 — cellMap/dates를 직접 참조해 deps 명시 (eslint-disable 불필요) ──
+  // ── 그래프 옵션 상태 ──────────────────────────────────────────────────
+  const [chartMode, setChartMode] = useState<'USER' | 'LIQUIDITY'>('USER');
+  // 제외할 자산 항목 키 (기본: 보증금·퇴직금·주택청약저축 — 변동이 적어 그래프 왜곡 유발)
+  const [chartExcludeKeys, setChartExcludeKeys] = useState<Set<string>>(
+    new Set(['보증금', '퇴직금', '주택청약저축'])
+  );
+  const toggleChartExclude = (key: string) =>
+    setChartExcludeKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  // 유저별 모드에서 개인 라인 표시 여부 (false = 합산만)
+  const [chartShowSplit, setChartShowSplit] = useState(true);
+
+  // ── 차트 데이터 계산 — cellMap/dates를 직접 참조해 deps 명시 ──────────
   const chartDataByUser = useMemo(() => {
     const toKrwLocal = (assetType: string, amount: number) =>
       ASSET_COLUMNS.find(c => c.key === assetType)?.isDollar ? Math.round(amount * exchangeRate) : amount;
+    const cols = ASSET_COLUMNS.filter(c => !chartExcludeKeys.has(c.key));
     const grandKrwLocal = (date: string, userId: string) =>
-      ASSET_COLUMNS.reduce((s, c) => s + toKrwLocal(c.key, cellMap[date]?.[userId]?.[c.key] ?? 0), 0);
+      cols.reduce((s, c) => s + toKrwLocal(c.key, cellMap[date]?.[userId]?.[c.key] ?? 0), 0);
     return [...dates].reverse().map(date => {
       const v0 = grandKrwLocal(date, u0.id);
       const v1 = grandKrwLocal(date, u1.id);
@@ -3120,19 +3136,20 @@ const AssetView: React.FC = () => {
         '합산': toUk(v0 + v1),
       };
     });
-  }, [cellMap, dates, exchangeRate, u0, u1]);
+  }, [cellMap, dates, exchangeRate, u0, u1, chartExcludeKeys]);
 
   const chartDataByLiquidity = useMemo(() => {
     const toKrwLocal = (assetType: string, amount: number) =>
       ASSET_COLUMNS.find(c => c.key === assetType)?.isDollar ? Math.round(amount * exchangeRate) : amount;
     const getKrwLocal = (date: string, userId: string, key: string) =>
       toKrwLocal(key, cellMap[date]?.[userId]?.[key] ?? 0);
+    const cols = ASSET_COLUMNS.filter(c => !chartExcludeKeys.has(c.key));
     return [...dates].reverse().map(date => {
       const toUk = (v: number) => Math.round(v / 1e6) / 100;
-      const liquid = ASSET_COLUMNS
+      const liquid = cols
         .filter(c => c.group === '즉시 사용 가능')
         .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrwLocal(date, u.id, c.key), 0), 0);
-      const illiquid = ASSET_COLUMNS
+      const illiquid = cols
         .filter(c => c.group === '즉시 사용 불가')
         .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrwLocal(date, u.id, c.key), 0), 0);
       return {
@@ -3143,9 +3160,7 @@ const AssetView: React.FC = () => {
         '합산': toUk(liquid + illiquid),
       };
     });
-  }, [cellMap, dates, exchangeRate]);
-
-  const [chartMode, setChartMode] = useState<'USER' | 'LIQUIDITY'>('USER');
+  }, [cellMap, dates, exchangeRate, chartExcludeKeys]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6' }}>불러오는 중…</div>;
 
@@ -3525,7 +3540,7 @@ const AssetView: React.FC = () => {
                         {u1.name} <b style={{ color: '#344054' }}>{v1 ? formatAmountKorean(v1) : '—'}</b>
                       </div>
                       <span style={{ fontSize: '12px', fontWeight: 600, color: diff === null ? '#9aa0a6' : diff >= 0 ? '#4CAF50' : '#E06060' }}>
-                        {diff === null ? '—' : `${diff >= 0 ? '+' : ''}${(diff / 1e8).toFixed(1)}억`}
+                        {diff === null ? '—' : `${diff >= 0 ? '+' : '-'}${formatAmountKorean(Math.abs(diff))}`}
                       </span>
                     </div>
                   </div>
@@ -3581,7 +3596,7 @@ const AssetView: React.FC = () => {
                         textAlign: 'right', fontWeight: 600,
                         color: diff === null ? '#9aa0a6' : diff >= 0 ? '#4CAF50' : '#E06060',
                       }}>
-                        {diff === null ? '—' : `${diff >= 0 ? '+' : ''}${(diff / 1e8).toFixed(2)}억`}
+                        {diff === null ? '—' : `${diff >= 0 ? '+' : '-'}${formatAmountKorean(Math.abs(diff))}`}
                       </span>
                     </div>
                   );
@@ -3596,7 +3611,7 @@ const AssetView: React.FC = () => {
         {subTab === 'CHART' && (
           <div>
             {/* 모드 토글 */}
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
               {([['USER', '유저별'], ['LIQUIDITY', '유동성별']] as ['USER' | 'LIQUIDITY', string][]).map(([m, label]) => (
                 <button key={m} onClick={() => setChartMode(m)} style={{
                   padding: '6px 16px', fontSize: '12px', fontWeight: chartMode === m ? 700 : 400,
@@ -3606,6 +3621,35 @@ const AssetView: React.FC = () => {
                   cursor: 'pointer',
                 }}>{label}</button>
               ))}
+              {/* 유저별 모드에서만: 합산만/개인+합산 토글 */}
+              {chartMode === 'USER' && (
+                <button onClick={() => setChartShowSplit(p => !p)} style={{
+                  padding: '6px 16px', fontSize: '12px', fontWeight: chartShowSplit ? 400 : 700,
+                  borderRadius: '20px', border: `1px solid ${chartShowSplit ? '#dadce0' : '#4CAF50'}`,
+                  background: chartShowSplit ? '#fff' : '#4CAF50',
+                  color: chartShowSplit ? '#5f6368' : '#fff',
+                  cursor: 'pointer',
+                }}>{chartShowSplit ? '합산만 보기' : '개인별 보기'}</button>
+              )}
+            </div>
+
+            {/* 자산 항목 제외 토글 칩 */}
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: '#9aa0a6', marginRight: '2px' }}>제외:</span>
+              {ASSET_COLUMNS.map(col => {
+                const excluded = chartExcludeKeys.has(col.key);
+                return (
+                  <button key={col.key} onClick={() => toggleChartExclude(col.key)} style={{
+                    padding: '3px 10px', fontSize: '11px',
+                    borderRadius: '12px',
+                    border: `1px solid ${excluded ? '#dadce0' : '#1565c0'}`,
+                    background: excluded ? '#f5f5f5' : '#e8f0fe',
+                    color: excluded ? '#aaa' : '#1565c0',
+                    textDecoration: excluded ? 'line-through' : 'none',
+                    cursor: 'pointer',
+                  }}>{col.label}</button>
+                );
+              })}
             </div>
 
             {dates.length < 2 ? (
@@ -3633,8 +3677,8 @@ const AssetView: React.FC = () => {
                     />
                     <Legend wrapperStyle={{ fontSize: '12px' }} />
                     {chartMode === 'USER' ? (<>
-                      <Line type="monotone" dataKey={u0.name} stroke="#1565c0" strokeWidth={2} dot={{ r: 4 }} />
-                      <Line type="monotone" dataKey={u1.name} stroke="#E06060" strokeWidth={2} dot={{ r: 4 }} />
+                      {chartShowSplit && <Line type="monotone" dataKey={u0.name} stroke="#1565c0" strokeWidth={2} dot={{ r: 4 }} />}
+                      {chartShowSplit && <Line type="monotone" dataKey={u1.name} stroke="#E06060" strokeWidth={2} dot={{ r: 4 }} />}
                       <Line type="monotone" dataKey="합산" stroke="#4CAF50" strokeWidth={2.5} dot={{ r: 5 }} />
                     </>) : (<>
                       <Line type="monotone" dataKey="즉시 사용 가능" stroke="#4CAF50" strokeWidth={2} dot={{ r: 4 }} />
