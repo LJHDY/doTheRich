@@ -3035,9 +3035,10 @@ const AssetView: React.FC = () => {
   const saveEdit = async () => {
     if (!editingCell || saving) return;
     const { userId, assetKey } = editingCell;
+    const isDollarCell = ASSET_COLUMNS.find(c => c.key === assetKey)?.isDollar === true;
     const amount = editValue
       .split(',')
-      .map(s => Number(s.trim().replace(/[^0-9]/g, '')) || 0)
+      .map(s => Number(s.trim().replace(isDollarCell ? /[^0-9.]/g : /[^0-9]/g, '')) || 0)
       .reduce((a, b) => a + b, 0);
     setSaving(true);
     try {
