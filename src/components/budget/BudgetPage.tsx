@@ -46,6 +46,7 @@ import {
   createCommonCode,
   updateCommonCode,
   deleteCommonCode,
+  invalidateCommonCodeCache,
   getFinancialReports,
   generateFinancialReport,
   FinancialReport as FinancialReportType,
@@ -1990,6 +1991,7 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       detail_code_name: dn,
       sort_order: Number(newDetailSort) || 0,
     });
+    invalidateCommonCodeCache(gc);
     setCodes(prev => [...prev, created]);
     setNewDetailCode('');
     setNewDetailName('');
@@ -2004,6 +2006,7 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const dn = editingName.trim();
     if (!dn) return;
     const updated = await updateCommonCode(id, { detail_code_name: dn, sort_order: Number(editingSort) || 0 });
+    invalidateCommonCodeCache(updated.commonCode);
     setCodes(prev => prev.map(c => c.id === id ? updated : c));
     setEditingId(null);
   };
@@ -2011,6 +2014,7 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const handleDelete = async (id: number, name: string) => {
     if (!window.confirm(`'${name}' 상세코드를 삭제하시겠습니까?`)) return;
     await deleteCommonCode(id);
+    invalidateCommonCodeCache(selectedGroup || undefined);
     setCodes(prev => prev.filter(c => c.id !== id));
   };
 

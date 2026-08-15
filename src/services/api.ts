@@ -1075,11 +1075,27 @@ const toCommonCode = (item: any): CommonCode => ({
   createdAt: item.created_at,
 });
 
-/** 공통코드 목록 조회 — common_code 파라미터로 그룹 필터 가능 */
-export const getCommonCodes = async (commonCode?: string): Promise<CommonCode[]> => {
-  const params = commonCode ? { common_code: commonCode } : {};
-  const { data } = await api.get('/api/common-codes', { params });
-  return data.map(toCommonCode);
+// 공통코드 인메모리 캐시 — 앱 실행 중 최초 1회만 API 호출, Promise 자체를 캐싱해 동시 중복 요청 방지
+const _commonCodeCache = new Map<string, Promise<CommonCode[]>>();
+
+/** 공통코드 목록 조회 — common_code 파라미터로 그룹 필터 가능 (결과 캐시, 새로고침 시 초기화) */
+export const getCommonCodes = (commonCode?: string): Promise<CommonCode[]> => {
+  const key = commonCode ?? '__all__';
+  if (!_commonCodeCache.has(key)) {
+    const params = commonCode ? { common_code: commonCode } : {};
+    _commonCodeCache.set(key, api.get('/api/common-codes', { params }).then(r => r.data.map(toCommonCode)));
+  }
+  return _commonCodeCache.get(key)!;
+};
+
+/** 공통코드 캐시 무효화 — 등록/수정/삭제 후 호출해 다음 조회 시 재요청 */
+export const invalidateCommonCodeCache = (commonCode?: string) => {
+  if (commonCode) {
+    _commonCodeCache.delete(commonCode);
+    _commonCodeCache.delete('__all__');
+  } else {
+    _commonCodeCache.clear();
+  }
 };
 
 /** 공통코드 등록 */
