@@ -3957,7 +3957,10 @@ const AssetCell: React.FC<{
   onDetailClick?: () => void;
 }> = ({ value, isEditing, editValue, onStartEdit, onEditChange, onSave, onCancel, saving, accentColor, isDollar, exchangeRate, onDetailClick }) => {
   if (isEditing) {
-    const parts = editValue.split(',').map(s => Number(s.trim().replace(/[^0-9]/g, '')) || 0);
+    // USD: 소수점 허용 / 원화: 정수만
+    const parts = isDollar
+      ? editValue.split(',').map(s => Number(s.trim().replace(/[^0-9.]/g, '')) || 0)
+      : editValue.split(',').map(s => Number(s.trim().replace(/[^0-9]/g, '')) || 0);
     const previewSum = parts.reduce((a, b) => a + b, 0);
     const showPreview = editValue.includes(',') && previewSum > 0;
     const krwPreview = isDollar && exchangeRate ? Math.round(previewSum * exchangeRate) : null;
@@ -3967,7 +3970,7 @@ const AssetCell: React.FC<{
         <input
           type="text"
           value={editValue} autoFocus placeholder={isDollar ? '$금액' : '숫자, 숫자, ...'}
-          onChange={e => onEditChange(e.target.value.replace(/[^0-9,\s]/g, ''))}
+          onChange={e => onEditChange(e.target.value.replace(isDollar ? /[^0-9.,\s]/g : /[^0-9,\s]/g, ''))}
           onKeyDown={e => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel(); }}
           onBlur={onSave}
           style={{
