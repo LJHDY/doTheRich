@@ -26,6 +26,23 @@ const catColor = (cat: string | null, idx: number) =>
 const scheduleTitle = (s: { title: string; category: string | null }) =>
   s.category === 'IMPORTANT' ? `${s.title} ⭐️` : s.title;
 
+// 반복 패턴 날짜 매칭 — 모듈 레벨로 분리해 useMemo 클로저 문제 방지
+function isEventActiveOn(s: Schedule, target: string): boolean {
+  if (target < s.eventDate) return false;
+  switch (s.repeatType) {
+    case 'weekly': {
+      const diffMs = new Date(target + 'T00:00:00').getTime() - new Date(s.eventDate + 'T00:00:00').getTime();
+      return Math.round(diffMs / 86400000) % 7 === 0;
+    }
+    case 'monthly':
+      return target.slice(8) === s.eventDate.slice(8);   // DD 일치
+    case 'yearly':
+      return target.slice(5) === s.eventDate.slice(5);   // MM-DD 일치
+    default:
+      return false;
+  }
+}
+
 // 다일 이벤트 바 정보
 interface BarInfo {
   event: Schedule;
@@ -275,25 +292,6 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
     loadNaverStatus();
   }, [loadNaverStatus]);
 
-  // 반복 패턴 날짜 매칭 — 백엔드 schedule_service._event_active_on 과 동일 로직
-  const isEventActiveOn = (s: Schedule, target: string): boolean => {
-    if (target < s.eventDate) return false;
-    switch (s.repeatType) {
-      case 'weekly': {
-        const t = new Date(target + 'T00:00:00');
-        const e = new Date(s.eventDate + 'T00:00:00');
-        const diffDays = Math.round((t.getTime() - e.getTime()) / 86400000);
-        return diffDays % 7 === 0;
-      }
-      case 'monthly':
-        return target.slice(8) === s.eventDate.slice(8); // DD 일치
-      case 'yearly':
-        return target.slice(5) === s.eventDate.slice(5); // MM-DD 일치
-      default:
-        return false;
-    }
-  };
-
   // 날짜 → 해당 날짜에 걸치는 모든 일정 맵 (반복/다일 이벤트 모두 확장)
   const daysInMonth = new Date(year, month, 0).getDate();
   const schedulesByDate = useMemo(() => {
@@ -301,7 +299,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
     const map: Record<string, Schedule[]> = {};
     schedules.forEach(s => {
       if (s.repeatType) {
-        // 반복 이벤트: 이번 달 전체 날짜를 순회하며 해당 날짜에 발생하는지 확인
+        // 반복 이벤트: 이번 달 전체 날짜를 순회하며 패턴 매칭
         for (let d = 1; d <= daysInMonth; d++) {
           const ds = `${year}-${pad2(month)}-${pad2(d)}`;
           if (isEventActiveOn(s, ds)) (map[ds] ??= []).push(s);
@@ -319,7 +317,6 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
       }
     });
     return map;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, year, month, daysInMonth]);
 
   // 달력 셀 배열 (null=빈칸)
@@ -342,12 +339,18 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
 
   const selectedSchedules = selectedDate ? (schedulesByDate[selectedDate] ?? []) : [];
 
-  // 이번 달에 실제로 발생하는 일정 목록 (반복 이벤트는 이번 달에 1회 이상 있는 것만)
-  const schedulesThisMonth = schedules.filter(s => {
-    if (!s.repeatType) return true; // 일반 이벤트는 백엔드가 이미 이번 달 것만 반환
-    const prefix = `${year}-${pad(month)}`;
-    return Object.keys(schedulesByDate).some(d => d.startsWith(prefix) && (schedulesByDate[d] ?? []).some(x => x.id === s.id));
-  });
+  // 이번 달에 실제로 발생하는 일정 목록
+  // 반복 이벤트는 isEventActiveOn으로 직접 확인 (schedulesByDate 우회 — 클로저 타이밍 문제 방지)
+  const schedulesThisMonth = useMemo(() => {
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+    return schedules.filter(s => {
+      if (!s.repeatType) return true; // 일반 이벤트는 백엔드가 이번 달 것만 반환
+      for (let d = 1; d <= daysInMonth; d++) {
+        if (isEventActiveOn(s, `${year}-${pad2(month)}-${pad2(d)}`)) return true;
+      }
+      return false;
+    });
+  }, [schedules, year, month, daysInMonth]);
 
   return (
     <>
