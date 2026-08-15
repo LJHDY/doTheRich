@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Schedule } from '../types';
+import { CommonCode, Schedule } from '../types';
 import { createSchedule, deleteSchedule, getCommonCodes, updateSchedule } from '../services/api';
 import { BUDGET_USER_STORAGE_KEY, BUDGET_USERS } from '../constants/budgetConstants';
 
@@ -29,19 +29,24 @@ const emptyForm = (date: string, userId: string) => ({
 
 const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved }) => {
   const userId = localStorage.getItem(BUDGET_USER_STORAGE_KEY) || BUDGET_USERS[0].id;
-  const [categories, setCategories] = useState<string[]>([]);
+  // CommonCode 객체로 관리 — detailCode를 DB에 저장, detailCodeName을 UI에 표시
+  const [catCodes, setCatCodes] = useState<CommonCode[]>([]);
   const [form, setForm] = useState(emptyForm(date, userId));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // SCHEDULE_CATEGORY 공통코드 로드
-    getCommonCodes('SCHEDULE_CATEGORY').then(codes =>
-      setCategories(codes.map(c => c.detailCodeName))
+    // CALENDAR_CATEGORY 공통코드 로드 (sortOrder 오름차순)
+    getCommonCodes('CALENDAR_CATEGORY').then(codes =>
+      setCatCodes([...codes].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)))
     ).catch(() => {});
     titleRef.current?.focus();
   }, []);
+
+  // detailCode → detailCodeName 역조회 (저장된 값 표시용)
+  const codeToName = (code: string | null) =>
+    catCodes.find(c => c.detailCode === code)?.detailCodeName ?? code ?? '';
 
   const resetForm = () => {
     setForm(emptyForm(date, userId));
@@ -51,12 +56,12 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
   const startEdit = (s: Schedule) => {
     setEditingId(s.id);
     setForm({
-      userId: s.userId,
-      title: s.title,
+      userId:      s.userId,
+      title:       s.title,
       description: s.description || '',
-      eventDate: s.eventDate,
-      eventTime: s.eventTime || '',
-      category: s.category || '',
+      eventDate:   s.eventDate,
+      eventTime:   s.eventTime || '',
+      category:    s.category || '',   // DB에 detailCode로 저장되어 있음
     });
     titleRef.current?.focus();
   };
@@ -71,7 +76,7 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
         description: form.description.trim() || undefined,
         eventDate:   form.eventDate,
         eventTime:   form.eventTime || undefined,
-        category:    form.category || undefined,
+        category:    form.category || undefined,  // detailCode 저장
       };
       if (editingId) {
         await updateSchedule(editingId, payload);
@@ -96,7 +101,6 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
     const [y, m, d] = date.split('-');
     return `${y}년 ${Number(m)}월 ${Number(d)}일`;
   })();
-
 
   return (
     <div
@@ -145,7 +149,8 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
                     )}
                     {s.category && (
                       <span style={{ fontSize: '11px', color: '#1565c0', background: '#e8f0fe', borderRadius: '4px', padding: '1px 5px' }}>
-                        {s.category}
+                        {/* DB에 detailCode 저장 → 화면엔 detailCodeName 표시 */}
+                        {codeToName(s.category)}
                       </span>
                     )}
                     <span style={{ fontSize: '13px', fontWeight: 600, color: '#1a3a5c' }}>{s.title}</span>
@@ -208,7 +213,12 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
               style={{ ...INPUT_STYLE, flex: 1 }}
             >
               <option value="">카테고리 선택</option>
-              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              {/* value=detailCode, label=detailCodeName */}
+              {catCodes.map(c => (
+                <option key={c.detailCode} value={c.detailCode}>
+                  {c.detailCodeName}
+                </option>
+              ))}
             </select>
           </div>
 
