@@ -1281,11 +1281,6 @@ export interface NaverCalendarStatus {
   juhae: { connected: boolean; valid: boolean; expiresAt: string | null; calendarId: string | null };
 }
 
-export interface NaverCalendarItem {
-  calendarId:   string;
-  calendarName: string;
-  calendarType: string;
-}
 
 export const getNaverCalendarStatus = async (): Promise<NaverCalendarStatus> => {
   const { data } = await api.get('/api/naver-calendar/status');
@@ -1300,11 +1295,6 @@ export const getNaverCalendarAuthUrl = (userId: string): string => {
 
 export const disconnectNaverCalendar = async (userId: string): Promise<void> => {
   await api.delete(`/api/naver-calendar/disconnect/${userId}`);
-};
-
-export const getNaverCalendars = async (userId: string): Promise<NaverCalendarItem[]> => {
-  const { data } = await api.get(`/api/naver-calendar/calendars/${userId}`);
-  return data.calendars;
 };
 
 export const selectNaverCalendar = async (userId: string, calendarId: string): Promise<void> => {

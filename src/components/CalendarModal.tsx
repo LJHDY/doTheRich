@@ -3,10 +3,8 @@ import { Schedule } from '../types';
 import {
   disconnectNaverCalendar,
   getNaverCalendarAuthUrl,
-  getNaverCalendars,
   getNaverCalendarStatus,
   getSchedules,
-  NaverCalendarItem,
   NaverCalendarStatus,
   selectNaverCalendar,
 } from '../services/api';
@@ -30,16 +28,14 @@ const NaverStatusBadge: React.FC<{
   status: NaverCalendarStatus | null;
   onRefresh: () => void;
 }> = ({ userId, label, status, onRefresh }) => {
-  const [disconnecting, setDisconnecting]       = useState(false);
-  const [calendars, setCalendars]               = useState<NaverCalendarItem[]>([]);
-  const [loadingCals, setLoadingCals]           = useState(false);
-  const [showCalPicker, setShowCalPicker]       = useState(false);
-  const [calError, setCalError]                 = useState(false);
-  const [manualId, setManualId]                 = useState('');
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [showInput, setShowInput]         = useState(false);
+  const [inputId, setInputId]             = useState('');
+  const [saving, setSaving]               = useState(false);
 
-  const userStatus   = status?.[userId as 'ldy' | 'juhae'];
-  const connected    = userStatus?.connected && userStatus?.valid;
-  const calendarId   = userStatus?.calendarId;
+  const userStatus = status?.[userId as 'ldy' | 'juhae'];
+  const connected  = userStatus?.connected && userStatus?.valid;
+  const calendarId = userStatus?.calendarId;
 
   const handleConnect = () => {
     window.open(getNaverCalendarAuthUrl(userId), '_blank', 'width=500,height=700');
@@ -56,35 +52,22 @@ const NaverStatusBadge: React.FC<{
     }
   };
 
-  const handleShowPicker = async () => {
-    if (showCalPicker) { setShowCalPicker(false); setCalError(false); return; }
-    setLoadingCals(true);
-    setCalError(false);
+  const handleSaveId = async () => {
+    if (!inputId.trim()) return;
+    setSaving(true);
     try {
-      const list = await getNaverCalendars(userId);
-      setCalendars(list);
-      setShowCalPicker(true);
-      if (list.length === 0) setCalError(true);
-    } catch {
-      setCalendars([]);
-      setCalError(true);
-      setShowCalPicker(true);
+      await selectNaverCalendar(userId, inputId.trim());
+      setShowInput(false);
+      setInputId('');
+      onRefresh();
     } finally {
-      setLoadingCals(false);
+      setSaving(false);
     }
   };
 
-  const handleSelect = async (id: string) => {
-    await selectNaverCalendar(userId, id);
-    setShowCalPicker(false);
-    onRefresh();
-  };
-
-  const selectedName = calendars.find(c => c.calendarId === calendarId)?.calendarName;
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '13px', color: '#344054', minWidth: '70px' }}>{label}</span>
         {connected ? (
           <>
@@ -92,17 +75,18 @@ const NaverStatusBadge: React.FC<{
               fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
               background: '#d4edda', color: '#155724', fontWeight: 600,
             }}>연동됨</span>
-            {/* 캘린더 선택 버튼 */}
+            {/* 선택된 calendarId 표시 / 설정 버튼 */}
             <button
-              onClick={handleShowPicker}
-              disabled={loadingCals}
+              onClick={() => { setShowInput(v => !v); setInputId(calendarId ?? ''); }}
               style={{
                 fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-                border: '1px solid #03C75A', background: showCalPicker ? '#03C75A' : '#fff',
-                color: showCalPicker ? '#fff' : '#03C75A', cursor: 'pointer', fontWeight: 600,
+                border: '1px solid #03C75A',
+                background: showInput ? '#03C75A' : '#fff',
+                color: showInput ? '#fff' : '#03C75A',
+                cursor: 'pointer', fontWeight: 600,
               }}
             >
-              {loadingCals ? '…' : (selectedName ? `📅 ${selectedName}` : '캘린더 선택')}
+              {calendarId ? `📅 ${calendarId.slice(0, 12)}…` : '캘린더 ID 설정'}
             </button>
             <button
               onClick={handleDisconnect}
@@ -126,66 +110,38 @@ const NaverStatusBadge: React.FC<{
         )}
       </div>
 
-      {/* 캘린더 목록 드롭다운 */}
-      {showCalPicker && (
+      {/* calendarId 직접 입력 — 네이버 캘린더 API에 목록 조회 기능 없음 */}
+      {showInput && connected && (
         <div style={{
-          marginLeft: '76px',
+          marginLeft: '76px', padding: '10px 12px',
           border: '1px solid #dadce0', borderRadius: '8px',
-          background: '#fff', overflow: 'hidden',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+          background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          display: 'flex', flexDirection: 'column', gap: '6px',
         }}>
-          {calendars.length > 0 ? calendars.map(c => (
-            <div
-              key={c.calendarId}
-              onClick={() => handleSelect(c.calendarId)}
+          <div style={{ fontSize: '11px', color: '#5f6368' }}>
+            미입력 시 기본 캘린더(내 캘린더)에 등록됩니다.<br />
+            특정 캘린더에 넣으려면 네이버 캘린더 웹 → 캘린더 설정 → URL에서 calendarId를 확인하세요.
+          </div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <input
+              value={inputId}
+              onChange={e => setInputId(e.target.value)}
+              placeholder="비워두면 기본 캘린더 사용"
               style={{
-                padding: '7px 12px', fontSize: '12px', cursor: 'pointer',
-                background: c.calendarId === calendarId ? '#e8f5e9' : '#fff',
-                color: c.calendarId === calendarId ? '#2e7d32' : '#344054',
-                fontWeight: c.calendarId === calendarId ? 700 : 400,
-                borderBottom: '1px solid #f0f0f0',
-                display: 'flex', alignItems: 'center', gap: '6px',
+                flex: 1, padding: '5px 8px', fontSize: '12px',
+                border: '1px solid #dadce0', borderRadius: '5px', outline: 'none',
               }}
-              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = c.calendarId === calendarId ? '#c8e6c9' : '#f8fbff'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = c.calendarId === calendarId ? '#e8f5e9' : '#fff'; }}
-            >
-              <span>📅</span>
-              <span>{c.calendarName}</span>
-              {c.calendarId === calendarId && <span style={{ marginLeft: 'auto', color: '#2e7d32' }}>✓</span>}
-            </div>
-          )) : (
-            /* 목록 조회 실패 시 calendarId 직접 입력 */
-            <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {calError && (
-                <div style={{ fontSize: '11px', color: '#c00' }}>
-                  캘린더 목록을 불러오지 못했습니다. Calendar ID를 직접 입력해주세요.
-                </div>
-              )}
-              <div style={{ fontSize: '11px', color: '#5f6368' }}>
-                네이버 캘린더 앱 → 설정 → 캘린더 정보에서 ID를 확인할 수 있습니다.
-              </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <input
-                  value={manualId}
-                  onChange={e => setManualId(e.target.value)}
-                  placeholder="예: AAAA-1234-BBBB"
-                  style={{
-                    flex: 1, padding: '5px 8px', fontSize: '12px',
-                    border: '1px solid #dadce0', borderRadius: '5px', outline: 'none',
-                  }}
-                />
-                <button
-                  onClick={() => { if (manualId.trim()) handleSelect(manualId.trim()); }}
-                  disabled={!manualId.trim()}
-                  style={{
-                    padding: '5px 10px', fontSize: '12px', borderRadius: '5px',
-                    border: 'none', background: '#03C75A', color: '#fff',
-                    cursor: manualId.trim() ? 'pointer' : 'not-allowed', fontWeight: 700,
-                  }}
-                >저장</button>
-              </div>
-            </div>
-          )}
+            />
+            <button
+              onClick={handleSaveId}
+              disabled={saving}
+              style={{
+                padding: '5px 12px', fontSize: '12px', borderRadius: '5px',
+                border: 'none', background: '#03C75A', color: '#fff',
+                cursor: 'pointer', fontWeight: 700,
+              }}
+            >{saving ? '…' : '저장'}</button>
+          </div>
         </div>
       )}
     </div>
