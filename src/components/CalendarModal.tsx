@@ -15,11 +15,15 @@ interface Props {
   onClose: () => void;
 }
 
-// 카테고리별 색상 (순환)
+// 카테고리별 색상 (순환) — IMPORTANT는 항상 빨간색
 const CAT_COLORS = ['#89CFF0', '#FFD97D', '#E06060', '#7DC8A0', '#BA8BD8', '#FF9800', '#1565c0'];
 const catColor = (cat: string | null, idx: number) =>
-  cat ? CAT_COLORS[Math.abs(cat.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % CAT_COLORS.length]
-      : CAT_COLORS[idx % CAT_COLORS.length];
+  cat === 'IMPORTANT' ? '#E53935'
+  : cat ? CAT_COLORS[Math.abs(cat.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % CAT_COLORS.length]
+        : CAT_COLORS[idx % CAT_COLORS.length];
+
+const scheduleTitle = (s: { title: string; category: string | null }) =>
+  s.category === 'IMPORTANT' ? `${s.title} ⭐️` : s.title;
 
 // 다일 이벤트 바 정보
 interface BarInfo {
@@ -506,7 +510,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                                 fontWeight: 600,
                               }}>
-                                {USER_EMOJI[s.userId] ?? ''}{s.eventTime ? ` ${s.eventTime}` : ''} {s.title}
+                                {USER_EMOJI[s.userId] ?? ''}{s.eventTime ? ` ${s.eventTime}` : ''} {scheduleTitle(s)}
                               </div>
                             ))}
                             {singleDay.length > maxChips && (
@@ -565,7 +569,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                                   boxSizing: 'border-box',
                                 }}
                               >
-                                {USER_EMOJI[event.userId] ?? ''} {event.title}
+                                {USER_EMOJI[event.userId] ?? ''} {scheduleTitle(event)}
                               </div>
                             );
                           })}
@@ -606,7 +610,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                         {s.category}
                       </span>
                     )}
-                    <span style={{ color: '#344054', fontWeight: 600 }}>{s.title}</span>
+                    <span style={{ color: '#344054', fontWeight: 600 }}>{scheduleTitle(s)}</span>
                     {s.repeatType && (
                       <span style={{ color: '#6a1b9a', fontSize: '10px', background: '#f3e5f5', borderRadius: '3px', padding: '0 4px', flexShrink: 0 }}>
                         반복
