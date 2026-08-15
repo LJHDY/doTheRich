@@ -1274,4 +1274,26 @@ export const deleteSchedule = async (id: number): Promise<void> => {
   await api.delete(`/api/schedules/${id}`);
 };
 
+// ─── 네이버 캘린더 연동 ──────────────────────────────────────────────────────
+
+export interface NaverCalendarStatus {
+  ldy:   { connected: boolean; valid: boolean; expiresAt: string | null };
+  juhae: { connected: boolean; valid: boolean; expiresAt: string | null };
+}
+
+export const getNaverCalendarStatus = async (): Promise<NaverCalendarStatus> => {
+  const { data } = await api.get('/api/naver-calendar/status');
+  return data;
+};
+
+/** OAuth 시작 URL — 해당 경로로 이동하면 네이버 인증 화면으로 리다이렉트 */
+export const getNaverCalendarAuthUrl = (userId: string): string => {
+  const base = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+  return `${base}/api/naver-calendar/auth/${userId}`;
+};
+
+export const disconnectNaverCalendar = async (userId: string): Promise<void> => {
+  await api.delete(`/api/naver-calendar/disconnect/${userId}`);
+};
+
 export default api;

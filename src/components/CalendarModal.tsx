@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Schedule } from '../types';
-import { getSchedules } from '../services/api';
+import { getNaverCalendarAuthUrl, getNaverCalendarStatus, getSchedules, NaverCalendarStatus, disconnectNaverCalendar } from '../services/api';
 import ScheduleFormModal, { USER_EMOJI } from './ScheduleFormModal';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -14,6 +14,67 @@ const catColor = (cat: string | null, idx: number) =>
   cat ? CAT_COLORS[Math.abs(cat.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % CAT_COLORS.length]
       : CAT_COLORS[idx % CAT_COLORS.length];
 
+// 네이버 캘린더 연동 상태 뱃지
+const NaverStatusBadge: React.FC<{
+  userId: string;
+  label: string;
+  status: NaverCalendarStatus | null;
+  onRefresh: () => void;
+}> = ({ userId, label, status, onRefresh }) => {
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const userStatus = status?.[userId as 'ldy' | 'juhae'];
+  const connected  = userStatus?.connected && userStatus?.valid;
+
+  const handleConnect = () => {
+    // OAuth 시작 — 새 탭에서 열어 현재 앱 상태 유지
+    window.open(getNaverCalendarAuthUrl(userId), '_blank', 'width=500,height=700');
+  };
+
+  const handleDisconnect = async () => {
+    if (!window.confirm(`${label}의 네이버 캘린더 연동을 해제하시겠습니까?`)) return;
+    setDisconnecting(true);
+    try {
+      await disconnectNaverCalendar(userId);
+      onRefresh();
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <span style={{ fontSize: '13px', color: '#344054' }}>{label}</span>
+      {connected ? (
+        <>
+          <span style={{
+            fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+            background: '#d4edda', color: '#155724', fontWeight: 600,
+          }}>연동됨</span>
+          <button
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            style={{
+              fontSize: '11px', padding: '2px 7px', borderRadius: '4px',
+              border: '1px solid #f5c6cb', background: '#fff8f8',
+              color: '#721c24', cursor: 'pointer',
+            }}
+          >해제</button>
+        </>
+      ) : (
+        <button
+          onClick={handleConnect}
+          style={{
+            fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+            border: '1px solid #03C75A', background: '#fff',
+            color: '#03C75A', fontWeight: 700, cursor: 'pointer',
+          }}
+        >N 연동</button>
+      )}
+    </div>
+  );
+};
+
 const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const isMobile = useIsMobile();
   const now = new Date();
@@ -22,6 +83,8 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const [schedules, setSchedules]     = useState<Schedule[]>([]);
   const [loading, setLoading]         = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [naverStatus, setNaverStatus] = useState<NaverCalendarStatus | null>(null);
+  const [showNaverPanel, setShowNaverPanel] = useState(false);
 
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
   const todayStr  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -37,6 +100,24 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   }, [yearMonth]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadNaverStatus = useCallback(async () => {
+    try {
+      const s = await getNaverCalendarStatus();
+      setNaverStatus(s);
+    } catch { /* 무시 */ }
+  }, []);
+
+  // OAuth 성공 콜백 감지 (같은 origin postMessage 또는 URL 파라미터)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('naverCalendar') === 'success') {
+      loadNaverStatus();
+      // URL 파라미터 제거
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    loadNaverStatus();
+  }, [loadNaverStatus]);
 
   // 날짜별 일정 맵
   const byDate = schedules.reduce<Record<string, Schedule[]>>((acc, s) => {
@@ -101,6 +182,17 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {loading && <span style={{ fontSize: '12px', color: '#9aa0a6' }}>불러오는 중…</span>}
+              {/* 네이버 캘린더 연동 버튼 */}
+              <button
+                onClick={() => setShowNaverPanel(v => !v)}
+                style={{
+                  padding: '4px 10px', fontSize: '12px', borderRadius: '6px',
+                  border: '1px solid #03C75A',
+                  background: showNaverPanel ? '#03C75A' : '#fff',
+                  color: showNaverPanel ? '#fff' : '#03C75A',
+                  cursor: 'pointer', fontWeight: 700,
+                }}
+              >N 네이버</button>
               <button onClick={() => { setYear(now.getFullYear()); setMonth(now.getMonth() + 1); }}
                 style={{ padding: '4px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #dadce0', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>
                 오늘
@@ -108,6 +200,23 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
               <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6' }}>×</button>
             </div>
           </div>
+
+          {/* 네이버 캘린더 연동 패널 */}
+          {showNaverPanel && (
+            <div style={{
+              padding: '12px 20px', borderBottom: '1px solid #f0f0f0',
+              background: '#f9fff9', display: 'flex', flexDirection: 'column', gap: '8px',
+            }}>
+              <div style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '2px' }}>
+                📅 네이버 캘린더 연동 — 일정 등록 시 자동으로 네이버 캘린더에 추가됩니다
+              </div>
+              <NaverStatusBadge userId="ldy"   label="🐴 동영" status={naverStatus} onRefresh={loadNaverStatus} />
+              <NaverStatusBadge userId="juhae" label="☀️ 주해" status={naverStatus} onRefresh={loadNaverStatus} />
+              <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '2px' }}>
+                * "N 연동" 클릭 → 네이버 로그인 → 자동으로 연동됩니다. 연동 후 창을 닫고 새로고침하면 상태가 업데이트됩니다.
+              </div>
+            </div>
+          )}
 
           {/* 요일 헤더 */}
           <div style={{
