@@ -275,25 +275,55 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
     loadNaverStatus();
   }, [loadNaverStatus]);
 
-  // 날짜 → 해당 날짜에 걸치는 모든 일정 맵 (다일 이벤트도 모든 날짜에 포함)
+  // 반복 패턴 날짜 매칭 — 백엔드 schedule_service._event_active_on 과 동일 로직
+  const isEventActiveOn = (s: Schedule, target: string): boolean => {
+    if (target < s.eventDate) return false;
+    switch (s.repeatType) {
+      case 'weekly': {
+        const t = new Date(target + 'T00:00:00');
+        const e = new Date(s.eventDate + 'T00:00:00');
+        const diffDays = Math.round((t.getTime() - e.getTime()) / 86400000);
+        return diffDays % 7 === 0;
+      }
+      case 'monthly':
+        return target.slice(8) === s.eventDate.slice(8); // DD 일치
+      case 'yearly':
+        return target.slice(5) === s.eventDate.slice(5); // MM-DD 일치
+      default:
+        return false;
+    }
+  };
+
+  // 날짜 → 해당 날짜에 걸치는 모든 일정 맵 (반복/다일 이벤트 모두 확장)
+  const daysInMonth = new Date(year, month, 0).getDate();
   const schedulesByDate = useMemo(() => {
+    const pad2 = (n: number) => String(n).padStart(2, '0');
     const map: Record<string, Schedule[]> = {};
     schedules.forEach(s => {
-      const start = new Date(s.eventDate + 'T00:00:00');
-      const end   = new Date((s.endDate || s.eventDate) + 'T00:00:00');
-      const cur   = new Date(start);
-      while (cur <= end) {
-        const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-        (map[ds] ??= []).push(s);
-        cur.setDate(cur.getDate() + 1);
+      if (s.repeatType) {
+        // 반복 이벤트: 이번 달 전체 날짜를 순회하며 해당 날짜에 발생하는지 확인
+        for (let d = 1; d <= daysInMonth; d++) {
+          const ds = `${year}-${pad2(month)}-${pad2(d)}`;
+          if (isEventActiveOn(s, ds)) (map[ds] ??= []).push(s);
+        }
+      } else {
+        // 일반/다일 이벤트: eventDate ~ endDate 범위 확장
+        const start = new Date(s.eventDate + 'T00:00:00');
+        const end   = new Date((s.endDate || s.eventDate) + 'T00:00:00');
+        const cur   = new Date(start);
+        while (cur <= end) {
+          const ds = `${cur.getFullYear()}-${pad2(cur.getMonth() + 1)}-${pad2(cur.getDate())}`;
+          (map[ds] ??= []).push(s);
+          cur.setDate(cur.getDate() + 1);
+        }
       }
     });
     return map;
-  }, [schedules]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedules, year, month, daysInMonth]);
 
   // 달력 셀 배열 (null=빈칸)
-  const firstDay    = new Date(year, month - 1, 1).getDay();
-  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDay = new Date(year, month - 1, 1).getDay();
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
@@ -311,6 +341,13 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const toDateStr = (day: number) => `${year}-${pad(month)}-${pad(day)}`;
 
   const selectedSchedules = selectedDate ? (schedulesByDate[selectedDate] ?? []) : [];
+
+  // 이번 달에 실제로 발생하는 일정 목록 (반복 이벤트는 이번 달에 1회 이상 있는 것만)
+  const schedulesThisMonth = schedules.filter(s => {
+    if (!s.repeatType) return true; // 일반 이벤트는 백엔드가 이미 이번 달 것만 반환
+    const prefix = `${year}-${pad(month)}`;
+    return Object.keys(schedulesByDate).some(d => d.startsWith(prefix) && (schedulesByDate[d] ?? []).some(x => x.id === s.id));
+  });
 
   return (
     <>
@@ -455,7 +492,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                 fontSize: isMobile ? '12px' : '13px', color: '#5f6368', fontWeight: 600,
               }}
             >
-              <span>{month}월 전체 일정 ({schedules.length}건)</span>
+              <span>{month}월 전체 일정 ({schedulesThisMonth.length}건)</span>
               <span style={{ fontSize: '12px', color: '#9aa0a6' }}>{listOpen ? '▲ 접기' : '▼ 펼치기'}</span>
             </button>
 
@@ -465,15 +502,19 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                 display: 'flex', flexDirection: 'column', gap: '4px',
                 maxHeight: isMobile ? '200px' : '240px', overflowY: 'auto',
               }}>
-                {schedules.length === 0 ? (
+                {schedulesThisMonth.length === 0 ? (
                   <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '4px 2px' }}>이번 달 일정이 없습니다.</div>
-                ) : schedules.map((s, si) => {
+                ) : schedulesThisMonth.map((s, si) => {
                   const name = catName(s.category);
                   const isImportant = s.category === 'IMPORTANT';
+                  // 반복 이벤트는 이번 달 첫 발생일로 이동, 일반은 시작일로 이동
+                  const jumpDate = s.repeatType
+                    ? (Object.keys(schedulesByDate).filter(d => d.startsWith(`${year}-${String(month).padStart(2,'0')}`) && (schedulesByDate[d] ?? []).some(x => x.id === s.id)).sort()[0] ?? s.eventDate)
+                    : s.eventDate;
                   return (
                     <div
                       key={s.id}
-                      onClick={() => setSelectedDate(s.eventDate)}
+                      onClick={() => setSelectedDate(jumpDate)}
                       style={{
                         display: 'flex', gap: '8px', alignItems: 'center',
                         padding: '5px 10px', borderRadius: '7px',
@@ -488,8 +529,24 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                       }} />
                       <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[s.userId] ?? ''}</span>
                       <span style={{ color: '#9aa0a6', flexShrink: 0, fontSize: '11px' }}>
-                        {s.eventDate.slice(5).replace('-', '/')}
-                        {s.endDate && s.endDate > s.eventDate ? ` ~ ${s.endDate.slice(5).replace('-', '/')}` : ''}
+                        {s.repeatType ? (
+                          // 반복 이벤트: 이번 달 발생 날짜들 나열 (최대 3개)
+                          (() => {
+                            const pad2 = (n: number) => String(n).padStart(2, '0');
+                            const days: string[] = [];
+                            for (let d = 1; d <= daysInMonth; d++) {
+                              const ds = `${year}-${pad2(month)}-${pad2(d)}`;
+                              if (isEventActiveOn(s, ds)) days.push(`${month}/${d}`);
+                            }
+                            const label = { weekly: '매주', monthly: '매달', yearly: '매년' }[s.repeatType] ?? '';
+                            return `${label} ${days.slice(0, 3).join(', ')}${days.length > 3 ? '…' : ''}`;
+                          })()
+                        ) : (
+                          <>
+                            {s.eventDate.slice(5).replace('-', '/')}
+                            {s.endDate && s.endDate > s.eventDate ? ` ~ ${s.endDate.slice(5).replace('-', '/')}` : ''}
+                          </>
+                        )}
                         {s.eventTime ? ` ${s.eventTime}` : ''}
                       </span>
                       {name && (
