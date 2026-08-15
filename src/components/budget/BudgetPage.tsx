@@ -51,6 +51,7 @@ import {
   FinancialReport as FinancialReportType,
   getMarketReports,
   generateMarketReport,
+  deleteMarketReport,
 } from '../../services/api';
 import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, MarketReport, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
@@ -2282,6 +2283,20 @@ const MarketReportView: React.FC = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (selectedId === null) return;
+    const target = reports.find(r => r.id === selectedId);
+    if (!window.confirm(`[${target?.reportDate}] 리포트를 삭제할까요?`)) return;
+    try {
+      await deleteMarketReport(selectedId);
+      const next = reports.filter(r => r.id !== selectedId);
+      setReports(next);
+      setSelectedId(next.length > 0 ? next[0].id : null);
+    } catch {
+      alert('삭제에 실패했습니다.');
+    }
+  };
+
   // 마크다운 → JSX (AIReportView와 동일 패턴)
   // **bold** 및 [text](url) 마크다운을 JSX로 변환하는 인라인 렌더러
   const renderInline = (text: string) => {
@@ -2370,15 +2385,22 @@ const MarketReportView: React.FC = () => {
         {reports.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매일 오전 7시 / 오후 9시 자동 생성</span>
-          <select
-            value={selectedId ?? ''}
-            onChange={e => setSelectedId(Number(e.target.value))}
-            style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '260px' }}
-          >
-            {reports.map(r => (
-              <option key={r.id} value={r.id}>{r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}</option>
-            ))}
-          </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <select
+                value={selectedId ?? ''}
+                onChange={e => setSelectedId(Number(e.target.value))}
+                style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '260px' }}
+              >
+                {reports.map(r => (
+                  <option key={r.id} value={r.id}>{r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleDelete}
+                title="선택 리포트 삭제"
+                style={{ padding: '5px 9px', fontSize: '13px', border: '1px solid #f5c6c6', borderRadius: '8px', background: '#fff5f5', color: '#c0392b', cursor: 'pointer', lineHeight: 1 }}
+              >×</button>
+            </div>
           </div>
         )}
         <button

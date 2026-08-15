@@ -1179,6 +1179,11 @@ export const generateMarketReport = async (reportDate?: string): Promise<void> =
   await api.post('/api/market-reports/generate', null, { params });
 };
 
+/** 시장 리포트 삭제 (204) */
+export const deleteMarketReport = async (reportId: number): Promise<void> => {
+  await api.delete(`/api/market-reports/${reportId}`);
+};
+
 // ── AI 부동산 투자 분석 ─────────────────────────────────────────────────────
 export interface ComplexAnalysis {
   id: number;
