@@ -700,11 +700,11 @@ const MapPage: React.FC<MapPageProps> = ({
           const polygon = new window.naver.maps.Polygon({
             map,
             paths,
-            fillColor: '#89CFF0',
-            fillOpacity: 0.07,
-            strokeColor: '#89CFF0',
-            strokeOpacity: 0.75,
-            strokeWeight: 2.5,
+            fillColor: '#FF6F00',
+            fillOpacity: 0.08,
+            strokeColor: '#FF6F00',
+            strokeOpacity: 1,
+            strokeWeight: 3,
             clickable: false, // 마우스 이벤트 미차단 — 경로 그리기와 충돌 방지
           });
           districtPolygonsRef.current.push(polygon);
