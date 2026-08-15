@@ -2424,7 +2424,8 @@ const MarketReportView: React.FC = () => {
               {Object.keys(selected.marketData).length > 0 && (
                 <div style={{ marginBottom: '20px' }}>
                   {TICKER_GROUPS.map((group) => {
-                    const tickers = group.keys.map(k => ({ key: k, data: selected.marketData[k] })).filter(t => t.data);
+                    // close가 null인 티커(NaN 소독 결과)는 카드 표시 제외
+                    const tickers = group.keys.map(k => ({ key: k, data: selected.marketData[k] })).filter(t => t.data && t.data.close != null);
                     if (tickers.length === 0) return null;
 
                     // 섹션 헤더: 액센트 컬러 왼쪽 바 + 라벨
@@ -2493,7 +2494,7 @@ const MarketReportView: React.FC = () => {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
 
                               {/* VIX 카드 — 우측 상단 ℹ 툴팁 */}
-                              {selected.marketData.vix && (() => {
+                              {selected.marketData.vix?.close != null && (() => {
                                 const vix = selected.marketData.vix!;
                                 return (
                                   <div style={{ position: 'relative', ...cardStyle(FEAR_ACCENT) }}>
