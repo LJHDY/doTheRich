@@ -3,10 +3,8 @@ import { Schedule } from '../types';
 import {
   disconnectNaverCalendar,
   getNaverCalendarAuthUrl,
-  getNaverCalendars,
   getNaverCalendarStatus,
   getSchedules,
-  NaverCalendarItem,
   NaverCalendarStatus,
   selectNaverCalendar,
 } from '../services/api';
@@ -31,16 +29,16 @@ const NaverStatusBadge: React.FC<{
   onRefresh: () => void;
 }> = ({ userId, label, status, onRefresh }) => {
   const [disconnecting, setDisconnecting] = useState(false);
-  const [calendars, setCalendars]         = useState<NaverCalendarItem[]>([]);
-  const [loadingCals, setLoadingCals]     = useState(false);
   const [showPicker, setShowPicker]       = useState(false);
+  const [customId, setCustomId]           = useState('');
+  const [saving, setSaving]               = useState(false);
 
   const userStatus = status?.[userId as 'ldy' | 'juhae'];
   const connected  = userStatus?.connected && userStatus?.valid;
   const calendarId = userStatus?.calendarId;
 
-  const selectedName = calendars.find(c => c.calendarId === calendarId)?.calendarName
-    ?? (calendarId === 'defaultCalendarId' ? '내 캘린더 (기본)' : calendarId);
+  const displayName = !calendarId || calendarId === 'defaultCalendarId'
+    ? '내 캘린더 (기본)' : calendarId;
 
   const handleConnect = () => {
     window.open(getNaverCalendarAuthUrl(userId), '_blank', 'width=500,height=700');
@@ -57,22 +55,16 @@ const NaverStatusBadge: React.FC<{
     }
   };
 
-  const handleShowPicker = async () => {
-    if (showPicker) { setShowPicker(false); return; }
-    setLoadingCals(true);
+  const handleSave = async (id: string) => {
+    setSaving(true);
     try {
-      const list = await getNaverCalendars(userId);
-      setCalendars(list);
-      setShowPicker(true);
+      await selectNaverCalendar(userId, id || 'defaultCalendarId');
+      setShowPicker(false);
+      setCustomId('');
+      onRefresh();
     } finally {
-      setLoadingCals(false);
+      setSaving(false);
     }
-  };
-
-  const handleSelect = async (id: string) => {
-    await selectNaverCalendar(userId, id);
-    setShowPicker(false);
-    onRefresh();
   };
 
   return (
@@ -86,8 +78,7 @@ const NaverStatusBadge: React.FC<{
               background: '#d4edda', color: '#155724', fontWeight: 600,
             }}>연동됨</span>
             <button
-              onClick={handleShowPicker}
-              disabled={loadingCals}
+              onClick={() => { setShowPicker(v => !v); setCustomId(calendarId ?? ''); }}
               style={{
                 fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
                 border: '1px solid #03C75A',
@@ -95,64 +86,72 @@ const NaverStatusBadge: React.FC<{
                 color: showPicker ? '#fff' : '#03C75A',
                 cursor: 'pointer', fontWeight: 600,
               }}
-            >
-              {loadingCals ? '조회 중…' : (calendarId ? `📅 ${selectedName}` : '캘린더 선택')}
-            </button>
-            <button
-              onClick={handleDisconnect}
-              disabled={disconnecting}
-              style={{
-                fontSize: '11px', padding: '2px 7px', borderRadius: '4px',
-                border: '1px solid #f5c6cb', background: '#fff8f8',
-                color: '#721c24', cursor: 'pointer',
-              }}
-            >해제</button>
+            >📅 {displayName}</button>
+            <button onClick={handleDisconnect} disabled={disconnecting} style={{
+              fontSize: '11px', padding: '2px 7px', borderRadius: '4px',
+              border: '1px solid #f5c6cb', background: '#fff8f8',
+              color: '#721c24', cursor: 'pointer',
+            }}>해제</button>
           </>
         ) : (
-          <button
-            onClick={handleConnect}
-            style={{
-              fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-              border: '1px solid #03C75A', background: '#fff',
-              color: '#03C75A', fontWeight: 700, cursor: 'pointer',
-            }}
-          >N 연동</button>
+          <button onClick={handleConnect} style={{
+            fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+            border: '1px solid #03C75A', background: '#fff',
+            color: '#03C75A', fontWeight: 700, cursor: 'pointer',
+          }}>N 연동</button>
         )}
       </div>
 
-      {/* 기존 일정에서 추출한 캘린더 목록 드롭다운 */}
-      {showPicker && (
+      {/* 캘린더 설정 패널 — 기본 / 직접 입력 */}
+      {showPicker && connected && (
         <div style={{
-          marginLeft: '76px',
-          border: '1px solid #dadce0', borderRadius: '8px',
-          background: '#fff', overflow: 'hidden',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+          marginLeft: '76px', border: '1px solid #dadce0', borderRadius: '8px',
+          background: '#fff', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         }}>
-          {calendars.length === 0 ? (
-            <div style={{ padding: '10px 12px', fontSize: '11px', color: '#9aa0a6' }}>
-              캘린더 정보를 가져오지 못했습니다.<br />
-              네이버 캘린더에 일정이 하나 이상 있어야 목록이 표시됩니다.
+          {/* 기본 캘린더 */}
+          <div
+            onClick={() => handleSave('defaultCalendarId')}
+            style={{
+              padding: '8px 12px', fontSize: '12px', cursor: 'pointer',
+              background: (!calendarId || calendarId === 'defaultCalendarId') ? '#e8f5e9' : '#fff',
+              color: (!calendarId || calendarId === 'defaultCalendarId') ? '#2e7d32' : '#344054',
+              fontWeight: (!calendarId || calendarId === 'defaultCalendarId') ? 700 : 400,
+              borderBottom: '1px solid #f0f0f0',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}
+          >
+            <span>📅</span><span>내 캘린더 (기본)</span>
+            {(!calendarId || calendarId === 'defaultCalendarId') && <span style={{ marginLeft: 'auto', color: '#2e7d32' }}>✓</span>}
+          </div>
+          {/* calendarId 직접 입력 */}
+          <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ fontSize: '11px', color: '#5f6368' }}>
+              다른 캘린더 ID 직접 입력<br />
+              <span style={{ color: '#9aa0a6' }}>
+                calendar.naver.com → F12 → Network → 페이지 새로고침 → calendarId 검색
+              </span>
             </div>
-          ) : calendars.map(c => (
-            <div
-              key={c.calendarId}
-              onClick={() => handleSelect(c.calendarId)}
-              style={{
-                padding: '7px 12px', fontSize: '12px', cursor: 'pointer',
-                background: c.calendarId === calendarId ? '#e8f5e9' : '#fff',
-                color: c.calendarId === calendarId ? '#2e7d32' : '#344054',
-                fontWeight: c.calendarId === calendarId ? 700 : 400,
-                borderBottom: '1px solid #f0f0f0',
-                display: 'flex', alignItems: 'center', gap: '6px',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = c.calendarId === calendarId ? '#c8e6c9' : '#f8fbff'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = c.calendarId === calendarId ? '#e8f5e9' : '#fff'; }}
-            >
-              <span>📅</span>
-              <span>{c.calendarName}</span>
-              {c.calendarId === calendarId && <span style={{ marginLeft: 'auto', color: '#2e7d32' }}>✓</span>}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                value={customId}
+                onChange={e => setCustomId(e.target.value)}
+                placeholder="calendarId 붙여넣기"
+                style={{
+                  flex: 1, padding: '5px 8px', fontSize: '12px',
+                  border: '1px solid #dadce0', borderRadius: '5px', outline: 'none',
+                }}
+              />
+              <button
+                onClick={() => handleSave(customId)}
+                disabled={!customId.trim() || saving}
+                style={{
+                  padding: '5px 12px', fontSize: '12px', borderRadius: '5px',
+                  border: 'none', background: customId.trim() ? '#03C75A' : '#ccc',
+                  color: '#fff', cursor: customId.trim() ? 'pointer' : 'default', fontWeight: 700,
+                }}
+              >{saving ? '…' : '저장'}</button>
             </div>
-          ))}
+          </div>
         </div>
       )}
     </div>
