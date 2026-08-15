@@ -3662,6 +3662,8 @@ const AssetView: React.FC = () => {
         assetLabel={detailTarget.assetLabel}
         cellCode={detailTarget.cellCode}
         assetCellCodes={assetCellCodes}
+        isDollar={ASSET_COLUMNS.find(c => c.key === detailTarget.assetType)?.isDollar}
+        exchangeRate={exchangeRate}
         onClose={() => setDetailTarget(null)}
         onSaved={() => { load(); }}
       />
@@ -3688,9 +3690,11 @@ const AssetDetailModal: React.FC<{
   assetLabel: string;
   cellCode: string;          // 공통코드 복합키 — ASSET_CELL 그룹의 detail_code (예: STOCK_LDY)
   assetCellCodes: CommonCode[]; // 상위(AssetView)에서 1회 조회 후 주입 — 모달 열 때마다 재조회 방지
+  isDollar?: boolean;        // true이면 USD 단위 입력·표시
+  exchangeRate?: number;     // USD → KRW 환산 (isDollar=true 시 필수)
   onClose: () => void;
   onSaved: () => void;
-}> = ({ snapshotDate, userId, assetType, userName, assetLabel, cellCode, assetCellCodes, onClose, onSaved }) => {
+}> = ({ snapshotDate, userId, assetType, userName, assetLabel, cellCode, assetCellCodes, isDollar, exchangeRate, onClose, onSaved }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // 다른 셀의 기존 데이터 (저장 시 그대로 포함, 원 단위)
@@ -3843,7 +3847,9 @@ const AssetDetailModal: React.FC<{
 
         {/* 안내 */}
         <div style={{ padding: '7px 20px', background: '#f0f8fd', borderBottom: '1px solid #e8ecf0', flexShrink: 0, fontSize: '11px', color: '#4BAAD4' }}>
-          금액 단위: <strong>원</strong> · 저장 시 합산이 자산 현황에 자동 반영됩니다
+          금액 단위: <strong>{isDollar ? 'USD ($)' : '원'}</strong>
+          {isDollar && exchangeRate && <span style={{ marginLeft: '6px', color: '#9aa0a6' }}>· 환율 {exchangeRate.toLocaleString()}원/$</span>}
+          <span style={{ marginLeft: '6px' }}>· 저장 시 합산이 자산 현황에 자동 반영됩니다</span>
         </div>
 
         {/* 본문 */}
@@ -3863,18 +3869,26 @@ const AssetDetailModal: React.FC<{
                     style={{ flex: 2, padding: '6px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none' }}
                   />
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                    <input
-                      type="text"
-                      placeholder="금액"
-                      value={item.amountStr}
-                      onChange={e => updateItem(item.key, 'amountStr', e.target.value.replace(/[^0-9]/g, ''))}
-                      style={{ width: '110px', padding: '6px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', textAlign: 'right' }}
-                    />
-                    {Number(item.amountStr) > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {isDollar && <span style={{ fontSize: '13px', color: '#5f6368', fontWeight: 600 }}>$</span>}
+                      <input
+                        type="text"
+                        placeholder={isDollar ? '달러 금액' : '금액'}
+                        value={item.amountStr}
+                        onChange={e => updateItem(item.key, 'amountStr', e.target.value.replace(/[^0-9.]/g, ''))}
+                        style={{ width: '110px', padding: '6px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', textAlign: 'right' }}
+                      />
+                      {!isDollar && <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>원</span>}
+                    </div>
+                    {Number(item.amountStr) > 0 && isDollar && exchangeRate && (
+                      <span style={{ fontSize: '10px', color: '#4BAAD4', fontWeight: 600 }}>
+                        ≈ {formatAmountKorean(Math.round(Number(item.amountStr) * exchangeRate))}
+                      </span>
+                    )}
+                    {Number(item.amountStr) > 0 && !isDollar && (
                       <span style={{ fontSize: '10px', color: '#4BAAD4', fontWeight: 600 }}>{formatAmountKorean(Number(item.amountStr))}</span>
                     )}
                   </div>
-                  <span style={{ fontSize: '11px', color: '#9aa0a6', whiteSpace: 'nowrap' }}>원</span>
                   <button
                     onClick={() => removeItem(item.key)}
                     style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#bdbdbd', fontSize: '18px', padding: '0 2px', lineHeight: 1 }}
@@ -3893,7 +3907,14 @@ const AssetDetailModal: React.FC<{
               {/* 합산 미리보기 */}
               {total > 0 && (
                 <div style={{ marginTop: '12px', padding: '8px 12px', background: '#f0f8fd', borderRadius: '8px', fontSize: '13px', textAlign: 'right', color: '#1a3a5c', fontWeight: 700 }}>
-                  합계: {total.toLocaleString('ko-KR')} 원
+                  {isDollar ? (
+                    <>
+                      합계: ${total.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
+                      {exchangeRate && <span style={{ fontSize: '11px', color: '#5f6368', fontWeight: 400, marginLeft: '8px' }}>≈ {formatAmountKorean(Math.round(total * exchangeRate))}</span>}
+                    </>
+                  ) : (
+                    <>합계: {total.toLocaleString('ko-KR')} 원</>
+                  )}
                 </div>
               )}
             </>
