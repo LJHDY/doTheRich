@@ -10,46 +10,63 @@ interface Props {
   onSaved: () => void;        // 저장/삭제 후 부모 리로드 트리거
 }
 
+// 일정 작성자 옵션 — 동영/주해/공통
+export const SCHEDULE_USERS = [
+  { id: 'ldy',    label: '🐴 동영' },
+  { id: 'juhae',  label: '☀️ 주해' },
+  { id: 'common', label: '❤️ 공통' },
+] as const;
+
+export const USER_EMOJI: Record<string, string> = {
+  ldy:    '🐴',
+  juhae:  '☀️',
+  common: '❤️',
+};
+
 const INPUT_STYLE: React.CSSProperties = {
   width: '100%', padding: '8px 10px', fontSize: '13px',
   border: '1px solid #dadce0', borderRadius: '6px',
   outline: 'none', boxSizing: 'border-box',
 };
 
-const BTN = (active: boolean): React.CSSProperties => ({
-  padding: '8px 16px', fontSize: '13px', fontWeight: 600, borderRadius: '6px',
-  border: `1px solid ${active ? '#89CFF0' : '#dadce0'}`,
-  background: active ? '#89CFF0' : '#fff',
+const BTN = (active: boolean, color?: string): React.CSSProperties => ({
+  padding: '7px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '6px',
+  border: `1px solid ${active ? (color ?? '#89CFF0') : '#dadce0'}`,
+  background: active ? (color ?? '#89CFF0') : '#fff',
   color: active ? '#fff' : '#5f6368', cursor: 'pointer',
 });
+
+// 작성자별 버튼 색상
+const USER_COLOR: Record<string, string> = {
+  ldy:    '#89CFF0',
+  juhae:  '#FFD97D',
+  common: '#E06060',
+};
 
 const emptyForm = (date: string, userId: string) => ({
   userId, title: '', description: '', eventDate: date, eventTime: '', category: '',
 });
 
 const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved }) => {
-  const userId = localStorage.getItem(BUDGET_USER_STORAGE_KEY) || BUDGET_USERS[0].id;
-  // CommonCode 객체로 관리 — detailCode를 DB에 저장, detailCodeName을 UI에 표시
+  const defaultUserId = localStorage.getItem(BUDGET_USER_STORAGE_KEY) || BUDGET_USERS[0].id;
   const [catCodes, setCatCodes] = useState<CommonCode[]>([]);
-  const [form, setForm] = useState(emptyForm(date, userId));
+  const [form, setForm] = useState(emptyForm(date, defaultUserId));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // CALENDAR_CATEGORY 공통코드 로드 (sortOrder 오름차순)
     getCommonCodes('CALENDAR_CATEGORY').then(codes =>
       setCatCodes([...codes].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)))
     ).catch(() => {});
     titleRef.current?.focus();
   }, []);
 
-  // detailCode → detailCodeName 역조회 (저장된 값 표시용)
   const codeToName = (code: string | null) =>
     catCodes.find(c => c.detailCode === code)?.detailCodeName ?? code ?? '';
 
   const resetForm = () => {
-    setForm(emptyForm(date, userId));
+    setForm(emptyForm(date, defaultUserId));
     setEditingId(null);
   };
 
@@ -61,7 +78,7 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
       description: s.description || '',
       eventDate:   s.eventDate,
       eventTime:   s.eventTime || '',
-      category:    s.category || '',   // DB에 detailCode로 저장되어 있음
+      category:    s.category || '',
     });
     titleRef.current?.focus();
   };
@@ -76,7 +93,7 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
         description: form.description.trim() || undefined,
         eventDate:   form.eventDate,
         eventTime:   form.eventTime || undefined,
-        category:    form.category || undefined,  // detailCode 저장
+        category:    form.category || undefined,
       };
       if (editingId) {
         await updateSchedule(editingId, payload);
@@ -142,6 +159,8 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    {/* 작성자 이모지 */}
+                    <span style={{ fontSize: '14px' }}>{USER_EMOJI[s.userId] ?? ''}</span>
                     {s.eventTime && (
                       <span style={{ fontSize: '11px', color: '#5f6368', background: '#e8ecf0', borderRadius: '4px', padding: '1px 5px' }}>
                         {s.eventTime}
@@ -149,7 +168,6 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
                     )}
                     {s.category && (
                       <span style={{ fontSize: '11px', color: '#1565c0', background: '#e8f0fe', borderRadius: '4px', padding: '1px 5px' }}>
-                        {/* DB에 detailCode 저장 → 화면엔 detailCodeName 표시 */}
                         {codeToName(s.category)}
                       </span>
                     )}
@@ -180,11 +198,15 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
             {editingId ? '일정 수정' : '새 일정 추가'}
           </div>
 
-          {/* 유저 선택 */}
+          {/* 작성자 선택 — 동영/주해/공통 */}
           <div style={{ display: 'flex', gap: '6px' }}>
-            {BUDGET_USERS.map(u => (
-              <button key={u.id} onClick={() => setForm(f => ({ ...f, userId: u.id }))} style={BTN(form.userId === u.id)}>
-                {u.name}
+            {SCHEDULE_USERS.map(u => (
+              <button
+                key={u.id}
+                onClick={() => setForm(f => ({ ...f, userId: u.id }))}
+                style={BTN(form.userId === u.id, USER_COLOR[u.id])}
+              >
+                {u.label}
               </button>
             ))}
           </div>
@@ -213,7 +235,6 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
               style={{ ...INPUT_STYLE, flex: 1 }}
             >
               <option value="">카테고리 선택</option>
-              {/* value=detailCode, label=detailCodeName */}
               {catCodes.map(c => (
                 <option key={c.detailCode} value={c.detailCode}>
                   {c.detailCodeName}
@@ -241,7 +262,9 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
             )}
             <button onClick={handleSave} disabled={saving} style={{
               padding: '8px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '6px',
-              border: 'none', background: '#89CFF0', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer',
+              border: 'none',
+              background: USER_COLOR[form.userId] ?? '#89CFF0',
+              color: '#fff', cursor: saving ? 'not-allowed' : 'pointer',
               opacity: saving ? 0.7 : 1,
             }}>{saving ? '저장 중…' : editingId ? '수정' : '추가'}</button>
           </div>

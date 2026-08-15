@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Schedule } from '../types';
 import { getSchedules } from '../services/api';
-import ScheduleFormModal from './ScheduleFormModal';
+import ScheduleFormModal, { USER_EMOJI } from './ScheduleFormModal';
 
 interface Props {
   onClose: () => void;
@@ -166,7 +166,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         fontWeight: 600,
                       }}>
-                        {s.eventTime ? `${s.eventTime} ` : ''}{s.title}
+                        {USER_EMOJI[s.userId] ?? ''}{s.eventTime ? ` ${s.eventTime}` : ''} {s.title}
                       </div>
                     ))}
                     {daySched.length > 3 && (
@@ -197,6 +197,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                       width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
                       background: catColor(s.category, si),
                     }} />
+                    <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[s.userId] ?? ''}</span>
                     <span style={{ color: '#9aa0a6', flexShrink: 0 }}>
                       {s.eventDate.slice(5).replace('-', '/')}
                       {s.eventTime ? ` ${s.eventTime}` : ''}
