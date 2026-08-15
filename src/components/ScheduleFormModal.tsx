@@ -97,7 +97,6 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
     return `${y}년 ${Number(m)}월 ${Number(d)}일`;
   })();
 
-  const userLabel = BUDGET_USERS.find(u => u.id === form.userId)?.name ?? form.userId;
 
   return (
     <div
