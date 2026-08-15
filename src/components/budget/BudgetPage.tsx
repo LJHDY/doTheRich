@@ -3671,7 +3671,11 @@ const AssetView: React.FC = () => {
                       width={50}
                     />
                     <Tooltip
-                      formatter={(value: number, name: string) => [`${value}억`, name]}
+                      formatter={(value: number, name: string) => [
+                        // 차트값은 억 단위(소수)이므로 원화로 역산 후 한글 표기
+                        formatAmountKorean(Math.round(value * 1e8)) || '0원',
+                        name,
+                      ]}
                       labelFormatter={label => `날짜: ${label}`}
                       contentStyle={{ fontSize: '12px' }}
                     />
