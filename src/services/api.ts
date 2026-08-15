@@ -32,6 +32,7 @@ import {
   PaymentMethod,
   CommonCode,
   MarketReport,
+  Schedule,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1207,7 +1208,6 @@ export const analyzeRealEstate = async (complexIds: number[]): Promise<ComplexAn
 };
 
 // ─── 일정 관리 ─────────────────────────────────────────────────────────────
-import { Schedule } from '../types';
 
 const toSchedule = (item: any): Schedule => ({
   id:          item.id,
