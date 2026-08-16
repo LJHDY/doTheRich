@@ -1,14 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CommonCode, FixedExpenseCalendar, Schedule } from '../types';
+import { CommonCode, FixedExpenseCalendar, Schedule, Todo } from '../types';
 import {
+  createTodo,
+  deleteTodo,
   disconnectNaverCalendar,
   getCommonCodes,
   getFixedExpenseCalendar,
   getNaverCalendarAuthUrl,
   getNaverCalendarStatus,
   getSchedules,
+  getTodos,
   NaverCalendarStatus,
   selectNaverCalendar,
+  updateTodo,
 } from '../services/api';
 import ScheduleFormModal, { USER_EMOJI } from './ScheduleFormModal';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -249,8 +253,14 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const [catCodes, setCatCodes]         = useState<CommonCode[]>([]);
   const [feCalendar, setFeCalendar]     = useState<FixedExpenseCalendar | null>(null);
   const [fePopup, setFePopup]           = useState<{ date: string; x: number; y: number } | null>(null);
-  const pickerRef  = useRef<HTMLDivElement>(null);
-  const fePopupRef = useRef<HTMLDivElement>(null);
+  const [todos, setTodos]               = useState<Todo[]>([]);
+  const [dateActionPopup, setDateActionPopup] = useState<{ date: string; x: number; y: number } | null>(null);
+  const [todoForm, setTodoForm]         = useState<{ date: string } | null>(null);
+  const [todoInput, setTodoInput]       = useState('');
+  const [todoUser, setTodoUser]         = useState<'ldy' | 'juhae' | 'common'>('ldy');
+  const pickerRef       = useRef<HTMLDivElement>(null);
+  const fePopupRef      = useRef<HTMLDivElement>(null);
+  const dateActionRef   = useRef<HTMLDivElement>(null);
 
   // CALENDAR_CATEGORY 공통코드 로드 (detailCode → detailCodeName 변환용)
   useEffect(() => {
@@ -282,6 +292,16 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, [showPicker]);
 
+  // 날짜 액션 팝업 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!dateActionPopup) return;
+    const handler = (e: MouseEvent) => {
+      if (dateActionRef.current && !dateActionRef.current.contains(e.target as Node)) setDateActionPopup(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dateActionPopup]);
+
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
   const todayStr  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
@@ -289,12 +309,14 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
     setLoading(true);
     const ym6 = yearMonth.replace('-', ''); // YYYY-MM → YYYYMM
     try {
-      const [sched, feData] = await Promise.all([
+      const [sched, feData, todoData] = await Promise.all([
         getSchedules(yearMonth),
         getFixedExpenseCalendar(ym6),
+        getTodos(yearMonth),
       ]);
       setSchedules(sched);
       setFeCalendar(feData);
+      setTodos(todoData);
     } finally { setLoading(false); }
   }, [yearMonth]);
 
@@ -372,6 +394,33 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
       return false;
     });
   }, [schedules, year, month, daysInMonth]);
+
+  // 이번 달 할일 — 날짜 오름차순 정렬
+  const todosThisMonth = useMemo(() => {
+    return [...todos].sort((a, b) => a.todoDate.localeCompare(b.todoDate) || a.id - b.id);
+  }, [todos]);
+
+  // 할일 저장
+  const handleSaveTodo = async () => {
+    if (!todoInput.trim() || !todoForm) return;
+    const newTodo = await createTodo({ userId: todoUser, title: todoInput.trim(), todoDate: todoForm.date });
+    setTodos(prev => [...prev, newTodo]);
+    setTodoInput('');
+    setTodoForm(null);
+  };
+
+  // 할일 완료 토글
+  const handleToggleTodo = async (todo: Todo) => {
+    const updated = await updateTodo(todo.id, { isDone: !todo.isDone });
+    setTodos(prev => prev.map(t => t.id === todo.id ? updated : t));
+  };
+
+  // 할일 삭제
+  const handleDeleteTodo = async (todoId: number) => {
+    if (!window.confirm('할일을 삭제하시겠습니까?')) return;
+    await deleteTodo(todoId);
+    setTodos(prev => prev.filter(t => t.id !== todoId));
+  };
 
   return (
     <>
@@ -516,7 +565,12 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                 fontSize: isMobile ? '12px' : '13px', color: '#5f6368', fontWeight: 600,
               }}
             >
-              <span>{month}월 전체 일정 ({schedulesThisMonth.length}건)</span>
+              <span>
+                {month}월 전체 일정 ({schedulesThisMonth.length}건)
+                {todosThisMonth.length > 0 && (
+                  <span style={{ marginLeft: '8px', color: '#7DC8A0' }}>· 할일 {todosThisMonth.length}건</span>
+                )}
+              </span>
               <span style={{ fontSize: '12px', color: '#9aa0a6' }}>{listOpen ? '▲ 접기' : '▼ 펼치기'}</span>
             </button>
 
@@ -524,7 +578,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
               <div style={{
                 padding: isMobile ? '0 16px 10px' : '0 20px 10px',
                 display: 'flex', flexDirection: 'column', gap: '4px',
-                maxHeight: isMobile ? '200px' : '240px', overflowY: 'auto',
+                maxHeight: isMobile ? '240px' : '280px', overflowY: 'auto',
               }}>
                 {schedulesThisMonth.length === 0 ? (
                   <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '4px 2px' }}>이번 달 일정이 없습니다.</div>
@@ -594,6 +648,41 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                     </div>
                   );
                 })}
+
+                {/* 할일 목록 — 일정 목록 아래 구분선 후 표시 */}
+                {todosThisMonth.length > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0 2px', paddingTop: '6px' }}>
+                      <span style={{ fontSize: '11px', color: '#7DC8A0', fontWeight: 700 }}>✅ 할일</span>
+                    </div>
+                    {todosThisMonth.map(t => (
+                      <div key={t.id} style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '4px 8px', borderRadius: '7px', background: '#f4fbf6',
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={t.isDone}
+                          onChange={() => handleToggleTodo(t)}
+                          style={{ cursor: 'pointer', accentColor: '#7DC8A0', width: '14px', height: '14px', flexShrink: 0 }}
+                        />
+                        <span style={{ fontSize: '11px', color: '#9aa0a6', flexShrink: 0 }}>
+                          {t.todoDate.slice(5).replace('-', '/')}
+                        </span>
+                        <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[t.userId] ?? ''}</span>
+                        <span style={{
+                          fontSize: '12px', color: t.isDone ? '#9aa0a6' : '#344054',
+                          textDecoration: t.isDone ? 'line-through' : 'none',
+                          flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>{t.title}</span>
+                        <button
+                          onClick={() => handleDeleteTodo(t.id)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: '14px', flexShrink: 0, lineHeight: 1, padding: '0 2px' }}
+                        >×</button>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -642,7 +731,10 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                       return (
                         <div
                           key={colIdx}
-                          onClick={() => setSelectedDate(dateStr)}
+                          onClick={(e) => {
+                            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setDateActionPopup({ date: dateStr, x: r.left, y: r.bottom + 4 });
+                          }}
                           style={{
                             minHeight: DAY_NUM_H + barsH + (isMobile ? 50 : 60),
                             padding: '5px 5px 4px',
@@ -829,6 +921,133 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
               </div>
             ));
           })}
+        </div>
+      )}
+
+      {/* 날짜 클릭 → 일정/할일 선택 팝업 */}
+      {dateActionPopup && (
+        <div
+          ref={dateActionRef}
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: Math.max(4, Math.min(dateActionPopup.x, window.innerWidth - 160)),
+            top: Math.min(dateActionPopup.y, window.innerHeight - 100),
+            zIndex: 10001,
+            background: '#fff',
+            border: '1px solid #e0e0e0',
+            borderRadius: '10px',
+            padding: '8px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            minWidth: '140px',
+          }}
+        >
+          <div style={{ fontSize: '11px', color: '#9aa0a6', padding: '2px 8px 4px', fontWeight: 600 }}>
+            {dateActionPopup.date.slice(5).replace('-', '/')}
+          </div>
+          <button
+            onClick={() => { setSelectedDate(dateActionPopup.date); setDateActionPopup(null); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '8px 12px', borderRadius: '8px', border: 'none',
+              background: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: '#344054',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f0f8fd'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+          >
+            📅 일정 추가
+          </button>
+          <button
+            onClick={() => { setTodoForm({ date: dateActionPopup.date }); setTodoUser('ldy'); setTodoInput(''); setDateActionPopup(null); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '8px 12px', borderRadius: '8px', border: 'none',
+              background: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: '#344054',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f4fbf6'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+          >
+            ✅ 할일 추가
+          </button>
+        </div>
+      )}
+
+      {/* 할일 추가 폼 모달 */}
+      {todoForm && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setTodoForm(null); }}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+            zIndex: 10002, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div style={{
+            background: '#fff', borderRadius: '14px', padding: '22px 24px',
+            minWidth: '280px', maxWidth: '380px', width: '90%',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }}>
+            <div style={{ fontWeight: 800, fontSize: '15px', color: '#1a3a5c', marginBottom: '16px' }}>
+              ✅ 할일 추가 — {todoForm.date.slice(5).replace('-', '/')}
+            </div>
+
+            {/* 사용자 선택 */}
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
+              {(['ldy', 'juhae', 'common'] as const).map(uid => (
+                <button
+                  key={uid}
+                  onClick={() => setTodoUser(uid)}
+                  style={{
+                    flex: 1, padding: '7px 4px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer',
+                    border: todoUser === uid ? '2px solid #7DC8A0' : '1px solid #dadce0',
+                    background: todoUser === uid ? '#f4fbf6' : '#fff',
+                    color: todoUser === uid ? '#2e7d32' : '#5f6368',
+                    fontWeight: todoUser === uid ? 700 : 400,
+                  }}
+                >
+                  {uid === 'ldy' ? '🐴 동영' : uid === 'juhae' ? '☀️ 주해' : '❤️ 공통'}
+                </button>
+              ))}
+            </div>
+
+            {/* 할일 제목 입력 */}
+            <input
+              value={todoInput}
+              onChange={e => setTodoInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSaveTodo(); if (e.key === 'Escape') setTodoForm(null); }}
+              placeholder="할일을 입력하세요"
+              autoFocus
+              style={{
+                width: '100%', padding: '9px 12px', fontSize: '14px',
+                border: '1px solid #dadce0', borderRadius: '8px', outline: 'none',
+                boxSizing: 'border-box',
+              }}
+              onFocus={e => { e.currentTarget.style.borderColor = '#7DC8A0'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = '#dadce0'; }}
+            />
+
+            {/* 버튼 */}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '14px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setTodoForm(null)}
+                style={{
+                  padding: '8px 16px', fontSize: '13px', borderRadius: '8px',
+                  border: '1px solid #dadce0', background: '#fff', color: '#5f6368', cursor: 'pointer',
+                }}
+              >취소</button>
+              <button
+                onClick={handleSaveTodo}
+                disabled={!todoInput.trim()}
+                style={{
+                  padding: '8px 18px', fontSize: '13px', borderRadius: '8px', border: 'none',
+                  background: todoInput.trim() ? '#7DC8A0' : '#ccc',
+                  color: '#fff', cursor: todoInput.trim() ? 'pointer' : 'default', fontWeight: 700,
+                }}
+              >저장</button>
+            </div>
+          </div>
         </div>
       )}
     </>

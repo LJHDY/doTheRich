@@ -828,6 +828,23 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
     - 지수 백오프 5회 재시도 (503 오류 대응)
     - 매일 22:00 UTC(07:00 KST) APScheduler 자동 생성
 
+- [x] CalendarModal 고정비 납부일 표시
+  - `getFixedExpenseCalendar(ym6)` API로 고정비 납부일 로드 (동영=연한빨강, 주해=베이비블루 원)
+  - 날짜 오른쪽 끝 빈 원, 납부 시 채워진 원, 전체 납부 시 달력에도 채워진 원
+  - 클릭 시 fePopup — 고정비명·금액·납부 여부 표시
+  - `FixedExpenseCalendar`, `FixedExpenseCalendarItem` 타입 (`types/index.ts`)
+
+- [x] CalendarModal 할일 기능
+  - 날짜 셀 클릭 → dateActionPopup (📅 일정 추가 / ✅ 할일 추가 선택)
+  - 할일 추가 폼: 동영/주해/공통 선택 + 제목 입력 + Enter 저장
+  - 월별 일정 목록 하단에 할일 목록 표시 (접기/펼치기 연동)
+    - 날짜·이모지·제목·완료 체크박스·삭제(×) 버튼
+    - 완료 시 취소선 + 회색 처리
+  - 텔레그램 알림(당일·내일·이번주)에 할일 포함 (백엔드 schedule_service.py)
+  - `Todo` 타입, CRUD API 4종 (`getTodos`, `createTodo`, `updateTodo`, `deleteTodo`)
+  - 백엔드: `todo` 테이블, `todo_service.py`, `routers/todos.py`
+    - `GET /api/todos?year_month=YYYY-MM`, `POST /api/todos`, `PATCH /api/todos/:id`, `DELETE /api/todos/:id`
+
 - [x] 네이버 캘린더 OAuth 연동 (`CalendarModal` 내 네이버 연동 패널)
   - OAuth 2.0 흐름: `GET /api/naver-calendar/auth/{user_id}` → 네이버 인증 → 콜백 → 토큰 저장
   - `NaverCalendarToken` 모델 (`naver_calendar_token` 테이블): user_id, access/refresh_token, expires_at, calendar_id

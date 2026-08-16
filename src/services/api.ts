@@ -30,6 +30,7 @@ import {
   AssetSnapshotDetail,
   FixedExpense,
   FixedExpenseCalendar,
+  Todo,
   PaymentMethod,
   CommonCode,
   MarketReport,
@@ -992,6 +993,26 @@ export const payFixedExpense = async (
     year_month: yearMonth, entry_date: entryDate,
   });
   return toEntry(data);
+};
+
+// ─── 할일 API ─────────────────────────────────────────────────────
+export const getTodos = async (yearMonth: string): Promise<Todo[]> => {
+  const { data } = await api.get('/api/todos', { params: { year_month: yearMonth } });
+  return data as Todo[];
+};
+export const createTodo = async (payload: { userId: string; title: string; todoDate: string }): Promise<Todo> => {
+  const { data } = await api.post('/api/todos', { user_id: payload.userId, title: payload.title, todo_date: payload.todoDate });
+  return data as Todo;
+};
+export const updateTodo = async (id: number, payload: { title?: string; isDone?: boolean }): Promise<Todo> => {
+  const body: any = {};
+  if (payload.title !== undefined) body.title = payload.title;
+  if (payload.isDone !== undefined) body.is_done = payload.isDone;
+  const { data } = await api.patch(`/api/todos/${id}`, body);
+  return data as Todo;
+};
+export const deleteTodo = async (id: number): Promise<void> => {
+  await api.delete(`/api/todos/${id}`);
 };
 
 export const getFixedExpenseCalendar = async (yearMonth: string): Promise<FixedExpenseCalendar> => {

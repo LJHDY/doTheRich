@@ -668,6 +668,16 @@ export interface FixedExpense {
   isActive: boolean;
 }
 
+/** 할일 */
+export interface Todo {
+  id: number;
+  userId: string;        // "ldy" | "juhae" | "common"
+  title: string;
+  todoDate: string;      // YYYY-MM-DD
+  isDone: boolean;
+  createdAt: string;
+}
+
 /** 고정비 캘린더 — 납부일별 항목 + 납부 여부 */
 export interface FixedExpenseCalendarItem {
   id: number;
