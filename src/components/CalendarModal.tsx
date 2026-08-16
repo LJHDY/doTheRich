@@ -258,6 +258,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const [todoForm, setTodoForm]         = useState<{ date: string } | null>(null);
   const [todoInput, setTodoInput]       = useState('');
   const [todoUser, setTodoUser]         = useState<'ldy' | 'juhae' | 'common'>('ldy');
+  const [todoEndDate, setTodoEndDate]   = useState('');
   const pickerRef       = useRef<HTMLDivElement>(null);
   const fePopupRef      = useRef<HTMLDivElement>(null);
   const dateActionRef   = useRef<HTMLDivElement>(null);
@@ -403,9 +404,11 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   // 할일 저장
   const handleSaveTodo = async () => {
     if (!todoInput.trim() || !todoForm) return;
-    const newTodo = await createTodo({ userId: todoUser, title: todoInput.trim(), todoDate: todoForm.date });
+    const endDate = todoEndDate && todoEndDate > todoForm.date ? todoEndDate : undefined;
+    const newTodo = await createTodo({ userId: todoUser, title: todoInput.trim(), todoDate: todoForm.date, endDate });
     setTodos(prev => [...prev, newTodo]);
     setTodoInput('');
+    setTodoEndDate('');
     setTodoForm(null);
   };
 
@@ -668,6 +671,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                         />
                         <span style={{ fontSize: '11px', color: '#9aa0a6', flexShrink: 0 }}>
                           {t.todoDate.slice(5).replace('-', '/')}
+                          {t.endDate && t.endDate > t.todoDate ? ` ~ ${t.endDate.slice(5).replace('-', '/')}` : ''}
                         </span>
                         <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[t.userId] ?? ''}</span>
                         <span style={{
@@ -961,7 +965,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
             📅 일정 추가
           </button>
           <button
-            onClick={() => { setTodoForm({ date: dateActionPopup.date }); setTodoUser('ldy'); setTodoInput(''); setDateActionPopup(null); }}
+            onClick={() => { setTodoForm({ date: dateActionPopup.date }); setTodoUser('ldy'); setTodoInput(''); setTodoEndDate(''); setDateActionPopup(null); }}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               padding: '8px 12px', borderRadius: '8px', border: 'none',
@@ -1027,6 +1031,34 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
               onFocus={e => { e.currentTarget.style.borderColor = '#7DC8A0'; }}
               onBlur={e => { e.currentTarget.style.borderColor = '#dadce0'; }}
             />
+
+            {/* 기간 설정 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+              <span style={{ fontSize: '12px', color: '#5f6368', flexShrink: 0 }}>기간</span>
+              <span style={{ fontSize: '12px', color: '#344054', fontWeight: 600 }}>
+                {todoForm.date.slice(5).replace('-', '/')}
+              </span>
+              <span style={{ fontSize: '12px', color: '#9aa0a6' }}>~</span>
+              <input
+                type="date"
+                value={todoEndDate}
+                min={todoForm.date}
+                onChange={e => setTodoEndDate(e.target.value)}
+                style={{
+                  flex: 1, padding: '6px 10px', fontSize: '13px',
+                  border: '1px solid #dadce0', borderRadius: '8px', outline: 'none',
+                  color: todoEndDate ? '#344054' : '#9aa0a6',
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#7DC8A0'; }}
+                onBlur={e => { e.currentTarget.style.borderColor = '#dadce0'; }}
+              />
+              {todoEndDate && (
+                <button
+                  onClick={() => setTodoEndDate('')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: '16px', lineHeight: 1, padding: 0 }}
+                >×</button>
+              )}
+            </div>
 
             {/* 버튼 */}
             <div style={{ display: 'flex', gap: '8px', marginTop: '14px', justifyContent: 'flex-end' }}>

@@ -1000,14 +1000,18 @@ export const getTodos = async (yearMonth: string): Promise<Todo[]> => {
   const { data } = await api.get('/api/todos', { params: { year_month: yearMonth } });
   return data as Todo[];
 };
-export const createTodo = async (payload: { userId: string; title: string; todoDate: string }): Promise<Todo> => {
-  const { data } = await api.post('/api/todos', { user_id: payload.userId, title: payload.title, todo_date: payload.todoDate });
+export const createTodo = async (payload: { userId: string; title: string; todoDate: string; endDate?: string }): Promise<Todo> => {
+  const { data } = await api.post('/api/todos', {
+    user_id: payload.userId, title: payload.title, todo_date: payload.todoDate,
+    ...(payload.endDate ? { end_date: payload.endDate } : {}),
+  });
   return data as Todo;
 };
-export const updateTodo = async (id: number, payload: { title?: string; isDone?: boolean }): Promise<Todo> => {
+export const updateTodo = async (id: number, payload: { title?: string; isDone?: boolean; endDate?: string }): Promise<Todo> => {
   const body: any = {};
   if (payload.title !== undefined) body.title = payload.title;
   if (payload.isDone !== undefined) body.is_done = payload.isDone;
+  if (payload.endDate !== undefined) body.end_date = payload.endDate;
   const { data } = await api.patch(`/api/todos/${id}`, body);
   return data as Todo;
 };

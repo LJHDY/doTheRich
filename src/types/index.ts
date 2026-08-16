@@ -673,7 +673,8 @@ export interface Todo {
   id: number;
   userId: string;        // "ldy" | "juhae" | "common"
   title: string;
-  todoDate: string;      // YYYY-MM-DD
+  todoDate: string;      // YYYY-MM-DD (시작일)
+  endDate?: string;      // YYYY-MM-DD (종료일, 없으면 단일일)
   isDone: boolean;
   createdAt: string;
 }
