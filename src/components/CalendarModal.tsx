@@ -857,7 +857,15 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                           {lane.map(bar => {
                             const { event, startCol, endCol } = bar;
                             const color = catColor(event.category, 0);
-                            const isContinued = event.eventDate < (dates.find(Boolean) ?? '');
+                            const weekStart = dates.find(Boolean) ?? '';
+                            const weekEnd   = [...dates].reverse().find(Boolean) ?? '';
+                            // 이번 주 이전에 시작된 경우 → 왼쪽 끝 flat
+                            const fromPrev = event.eventDate < weekStart;
+                            // 이번 주 이후에도 계속되는 경우 → 오른쪽 끝 flat
+                            const toNext   = event.endDate! > weekEnd;
+                            // 단일일 칩과 동일한 3px 라운드, 주 경계 연결 부분만 flat
+                            const radL = fromPrev ? '0' : '3px';
+                            const radR = toNext   ? '0' : '3px';
                             return (
                               <div
                                 key={event.id}
@@ -866,10 +874,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                                   gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
                                   height: BAR_H,
                                   background: color,
-                                  // 주 경계에서 잘린 경우 좌측 radius 제거
-                                  borderRadius: isContinued
-                                    ? `0 ${BAR_H / 2}px ${BAR_H / 2}px 0`
-                                    : `${BAR_H / 2}px`,
+                                  borderRadius: `${radL} ${radR} ${radR} ${radL}`,
                                   color: '#fff',
                                   fontSize: isMobile ? '10px' : '11px',
                                   fontWeight: 700,
