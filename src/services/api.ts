@@ -1007,11 +1007,12 @@ export const createTodo = async (payload: { userId: string; title: string; todoD
   });
   return data as Todo;
 };
-export const updateTodo = async (id: number, payload: { title?: string; isDone?: boolean; endDate?: string }): Promise<Todo> => {
+export const updateTodo = async (id: number, payload: { title?: string; isDone?: boolean; endDate?: string; doneDate?: string | null }): Promise<Todo> => {
   const body: any = {};
   if (payload.title !== undefined) body.title = payload.title;
   if (payload.isDone !== undefined) body.is_done = payload.isDone;
   if (payload.endDate !== undefined) body.end_date = payload.endDate;
+  if (payload.doneDate !== undefined) body.done_date = payload.doneDate ?? '';  // null → '' → 백엔드에서 NULL 처리
   const { data } = await api.patch(`/api/todos/${id}`, body);
   return data as Todo;
 };

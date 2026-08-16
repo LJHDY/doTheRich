@@ -675,7 +675,8 @@ export interface Todo {
   title: string;
   todoDate: string;      // YYYY-MM-DD (시작일)
   endDate?: string;      // YYYY-MM-DD (종료일, 없으면 단일일)
-  isDone: boolean;
+  isDone: boolean;       // 단일 할일 완료 여부
+  doneDate?: string;     // 다일 할일: 마지막으로 완료 처리한 날짜 (YYYY-MM-DD)
   createdAt: string;
 }
 

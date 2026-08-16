@@ -412,9 +412,25 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
     setTodoForm(null);
   };
 
+  const todayStr2 = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  // 다일 할일 여부
+  const isMultiDay = (t: Todo) => !!(t.endDate && t.endDate > t.todoDate);
+
+  // 특정 날짜 기준 완료 여부
+  const isTodoDone = (t: Todo) =>
+    isMultiDay(t) ? t.doneDate === todayStr2 : t.isDone;
+
   // 할일 완료 토글
   const handleToggleTodo = async (todo: Todo) => {
-    const updated = await updateTodo(todo.id, { isDone: !todo.isDone });
+    let updated: Todo;
+    if (isMultiDay(todo)) {
+      // 다일: done_date 토글 (오늘 날짜 기준)
+      const newDoneDate = todo.doneDate === todayStr2 ? null : todayStr2;
+      updated = await updateTodo(todo.id, { doneDate: newDoneDate });
+    } else {
+      updated = await updateTodo(todo.id, { isDone: !todo.isDone });
+    }
     setTodos(prev => prev.map(t => t.id === todo.id ? updated : t));
   };
 
@@ -665,7 +681,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                       }}>
                         <input
                           type="checkbox"
-                          checked={t.isDone}
+                          checked={isTodoDone(t)}
                           onChange={() => handleToggleTodo(t)}
                           style={{ cursor: 'pointer', accentColor: '#7DC8A0', width: '14px', height: '14px', flexShrink: 0 }}
                         />
@@ -675,8 +691,8 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                         </span>
                         <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[t.userId] ?? ''}</span>
                         <span style={{
-                          fontSize: '12px', color: t.isDone ? '#9aa0a6' : '#344054',
-                          textDecoration: t.isDone ? 'line-through' : 'none',
+                          fontSize: '12px', color: isTodoDone(t) ? '#9aa0a6' : '#344054',
+                          textDecoration: isTodoDone(t) ? 'line-through' : 'none',
                           flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>{t.title}</span>
                         <button
