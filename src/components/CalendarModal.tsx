@@ -889,7 +889,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
             position: 'fixed',
             left: Math.max(4, Math.min(fePopup.x, window.innerWidth - 230)),
             top: fePopup.y,
-            zIndex: 9999,
+            zIndex: 10003,
             background: '#fff',
             border: '1px solid #e0e0e0',
             borderRadius: '10px',
