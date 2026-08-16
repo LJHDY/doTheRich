@@ -383,6 +383,16 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
 
   const selectedSchedules = selectedDate ? (schedulesByDate[selectedDate] ?? []) : [];
 
+  // 모든 주의 lanes를 미리 계산 — maxBarsH로 주 행 높이를 통일해 이벤트 칩이 제각각 위치 표시되는 문제 방지
+  const allWeekLanes = useMemo(() =>
+    weeks.map(week =>
+      buildLanes(week, week.map(day => day ? toDateStr(day) : null), schedules)
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [schedules, weeks.length, year, month]
+  );
+  const maxBarsH = Math.max(0, ...allWeekLanes.map(l => l.length * (BAR_H + BAR_GAP)));
+
   // 이번 달에 실제로 발생하는 일정 목록
   // 반복 이벤트는 isEventActiveOn으로 직접 확인 (schedulesByDate 우회 — 클로저 타이밍 문제 방지)
   const schedulesThisMonth = useMemo(() => {
@@ -726,8 +736,8 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
           <div style={{ padding: isMobile ? '0 12px 16px' : '0 20px 20px', display: 'flex', flexDirection: 'column', gap: `${GRID_GAP}px` }}>
             {weeks.map((week, weekIdx) => {
               const dates = week.map(day => day ? toDateStr(day) : null);
-              const lanes = buildLanes(week, dates, schedules);
-              const barsH = lanes.length * (BAR_H + BAR_GAP);
+              const lanes = allWeekLanes[weekIdx];
+              const barsH = maxBarsH;
 
               return (
                 <div key={weekIdx} style={{ position: 'relative' }}>
