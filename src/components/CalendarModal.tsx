@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CommonCode, Schedule } from '../types';
+import { CommonCode, FixedExpenseCalendar, Schedule } from '../types';
 import {
   disconnectNaverCalendar,
   getCommonCodes,
+  getFixedExpenseCalendar,
   getNaverCalendarAuthUrl,
   getNaverCalendarStatus,
   getSchedules,
@@ -246,7 +247,10 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const [pickerYear, setPickerYear]     = useState(now.getFullYear());
   const [listOpen, setListOpen]         = useState(true);  // 월별 일정 목록 펼침 여부
   const [catCodes, setCatCodes]         = useState<CommonCode[]>([]);
-  const pickerRef = useRef<HTMLDivElement>(null);
+  const [feCalendar, setFeCalendar]     = useState<FixedExpenseCalendar | null>(null);
+  const [fePopup, setFePopup]           = useState<{ date: string; x: number; y: number } | null>(null);
+  const pickerRef  = useRef<HTMLDivElement>(null);
+  const fePopupRef = useRef<HTMLDivElement>(null);
 
   // CALENDAR_CATEGORY 공통코드 로드 (detailCode → detailCodeName 변환용)
   useEffect(() => {
@@ -255,6 +259,16 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
 
   const catName = (code: string | null) =>
     code ? (catCodes.find(c => c.detailCode === code)?.detailCodeName ?? code) : null;
+
+  // 고정비 팝업 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!fePopup) return;
+    const handler = (e: MouseEvent) => {
+      if (fePopupRef.current && !fePopupRef.current.contains(e.target as Node)) setFePopup(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [fePopup]);
 
   // 피커 바깥 클릭 시 닫기
   useEffect(() => {
@@ -273,8 +287,15 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setSchedules(await getSchedules(yearMonth)); }
-    finally { setLoading(false); }
+    const ym6 = yearMonth.replace('-', ''); // YYYY-MM → YYYYMM
+    try {
+      const [sched, feData] = await Promise.all([
+        getSchedules(yearMonth),
+        getFixedExpenseCalendar(ym6),
+      ]);
+      setSchedules(sched);
+      setFeCalendar(feData);
+    } finally { setLoading(false); }
   }, [yearMonth]);
 
   useEffect(() => { load(); }, [load]);
@@ -633,13 +654,40 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                           onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#e0f4fc' : '#f8fbff'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#f0f8fd' : '#fff'; }}
                         >
-                          {/* 날짜 숫자 */}
-                          <div style={{
-                            height: DAY_NUM_H,
-                            fontWeight: isToday ? 800 : 500,
-                            fontSize: isMobile ? '13px' : '15px',
-                            color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
-                          }}>{day}</div>
+                          {/* 날짜 숫자 + 고정비 원 */}
+                          <div style={{ height: DAY_NUM_H, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                            <span style={{
+                              fontWeight: isToday ? 800 : 500,
+                              fontSize: isMobile ? '13px' : '15px',
+                              color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
+                            }}>{day}</span>
+                            {/* 고정비 납부일 표시 원 */}
+                            {(feCalendar?.ldy?.[dateStr] || feCalendar?.juhae?.[dateStr]) && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingTop: '2px' }}>
+                                {(['ldy', 'juhae'] as const).map(uid => {
+                                  const items = feCalendar?.[uid]?.[dateStr];
+                                  if (!items) return null;
+                                  const color = uid === 'ldy' ? '#E07070' : '#89CFF0';
+                                  const allPaid = items.every(x => x.paid);
+                                  return (
+                                    <div
+                                      key={uid}
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                        setFePopup({ date: dateStr, x: r.left - 90, y: r.bottom + 4 });
+                                      }}
+                                      style={{
+                                        width: 9, height: 9, borderRadius: '50%', cursor: 'pointer',
+                                        border: `1.5px solid ${color}`,
+                                        background: allPaid ? color : 'transparent',
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
 
                           {/* 다일 이벤트 바 영역 높이 확보 */}
                           <div style={{ height: barsH }} />
@@ -738,6 +786,50 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
           onClose={() => setSelectedDate(null)}
           onSaved={() => { load(); }}
         />
+      )}
+
+      {/* 고정비 납부일 팝업 */}
+      {fePopup && (
+        <div
+          ref={fePopupRef}
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: Math.max(4, Math.min(fePopup.x, window.innerWidth - 230)),
+            top: fePopup.y,
+            zIndex: 9999,
+            background: '#fff',
+            border: '1px solid #e0e0e0',
+            borderRadius: '10px',
+            padding: '12px 14px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            minWidth: '200px',
+            maxWidth: '260px',
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: '13px', color: '#344054', marginBottom: '10px' }}>
+            {fePopup.date.slice(5).replace('-', '/')} 고정비
+          </div>
+          {(['ldy', 'juhae'] as const).map(uid => {
+            const items = feCalendar?.[uid]?.[fePopup.date];
+            if (!items) return null;
+            const color = uid === 'ldy' ? '#E07070' : '#89CFF0';
+            const emoji = uid === 'ldy' ? '🐴' : '☀️';
+            return items.map(fe => (
+              <div key={fe.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <div style={{
+                  width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+                  border: `1.5px solid ${color}`,
+                  background: fe.paid ? color : 'transparent',
+                }} />
+                <span style={{ fontSize: '12px', color: '#344054', flex: 1 }}>{emoji} {fe.name}</span>
+                <span style={{ fontSize: '11px', color: '#888', whiteSpace: 'nowrap' }}>
+                  {Math.round(fe.amount / 10000)}만
+                </span>
+              </div>
+            ));
+          })}
+        </div>
       )}
     </>
   );

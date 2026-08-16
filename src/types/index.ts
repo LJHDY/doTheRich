@@ -668,6 +668,18 @@ export interface FixedExpense {
   isActive: boolean;
 }
 
+/** 고정비 캘린더 — 납부일별 항목 + 납부 여부 */
+export interface FixedExpenseCalendarItem {
+  id: number;
+  name: string;
+  amount: number;
+  paid: boolean;
+}
+export interface FixedExpenseCalendar {
+  ldy?: Record<string, FixedExpenseCalendarItem[]>;
+  juhae?: Record<string, FixedExpenseCalendarItem[]>;
+}
+
 /** CNN Fear & Greed Index */
 export interface FearGreedData {
   score: number;

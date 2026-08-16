@@ -29,6 +29,7 @@ import {
   AssetSnapshotCell,
   AssetSnapshotDetail,
   FixedExpense,
+  FixedExpenseCalendar,
   PaymentMethod,
   CommonCode,
   MarketReport,
@@ -991,6 +992,12 @@ export const payFixedExpense = async (
     year_month: yearMonth, entry_date: entryDate,
   });
   return toEntry(data);
+};
+
+export const getFixedExpenseCalendar = async (yearMonth: string): Promise<FixedExpenseCalendar> => {
+  // yearMonth: YYYYMM 형식
+  const { data } = await api.get('/api/budget/fixed-expense-calendar', { params: { year_month: yearMonth } });
+  return data as FixedExpenseCalendar;
 };
 
 // ─── 결제수단 API ─────────────────────────────────────────────────
