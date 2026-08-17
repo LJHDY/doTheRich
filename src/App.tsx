@@ -26,6 +26,7 @@ import UserSelectModal from './components/budget/UserSelectModal';
 import { BUDGET_USER_STORAGE_KEY } from './constants/budgetConstants';
 import RealEstateAnalysisModal from './components/RealEstateAnalysisModal';
 import CalendarModal from './components/CalendarModal';
+import CameraStampButton from './components/CameraStampButton';
 
 const App: React.FC = () => {
   const isMobile = useIsMobile();
@@ -1451,6 +1452,9 @@ const App: React.FC = () => {
           }}
         >← 등록으로 돌아가기</button>
       )}
+
+      {/* 모바일 전용 타임스탬프 카메라 */}
+      <CameraStampButton isMobile={isMobile} />
 
       {/* 전역 토스트 알림 */}
       {toast && (
