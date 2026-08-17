@@ -6,7 +6,7 @@ import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
 import PhotoSlideModal from './PhotoSlideModal';
 import ChecklistModal from './ChecklistModal';
-import { getComplexChecklist } from '../services/api';
+import { getComplexChecklist, getPropertyVisits } from '../services/api';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import { FACILITY_MACRO_CATEGORY, getSimplifiedCategory } from '../constants/hazardCategories';
 
@@ -563,11 +563,23 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       loadPriceHistories(complex.id);
       // 체크리스트 요약 로드 — 체크된 항목 수 / 전체 항목 수 파악
       setChecklistOpen(false);
-      getComplexChecklist(complex.id).then(results => {
+      // 분위기/단지 + 매물 기록 병렬 로드 후 합산 총점 계산
+      Promise.all([
+        getComplexChecklist(complex.id),
+        getPropertyVisits(complex.id),
+      ]).then(([results, visits]) => {
         setChecklistRatedCount(results.filter(r => r.rating !== null).length);
         setChecklistTotalCount(results.length);
-        const sc = calcChecklistScore(results);
-        setChecklistScore(sc.maxScore > 0 ? sc : null);
+        const atmoComp = calcChecklistScore(results);
+        const propScore = visits.reduce(
+          (acc, v) => {
+            const s = calcChecklistScore(v.results);
+            return { score: acc.score + s.score, maxScore: acc.maxScore + s.maxScore };
+          },
+          { score: 0, maxScore: 0 }
+        );
+        const combined = { score: atmoComp.score + propScore.score, maxScore: atmoComp.maxScore + propScore.maxScore };
+        setChecklistScore(combined.maxScore > 0 ? combined : null);
       }).catch(() => {});
     }
   }, [complex, loadPriceHistories, onRadiusToggle]);

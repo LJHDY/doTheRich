@@ -120,10 +120,8 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     finally { setVisitsLoading(false); }
   }, [complexId]);
 
-  useEffect(() => { loadAtmosphere(); }, [loadAtmosphere]);
-  useEffect(() => {
-    if (activeTab === 'PROPERTY') loadVisits();
-  }, [activeTab, loadVisits]);
+  // 마운트 시 분위기/단지 + 매물 기록 동시 로드 — 합산 총점 계산을 위해 모두 필요
+  useEffect(() => { loadAtmosphere(); loadVisits(); }, [loadAtmosphere, loadVisits]);
 
   const tabItems = useMemo(() =>
     items.filter(i => i.visitType === activeTab).sort((a, b) => a.displayOrder - b.displayOrder),
@@ -159,7 +157,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
   const totalCount = items.length;
   const hasAnyRating = items.some(hasValue);
 
-  // 탭별 점수 — calcChecklistScore 기반
+  // 탭별 점수 (분위기/단지) — 탭 버튼 표시용
   const tabScores = useMemo(() =>
     Object.fromEntries(
       VISIT_TYPES.filter(vt => vt.key !== 'PROPERTY').map(vt => {
@@ -170,13 +168,25 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
     [items]
   );
 
-  // 매물별 점수
+  // 매물별 점수 — 카드 헤더 표시용
   const visitScores = useMemo(() =>
     Object.fromEntries(
       visits.map(v => [v.id, calcChecklistScore(v.results)])
     ) as Record<number, { score: number; maxScore: number }>,
     [visits]
   );
+
+  // 합산 총점 — 분위기 + 단지 + 모든 매물 기록 합계
+  const totalScore = useMemo(() => {
+    const atmo = tabScores['ATMOSPHERE'] ?? { score: 0, maxScore: 0 };
+    const comp = tabScores['COMPLEX'] ?? { score: 0, maxScore: 0 };
+    const propScores = Object.values(visitScores);
+    const propScore = propScores.reduce((acc, s) => ({ score: acc.score + s.score, maxScore: acc.maxScore + s.maxScore }), { score: 0, maxScore: 0 });
+    return {
+      score: atmo.score + comp.score + propScore.score,
+      maxScore: atmo.maxScore + comp.maxScore + propScore.maxScore,
+    };
+  }, [tabScores, visitScores]);
 
   // ── RATING/OX 평가 저장 (분위기/단지 탭) ────────────────────────────────────
   const handleRate = async (templateId: number, rating: string) => {
@@ -416,8 +426,16 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
         }}>
           <div>
             <div style={{ fontSize: '16px', fontWeight: 700, color: '#202124' }}>임장 체크리스트</div>
-            <div style={{ fontSize: '12px', color: '#80868b', marginTop: '3px' }}>
-              {complexName} · {checkedCount}/{totalCount}개 체크됨
+            <div style={{ fontSize: '12px', color: '#80868b', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>{complexName} · {checkedCount}/{totalCount}개 체크됨</span>
+              {totalScore.maxScore > 0 && (
+                <span style={{ fontWeight: 700, color: '#4BAAD4' }}>
+                  총 {totalScore.score}/{totalScore.maxScore}점
+                  <span style={{ fontWeight: 400, color: '#9aa0a6', marginLeft: '3px' }}>
+                    ({Math.round(totalScore.score / totalScore.maxScore * 100)}%)
+                  </span>
+                </span>
+              )}
             </div>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', color: '#80868b', padding: 0, lineHeight: 1 }}>×</button>
