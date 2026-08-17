@@ -134,6 +134,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
   };
 
   const handleCollect = async () => {
+    if (!window.confirm('서울 25구 시세 수집을 시작합니다.\n수집에는 수 분이 소요될 수 있습니다.')) return;
     setCollecting(true);
     // 수집 시작 시각 기록 — 이보다 최신 collectedAt이 반환되면 수집 완료로 판단
     // ISO 문자열 비교 가능: "2024-08-10T02:00:00" > "2024-08-09T23:00:00"

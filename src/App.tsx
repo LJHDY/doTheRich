@@ -330,6 +330,7 @@ const App: React.FC = () => {
 
   const handleCollect = async () => {
     if (!selectedCollectGu) return;
+    if (!window.confirm(`${selectedCollectGu} 공공단지 수집을 시작합니다.\n수집에는 수 분이 소요될 수 있습니다.`)) return;
     setCollectStatus('collecting');
     try {
       await collectPublicComplexes(selectedCollectGu);
