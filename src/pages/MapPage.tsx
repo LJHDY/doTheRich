@@ -6,6 +6,24 @@ import { haversineMeters } from '../utils/geo';
 // 저장된 경로마다 순환 사용할 색상 팔레트
 const ROUTE_COLORS = ['#e53935', '#1565c0', '#2e7d32', '#e65100', '#6a1b9a', '#00838f', '#ad1457', '#f9a825'];
 
+// ── 현재 위치 마커 HTML — 파란 점 + 방향 삼각형 (heading=null이면 삼각형 생략)
+// heading: 북=0, 시계방향(도) — GPS 이동방향 또는 나침반 방위각
+const buildLocMarkerContent = (heading: number | null): string => {
+  const cone = heading !== null ? `
+    <div style="position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;transform:rotate(${heading}deg);">
+      <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:14px solid rgba(26,115,232,0.85);margin-top:-11px;"></div>
+    </div>
+  ` : '';
+  return `
+    <div style="position:relative;width:28px;height:28px;">
+      <div style="position:absolute;inset:-7px;border-radius:50%;background:rgba(26,115,232,0.15);animation:mylocpulse 1.8s ease-out infinite;"></div>
+      ${cone}
+      <div style="position:absolute;inset:4px;border-radius:50%;background:#1a73e8;border:2.5px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,0.4);"></div>
+    </div>
+    <style>@keyframes mylocpulse{0%{transform:scale(1);opacity:0.6;}100%{transform:scale(3.2);opacity:0;}}</style>
+  `;
+};
+
 // p1 → p2 방향의 방위각 계산 (도, 북=0, 시계방향) — 화살표 마커 회전각 결정에 사용
 // Haversine 기반 구면 삼각법으로 정확한 방위각 산출
 function calcBearing(p1: RoutePoint, p2: RoutePoint): number {
@@ -60,6 +78,15 @@ const MapPage: React.FC<MapPageProps> = ({
   const districtPolygonsRef = useRef<any[]>([]); // 행정구역 경계 폴리곤 배열
   const myLocationMarkerRef = useRef<any>(null); // 내 위치 마커
   const [locating, setLocating] = useState(false); // 위치 조회 중 로딩 상태
+  // 실시간 위치 추적 — watchPosition + 나침반
+  const watchIdRef = useRef<number | null>(null);
+  const headingRef = useRef<number | null>(null);               // 나침반·GPS 방위각
+  const isFollowingRef = useRef(false);                         // 지도 자동 이동 여부
+  const dragListenerRef = useRef<any>(null);                    // 지도 드래그 이벤트 핸들
+  const lastPositionRef = useRef<{ lat: number; lng: number } | null>(null);
+  const orientationCleanupRef = useRef<(() => void) | null>(null);
+  const [isTracking, setIsTracking] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
   const boundsInitializedRef = useRef(false);
   const routePolylinesRef = useRef<any[]>([]);      // 저장된 경로 폴리라인 배열
   const routeArrowMarkersRef = useRef<any[]>([]);   // 방향 화살표 마커 배열
@@ -860,64 +887,169 @@ const MapPage: React.FC<MapPageProps> = ({
     });
   }, [drawingPoints]);
 
-  // 내 위치 버튼 핸들러 — Geolocation API로 현재 위치 조회 후 마커 표시
-  const handleMyLocation = useCallback(() => {
+  // 위치 추적 종료 — watchPosition·나침반·드래그 리스너 해제 + 마커 제거
+  const stopTracking = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    orientationCleanupRef.current?.();
+    orientationCleanupRef.current = null;
+    if (dragListenerRef.current && window.naver) {
+      window.naver.maps.Event.removeListener(dragListenerRef.current);
+      dragListenerRef.current = null;
+    }
+    if (myLocationMarkerRef.current) {
+      myLocationMarkerRef.current.setMap(null);
+      myLocationMarkerRef.current = null;
+    }
+    headingRef.current = null;
+    lastPositionRef.current = null;
+    isFollowingRef.current = false;
+    setIsTracking(false);
+    setIsFollowing(false);
+  }, []);
+
+  // 내 위치 버튼 핸들러
+  // - 비활성 → 추적 시작 + 지도 따라가기
+  // - 추적 중 + 따라가기 중 → 탭 시 추적 종료
+  // - 추적 중 + 드래그로 멈춤 → 탭 시 지도를 현재 위치로 재중심 + 따라가기 재개
+  const handleMyLocation = useCallback(async () => {
     if (!navigator.geolocation) {
       alert('이 브라우저는 위치 정보를 지원하지 않습니다.');
       return;
     }
+
+    if (isTracking) {
+      if (!isFollowing) {
+        // 따라가기 재개 + 현재 위치로 지도 이동
+        isFollowingRef.current = true;
+        setIsFollowing(true);
+        if (lastPositionRef.current && mapInstanceRef.current && window.naver) {
+          const { lat, lng } = lastPositionRef.current;
+          mapInstanceRef.current.panTo(new window.naver.maps.LatLng(lat, lng));
+          mapInstanceRef.current.setZoom(16);
+        }
+      } else {
+        stopTracking();
+      }
+      return;
+    }
+
+    // 추적 시작
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        const map = mapInstanceRef.current;
-        if (!map || !window.naver) { setLocating(false); return; }
 
-        // 기존 내 위치 마커 제거 후 새로 생성
-        if (myLocationMarkerRef.current) myLocationMarkerRef.current.setMap(null);
-        myLocationMarkerRef.current = new window.naver.maps.Marker({
-          position: new window.naver.maps.LatLng(lat, lng),
-          map,
-          icon: {
-            content: `
-              <div style="position:relative;width:20px;height:20px;">
-                <div style="
-                  position:absolute;inset:0;border-radius:50%;
-                  background:rgba(26,115,232,0.2);
-                  animation:mylocpulse 1.8s ease-out infinite;
-                "></div>
-                <div style="
-                  position:absolute;inset:4px;border-radius:50%;
-                  background:#1a73e8;border:2.5px solid #fff;
-                  box-shadow:0 1px 4px rgba(0,0,0,0.35);
-                "></div>
-              </div>
-              <style>
-                @keyframes mylocpulse {
-                  0%   { transform:scale(1);   opacity:0.7; }
-                  100% { transform:scale(2.8); opacity:0; }
-                }
-              </style>
-            `,
-            anchor: new window.naver.maps.Point(10, 10),
-          },
-          zIndex: 200,
+    // 나침반 이벤트 핸들러 — iOS: webkitCompassHeading, Android: absolute alpha
+    const orientationHandler = (e: DeviceOrientationEvent) => {
+      let h: number | null = null;
+      const wch = (e as any).webkitCompassHeading;
+      if (wch != null && wch >= 0) {
+        h = wch; // iOS: 자북 기준 시계방향 방위각
+      } else if ((e as any).absolute && e.alpha != null) {
+        h = (360 - e.alpha) % 360; // Android: alpha 반시계 → 시계방향 변환
+      }
+      if (h === null) return;
+      headingRef.current = h;
+      // 마커가 이미 있으면 방향 아이콘 즉시 갱신
+      if (myLocationMarkerRef.current && window.naver) {
+        myLocationMarkerRef.current.setIcon({
+          content: buildLocMarkerContent(h),
+          anchor: new window.naver.maps.Point(14, 14),
         });
+      }
+    };
 
-        map.setCenter(new window.naver.maps.LatLng(lat, lng));
-        map.setZoom(15);
+    // iOS 13+는 DeviceOrientationEvent 사용 전 사용자 권한 요청 필요
+    try {
+      if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+        const perm = await (DeviceOrientationEvent as any).requestPermission();
+        if (perm === 'granted') {
+          window.addEventListener('deviceorientationabsolute', orientationHandler as any, true);
+          window.addEventListener('deviceorientation', orientationHandler as any, true);
+          orientationCleanupRef.current = () => {
+            window.removeEventListener('deviceorientationabsolute', orientationHandler as any, true);
+            window.removeEventListener('deviceorientation', orientationHandler as any, true);
+          };
+        }
+      } else {
+        window.addEventListener('deviceorientationabsolute', orientationHandler as any, true);
+        window.addEventListener('deviceorientation', orientationHandler as any, true);
+        orientationCleanupRef.current = () => {
+          window.removeEventListener('deviceorientationabsolute', orientationHandler as any, true);
+          window.removeEventListener('deviceorientation', orientationHandler as any, true);
+        };
+      }
+    } catch {}
+
+    // 지도 드래그 시 따라가기 일시 중지
+    const map = mapInstanceRef.current;
+    if (map && window.naver) {
+      if (dragListenerRef.current) window.naver.maps.Event.removeListener(dragListenerRef.current);
+      dragListenerRef.current = window.naver.maps.Event.addListener(map, 'dragstart', () => {
+        if (isFollowingRef.current) {
+          isFollowingRef.current = false;
+          setIsFollowing(false);
+        }
+      });
+    }
+
+    isFollowingRef.current = true;
+    setIsFollowing(true);
+    setIsTracking(true);
+
+    let firstFix = true;
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng, heading: gpsH } = pos.coords;
+        lastPositionRef.current = { lat, lng };
+        // 이동 중 GPS 방향 우선, 정지 시 나침반 fallback
+        const effectiveH = (gpsH != null && gpsH >= 0) ? gpsH : headingRef.current;
+        const content = buildLocMarkerContent(effectiveH);
+        const anchor = new window.naver.maps.Point(14, 14);
+        const mapInst = mapInstanceRef.current;
+        if (!mapInst || !window.naver) return;
+
+        const naverPos = new window.naver.maps.LatLng(lat, lng);
+        if (myLocationMarkerRef.current) {
+          myLocationMarkerRef.current.setPosition(naverPos);
+          myLocationMarkerRef.current.setIcon({ content, anchor });
+        } else {
+          myLocationMarkerRef.current = new window.naver.maps.Marker({
+            position: naverPos,
+            map: mapInst,
+            icon: { content, anchor },
+            zIndex: 200,
+          });
+        }
+
+        if (isFollowingRef.current) {
+          mapInst.panTo(naverPos);
+          if (firstFix) { mapInst.setZoom(16); firstFix = false; }
+        }
         setLocating(false);
       },
-      err => {
+      (err) => {
         setLocating(false);
+        stopTracking();
         if (err.code === err.PERMISSION_DENIED) {
           alert('위치 권한이 거부됐습니다. 브라우저 설정에서 위치 접근을 허용해주세요.');
         } else {
           alert('위치를 가져오지 못했습니다.');
         }
       },
-      { timeout: 10000, maximumAge: 30000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
+  }, [isTracking, isFollowing, stopTracking]);
+
+  // 언마운트 시 위치 추적 리소스 정리
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      orientationCleanupRef.current?.();
+      if (dragListenerRef.current && (window as any).naver) {
+        (window as any).naver.maps.Event.removeListener(dragListenerRef.current);
+      }
+    };
   }, []);
 
   // 로드뷰 초기화 — roadViewOpen이 true가 될 때 Panorama 인스턴스 생성 (최초 1회)
@@ -1091,21 +1223,29 @@ const MapPage: React.FC<MapPageProps> = ({
             cursor: (isDrawingRoute || isDrawingZone) ? 'crosshair' : 'default',
           }}
         />
-        {/* 내 위치 플로팅 버튼 — 왼쪽 상단 고정 (모바일에서 경로 목록 버튼과 겹침 방지) */}
+        {/* 내 위치 / 실시간 추적 버튼 — 상태별 색상
+            · 비활성: 흰 배경 / 회색 테두리
+            · 추적+따라가기: 파란 배경 (📍 흰색)
+            · 추적+멈춤: 흰 배경 / 파란 테두리 (탭 시 재중심) */}
         <button
           onClick={handleMyLocation}
           disabled={locating}
-          title="내 위치로 이동"
+          title={
+            !isTracking ? '실시간 위치 추적 시작' :
+            !isFollowing ? '현재 위치로 이동' : '위치 추적 종료'
+          }
           style={{
             position: 'absolute', top: '12px', left: '12px',
             width: '40px', height: '40px', borderRadius: '8px',
-            backgroundColor: '#fff', border: '1px solid #dadce0',
+            backgroundColor: (isTracking && isFollowing) ? '#1a73e8' : '#fff',
+            border: (isTracking && !isFollowing) ? '2px solid #1a73e8' : '1px solid #dadce0',
             boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
             cursor: locating ? 'wait' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '18px', zIndex: 50,
             opacity: locating ? 0.6 : 1,
-            transition: 'opacity 0.2s',
+            transition: 'background-color 0.2s, border 0.2s',
+            color: (isTracking && isFollowing) ? '#fff' : 'inherit',
           }}
         >
           {locating ? '⌛' : '📍'}
