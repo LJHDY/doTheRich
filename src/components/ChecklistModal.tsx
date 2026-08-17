@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChecklistResultItem, PropertyVisit, ChecklistInputType } from '../types';
+import { ChecklistResultItem, PropertyVisit, ChecklistInputType, calcChecklistScore } from '../types';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import {
   createChecklistTemplate, deleteChecklistTemplate,
@@ -158,6 +158,25 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
   const checkedCount = items.filter(hasValue).length;
   const totalCount = items.length;
   const hasAnyRating = items.some(hasValue);
+
+  // 탭별 점수 — calcChecklistScore 기반
+  const tabScores = useMemo(() =>
+    Object.fromEntries(
+      VISIT_TYPES.filter(vt => vt.key !== 'PROPERTY').map(vt => {
+        const vtItems = items.filter(i => i.visitType === vt.key);
+        return [vt.key, calcChecklistScore(vtItems)];
+      })
+    ) as Record<'ATMOSPHERE' | 'COMPLEX', { score: number; maxScore: number }>,
+    [items]
+  );
+
+  // 매물별 점수
+  const visitScores = useMemo(() =>
+    Object.fromEntries(
+      visits.map(v => [v.id, calcChecklistScore(v.results)])
+    ) as Record<number, { score: number; maxScore: number }>,
+    [visits]
+  );
 
   // ── RATING/OX 평가 저장 (분위기/단지 탭) ────────────────────────────────────
   const handleRate = async (templateId: number, rating: string) => {
@@ -425,13 +444,18 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                   visitCount !== null && visitCount > 0 && (
                     <span style={{ marginLeft: '4px', fontSize: '10px', opacity: isActive ? 0.85 : 0.65 }}>{visitCount}건</span>
                   )
-                ) : (
-                  tabTotal > 0 && (
+                ) : (() => {
+                  const sc = tabScores[vt.key as 'ATMOSPHERE' | 'COMPLEX'];
+                  return sc && sc.maxScore > 0 ? (
+                    <span style={{ marginLeft: '5px', fontSize: '10px', opacity: isActive ? 0.9 : 0.65, fontWeight: 600 }}>
+                      {sc.score}/{sc.maxScore}점
+                    </span>
+                  ) : tabTotal > 0 ? (
                     <span style={{ marginLeft: '4px', fontSize: '10px', opacity: isActive ? 0.85 : 0.65 }}>
                       {tabRated}/{tabTotal}
                     </span>
-                  )
-                )}
+                  ) : null;
+                })()}
               </button>
             );
           })}
@@ -597,11 +621,18 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                           {visit.visitDate && (
                             <span style={{ fontSize: '11px', color: '#9aa0a6' }}>{visit.visitDate}</span>
                           )}
-                          {totalTemplates > 0 && (
-                            <span style={{ fontSize: '10px', color: '#9aa0a6', marginLeft: 'auto' }}>
-                              체크 {ratedCount}/{totalTemplates}
-                            </span>
-                          )}
+                          {(() => {
+                            const vsc = visitScores[visit.id];
+                            return vsc && vsc.maxScore > 0 ? (
+                              <span style={{ fontSize: '10px', fontWeight: 700, color: '#4BAAD4', marginLeft: 'auto' }}>
+                                {vsc.score}/{vsc.maxScore}점
+                              </span>
+                            ) : totalTemplates > 0 ? (
+                              <span style={{ fontSize: '10px', color: '#9aa0a6', marginLeft: 'auto' }}>
+                                체크 {ratedCount}/{totalTemplates}
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
                         {(visit.officePhone || visit.mobilePhone) && (
                           <div style={{ display: 'flex', gap: '10px', marginTop: '2px' }}>
@@ -676,6 +707,25 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
         ) : (
           /* 분위기/단지 탭 */
           <>
+            {/* 점수 요약 바 — maxScore > 0일 때만 표시 */}
+            {(() => {
+              const sc = tabScores[activeTab as 'ATMOSPHERE' | 'COMPLEX'];
+              if (!sc || sc.maxScore === 0) return null;
+              const pct = Math.round(sc.score / sc.maxScore * 100);
+              const barColor = pct >= 70 ? '#7DC8A0' : pct >= 40 ? '#FFD97D' : '#F08080';
+              return (
+                <div style={{ padding: '8px 22px 0', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ flex: 1, height: '8px', borderRadius: '4px', backgroundColor: '#f0f0f0', overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', backgroundColor: barColor, borderRadius: '4px', transition: 'width 0.3s' }} />
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#202124', flexShrink: 0 }}>
+                      {sc.score}점 <span style={{ fontSize: '11px', color: '#80868b', fontWeight: 400 }}>/ {sc.maxScore}점 ({pct}%)</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 22px' }}>
               {loading ? (
                 <p style={{ color: '#9aa0a6', fontSize: '13px', padding: '12px 0' }}>불러오는 중...</p>

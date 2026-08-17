@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker } from '../types';
+import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, calcChecklistScore } from '../types';
 import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo } from '../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
@@ -425,6 +425,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [checklistRatedCount, setChecklistRatedCount] = useState(0);
   const [checklistTotalCount, setChecklistTotalCount] = useState(0);
+  const [checklistScore, setChecklistScore] = useState<{ score: number; maxScore: number } | null>(null);
   // 지하철 편집 상태 — 기존·신규 행 통합 배열 + 삭제 예약 ID 목록
   const [editingSubway, setEditingSubway] = useState(false);
   const [subwayRows, setSubwayRows] = useState<SubwayEditRow[]>([]);
@@ -565,6 +566,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       getComplexChecklist(complex.id).then(results => {
         setChecklistRatedCount(results.filter(r => r.rating !== null).length);
         setChecklistTotalCount(results.length);
+        const sc = calcChecklistScore(results);
+        setChecklistScore(sc.maxScore > 0 ? sc : null);
       }).catch(() => {});
     }
   }, [complex, loadPriceHistories, onRadiusToggle]);
@@ -2141,11 +2144,25 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               {checklistRatedCount > 0 ? '체크리스트 보기' : '체크리스트 작성'}
             </button>
           </div>
-          {checklistRatedCount > 0 && (
+          {checklistScore ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ flex: 1, height: '7px', borderRadius: '4px', backgroundColor: '#f0f0f0', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${Math.round(checklistScore.score / checklistScore.maxScore * 100)}%`,
+                  height: '100%', borderRadius: '4px', transition: 'width 0.3s',
+                  backgroundColor: checklistScore.score / checklistScore.maxScore >= 0.7 ? '#7DC8A0'
+                    : checklistScore.score / checklistScore.maxScore >= 0.4 ? '#FFD97D' : '#F08080',
+                }} />
+              </div>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#202124', flexShrink: 0 }}>
+                {checklistScore.score}<span style={{ fontSize: '11px', color: '#80868b', fontWeight: 400 }}>/{checklistScore.maxScore}점</span>
+              </span>
+            </div>
+          ) : checklistRatedCount > 0 ? (
             <div style={{ fontSize: '12px', color: '#80868b' }}>
               {checklistRatedCount}개 항목 체크됨 — 보기 버튼을 클릭하세요
             </div>
-          )}
+          ) : null}
         </div>
         {/* 체크리스트 모달 */}
         {checklistOpen && (

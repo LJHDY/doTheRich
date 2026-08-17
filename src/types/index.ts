@@ -746,6 +746,49 @@ export const formatAmountShort = (amount: number): string =>
   amount.toLocaleString('ko-KR');
 
 /** 모바일 등 좁은 공간용 억/만 단위 축약 포맷 */
+// TEXT 타입 항목 점수 매핑 — memo에 해당 키워드가 포함되면 점수 부여
+const CHECKLIST_TEXT_SCORE_MAP: Record<string, number> = {
+  '탄성': 1,
+  '모래': 0,
+};
+
+export interface ChecklistScore {
+  score: number;     // 획득 점수
+  maxScore: number;  // 최대 가능 점수
+}
+
+/** 체크리스트 항목 배열을 점수로 환산
+ *  - RATING: 상=3 / 중=2 / 하=1
+ *  - OX: O=1 / X=0
+ *  - TEXT: CHECKLIST_TEXT_SCORE_MAP 키워드 매칭 시 해당 점수 (미매칭은 집계 제외)
+ */
+export const calcChecklistScore = (
+  items: Array<{ inputType?: ChecklistInputType; rating: ChecklistRating; memo?: string | null }>
+): ChecklistScore => {
+  let score = 0;
+  let maxScore = 0;
+  for (const item of items) {
+    const type = (item.inputType ?? 'RATING') as ChecklistInputType;
+    if (type === 'RATING') {
+      maxScore += 3;
+      if (item.rating === 'UPPER') score += 3;
+      else if (item.rating === 'MIDDLE') score += 2;
+      else if (item.rating === 'LOWER') score += 1;
+    } else if (type === 'OX') {
+      maxScore += 1;
+      if (item.rating === 'O') score += 1;
+    } else if (type === 'TEXT') {
+      const memo = (item.memo ?? '').trim();
+      const matched = Object.keys(CHECKLIST_TEXT_SCORE_MAP).find(k => memo.includes(k));
+      if (matched !== undefined) {
+        maxScore += 1;
+        score += CHECKLIST_TEXT_SCORE_MAP[matched];
+      }
+    }
+  }
+  return { score, maxScore };
+};
+
 export const formatAmountCompact = (amount: number): string => {
   if (amount === 0) return '—';
   if (amount >= 100_000_000) {
