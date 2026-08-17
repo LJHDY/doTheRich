@@ -345,7 +345,26 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                         </div>
                       );
                     })()}
-                    <InfoRow label="전저점" value={activeItem.lowestPrice ? formatPrice(activeItem.lowestPrice) : null} />
+                    {/* 전저점 — 호가도 있으면 전저점 대비 상승분을 옆에 인라인 표시 */}
+                    {activeItem.lowestPrice && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                        <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, marginRight: '8px' }}>전저점</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '13px', color: '#202124' }}>{formatPrice(activeItem.lowestPrice)}</span>
+                          {activeItem.askingPrice && (() => {
+                            const diff = activeItem.askingPrice! - activeItem.lowestPrice!;
+                            const pct  = +((diff / activeItem.lowestPrice!) * 100).toFixed(1);
+                            const sign = diff >= 0 ? '+' : '';
+                            const color = diff >= 0 ? '#c62828' : '#1565c0';
+                            return (
+                              <span style={{ fontSize: '11px', color, fontWeight: 600 }}>
+                                {sign}{+(diff / 100_000_000).toFixed(2)}억 ({sign}{pct}%)
+                              </span>
+                            );
+                          })()}
+                        </span>
+                      </div>
+                    )}
                     <InfoRow label="10년 등락" value={activeItem.tenYearChangeAmount != null
                       ? `${activeItem.tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(activeItem.tenYearChangeAmount)}억`
                       : null} />

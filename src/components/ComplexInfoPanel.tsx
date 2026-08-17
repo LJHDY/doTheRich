@@ -1986,7 +1986,26 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   </div>
                 );
               })()}
-              <InfoRow label="전저점" value={selectedRefItem?.lowestPrice ? formatPrice(selectedRefItem.lowestPrice) : null} />
+              {/* 전저점 — 호가도 있으면 전저점 대비 상승분을 옆에 인라인 표시 */}
+              {selectedRefItem?.lowestPrice && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0, marginRight: '8px' }}>전저점</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '13px', color: '#202124' }}>{formatPrice(selectedRefItem.lowestPrice)}</span>
+                    {selectedRefItem.askingPrice && (() => {
+                      const diff = selectedRefItem.askingPrice! - selectedRefItem.lowestPrice!;
+                      const pct  = +((diff / selectedRefItem.lowestPrice!) * 100).toFixed(1);
+                      const sign = diff >= 0 ? '+' : '';
+                      const color = diff >= 0 ? '#c62828' : '#1565c0';
+                      return (
+                        <span style={{ fontSize: '11px', color, fontWeight: 600 }}>
+                          {sign}{+(diff / 100_000_000).toFixed(2)}억 ({sign}{pct}%)
+                        </span>
+                      );
+                    })()}
+                  </span>
+                </div>
+              )}
               <InfoRow label="10년 등락" value={selectedRefItem?.tenYearChangeAmount != null
                 ? `${selectedRefItem.tenYearChangeAmount >= 0 ? '+' : ''}${toUkUnit(selectedRefItem.tenYearChangeAmount)}억`
                 : null} />
