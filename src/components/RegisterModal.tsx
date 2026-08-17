@@ -150,7 +150,7 @@ const stripHtml = (html: string): string => html.replace(/<[^>]*>/g, '');
 interface Props {
   initialData: RegisterInitialData;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (newComplex: ApartmentComplex) => void;
   isMobile?: boolean;
   hidden?: boolean;   // true = 모달 숨김 (form 상태는 유지)
   onShowMap?: () => void; // 모바일 "지도 보기" 버튼 콜백
@@ -848,7 +848,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
           )
         );
       }
-      onSuccess();
+      onSuccess(created);
       onClose();
     } catch {
       setError('등록에 실패했습니다. 서버를 확인해주세요.');

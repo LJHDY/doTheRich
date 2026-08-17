@@ -208,14 +208,23 @@ const App: React.FC = () => {
     setCompareMode('normal');
   };
 
-  // 앱 최초 마운트 시 금액대 목록을 서버에서 가져와 필터 버튼 생성
+  // 앱 최초 마운트 시 금액대 목록 + 단지 목록 병렬 로드 — 순차 대기 제거
   useEffect(() => {
-    getPriceRanges()
-      .then(setPriceRanges)
-      .catch(() => {});
-  }, []);
+    setLoading(true);
+    Promise.all([
+      getPriceRanges().catch(() => [] as string[]),
+      getComplexes(undefined).catch(() => [] as ApartmentComplex[]),
+    ]).then(([ranges, data]) => {
+      setPriceRanges(ranges);
+      setComplexes(data);
+    }).catch(() => {
+      setError('단지 데이터를 불러오지 못했습니다. 백엔드 서버를 확인해주세요.');
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // useCallback으로 메모이제이션 — 등록 성공 후 onSuccess 콜백으로도 재사용
+  // 명시적 새로고침용 — 목록 수정 후 재조회 (등록 시엔 사용 안 함)
   const loadComplexes = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -228,8 +237,6 @@ const App: React.FC = () => {
       setLoading(false);
     }
   }, []);
-
-  useEffect(() => { loadComplexes(); }, [loadComplexes]);
 
   // 경로 목록 초기 로드
   useEffect(() => {
@@ -1421,7 +1428,11 @@ const App: React.FC = () => {
         <RegisterModal
           initialData={registerData}
           onClose={() => { setRegisterData(null); setRegisterMapView(false); }}
-          onSuccess={() => { loadComplexes(); setRegisterMapView(false); }}
+          onSuccess={(newComplex) => {
+            // 전체 재조회 없이 새 단지만 목록 앞에 추가 — 서버 왕복 1회 절감
+            setComplexes(prev => [newComplex, ...prev]);
+            setRegisterMapView(false);
+          }}
           isMobile={isMobile}
           hidden={isMobile && registerMapView}
           onShowMap={() => setRegisterMapView(true)}
