@@ -52,9 +52,10 @@ import {
   FinancialReport as FinancialReportType,
   getMarketReports,
   generateMarketReport,
+  generateKrCloseReport,
   deleteMarketReport,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, MarketReport, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
@@ -2232,6 +2233,7 @@ const MarketReportView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [generatingKr, setGeneratingKr] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [toast, setToast] = useState('');
   const [vixTipOpen, setVixTipOpen] = useState(false);
@@ -2282,6 +2284,34 @@ const MarketReportView: React.FC = () => {
       }, 5000);
     } catch {
       setGenerating(false);
+      setToast('❌ 요청에 실패했습니다.');
+      setTimeout(() => setToast(''), 3000);
+    }
+  };
+
+  const handleGenerateKrClose = async () => {
+    setGeneratingKr(true);
+    setToast('국내 장 마감 분석 요청 중…');
+    try {
+      await generateKrCloseReport();
+      setToast('섹터 데이터를 수집하고 분석 중입니다. 잠시 후 업데이트됩니다.');
+      const prevTopId = reports.length > 0 ? reports[0].id : null;
+      let tries = 0;
+      const poll = setInterval(async () => {
+        tries++;
+        const data = await getMarketReports();
+        const isNew = data.length > 0 && data[0].id !== prevTopId;
+        if (isNew || tries >= 36) {
+          clearInterval(poll);
+          setReports(data);
+          if (data.length > 0) setSelectedId(data[0].id);
+          setGeneratingKr(false);
+          setToast(isNew ? '✅ 국내장마감 분석 완료!' : '⚠️ 시간 초과. 잠시 후 새로고침해주세요.');
+          setTimeout(() => setToast(''), 4000);
+        }
+      }, 5000);
+    } catch {
+      setGeneratingKr(false);
       setToast('❌ 요청에 실패했습니다.');
       setTimeout(() => setToast(''), 3000);
     }
@@ -2388,15 +2418,17 @@ const MarketReportView: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {reports.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매일 오전 7시 / 오후 9시 자동 생성</span>
+            <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매일 오전 7시(글로벌) / 오후 4시(국내장마감) 자동 생성</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <select
                 value={selectedId ?? ''}
                 onChange={e => setSelectedId(Number(e.target.value))}
-                style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '260px' }}
+                style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '280px' }}
               >
                 {reports.map(r => (
-                  <option key={r.id} value={r.id}>{r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}</option>
+                  <option key={r.id} value={r.id}>
+                    {r.reportType === 'kr_close' ? '🇰🇷' : '🌏'} {r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}
+                  </option>
                 ))}
               </select>
               <button
@@ -2409,14 +2441,25 @@ const MarketReportView: React.FC = () => {
         )}
         <button
           onClick={handleGenerate}
-          disabled={generating}
+          disabled={generating || generatingKr}
           style={{
             padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
-            borderRadius: '8px', cursor: generating ? 'default' : 'pointer',
+            borderRadius: '8px', cursor: (generating || generatingKr) ? 'default' : 'pointer',
             background: generating ? '#b0c4de' : '#89CFF0', color: '#fff',
           }}
         >
-          {generating ? '생성 중…' : '✨ 리포트 생성'}
+          {generating ? '생성 중…' : '🌏 글로벌 생성'}
+        </button>
+        <button
+          onClick={handleGenerateKrClose}
+          disabled={generating || generatingKr}
+          style={{
+            padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
+            borderRadius: '8px', cursor: (generating || generatingKr) ? 'default' : 'pointer',
+            background: generatingKr ? '#b0c4de' : '#e06060', color: '#fff',
+          }}
+        >
+          {generatingKr ? '생성 중…' : '🇰🇷 장마감 생성'}
         </button>
         <button onClick={load} style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>↺</button>
       </div>
@@ -2602,6 +2645,118 @@ const MarketReportView: React.FC = () => {
                   })}
                 </div>
               )}
+
+              {/* 섹터 등락률 + 주도주 — kr_close 리포트 전용 */}
+              {selected.reportType === 'kr_close' && (selected.krSectors.length > 0 || selected.krTopGainers.length > 0) && (() => {
+                const accent = '#c0404a';
+
+                const SectionHeader = ({ label }: { label: string }) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
+                    <div style={{ width: '3px', height: '14px', borderRadius: '2px', background: accent, flexShrink: 0 }} />
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>{label}</span>
+                  </div>
+                );
+
+                const SectorTable = ({ title, items }: { title: string; items: KrSectorData[] }) => {
+                  if (items.length === 0) return null;
+                  const maxAbs = Math.max(...items.map(s => Math.abs(s.changePct)));
+                  return (
+                    <div style={{ marginBottom: '14px' }}>
+                      <SectionHeader label={`${title} 섹터별 등락률`} />
+                      <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #dde4ed', overflow: 'hidden' }}>
+                        {items.map((s, i) => {
+                          const isPos = s.changePct >= 0;
+                          const barW = maxAbs > 0 ? Math.abs(s.changePct) / maxAbs * 100 : 0;
+                          return (
+                            <div key={i} style={{
+                              display: 'grid', gridTemplateColumns: '1fr 60px 1fr',
+                              alignItems: 'center', padding: '5px 12px',
+                              borderBottom: i < items.length - 1 ? '1px solid #f0f4f8' : 'none',
+                            }}>
+                              <span style={{ fontSize: '12px', color: '#344054', fontWeight: 500 }}>{s.sector}</span>
+                              <span style={{ fontSize: '12px', fontWeight: 700, textAlign: 'right', color: isPos ? '#2e7d32' : '#c62828' }}>
+                                {isPos ? '+' : ''}{s.changePct.toFixed(2)}%
+                              </span>
+                              <div style={{ paddingLeft: '8px' }}>
+                                <div style={{ height: '7px', borderRadius: '4px', width: `${barW}%`, background: isPos ? '#66bb6a' : '#ef5350', minWidth: barW > 0 ? '3px' : '0' }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                };
+
+                const GainerTable = ({ title, items }: { title: string; items: KrTopGainer[] }) => {
+                  if (items.length === 0) return null;
+                  return (
+                    <div style={{ marginBottom: '14px' }}>
+                      <SectionHeader label={`${title} 상승률 상위 종목`} />
+                      <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #dde4ed', overflow: 'hidden' }}>
+                        {/* 헤더 */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 70px 80px', alignItems: 'center', padding: '5px 12px', background: '#f8fafc', borderBottom: '1px solid #e8edf3' }}>
+                          {['#', '종목명', '등락률', '종가'].map((h, i) => (
+                            <span key={i} style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, textAlign: i >= 2 ? 'right' : 'left' }}>{h}</span>
+                          ))}
+                        </div>
+                        {items.map((g, i) => {
+                          const isPos = g.changePct >= 0;
+                          return (
+                            <div key={i} style={{
+                              display: 'grid', gridTemplateColumns: '24px 1fr 70px 80px',
+                              alignItems: 'center', padding: '6px 12px',
+                              borderBottom: i < items.length - 1 ? '1px solid #f0f4f8' : 'none',
+                            }}>
+                              <span style={{ fontSize: '11px', color: '#b0bec5', fontWeight: 600 }}>{i + 1}</span>
+                              <div>
+                                <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a3a5c' }}>{g.name}</div>
+                                <div style={{ fontSize: '10px', color: '#b0bec5' }}>{g.ticker}</div>
+                              </div>
+                              <span style={{ fontSize: '13px', fontWeight: 700, textAlign: 'right', color: isPos ? '#2e7d32' : '#c62828' }}>
+                                {isPos ? '+' : ''}{g.changePct.toFixed(2)}%
+                              </span>
+                              <span style={{ fontSize: '12px', textAlign: 'right', color: '#344054' }}>
+                                {g.close != null ? g.close.toLocaleString() : '-'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                };
+
+                const kospiSec    = selected.krSectors.filter(s => s.market === 'KOSPI');
+                const kosdaqSec   = selected.krSectors.filter(s => s.market === 'KOSDAQ');
+                const kospiGain   = selected.krTopGainers.filter(g => g.market === 'KOSPI');
+                const kosdaqGain  = selected.krTopGainers.filter(g => g.market === 'KOSDAQ');
+
+                return (
+                  <div style={{ marginBottom: '20px' }}>
+                    {/* KOSPI */}
+                    {(kospiSec.length > 0 || kospiGain.length > 0) && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px', paddingBottom: '4px', borderBottom: '2px solid #fce4e4' }}>🇰🇷 KOSPI</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                          <SectorTable title="섹터" items={kospiSec} />
+                          <GainerTable title="주도주" items={kospiGain} />
+                        </div>
+                      </div>
+                    )}
+                    {/* KOSDAQ */}
+                    {(kosdaqSec.length > 0 || kosdaqGain.length > 0) && (
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px', paddingBottom: '4px', borderBottom: '2px solid #fce4e4' }}>📊 KOSDAQ</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                          <SectorTable title="섹터" items={kosdaqSec} />
+                          <GainerTable title="주도주" items={kosdaqGain} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Gemini 분석 본문 */}
               {selected.content && (

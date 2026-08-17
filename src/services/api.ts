@@ -1192,14 +1192,15 @@ export const getMarketReports = async (): Promise<MarketReport[]> => {
   return data.map((r: any) => {
     const raw = r.marketData || {};
     const fg = raw.fear_greed;
-    // ticker 데이터만 추출 (fear_greed 등 특수 키 제외)
+    // ticker 데이터만 추출 (fear_greed 등 특수 키 제외, 배열형 값도 제외)
     const EXCLUDED_KEYS = new Set(['fear_greed']);
     return {
       id: r.id,
       reportDate: r.reportDate,
+      reportType: (r.reportType || 'global') as 'global' | 'kr_close',
       marketData: Object.fromEntries(
         Object.entries(raw)
-          .filter(([k, v]) => !EXCLUDED_KEYS.has(k) && v !== null && typeof v === 'object')
+          .filter(([k, v]) => !EXCLUDED_KEYS.has(k) && v !== null && typeof v === 'object' && !Array.isArray(v))
           .map(([k, v]: [string, any]) => [k, {
             label: v.label,
             close: v.close,
@@ -1216,11 +1217,29 @@ export const getMarketReports = async (): Promise<MarketReport[]> => {
         previous1Week: fg.previous_1_week,
         previous1Month: fg.previous_1_month,
       } : null,
+      krSectors: (r.krSectors || []).map((s: any) => ({
+        market: s.market,
+        sector: s.sector,
+        changePct: s.changePct,
+      })),
+      krTopGainers: (r.krTopGainers || []).map((g: any) => ({
+        market: g.market,
+        ticker: g.ticker,
+        name: g.name,
+        changePct: g.changePct,
+        close: g.close,
+      })),
       content: r.content,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     };
   });
+};
+
+/** 국내 장 마감 리포트 즉시 생성 요청 (백그라운드, 202) */
+export const generateKrCloseReport = async (reportDate?: string): Promise<void> => {
+  const params = reportDate ? { report_date: reportDate } : {};
+  await api.post('/api/market-reports/generate/kr-close', null, { params });
 };
 
 /** 시장 리포트 즉시 생성 요청 (백그라운드, 202) */

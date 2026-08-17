@@ -711,12 +711,31 @@ export interface MarketTicker {
   date: string;
 }
 
-/** 시장 리포트 — 매일 KST 08:00 자동 생성 */
+/** 국내 장 마감 리포트 섹터 데이터 */
+export interface KrSectorData {
+  market: 'KOSPI' | 'KOSDAQ';
+  sector: string;
+  changePct: number;
+}
+
+/** 국내 장 마감 리포트 주도주 데이터 */
+export interface KrTopGainer {
+  market: 'KOSPI' | 'KOSDAQ';
+  ticker: string;
+  name: string;
+  changePct: number;
+  close: number | null;
+}
+
+/** 시장 리포트 — 매일 KST 07:00(글로벌) / 16:00(국내장마감) 자동 생성 */
 export interface MarketReport {
   id: number;
   reportDate: string;                         // YYYY-MM-DD
+  reportType: 'global' | 'kr_close';          // 글로벌(기본) | 국내장마감
   marketData: Record<string, MarketTicker>;   // sp500, nasdaq, kospi 등
   fearGreed: FearGreedData | null;            // CNN Fear & Greed Index
+  krSectors: KrSectorData[];                  // 섹터별 등락률 (kr_close 전용)
+  krTopGainers: KrTopGainer[];               // 상승률 상위 종목 (kr_close 전용)
   content: string;                            // Gemini 분석 마크다운
   createdAt: string | null;
   updatedAt: string | null;
