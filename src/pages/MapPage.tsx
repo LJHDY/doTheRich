@@ -185,6 +185,8 @@ const MapPage: React.FC<MapPageProps> = ({
         : '#607d8b';
 
       const priceDisplay = priceUk !== null ? `${priceUk}억` : (complex.priceRange ?? '-');
+      // 표시 가격의 출처 구분 — 호가면 (호), 매매가면 (매), 금액대만 있으면 없음
+      const priceTag = complex.askingPrice ? '호' : complex.price ? '매' : null;
       const yearDisplay = complex.builtYear
         ? `${String(complex.builtYear).replace(/[^0-9]/g, '')}년`
         : '-';
@@ -225,7 +227,7 @@ const MapPage: React.FC<MapPageProps> = ({
           ">
             ${favBadge}
             <div style="font-size:10px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;max-width:108px;">${safeShortName}</div>
-            <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}</div>
+            <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}${priceTag ? `<span style="font-size:9px;font-weight:600;opacity:0.7;margin-left:2px;">(${priceTag})</span>` : ''}</div>
             <div style="font-size:9px;color:#80868b;">${yearDisplay}&nbsp;·&nbsp;${unitDisplay}</div>
           </div>
         `,
