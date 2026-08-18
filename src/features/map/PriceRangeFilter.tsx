@@ -1,0 +1,177 @@
+import React, { useState, useMemo } from 'react';
+import { ApartmentComplex } from '../../types';
+
+interface PriceRangeFilterProps {
+  priceRanges: string[];
+  selectedRange: string | null;
+  onSelect: (range: string | null) => void;
+  onSelectAreaType?: (range: string, areaType: string) => void;
+  complexes?: ApartmentComplex[];
+}
+
+const parsePriceRangeNum = (range: string): number => {
+  const match = range.match(/[\d.]+/);
+  return match ? parseFloat(match[0]) : 0;
+};
+
+// 공통 셀렉트 스타일 팩토리 — 활성 여부에 따라 색상 분기
+const selectStyle = (active: boolean): React.CSSProperties => ({
+  appearance: 'none',
+  WebkitAppearance: 'none',
+  MozAppearance: 'none',
+  border: '1.5px solid',
+  borderColor: active ? '#89CFF0' : '#d2d5da',
+  borderRadius: '16px',
+  backgroundColor: active ? '#D4EFFC' : '#fff',
+  color: active ? '#89CFF0' : '#4a4f54',
+  fontSize: '12px',
+  fontWeight: 600,
+  padding: '3px 24px 3px 10px',
+  cursor: 'pointer',
+  outline: 'none',
+  boxShadow: active
+    ? '0 2px 8px rgba(26,115,232,0.2)'
+    : '0 1px 3px rgba(0,0,0,0.07)',
+  transition: 'all 0.18s ease',
+  lineHeight: 1.3,
+});
+
+// 커스텀 화살표 오버레이 SVG
+const DropdownArrow: React.FC<{ active: boolean }> = ({ active }) => (
+  <svg
+    viewBox="0 0 24 24" fill="none"
+    stroke={active ? '#89CFF0' : '#9e9e9e'}
+    strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
+    style={{
+      position: 'absolute', right: '10px', top: '50%',
+      transform: 'translateY(-50%)',
+      width: '12px', height: '12px', pointerEvents: 'none',
+    }}
+  >
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
+const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
+  priceRanges,
+  onSelect,
+  onSelectAreaType,
+  complexes,
+}) => {
+  const sorted = [...priceRanges].sort(
+    (a, b) => parsePriceRangeNum(a) - parsePriceRangeNum(b)
+  );
+
+  // 금액대 선택 상태 — '' = 전체
+  const [localRange, setLocalRange] = useState('');
+  const [localAreaType, setLocalAreaType] = useState('');
+
+  // 특정 금액대에 속하는 평형 목록 추출
+  const getAreaTypes = (range: string): string[] => {
+    if (!complexes || !range) return [];
+    const seen = new Set<string>();
+    const types: string[] = [];
+    complexes
+      .filter(c => c.areaTypePriceRanges
+        ? Object.values(c.areaTypePriceRanges).includes(range)
+        : c.priceRange === range)
+      .forEach(c => {
+        if (c.areaTypePriceRanges) {
+          Object.entries(c.areaTypePriceRanges)
+            .filter(([, r]) => r === range)
+            .forEach(([at]) => { if (!seen.has(at)) { seen.add(at); types.push(at); } });
+        } else {
+          const sources = c.areaTypes?.length
+            ? c.areaTypes
+            : (c.priceItems?.map(p => p.areaType).filter(Boolean) as string[] ?? []);
+          sources.forEach(at => {
+            if (at && !seen.has(at)) { seen.add(at); types.push(at); }
+          });
+        }
+      });
+    // areaType 숫자 기준 오름차순 정렬
+    return types.sort((a, b) => {
+      const na = parseFloat(a.replace(/[^0-9.]/g, '')) || 0;
+      const nb = parseFloat(b.replace(/[^0-9.]/g, '')) || 0;
+      return na - nb;
+    });
+  };
+
+  // 금액대별 평형 목록 사전 계산 — 금액대 옵션 라벨에 표시
+  const areaTypesByRange = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    sorted.forEach(r => { map[r] = getAreaTypes(r); });
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complexes, sorted.join(',')]);
+
+  const areaTypes = getAreaTypes(localRange);
+  const rangeActive = localRange !== '';
+  const areaTypeActive = localAreaType !== '';
+
+  const handleRangeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setLocalRange(val);
+    setLocalAreaType('');
+    onSelect(val === '' ? null : val);
+  };
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '6px',
+      padding: '2px 0', flexShrink: 0,
+    }}>
+      <span style={{ fontSize: '12px', color: '#9e9e9e', fontWeight: 500, whiteSpace: 'nowrap' }}>
+        금액대
+      </span>
+
+      {/* 금액대 셀렉트 */}
+      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+        <select
+          value={localRange}
+          onChange={handleRangeChange}
+          style={selectStyle(rangeActive)}
+        >
+          <option value="">전체</option>
+          {sorted.map(r => {
+            const ats = areaTypesByRange[r] ?? [];
+            const atLabel = ats.length > 0
+              ? ` (${ats.map(at => at.replace(/^전용\s*/, '')).join('/')})`
+              : '';
+            return <option key={r} value={r}>{r}{atLabel}</option>;
+          })}
+        </select>
+        <DropdownArrow active={rangeActive} />
+      </div>
+
+      {/* 금액대 선택 시 평형 셀렉트 표시 */}
+      {rangeActive && areaTypes.length > 0 && (
+        <>
+          <span style={{ fontSize: '12px', color: '#d2d5da', fontWeight: 400 }}>›</span>
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <select
+              value={localAreaType}
+              onChange={(e) => {
+                const val = e.target.value;
+                setLocalAreaType(val);
+                if (val) onSelectAreaType?.(localRange, val);
+                else onSelect(localRange);
+              }}
+              style={selectStyle(areaTypeActive)}
+            >
+              <option value="">전체 평형</option>
+              {areaTypes.map(at => (
+                <option key={at} value={at}>
+                  {at.replace(/^전용\s*/, '')}
+                </option>
+              ))}
+            </select>
+            <DropdownArrow active={areaTypeActive} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default PriceRangeFilter;
