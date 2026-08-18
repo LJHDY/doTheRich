@@ -262,10 +262,16 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     if (categoryFilter) base = base.filter(e => e.category === categoryFilter);
     // 통장 필터 — account(중분류) 또는 accountMain(대분류) 일치
     if (accountFilter) base = base.filter(e => e.account === accountFilter || e.accountMain === accountFilter);
-    // 카드 필터 — cardName 일치
-    if (cardFilter) base = base.filter(e => e.cardName === cardFilter);
+    // 카드 필터 — cardName 일치 또는 레거시(이전에 카드를 account 필드에 저장한 항목)도 포함
+    if (cardFilter) {
+      const cardNames = new Set(paymentMethods.filter(p => p.type === '카드').map(p => p.name));
+      base = base.filter(e =>
+        e.cardName === cardFilter ||
+        (!e.cardName && e.account === cardFilter && cardNames.has(cardFilter))
+      );
+    }
     return base;
-  }, [entries, filter, categoryFilter, accountFilter, cardFilter]);
+  }, [entries, filter, categoryFilter, accountFilter, cardFilter, paymentMethods]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
   const openAdd = () => { setEditingId(null); setForm(initialForm()); setIsShared(false); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); setFormOpen(true); };
@@ -643,11 +649,17 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           if (cardPMs.length === 0) return null;
 
           // cardName 기준 지출 합산 (이체·투자 제외)
+          const cardNames = new Set(cardPMs.map(p => p.name));
           const cardMap: Record<string, number> = {};
-          for (const e of entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e) && e.cardName)) {
-            cardMap[e.cardName!] = (cardMap[e.cardName!] ?? 0) + e.amount;
+          for (const e of entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e))) {
+            // 신규: cardName 필드에 저장된 항목
+            if (e.cardName) {
+              cardMap[e.cardName] = (cardMap[e.cardName] ?? 0) + e.amount;
+            // 레거시: 이전에 카드를 account 필드에 저장한 항목
+            } else if (e.account && cardNames.has(e.account)) {
+              cardMap[e.account] = (cardMap[e.account] ?? 0) + e.amount;
+            }
           }
-          // 등록된 카드 중 이번 달 지출이 있거나 전체 카드 목록 표시
           const hasAnyCardData = Object.keys(cardMap).length > 0;
           if (!hasAnyCardData) return null;
 
