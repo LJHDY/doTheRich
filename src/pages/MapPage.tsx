@@ -252,7 +252,7 @@ const MapPage: React.FC<MapPageProps> = ({
           ">
             ${favBadge}
             <div style="font-size:10px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;max-width:108px;">${safeShortName}</div>
-            <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}${areaTypeBadge ? `<span style="display:inline-block;font-size:9px;font-weight:700;border:1.5px solid ${priceTextColor};border-radius:2px;padding:0 2px;margin-left:3px;line-height:1.5;opacity:0.8;vertical-align:middle;">${areaTypeBadge}</span>` : ''}${priceTag ? `<span style="font-size:9px;font-weight:600;opacity:0.7;margin-left:2px;">(${priceTag})</span>` : ''}</div>
+            <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}${areaTypeBadge ? `<span style="display:inline-block;font-size:7px;font-weight:700;border:1px solid ${priceTextColor};border-radius:2px;padding:0 1px;margin-left:2px;line-height:1.5;opacity:0.75;vertical-align:middle;">${areaTypeBadge}</span>` : ''}${priceTag ? `<span style="font-size:9px;font-weight:600;opacity:0.7;margin-left:2px;">(${priceTag})</span>` : ''}</div>
             <div style="font-size:9px;color:#80868b;">${yearDisplay}&nbsp;·&nbsp;${unitDisplay}</div>
           </div>
         `,
