@@ -731,6 +731,10 @@ const toEntry = (d: any): BudgetEntry => ({
   investmentType: d.investment_type,
   isTransfer: d.is_transfer ?? false,
   merchant: d.merchant,
+  installmentMonths: d.installment_months ?? undefined,
+  installmentSeq: d.installment_seq ?? undefined,
+  installmentGroupId: d.installment_group_id ?? undefined,
+  isInterestFree: d.is_interest_free ?? false,
   memo: d.memo,
   createdAt: d.created_at,
 });
@@ -757,6 +761,10 @@ export const createBudgetEntry = async (payload: Omit<BudgetEntry, 'id' | 'creat
     investment_type: payload.investmentType ?? null,
     is_transfer: payload.isTransfer ?? false,
     merchant: payload.merchant ?? null,
+    installment_months: payload.installmentMonths ?? null,
+    installment_seq: payload.installmentSeq ?? null,
+    installment_group_id: payload.installmentGroupId ?? null,
+    is_interest_free: payload.isInterestFree ?? false,
     memo: payload.memo ?? null,
   });
   return toEntry(data);
@@ -777,6 +785,10 @@ export const updateBudgetEntry = async (id: number, payload: Partial<Omit<Budget
   if (payload.investmentType !== undefined) body.investment_type = payload.investmentType;
   if (payload.isTransfer !== undefined) body.is_transfer = payload.isTransfer;
   if (payload.merchant !== undefined) body.merchant = payload.merchant;
+  if (payload.installmentMonths !== undefined) body.installment_months = payload.installmentMonths;
+  if (payload.installmentSeq !== undefined) body.installment_seq = payload.installmentSeq;
+  if (payload.installmentGroupId !== undefined) body.installment_group_id = payload.installmentGroupId;
+  if (payload.isInterestFree !== undefined) body.is_interest_free = payload.isInterestFree;
   if (payload.memo !== undefined) body.memo = payload.memo;
   const { data } = await api.patch(`/api/budget/entries/${id}`, body);
   return toEntry(data);
@@ -806,6 +818,10 @@ export const bulkCreateBudgetEntries = async (
       is_investment: payload.isInvestment,
       investment_type: payload.investmentType ?? null,
       merchant: payload.merchant ?? null,
+      installment_months: payload.installmentMonths ?? null,
+      installment_seq: payload.installmentSeq ?? null,
+      installment_group_id: payload.installmentGroupId ?? null,
+      is_interest_free: payload.isInterestFree ?? false,
       memo: payload.memo ?? null,
     })),
   });

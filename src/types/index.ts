@@ -582,6 +582,10 @@ export interface BudgetEntry {
   investmentType?: string;
   isTransfer?: boolean;  // 이체 여부
   merchant?: string;    // 지출처 (예: 스타벅스, 쿠팡)
+  installmentMonths?: number;   // 할부 총 개월수 (null=일시불)
+  installmentSeq?: number;      // 할부 회차 (1부터 시작)
+  installmentGroupId?: string;  // 같은 할부 묶음 UUID
+  isInterestFree?: boolean;     // 무이자 할부 여부
   memo?: string;
   createdAt: string;
 }

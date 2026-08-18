@@ -397,7 +397,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         const remainder = amount - perMonth * months; // 첫 달에 나머지 추가
         const otherUserId = BUDGET_USERS.find(u => u.id !== userId)?.id ?? '';
         const baseDate = new Date(entryDate);
-        const interestLabel = isInterestFree ? ' 무이자' : '';
+        const groupId = crypto.randomUUID(); // 같은 할부 묶음 ID
         const newEntries: BudgetEntry[] = [];
 
         for (let i = 0; i < months; i++) {
@@ -405,9 +405,16 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           const monthEntryDate = d.toISOString().slice(0, 10);
           const monthYearMonth = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
           const monthAmount = perMonth + (i === 0 ? remainder : 0);
-          const installmentMemo = `${i + 1}/${months}${interestLabel} 할부`;
-          const memo = basePayload.memo ? `${basePayload.memo} (${installmentMemo})` : installmentMemo;
-          const payload = { ...basePayload, entryDate: monthEntryDate, yearMonth: monthYearMonth, memo };
+          // 할부 정보는 DB 컬럼으로 관리 (메모 오염 없음)
+          const payload = {
+            ...basePayload,
+            entryDate: monthEntryDate,
+            yearMonth: monthYearMonth,
+            installmentMonths: months,
+            installmentSeq: i + 1,
+            installmentGroupId: groupId,
+            isInterestFree,
+          };
 
           if (isShared) {
             // 공용: 두 유저에게 각각 절반
@@ -1958,6 +1965,18 @@ const EntryRow: React.FC<{
                 borderRadius: '4px', padding: '1px 5px',
               }}>
                 💳 {entry.cardName}
+              </span>
+            )}
+            {/* 할부 배지 — installment_seq/months DB 컬럼 기반 */}
+            {entry.installmentSeq && entry.installmentMonths && (
+              <span style={{
+                marginLeft: '4px', fontSize: '10px',
+                background: entry.isInterestFree ? '#E8F5E9' : '#EDE7F6',
+                color: entry.isInterestFree ? '#2E7D32' : '#6A1B9A',
+                border: `1px solid ${entry.isInterestFree ? '#A5D6A7' : '#CE93D8'}`,
+                borderRadius: '4px', padding: '1px 5px', fontWeight: 600,
+              }}>
+                {entry.installmentSeq}/{entry.installmentMonths}{entry.isInterestFree ? ' 무이자' : ''}
               </span>
             )}
             {entry.memo && <span> · {entry.memo}</span>}
