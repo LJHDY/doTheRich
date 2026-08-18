@@ -367,6 +367,15 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const memoHook = useNumberedTextarea(memoText, setMemoText);
   const [memoSaving, setMemoSaving] = useState(false);
   const [memoError, setMemoError] = useState<string | null>(null);
+
+  // 메모 textarea 자동 높이 조절 — 편집 모드 진입 시 및 텍스트 변경 시
+  useEffect(() => {
+    if (!editingMemo) return;
+    const el = memoHook.ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [editingMemo, memoText]);
   const [showRecordTooltip, setShowRecordTooltip] = useState(false);
   const [showStageTooltip, setShowStageTooltip] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -2059,7 +2068,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     border: '1px solid #1a73e8', borderRadius: '6px',
                     resize: 'none', overflow: 'hidden',
                     fontFamily: 'inherit', boxSizing: 'border-box',
-                    outline: 'none',
+                    outline: 'none', minHeight: '60px',
                   }}
                 />
                 {memoError && (
