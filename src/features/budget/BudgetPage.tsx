@@ -233,10 +233,10 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
     const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
 
-    // 통장별 잔액 계산용 — 이체 포함 (계좌 간 이동도 개별 잔액에 반영)
+    // 통장별 잔액 계산용 — 이체 포함, account(중분류) 우선 / 없으면 accountMain(대분류)으로 분류
     const accountMap: Record<string, { income: number; expense: number }> = {};
     entries.forEach(e => {
-      const key = e.account || '미분류';
+      const key = e.account || e.accountMain || '미분류';
       if (!accountMap[key]) accountMap[key] = { income: 0, expense: 0 };
       if (e.entryType === 'INCOME') accountMap[key].income += e.amount;
       else accountMap[key].expense += e.amount;
@@ -261,7 +261,15 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     }
     if (categoryFilter) base = base.filter(e => e.category === categoryFilter);
     // 통장 필터 — account(중분류) 또는 accountMain(대분류) 일치
-    if (accountFilter) base = base.filter(e => e.account === accountFilter || e.accountMain === accountFilter);
+    // accountMainFilter: 해당 pm의 accountMain값도 같이 매칭 (accountMain-only 수입 항목 포함)
+    if (accountFilter) {
+      const pm = paymentMethods.find(p => p.name === accountFilter);
+      base = base.filter(e =>
+        e.account === accountFilter ||
+        e.accountMain === accountFilter ||
+        (pm?.accountMain && (e.account === pm.accountMain || e.accountMain === pm.accountMain))
+      );
+    }
     // 카드 필터 — cardName 일치 또는 레거시(이전에 카드를 account 필드에 저장한 항목)도 포함
     if (cardFilter) {
       const cardNames = new Set(paymentMethods.filter(p => p.type === '카드').map(p => p.name));
@@ -591,16 +599,28 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   );
                 };
 
-                // 등록된 통장 카드
+                // 등록된 통장 카드 — pm.name(중분류) + pm.accountMain(대분류) 두 키 모두 합산
                 const cards = bankAccounts.map(pm => {
                   const accName = pm.name;
                   const opening = openingBalances[accName] ?? 0;
-                  const { income = 0, expense = 0 } = summary.accountMap[accName] ?? {};
-                  return <AccountCard key={accName} accName={accName} opening={opening} income={income} expense={expense} />;
+                  const byName = summary.accountMap[accName] ?? { income: 0, expense: 0 };
+                  // accountMain이 pm.name과 다를 때: accountMain 키로 저장된 수입/지출도 합산
+                  // (수입 항목에 통장 미지정 → accountMain만 저장된 경우 대응)
+                  const byMain = pm.accountMain && pm.accountMain !== accName
+                    ? (summary.accountMap[pm.accountMain] ?? { income: 0, expense: 0 })
+                    : { income: 0, expense: 0 };
+                  return (
+                    <AccountCard key={accName} accName={accName} opening={opening}
+                      income={byName.income + byMain.income}
+                      expense={byName.expense + byMain.expense} />
+                  );
                 });
 
-                // 미분류 — 통장 미지정 항목 (잔액 합계를 맞추기 위해 표시)
-                const knownNames = new Set(bankAccounts.map(p => p.name));
+                // 미분류 — 통장·accountMain 모두 미해당 항목
+                const knownNames = new Set([
+                  ...bankAccounts.map(p => p.name),
+                  ...bankAccounts.filter(p => p.accountMain).map(p => p.accountMain!),
+                ]);
                 const unassigned = { income: 0, expense: 0 };
                 Object.entries(summary.accountMap).forEach(([k, v]) => {
                   if (!knownNames.has(k)) { unassigned.income += v.income; unassigned.expense += v.expense; }
