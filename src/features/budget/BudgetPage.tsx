@@ -149,6 +149,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [accountFilter, setAccountFilter] = useState<string | null>(null); // 통장/카드 단위 필터
   const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem('budget_tab') as Tab) || 'ENTRIES');
   useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
@@ -257,8 +258,10 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       else if (filter === 'INVEST') base = base.filter(e => e.isInvestment);
     }
     if (categoryFilter) base = base.filter(e => e.category === categoryFilter);
+    // 통장/카드 필터 — account(중분류) 또는 accountMain(대분류) 일치
+    if (accountFilter) base = base.filter(e => e.account === accountFilter || e.accountMain === accountFilter);
     return base;
-  }, [entries, filter, categoryFilter]);
+  }, [entries, filter, categoryFilter, accountFilter]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
   const openAdd = () => { setEditingId(null); setForm(initialForm()); setIsShared(false); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); setFormOpen(true); };
@@ -514,12 +517,24 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 }) => {
                   const closing = opening + income - expense;
                   const isEditing = editingOpeningAccount === accName;
+                  // 통장 카드 클릭 시 해당 통장으로 내역 필터링 (dimmed 카드는 비활성)
+                  const isSelected = !dimmed && accountFilter === accName;
+                  const handleCardClick = () => {
+                    if (dimmed) return;
+                    setAccountFilter(prev => prev === accName ? null : accName);
+                  };
                   return (
-                    <div style={{
-                      background: dimmed ? '#fafafa' : '#fff',
-                      border: `1px solid ${dimmed ? '#e0e0e0' : '#e8ecf0'}`, borderRadius: '10px',
-                      padding: '10px 14px', minWidth: '160px', fontSize: '12px',
-                    }}>
+                    <div
+                      onClick={handleCardClick}
+                      style={{
+                        background: isSelected ? '#e8f4fd' : (dimmed ? '#fafafa' : '#fff'),
+                        border: `1px solid ${isSelected ? '#89CFF0' : (dimmed ? '#e0e0e0' : '#e8ecf0')}`,
+                        borderRadius: '10px', padding: '10px 14px', minWidth: '160px', fontSize: '12px',
+                        cursor: dimmed ? 'default' : 'pointer',
+                        boxShadow: isSelected ? '0 0 0 2px #89CFF080' : 'none',
+                        transition: 'all 0.15s',
+                      }}
+                    >
                       <div style={{ fontWeight: 700, color: dimmed ? '#9aa0a6' : '#1a3a5c', marginBottom: '6px' }}>{accName}</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#5f6368' }}>
                         {!dimmed && (
@@ -544,7 +559,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                               />
                             ) : (
                               <span
-                                onClick={() => { setEditingOpeningAccount(accName); setEditingOpeningStr(String(opening)); }}
+                                onClick={e => { e.stopPropagation(); setEditingOpeningAccount(accName); setEditingOpeningStr(String(opening)); }}
                                 style={{ cursor: 'text', borderBottom: '1px dashed #89CFF0', color: '#344054', fontWeight: 600 }}
                                 title="클릭하여 이월 잔액 수정"
                               >
@@ -747,6 +762,23 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               }}
             >
               {categoryFilter} ×
+            </span>
+          </div>
+        )}
+
+        {/* 통장 필터 활성 배지 — 통장 카드 클릭 시 표시, × 클릭으로 해제 */}
+        {accountFilter && (
+          <div style={{ padding: '6px 20px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', color: '#5f6368' }}>통장 필터:</span>
+            <span
+              onClick={() => setAccountFilter(null)}
+              style={{
+                fontSize: '12px', fontWeight: 700, color: '#1565c0',
+                background: '#e0f0ff', border: '1px solid #4BAAD4',
+                borderRadius: '12px', padding: '2px 10px', cursor: 'pointer',
+              }}
+            >
+              🏦 {accountFilter} ×
             </span>
           </div>
         )}
