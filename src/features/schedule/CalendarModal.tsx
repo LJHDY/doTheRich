@@ -304,7 +304,8 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   }, [dateActionPopup]);
 
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
-  const todayStr  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  // 렌더 시점 기준 오늘 날짜 — now는 마운트 시 고정이므로 직접 계산
+  const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
 
   const load = useCallback(async () => {
     setLoading(true);
