@@ -1049,6 +1049,8 @@ const toPaymentMethod = (d: any): PaymentMethod => ({
   accountNumber: d.account_number ?? undefined,
   cardAlias: d.card_alias ?? undefined,
   billingDay: d.billing_day ?? undefined,
+  billingStartDay: d.billing_start_day ?? undefined,
+  billingEndDay: d.billing_end_day ?? undefined,
   isActive: d.is_active,
 });
 
@@ -1059,7 +1061,8 @@ export const getPaymentMethods = async (userId: string): Promise<PaymentMethod[]
 
 export const createPaymentMethod = async (payload: {
   userId: string; name: string; type: string;
-  accountMain?: string; accountNumber?: string; cardAlias?: string; billingDay?: number;
+  accountMain?: string; accountNumber?: string; cardAlias?: string;
+  billingDay?: number; billingStartDay?: number; billingEndDay?: number;
 }): Promise<PaymentMethod> => {
   const { data } = await api.post('/api/budget/payment-methods', {
     user_id: payload.userId,
@@ -1069,13 +1072,16 @@ export const createPaymentMethod = async (payload: {
     account_number: payload.accountNumber ?? null,
     card_alias: payload.cardAlias ?? null,
     billing_day: payload.billingDay ?? null,
+    billing_start_day: payload.billingStartDay ?? null,
+    billing_end_day: payload.billingEndDay ?? null,
   });
   return toPaymentMethod(data);
 };
 
 export const updatePaymentMethod = async (id: number, payload: {
   name?: string; type?: string;
-  accountMain?: string; accountNumber?: string; cardAlias?: string; billingDay?: number;
+  accountMain?: string; accountNumber?: string; cardAlias?: string;
+  billingDay?: number; billingStartDay?: number; billingEndDay?: number;
 }): Promise<PaymentMethod> => {
   const { data } = await api.patch(`/api/budget/payment-methods/${id}`, {
     name: payload.name,
@@ -1084,6 +1090,8 @@ export const updatePaymentMethod = async (id: number, payload: {
     account_number: payload.accountNumber,
     card_alias: payload.cardAlias,
     billing_day: payload.billingDay,
+    billing_start_day: payload.billingStartDay,
+    billing_end_day: payload.billingEndDay,
   });
   return toPaymentMethod(data);
 };

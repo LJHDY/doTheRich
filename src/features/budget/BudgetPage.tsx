@@ -84,17 +84,20 @@ const toYearMonth = (d: Date) =>
 const displayYearMonth = (ym: string) =>
   `${ym.slice(0, 4)}년 ${Number(ym.slice(4))}월`;
 
-/** 카드 결제일 기준 청구 기간 계산
- * 예: billingDay=24, yearMonth='202608' → { from:'2026-07-24', to:'2026-08-23', label:'7/24~8/23' }
- * billingDay=1 → to는 전달 말일 (Date day=0 트릭)
+/** 카드 결산 기간 계산 — 시작일/종료일 모두 직접 설정
+ * 예: startDay=24, endDay=23, yearMonth='202608' → { from:'2026-07-24', to:'2026-08-23', label:'7/24~8/23' }
+ * 종료일이 시작일보다 크면 같은 달, 작으면 다음달 기준
  */
-const getCardBillingPeriod = (billingDay: number, yearMonth: string) => {
+const getCardBillingPeriod = (billingStartDay: number, billingEndDay: number, yearMonth: string) => {
   const year = Number(yearMonth.slice(0, 4));
   const month = Number(yearMonth.slice(4)); // 1-indexed
-  const fromDate = new Date(year, month - 2, billingDay); // 전달 결제일
-  const toDate   = new Date(year, month - 1, billingDay - 1); // 이번달 결제일 전날
+  const fromDate = new Date(year, month - 2, billingStartDay); // 전달 시작일
+  // 종료일이 시작일 이상이면 전달 기준, 미만이면 이번달 기준
+  const toDate = billingEndDay >= billingStartDay
+    ? new Date(year, month - 2, billingEndDay)   // 전달 종료 (예: 1일~31일 같은 달)
+    : new Date(year, month - 1, billingEndDay);  // 이번달 종료 (예: 24일~23일)
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  const label = `${fromDate.getMonth() + 1}/${billingDay}~${month}/${toDate.getDate()}`;
+  const label = `${fromDate.getMonth() + 1}/${billingStartDay}~${toDate.getMonth() + 1}/${billingEndDay}`;
   return { from: fmt(fromDate), to: fmt(toDate), label };
 };
 
@@ -230,7 +233,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   // ─── 카드 청구 기간용 전달 항목 로드 — billingDay 있는 카드가 1개라도 있을 때만 실행
   useEffect(() => {
-    const hasBillingCards = paymentMethods.some(p => p.type === '카드' && p.billingDay);
+    const hasBillingCards = paymentMethods.some(p => p.type === '카드' && p.billingStartDay && p.billingEndDay);
     if (!hasBillingCards) { setPrevMonthEntries([]); return; }
     const year = Number(yearMonth.slice(0, 4));
     const month = Number(yearMonth.slice(4));
@@ -697,13 +700,13 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
           const cardNames = new Set(cardPMs.map(p => p.name));
 
-          // 카드별 청구 기간 기준 지출 합산
+          // 카드별 청구 기간 기준 지출 합산 (billingStartDay+billingEndDay 모두 설정 시 결산 기간 기준, 없으면 이번달 전체)
           const cardData: Record<string, { spent: number; period?: string }> = {};
           for (const pm of cardPMs) {
             let pool: BudgetEntry[];
             let period: string | undefined;
-            if (pm.billingDay) {
-              const { from, to, label } = getCardBillingPeriod(pm.billingDay, yearMonth);
+            if (pm.billingStartDay && pm.billingEndDay) {
+              const { from, to, label } = getCardBillingPeriod(pm.billingStartDay, pm.billingEndDay, yearMonth);
               period = label;
               // 전달 항목 중 from 이후 + 이번달 항목 중 to 이하를 합산
               pool = [
@@ -759,9 +762,9 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                         {pm.name}
                         {pm.billingDay && <span style={{ fontSize: '10px', color: '#9aa0a6', marginLeft: '4px' }}>결제일 {pm.billingDay}일</span>}
                       </div>
-                      {/* 청구 기간 표시 */}
+                      {/* 결산 기간 표시 */}
                       {period && (
-                        <div style={{ fontSize: '10px', color: '#9aa0a6', marginBottom: '4px' }}>{period}</div>
+                        <div style={{ fontSize: '10px', color: '#4BAAD4', marginBottom: '4px' }}>결산 {period}</div>
                       )}
                       <div style={{ color: '#E06060', fontWeight: 700, fontSize: '13px' }}>
                         -{formatAmountShort(spent)}
@@ -1937,11 +1940,14 @@ type PmForm = {
   accountNumber: string;
   // 카드 전용
   cardAlias: string;
-  billingDayStr: string;
+  billingDayStr: string;       // 결제일
+  billingStartDayStr: string;  // 결산 시작일
+  billingEndDayStr: string;    // 결산 종료일
 };
 
 const emptyPmForm = (): PmForm => ({
-  name: '', type: '통장', accountMain: '', accountNumber: '', cardAlias: '', billingDayStr: '',
+  name: '', type: '통장', accountMain: '', accountNumber: '', cardAlias: '',
+  billingDayStr: '', billingStartDayStr: '', billingEndDayStr: '',
 });
 
 const PaymentMethodPanel: React.FC<{
@@ -1975,6 +1981,8 @@ const PaymentMethodPanel: React.FC<{
       accountNumber: pm.accountNumber ?? '',
       cardAlias: pm.cardAlias ?? '',
       billingDayStr: pm.billingDay ? String(pm.billingDay) : '',
+      billingStartDayStr: pm.billingStartDay ? String(pm.billingStartDay) : '',
+      billingEndDayStr: pm.billingEndDay ? String(pm.billingEndDay) : '',
     });
     setFormOpen(true);
   };
@@ -1990,6 +1998,8 @@ const PaymentMethodPanel: React.FC<{
         accountNumber: form.type === '통장' ? (form.accountNumber.trim() || undefined) : undefined,
         cardAlias: form.type === '카드' ? (form.cardAlias.trim() || undefined) : undefined,
         billingDay: form.type === '카드' && form.billingDayStr ? Number(form.billingDayStr) : undefined,
+        billingStartDay: form.type === '카드' && form.billingStartDayStr ? Number(form.billingStartDayStr) : undefined,
+        billingEndDay: form.type === '카드' && form.billingEndDayStr ? Number(form.billingEndDayStr) : undefined,
       };
       if (editingId !== null) {
         const updated = await updatePaymentMethod(editingId, payload);
@@ -2078,6 +2088,18 @@ const PaymentMethodPanel: React.FC<{
                 <input type="number" min={1} max={31} value={form.billingDayStr}
                   onChange={e => setForm(f => ({ ...f, billingDayStr: e.target.value }))}
                   placeholder="예: 14" style={inputSt} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>결산 시작일</label>
+                <input type="number" min={1} max={31} value={form.billingStartDayStr}
+                  onChange={e => setForm(f => ({ ...f, billingStartDayStr: e.target.value }))}
+                  placeholder="예: 24" style={inputSt} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>결산 종료일</label>
+                <input type="number" min={1} max={31} value={form.billingEndDayStr}
+                  onChange={e => setForm(f => ({ ...f, billingEndDayStr: e.target.value }))}
+                  placeholder="예: 23" style={inputSt} />
               </div>
             </>)}
           </div>
