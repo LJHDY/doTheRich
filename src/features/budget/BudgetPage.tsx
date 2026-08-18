@@ -1196,7 +1196,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   <input type="date" value={form.entryDate ?? today()} onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} style={inputStyle} />
                 </FieldRow>
                 <FieldRow label="통장">
-                  <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputStyle}>
+                  {/* 통장 선택 시 카드 초기화 — 동시 선택 불가 */}
+                  <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value, cardName: undefined }))} style={inputStyle}>
                     <option value="">선택 안함</option>
                     {paymentMethods.filter(p => p.type === '통장').map(p => (
                       <option key={p.id} value={p.name}>{p.name}</option>
@@ -1205,7 +1206,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 </FieldRow>
                 {paymentMethods.some(p => p.type === '카드') && (
                   <FieldRow label="카드">
-                    <select value={form.cardName ?? ''} onChange={e => setForm(f => ({ ...f, cardName: e.target.value || undefined }))} style={inputStyle}>
+                    {/* 카드 선택 시 통장 초기화 — 동시 선택 불가 */}
+                    <select value={form.cardName ?? ''} onChange={e => setForm(f => ({ ...f, cardName: e.target.value || undefined, account: e.target.value ? '' : f.account }))} style={inputStyle}>
                       <option value="">선택 안함</option>
                       {paymentMethods.filter(p => p.type === '카드').map(p => (
                         <option key={p.id} value={p.name}>{p.name}{p.billingDay ? ` (결제일 ${p.billingDay}일)` : ''}</option>
@@ -1244,7 +1246,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>통장</label>
-                    <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputStyle}>
+                    {/* 통장 선택 시 카드 초기화 — 동시 선택 불가 */}
+                    <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value, cardName: undefined }))} style={inputStyle}>
                       <option value="">선택 안함</option>
                       {paymentMethods.filter(p => p.type === '통장').map(p => (
                         <option key={p.id} value={p.name}>{p.name}</option>
@@ -1254,7 +1257,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   {paymentMethods.some(p => p.type === '카드') && (
                     <div>
                       <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>카드</label>
-                      <select value={form.cardName ?? ''} onChange={e => setForm(f => ({ ...f, cardName: e.target.value || undefined }))} style={inputStyle}>
+                      {/* 카드 선택 시 통장 초기화 — 동시 선택 불가 */}
+                      <select value={form.cardName ?? ''} onChange={e => setForm(f => ({ ...f, cardName: e.target.value || undefined, account: e.target.value ? '' : f.account }))} style={inputStyle}>
                         <option value="">선택 안함</option>
                         {paymentMethods.filter(p => p.type === '카드').map(p => (
                           <option key={p.id} value={p.name}>{p.name}{p.billingDay ? ` (${p.billingDay}일)` : ''}</option>
@@ -2403,6 +2407,7 @@ const TICKER_GROUPS = [
 ];
 
 const MarketReportView: React.FC = () => {
+  const isMobile = useIsMobile();
   const [reports, setReports] = useState<MarketReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -2912,7 +2917,7 @@ const MarketReportView: React.FC = () => {
                     {(kospiSec.length > 0 || kospiGain.length > 0) && (
                       <div style={{ marginBottom: '8px' }}>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px', paddingBottom: '4px', borderBottom: '2px solid #fce4e4' }}>🇰🇷 KOSPI</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
                           <SectorTable title="섹터" items={kospiSec} />
                           <GainerTable title="주도주" items={kospiGain} />
                         </div>
@@ -2922,12 +2927,29 @@ const MarketReportView: React.FC = () => {
                     {(kosdaqSec.length > 0 || kosdaqGain.length > 0) && (
                       <div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px', paddingBottom: '4px', borderBottom: '2px solid #fce4e4' }}>📊 KOSDAQ</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
                           <SectorTable title="섹터" items={kosdaqSec} />
                           <GainerTable title="주도주" items={kosdaqGain} />
                         </div>
                       </div>
                     )}
+                    {/* 네이버 증권 바로가기 */}
+                    <div style={{ marginTop: '12px', textAlign: 'right' }}>
+                      <a
+                        href="https://stock.naver.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          fontSize: '12px', color: '#03c75a', fontWeight: 600,
+                          textDecoration: 'none', padding: '5px 12px',
+                          border: '1px solid #03c75a', borderRadius: '20px',
+                          background: '#f0fff7',
+                        }}
+                      >
+                        <span style={{ fontSize: '14px' }}>N</span> 네이버 증권
+                      </a>
+                    </div>
                   </div>
                 );
               })()}
