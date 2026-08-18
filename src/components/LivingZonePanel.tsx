@@ -3,7 +3,7 @@ import { ApartmentComplex, LivingZone, ZoneChecklistResultItem, ChecklistInputTy
 import {
   getLivingZones, createLivingZone, updateLivingZoneMemo,
   addComplexesToZone, removeComplexFromZone, deleteLivingZone,
-  getZoneChecklist, upsertZoneChecklistResult,
+  getZoneChecklist, upsertZoneChecklistResult, reorderZoneComplexes,
 } from '../services/api';
 import { useNumberedTextarea } from '../hooks/useNumberedTextarea';
 import ZonePhotoModal from './ZonePhotoModal';
@@ -24,8 +24,8 @@ interface Props {
   onClose: () => void;
   isMobile?: boolean; // 모바일 풀스크린 오버레이 모드
   onStartZoneDrawing?: (zoneId: number) => void; // 구획 그리기 시작 — 지도에서 폴리곤 입력 모드로 전환
-  // 생활권 폴리곤 목록 — 지도 오버레이로 표시할 좌표 목록을 상위에 전달
-  onZonePolygonsChange?: (polygons: { id: number; name: string; points: { lat: number; lng: number }[] }[]) => void;
+  // 생활권 폴리곤 목록 — 지도 오버레이로 표시할 좌표 목록을 상위에 전달 (대장 단지명 포함)
+  onZonePolygonsChange?: (polygons: { id: number; name: string; points: { lat: number; lng: number }[]; flagshipComplexName?: string | null }[]) => void;
 }
 
 const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStartZoneDrawing, onZonePolygonsChange }) => {
@@ -60,6 +60,9 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
   // 사진 모달 — 열린 생활권 id 저장
   const [photoZone, setPhotoZone] = useState<{ id: number; name: string } | null>(null);
 
+  // 순위 변경 저장 중 상태 (zoneId → boolean)
+  const [rankingSaving, setRankingSaving] = useState<Record<number, boolean>>({});
+
   // 생활권별 분위기 체크리스트 (zoneId → items)
   const [zoneChecklists, setZoneChecklists] = useState<Record<number, ZoneChecklistResultItem[]>>({});
   const [checklistLoading, setChecklistLoading] = useState<Record<number, boolean>>({});
@@ -74,12 +77,12 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
     try {
       const data = await getLivingZones();
       setZones(data);
-      // 폴리곤이 있는 생활권 목록을 지도 오버레이용으로 상위에 전달
+      // 폴리곤이 있는 생활권 목록을 지도 오버레이용으로 상위에 전달 (대장 단지명 포함)
       if (onZonePolygonsChange) {
         onZonePolygonsChange(
           data
             .filter(z => z.polygonPoints && z.polygonPoints.length >= 3)
-            .map(z => ({ id: z.id, name: z.name, points: z.polygonPoints! }))
+            .map(z => ({ id: z.id, name: z.name, points: z.polygonPoints!, flagshipComplexName: z.flagshipComplexName }))
         );
       }
     } catch {}
@@ -209,6 +212,32 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
       setCheckboxZoneId(null);
     } catch {}
     setCheckboxSaving(false);
+  };
+
+  // 단지 순위 이동 — direction: 'up'이면 위로, 'down'이면 아래로
+  const handleReorder = async (zone: LivingZone, complexId: number, direction: 'up' | 'down') => {
+    const ids = zone.complexes.map(c => c.complexId);
+    const idx = ids.indexOf(complexId);
+    if (direction === 'up' && idx <= 0) return;
+    if (direction === 'down' && idx >= ids.length - 1) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]];
+    setRankingSaving(prev => ({ ...prev, [zone.id]: true }));
+    try {
+      const updated = await reorderZoneComplexes(zone.id, ids);
+      setZones(prev => {
+        const next = prev.map(z => z.id === zone.id ? updated : z);
+        if (onZonePolygonsChange) {
+          onZonePolygonsChange(
+            next
+              .filter(z => z.polygonPoints && z.polygonPoints.length >= 3)
+              .map(z => ({ id: z.id, name: z.name, points: z.polygonPoints!, flagshipComplexName: z.flagshipComplexName }))
+          );
+        }
+        return next;
+      });
+    } catch {}
+    setRankingSaving(prev => ({ ...prev, [zone.id]: false }));
   };
 
   const handleDeleteZone = async (zoneId: number) => {
@@ -535,20 +564,27 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
                         {zone.complexes.length === 0 ? (
                           <div style={{ fontSize: '12px', color: '#9e9e9e', padding: '4px 0' }}>단지가 없습니다.</div>
                         ) : (
-                          zone.complexes.map(c => {
+                          zone.complexes.map((c, idx) => {
                             // 백엔드 DTO에 priceRange 없으므로 complexes prop에서 complexId로 보강
                             const full = complexes.find(fc => fc.id === c.complexId);
+                            const isFirst = idx === 0;
+                            const isLast = idx === zone.complexes.length - 1;
+                            // 2개 이상일 때만 👍/👎 표시
+                            const hasRank = zone.complexes.length > 1;
                             return (
                               <div
                                 key={c.id}
                                 style={{
                                   display: 'flex', alignItems: 'center',
                                   padding: '6px 10px',
-                                  backgroundColor: '#fff', borderRadius: '6px',
-                                  border: '1px solid #e8eaed',
+                                  backgroundColor: isFirst && hasRank ? '#fff8e1' : isLast && hasRank ? '#fff5f5' : '#fff',
+                                  borderRadius: '6px',
+                                  border: isFirst && hasRank ? '1px solid #FFD97D' : isLast && hasRank ? '1px solid #ffb3b3' : '1px solid #e8eaed',
                                 }}
                               >
                                 <div style={{ minWidth: 0, flex: 1 }}>
+                                  {hasRank && isFirst && <span style={{ marginRight: '4px', fontSize: '12px' }}>👍</span>}
+                                  {hasRank && isLast && <span style={{ marginRight: '4px', fontSize: '12px' }}>👎</span>}
                                   <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124' }}>{c.complexName}</span>
                                   {full?.priceRange && (
                                     <span style={{
@@ -557,6 +593,31 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
                                       borderRadius: '8px', padding: '1px 5px',
                                     }}>{full.priceRange}</span>
                                   )}
+                                </div>
+                                {/* 순위 이동 버튼 — 저장 중이거나 이동 불가 시 비활성 */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', marginLeft: '6px', flexShrink: 0 }}>
+                                  <button
+                                    onClick={() => handleReorder(zone, c.complexId, 'up')}
+                                    disabled={rankingSaving[zone.id] || isFirst}
+                                    title="순위 올리기"
+                                    style={{
+                                      background: 'transparent', border: '1px solid #d0d0d0',
+                                      borderRadius: '3px', padding: '0 4px', lineHeight: '14px',
+                                      fontSize: '10px', cursor: isFirst ? 'default' : 'pointer',
+                                      color: isFirst ? '#ccc' : '#555',
+                                    }}
+                                  >▲</button>
+                                  <button
+                                    onClick={() => handleReorder(zone, c.complexId, 'down')}
+                                    disabled={rankingSaving[zone.id] || isLast}
+                                    title="순위 내리기"
+                                    style={{
+                                      background: 'transparent', border: '1px solid #d0d0d0',
+                                      borderRadius: '3px', padding: '0 4px', lineHeight: '14px',
+                                      fontSize: '10px', cursor: isLast ? 'default' : 'pointer',
+                                      color: isLast ? '#ccc' : '#555',
+                                    }}
+                                  >▼</button>
                                 </div>
                               </div>
                             );

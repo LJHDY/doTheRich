@@ -118,8 +118,10 @@ export interface LivingZone {
   district: string;     // "서울 관악구"
   name: string;         // "봉천역 생활권"
   memo?: string;
-  complexes: LivingZoneComplex[];
+  complexes: LivingZoneComplex[];  // 순위 순서대로 정렬됨 (백엔드가 complexRankings 기준으로 정렬)
   polygonPoints?: { lat: number; lng: number }[] | null; // 구획 폴리곤 좌표 배열
+  complexRankings?: number[];       // 순위 배열 (complexId 순서)
+  flagshipComplexName?: string | null;  // 1순위 단지명 (지도 라벨용)
 }
 
 /** 지도 오버레이 마커 — 학교·인프라 위치 표시용 */

@@ -93,8 +93,8 @@ const App: React.FC = () => {
   const [zoneDrawingSaving, setZoneDrawingSaving] = useState(false);
   // 구획 추가 완료 시 LivingZonePanel 데이터 리로드용 key
   const [livingZoneRefreshKey, setLivingZoneRefreshKey] = useState(0);
-  // 생활권 패널에서 지도에 표시할 구획 폴리곤 목록 — 생활권 로드 시 패널이 채워줌
-  const [zonePolygons, setZonePolygons] = useState<{ id: number; name: string; points: RoutePoint[] }[]>([]);
+  // 생활권 패널에서 지도에 표시할 구획 폴리곤 목록 — 생활권 로드 시 패널이 채워줌 (대장 단지명 포함)
+  const [zonePolygons, setZonePolygons] = useState<{ id: number; name: string; points: RoutePoint[]; flagshipComplexName?: string | null }[]>([]);
 
   // 행정구역 경계 표시 — 선택한 구/시 폴리곤을 지도에 오버레이
   const [selectedDistrict, setSelectedDistrict] = useState<string | null>(() => sessionStorage.getItem('selected_district') || null);

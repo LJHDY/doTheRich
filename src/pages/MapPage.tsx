@@ -54,8 +54,8 @@ interface MapPageProps {
   isDrawingZone?: boolean;
   drawingZonePoints?: RoutePoint[];
   onZonePointAdd?: (p: RoutePoint) => void;
-  // 저장된 생활권 구획 폴리곤 목록 — 지도에 반투명 초록 오버레이로 표시
-  zonePolygons?: { id: number; name: string; points: RoutePoint[] }[];
+  // 저장된 생활권 구획 폴리곤 목록 — 지도에 반투명 초록 오버레이로 표시 (대장 단지명 포함)
+  zonePolygons?: { id: number; name: string; points: RoutePoint[]; flagshipComplexName?: string | null }[];
   // 단지 등록 모달 검색 위치 — 임시 핀으로 표시해 실제 아파트 위치 확인용
   previewMarker?: { lat: number; lng: number } | null;
   // ComplexInfoPanel 표시 중 해당 단지의 가장 가까운 한강공원 — 이름 라벨 마커로 표시
@@ -1119,12 +1119,15 @@ const MapPage: React.FC<MapPageProps> = ({
       });
       zoneSavedPolygonsRef.current.push(polygon);
 
-      // 폴리곤 중심점에 생활권 이름 라벨 표시
+      // 폴리곤 중심점에 생활권 이름 라벨 표시 (대장 단지가 있으면 두 번째 줄에 👍 표시)
       const lats = zone.points.map(p => p.lat);
       const lngs = zone.points.map(p => p.lng);
       const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
       const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
       const safeZoneName = zone.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safeFlagshipName = zone.flagshipComplexName
+        ? zone.flagshipComplexName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        : null;
       const labelMarker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(centerLat, centerLng),
         map,
@@ -1134,8 +1137,8 @@ const MapPage: React.FC<MapPageProps> = ({
             padding:3px 8px;border-radius:10px;
             font-size:11px;font-weight:700;white-space:nowrap;
             box-shadow:0 1px 4px rgba(0,0,0,0.2);
-            pointer-events:none;
-          ">${safeZoneName}</div>`,
+            pointer-events:none;text-align:center;
+          ">${safeZoneName}${safeFlagshipName ? `<div style="font-size:10px;font-weight:600;margin-top:1px;opacity:0.92;">👍 ${safeFlagshipName}</div>` : ''}</div>`,
           anchor: new window.naver.maps.Point(0, 0),
         },
         zIndex: 12,

@@ -366,6 +366,13 @@ export const updateLivingZonePolygon = async (id: number, polygonPoints: { lat: 
   return data;
 };
 
+/** 생활권 단지 순위 업데이트 — PATCH /api/living-zones/:id/rankings
+ *  complexIds: 순위 순서대로 정렬된 complexId 배열 (빈 배열이면 초기화) */
+export const reorderZoneComplexes = async (zoneId: number, complexIds: number[]): Promise<LivingZone> => {
+  const { data } = await api.patch<LivingZone>(`/api/living-zones/${zoneId}/rankings`, { complexIds });
+  return data;
+};
+
 /** 생활권에 단지 일괄 추가 — POST /api/living-zones/:id/complexes
  *  백엔드가 { complexIds: number[] } 배열을 받고 갱신된 LivingZoneDto를 반환 */
 export const addComplexesToZone = async (zoneId: number, complexIds: number[]): Promise<LivingZone> => {

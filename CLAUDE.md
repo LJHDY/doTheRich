@@ -255,6 +255,7 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 | GET | `/api/living-zones/:id/checklists` | 생활권 분위기 체크리스트 조회 (ATMOSPHERE 템플릿, 미체크 포함) |
 | PATCH | `/api/living-zones/:id/checklists/:templateId` | 생활권 체크 결과 upsert — `{ rating?, memo? }` |
 | PATCH | `/api/living-zones/:id/polygon` | 생활권 구획 폴리곤 저장 — `{ polygonPoints: [{lat,lng},...] \| null }` |
+| PATCH | `/api/living-zones/:id/rankings` | 단지 순위 배열 전체 교체 — `{ complexIds: number[] }` (순위 순서) |
 | GET | `/api/complexes/:id/property-visits` | 매물 임장 기록 목록 (created_at 내림차순, PROPERTY 템플릿 결과 포함) |
 | POST | `/api/complexes/:id/property-visits` | 매물 임장 기록 추가 (201) — `PropertyVisitRequest` |
 | PATCH | `/api/complexes/:id/property-visits/:visitId` | 매물 임장 기록 수정 — `PropertyVisitRequest` |
@@ -343,7 +344,9 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - 생활권 생성 폼: 이름 + 지역구 셀렉트 (`complexes`의 `region` distinct 목록), Enter/저장
 - 생활권 카드: 클릭 펼침/닫힘, 지역구 배지 + 단지 수 + 메모 미리보기
 - 메모 인라인 편집 (✏ 버튼 or 텍스트 클릭)
-- 단지 목록: 이름·금액대·지역 읽기전용 표시 (× 버튼 없음)
+- 단지 목록: 이름·금액대 읽기전용 표시 + 👍 버튼 (대장 단지 지정/해제 토글)
+  - 대장 단지 행: 노란 배경(`#fff8e1`) + 단지명 왼쪽에 👍 이모지
+  - 활성 버튼: 노란 배경 + 진하게 / 비활성: 투명 테두리만
 - **단지 선택 체크박스 패널**: "단지 수정" / "+ 단지 추가" 버튼 클릭 시 펼침
   - ⚠️ 지역구 조건 없이 모든 단지 표시 (기존에는 `zone.district === c.region` 조건 있었으나 제거)
   - 기존 포함된 단지 미리 체크 (`pendingIds` Set 초기화)
@@ -352,7 +355,7 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - **구획 그리기**: 포함 단지 섹션 헤더의 "구획 그리기" 버튼 → `onStartZoneDrawing(zoneId)` 콜백 → 지도 폴리곤 입력 모드
 - 생활권 삭제: 카드 우측 × → 2단계 확인
 - 신규 생활권 생성 후 자동 펼침
-- `onZonePolygonsChange` prop: 생활권 로드 시 폴리곤이 있는 생활권 좌표 목록을 App.tsx에 전달 → MapPage 오버레이 갱신
+- `onZonePolygonsChange` prop: 생활권 로드 시 폴리곤이 있는 생활권 좌표 목록 + 대장 단지명을 App.tsx에 전달 → MapPage 오버레이 갱신
 
 ### `MapPage.tsx`
 - 네이버 지도 초기화 (서울 중심, zoom 12)
@@ -377,7 +380,7 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - **생활권 구획 그리기**:
   - `isDrawingZone=true` 시 지도 커서 `crosshair`, 별도 클릭 리스너 등록 → `onZonePointAdd(lat, lng)` 콜백
   - `drawingZonePoints` 변경 시: 초록 원 꼭지점 마커 + 3개 이상이면 반투명 초록 Polygon / 2개 이하면 Polyline
-  - `zonePolygons` 변경 시: 저장된 구획을 반투명 초록 `shortdash` Polygon + 생활권 이름 라벨 마커로 표시
+  - `zonePolygons` 변경 시: 저장된 구획을 반투명 초록 `shortdash` Polygon + 생활권 이름 라벨 마커로 표시 (대장 단지 있으면 이름 아래 두 번째 줄에 "👍 단지명")
   - `zoneClickListenerRef` / `zonePolygonRef` / `zoneMarkersRef` / `zoneSavedPolygonsRef` / `zoneLabelMarkersRef`로 수명 관리
 - **공공단지 마커** (`publicComplexes` prop):
   - 줌 14 미만: 숨김 / 줌 14~14: 단지명만 / 줌 15+: 연식·세대수·용적·주차 세부정보 (CSS `pc-detail` 클래스로 마커 재생성 없이 토글)
@@ -719,6 +722,23 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
   - 저장된 구획: 생활권 패널 로드 시 `onZonePolygonsChange` → MapPage에 반투명 초록 Polygon + 이름 라벨 오버레이
   - 단지 체크박스 목록 지역구 조건 제거 (구획 추가로 지역구 무관하게 추가 가능)
   - 백엔드: `living_zone.polygon_points TEXT` 컬럼 (idempotent ALTER TABLE), `PATCH /api/living-zones/:id/polygon`
+- [x] 생활권 대장 단지 지정 기능
+  - LivingZonePanel 포함 단지 목록에 👍 버튼 추가 — 클릭 시 대장 단지 지정/해제 (토글)
+  - 대장 단지로 선택된 단지 행: 노란 배경 + 왼쪽에 👍 이모지 표시
+  - 지도 생활권 라벨: 생활권 이름 아래 두 번째 줄에 "👍 단지명" 표시 (대장 단지 있을 때만)
+  - 백엔드: `living_zone.flagship_complex_id BIGINT NULL` 컬럼 (idempotent ALTER TABLE)
+  - `LivingZoneDto.flagship_complex_id` + `flagship_complex_name` (조인), `PATCH /api/living-zones/:id/flagship`
+  - 프론트: `LivingZone.flagshipComplexId/Name` 타입 추가, `setLivingZoneFlagship` API, `zonePolygons` 타입 확장
+- [x] 생활권 단지 순위 기능 (대장 단지 → 전체 순위로 확장)
+  - 포함 단지 목록에 ▲▼ 버튼으로 순위 조정 — 1순위 👍 (노랑), 꼴찌 👎 (연빨강), 단지 2개 이상일 때만 표시
+  - 순위 순서대로 단지 목록 정렬 표시 (1순위 → 꼴찌)
+  - 지도 라벨: 1순위 단지명 "👍 단지명" 유지
+  - 백엔드: `living_zone.complex_rankings TEXT NULL` (JSON 배열, idempotent ALTER TABLE)
+    - `_to_dto()`: `complex_rankings` 순서대로 complexes 정렬 반환, `flagship_complex_name` = 1순위 단지명
+    - `add_complexes()`: 새 단지 rankings 끝에 자동 추가
+    - `remove_complex()`: rankings에서도 자동 제거
+    - `PATCH /api/living-zones/:id/rankings` — `{ complexIds: number[] }` 전체 교체
+  - 프론트: `LivingZone.complexRankings`, `reorderZoneComplexes` API, ▲▼ 버튼 즉시 저장
 - [x] 지도 마커 가격 = 호가(`askingPrice`) 우선, 없으면 매매가(`price`) fallback
   - 백엔드: `_build_price_maps()`에 SQL 쿼리 3 추가 → `asking_price_map` 반환
   - `_to_dto()` `latest_asking_price` 파라미터 추가, `ApartmentComplexDto.asking_price` 설정
