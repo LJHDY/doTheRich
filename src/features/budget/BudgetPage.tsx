@@ -211,6 +211,9 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(initialForm());
   const [isShared, setIsShared] = useState(false); // 공용 지출 — 두 유저에게 절반씩 저장
+  const [isInstallment, setIsInstallment] = useState(false);   // 할부 여부
+  const [installmentMonths, setInstallmentMonths] = useState(2); // 할부 개월수
+  const [isInterestFree, setIsInterestFree] = useState(false);  // 무이자 여부
 
   // 달력/목록 뷰 전환 상태
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
@@ -312,15 +315,17 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   }, [entries, filter, categoryFilter, accountFilter, cardFilter, paymentMethods]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
-  const openAdd = () => { setEditingId(null); setForm(initialForm()); setIsShared(false); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); setFormOpen(true); };
+  const resetInstallment = () => { setIsInstallment(false); setInstallmentMonths(2); setIsInterestFree(false); };
+  const openAdd = () => { setEditingId(null); setForm(initialForm()); setIsShared(false); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); resetInstallment(); setFormOpen(true); };
   const openEdit = (e: BudgetEntry) => {
     setEditingId(e.id);
     setForm({ ...e, amountStr: String(e.amount) });
     setIsShared(false);
     setIsTransfer(e.isTransfer ?? false);
+    resetInstallment();
     setFormOpen(true);
   };
-  const closeForm = () => { setFormOpen(false); setEditingId(null); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); };
+  const closeForm = () => { setFormOpen(false); setEditingId(null); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); resetInstallment(); };
 
   // 이체 저장 — from 통장에서 출금(EXPENSE) + to 통장에 입금(INCOME) 두 항목 생성
   const handleTransferSave = async () => {
@@ -378,26 +383,58 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     };
     try {
       if (editingId !== null) {
+        // 수정 모드: 할부 미지원 (단건 수정)
         const updated = await updateBudgetEntry(editingId, { ...basePayload, amount });
-        // 날짜 변경으로 다른 달이 된 경우 현재 뷰에서 제거
         if (updated.yearMonth !== yearMonth) {
           setEntries(prev => prev.filter(e => e.id !== editingId));
         } else {
           setEntries(prev => prev.map(e => e.id === editingId ? updated : e));
         }
+      } else if (isInstallment && form.entryType === 'EXPENSE' && form.cardName) {
+        // ── 할부 분할 저장 ──────────────────────────────────────────
+        const months = Math.max(2, installmentMonths);
+        const perMonth = Math.floor(amount / months);
+        const remainder = amount - perMonth * months; // 첫 달에 나머지 추가
+        const otherUserId = BUDGET_USERS.find(u => u.id !== userId)?.id ?? '';
+        const baseDate = new Date(entryDate);
+        const interestLabel = isInterestFree ? ' 무이자' : '';
+        const newEntries: BudgetEntry[] = [];
+
+        for (let i = 0; i < months; i++) {
+          const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, baseDate.getDate());
+          const monthEntryDate = d.toISOString().slice(0, 10);
+          const monthYearMonth = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const monthAmount = perMonth + (i === 0 ? remainder : 0);
+          const installmentMemo = `${i + 1}/${months}${interestLabel} 할부`;
+          const memo = basePayload.memo ? `${basePayload.memo} (${installmentMemo})` : installmentMemo;
+          const payload = { ...basePayload, entryDate: monthEntryDate, yearMonth: monthYearMonth, memo };
+
+          if (isShared) {
+            // 공용: 두 유저에게 각각 절반
+            const half = Math.round(monthAmount / 2);
+            const [e1] = await Promise.all([
+              createBudgetEntry({ ...payload, userId, amount: half }),
+              createBudgetEntry({ ...payload, userId: otherUserId, amount: half }),
+            ]);
+            if (e1.yearMonth === yearMonth) newEntries.push(e1);
+          } else {
+            const created = await createBudgetEntry({ ...payload, amount: monthAmount });
+            if (created.yearMonth === yearMonth) newEntries.push(created);
+          }
+        }
+        if (newEntries.length > 0) setEntries(prev => [...newEntries, ...prev]);
       } else if (isShared && form.entryType === 'EXPENSE') {
-        // 공용 지출: 두 유저에게 각각 절반 금액으로 저장
+        // 공용 지출 (일시불): 두 유저에게 각각 절반
         const halfAmount = Math.round(amount / 2);
         const otherUserId = BUDGET_USERS.find(u => u.id !== userId)?.id ?? '';
         const [created1] = await Promise.all([
           createBudgetEntry({ ...basePayload, userId, amount: halfAmount }),
           createBudgetEntry({ ...basePayload, userId: otherUserId, amount: halfAmount }),
         ]);
-        // 현재 보고 있는 달의 항목만 목록에 추가
         if (created1.yearMonth === yearMonth) setEntries(prev => [created1, ...prev]);
       } else {
+        // 일반 단건 저장
         const created = await createBudgetEntry({ ...basePayload, amount });
-        // 현재 보고 있는 달의 항목만 목록에 추가
         if (created.yearMonth === yearMonth) setEntries(prev => [created, ...prev]);
       }
       closeForm();
@@ -1344,6 +1381,43 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                     </span>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* 할부 — 카드 선택 + 지출 + 신규 등록 시에만 표시 */}
+            {form.cardName && form.entryType === 'EXPENSE' && editingId === null && (
+              <div style={{ marginBottom: '14px', padding: '10px 12px', background: '#f0f8fd', borderRadius: '8px', border: '1px solid #c9e8f8' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: isInstallment ? '10px' : 0 }}>
+                  <input type="checkbox" checked={isInstallment} onChange={e => setIsInstallment(e.target.checked)}
+                    style={{ width: '14px', height: '14px', accentColor: '#4BAAD4', cursor: 'pointer' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#1a3a5c' }}>💳 할부</span>
+                </label>
+                {isInstallment && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <input type="number" min={2} max={36} value={installmentMonths}
+                        onChange={e => setInstallmentMonths(Math.max(2, Math.min(36, Number(e.target.value))))}
+                        style={{ ...inputStyle, width: '64px', textAlign: 'center' }} />
+                      <span style={{ fontSize: '13px', color: '#344054' }}>개월</span>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={isInterestFree} onChange={e => setIsInterestFree(e.target.checked)}
+                        style={{ width: '14px', height: '14px', accentColor: '#4CAF50', cursor: 'pointer' }} />
+                      <span style={{ fontSize: '13px', color: isInterestFree ? '#2e7d32' : '#5f6368', fontWeight: isInterestFree ? 700 : 400 }}>무이자</span>
+                    </label>
+                    {/* 월 납부금액 미리보기 */}
+                    {form.amountStr && Number(form.amountStr) > 0 && (
+                      <span style={{ fontSize: '12px', color: '#4BAAD4', fontWeight: 600 }}>
+                        {isShared
+                          ? `매달 각 ${formatAmountKorean(Math.round(Math.floor(Number(form.amountStr) / installmentMonths) / 2))}`
+                          : `매달 ${formatAmountKorean(Math.floor(Number(form.amountStr) / installmentMonths))}`
+                        }
+                        {` × ${installmentMonths}개월`}
+                        {isInterestFree && <span style={{ color: '#2e7d32', marginLeft: '4px' }}>무이자</span>}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
