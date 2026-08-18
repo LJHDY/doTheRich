@@ -574,7 +574,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-" />
           <SummaryCard label="투자" amount={summary.totalInvest} color="#2196F3" sign="" />
           <SummaryCard label="잔액" amount={summary.totalIncome - summary.totalExpense - summary.totalInvest}
-            color={summary.totalIncome >= summary.totalExpense + summary.totalInvest ? '#1565c0' : '#E06060'} sign="" />
+            color={summary.totalIncome >= summary.totalExpense + summary.totalInvest ? '#1565c0' : '#E06060'}
+            sign={summary.totalIncome - summary.totalExpense - summary.totalInvest < 0 ? '-' : ''} />
         </div>
 
         {/* ── 고정/변동/투자 소요약 */}
@@ -754,7 +755,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                         {totalExpense > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>- 지출</span><span style={{ color: '#E06060', fontWeight: 600 }}>{formatAmountShort(totalExpense)}</span></div>}
                         <div style={{ borderTop: '1px solid #89CFF0', marginTop: '4px', paddingTop: '4px' }}>
                           <span style={{ minWidth: '52px', display: 'inline-block' }}>잔액</span>
-                          <span style={{ fontWeight: 700, color: totalBalance >= 0 ? '#1565c0' : '#E06060', fontSize: '13px' }}>{formatAmountShort(totalBalance)}</span>
+                          <span style={{ fontWeight: 700, color: totalBalance >= 0 ? '#1565c0' : '#E06060', fontSize: '13px' }}>{totalBalance < 0 ? '-' : ''}{formatAmountShort(Math.abs(totalBalance))}</span>
                         </div>
                       </div>
                     </div>
@@ -3389,7 +3390,7 @@ const OverviewView: React.FC<{ yearMonth: string }> = ({ yearMonth }) => {
     label, v0, v1, bold = false, colored = false, isBalance = false,
   }: { label: string; v0: number; v1: number; bold?: boolean; colored?: boolean; isBalance?: boolean }) => {
     const sum = v0 + v1;
-    const fmt = (v: number) => v === 0 ? '—' : formatAmountShort(v);
+    const fmt = (v: number) => v === 0 ? '—' : `${v < 0 ? '-' : ''}${formatAmountShort(Math.abs(v))}`;
     const color = (v: number) => isBalance
       ? (v >= 0 ? '#1565c0' : '#E06060')
       : colored ? '#E06060' : '#344054';
