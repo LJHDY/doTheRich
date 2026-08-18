@@ -91,6 +91,7 @@ const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
   subcategory: '',
   accountMain: '',
   account: '',
+  cardName: '',
   amountStr: '',
   isFixed: false,
   isInvestment: false,
@@ -149,7 +150,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [accountFilter, setAccountFilter] = useState<string | null>(null); // 통장/카드 단위 필터
+  const [accountFilter, setAccountFilter] = useState<string | null>(null); // 통장 단위 필터
+  const [cardFilter, setCardFilter] = useState<string | null>(null);      // 카드 단위 필터
   const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem('budget_tab') as Tab) || 'ENTRIES');
   useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
@@ -258,10 +260,12 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       else if (filter === 'INVEST') base = base.filter(e => e.isInvestment);
     }
     if (categoryFilter) base = base.filter(e => e.category === categoryFilter);
-    // 통장/카드 필터 — account(중분류) 또는 accountMain(대분류) 일치
+    // 통장 필터 — account(중분류) 또는 accountMain(대분류) 일치
     if (accountFilter) base = base.filter(e => e.account === accountFilter || e.accountMain === accountFilter);
+    // 카드 필터 — cardName 일치
+    if (cardFilter) base = base.filter(e => e.cardName === cardFilter);
     return base;
-  }, [entries, filter, categoryFilter, accountFilter]);
+  }, [entries, filter, categoryFilter, accountFilter, cardFilter]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
   const openAdd = () => { setEditingId(null); setForm(initialForm()); setIsShared(false); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); setFormOpen(true); };
@@ -321,6 +325,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       subcategory: form.subcategory || undefined,
       accountMain: form.accountMain || undefined,
       account: form.account || undefined,
+      cardName: form.cardName || undefined,
       isFixed: form.isFixed ?? false,
       isInvestment: form.isInvestment ?? false,
       investmentType: form.isInvestment ? (form.investmentType || undefined) : undefined,
@@ -517,10 +522,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 }) => {
                   const closing = opening + income - expense;
                   const isEditing = editingOpeningAccount === accName;
-                  // 통장 카드 클릭 시 해당 통장으로 내역 필터링 (dimmed 카드는 비활성)
+                  // 통장 카드 클릭 시 해당 통장으로 내역 필터링 (dimmed 카드는 비활성, 카드 필터는 해제)
                   const isSelected = !dimmed && accountFilter === accName;
                   const handleCardClick = () => {
                     if (dimmed) return;
+                    setCardFilter(null);
                     setAccountFilter(prev => prev === accName ? null : accName);
                   };
                   return (
@@ -626,6 +632,73 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   </div>
                 );
               })()}
+            </div>
+          );
+        })()}
+
+        {/* ── 카드별 지출 현황 — cardName이 있는 항목만 집계 */}
+        {(() => {
+          const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+          const cardPMs = paymentMethods.filter(p => p.type === '카드');
+          if (cardPMs.length === 0) return null;
+
+          // cardName 기준 지출 합산 (이체·투자 제외)
+          const cardMap: Record<string, number> = {};
+          for (const e of entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e) && e.cardName)) {
+            cardMap[e.cardName!] = (cardMap[e.cardName!] ?? 0) + e.amount;
+          }
+          // 등록된 카드 중 이번 달 지출이 있거나 전체 카드 목록 표시
+          const hasAnyCardData = Object.keys(cardMap).length > 0;
+          if (!hasAnyCardData) return null;
+
+          return (
+            <div style={{ padding: '8px 20px 0' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>💳 카드별 지출</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {cardPMs.map(pm => {
+                  const spent = cardMap[pm.name] ?? 0;
+                  if (spent === 0) return null;
+                  const isSelected = cardFilter === pm.name;
+                  return (
+                    <div
+                      key={pm.name}
+                      onClick={() => { setAccountFilter(null); setCardFilter(prev => prev === pm.name ? null : pm.name); }}
+                      style={{
+                        background: isSelected ? '#fff3e0' : '#fff',
+                        border: `1px solid ${isSelected ? '#FF9800' : '#e8ecf0'}`,
+                        borderRadius: '10px', padding: '10px 14px', minWidth: '140px',
+                        fontSize: '12px', cursor: 'pointer',
+                        boxShadow: isSelected ? '0 0 0 2px #FF980040' : 'none',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, color: isSelected ? '#E65100' : '#1a3a5c', marginBottom: '4px' }}>
+                        {pm.name}
+                        {pm.billingDay ? <span style={{ fontSize: '10px', color: '#9aa0a6', marginLeft: '4px' }}>결제일 {pm.billingDay}일</span> : null}
+                      </div>
+                      <div style={{ color: '#E06060', fontWeight: 700, fontSize: '13px' }}>
+                        -{formatAmountShort(spent)}
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* 등록 안된 카드로 지출된 항목 */}
+                {Object.entries(cardMap).filter(([name]) => !cardPMs.some(p => p.name === name)).map(([name, spent]) => (
+                  <div
+                    key={name}
+                    onClick={() => { setAccountFilter(null); setCardFilter(prev => prev === name ? null : name); }}
+                    style={{
+                      background: cardFilter === name ? '#fff3e0' : '#fafafa',
+                      border: `1px solid ${cardFilter === name ? '#FF9800' : '#e0e0e0'}`,
+                      borderRadius: '10px', padding: '10px 14px', minWidth: '140px',
+                      fontSize: '12px', cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: '#9aa0a6', marginBottom: '4px' }}>{name}</div>
+                    <div style={{ color: '#E06060', fontWeight: 700, fontSize: '13px' }}>-{formatAmountShort(spent)}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           );
         })()}
@@ -766,7 +839,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           </div>
         )}
 
-        {/* 통장 필터 활성 배지 — 통장 카드 클릭 시 표시, × 클릭으로 해제 */}
+        {/* 통장 필터 활성 배지 */}
         {accountFilter && (
           <div style={{ padding: '6px 20px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '11px', color: '#5f6368' }}>통장 필터:</span>
@@ -779,6 +852,23 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               }}
             >
               🏦 {accountFilter} ×
+            </span>
+          </div>
+        )}
+
+        {/* 카드 필터 활성 배지 */}
+        {cardFilter && (
+          <div style={{ padding: '6px 20px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', color: '#5f6368' }}>카드 필터:</span>
+            <span
+              onClick={() => setCardFilter(null)}
+              style={{
+                fontSize: '12px', fontWeight: 700, color: '#E65100',
+                background: '#fff3e0', border: '1px solid #FF9800',
+                borderRadius: '12px', padding: '2px 10px', cursor: 'pointer',
+              }}
+            >
+              💳 {cardFilter} ×
             </span>
           </div>
         )}
@@ -1073,20 +1163,24 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 <FieldRow label="날짜">
                   <input type="date" value={form.entryDate ?? today()} onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} style={inputStyle} />
                 </FieldRow>
-                <FieldRow label="결제수단">
+                <FieldRow label="통장">
                   <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputStyle}>
                     <option value="">선택 안함</option>
-                    {(['통장', '카드'] as const).map(type => {
-                      const group = paymentMethods.filter(p => p.type === type);
-                      if (group.length === 0) return null;
-                      return (
-                        <optgroup key={type} label={type}>
-                          {group.map(p => <option key={p.id} value={p.name}>{p.name}{p.billingDay ? ` (결제일 ${p.billingDay}일)` : ''}</option>)}
-                        </optgroup>
-                      );
-                    })}
+                    {paymentMethods.filter(p => p.type === '통장').map(p => (
+                      <option key={p.id} value={p.name}>{p.name}</option>
+                    ))}
                   </select>
                 </FieldRow>
+                {paymentMethods.some(p => p.type === '카드') && (
+                  <FieldRow label="카드">
+                    <select value={form.cardName ?? ''} onChange={e => setForm(f => ({ ...f, cardName: e.target.value || undefined }))} style={inputStyle}>
+                      <option value="">선택 안함</option>
+                      {paymentMethods.filter(p => p.type === '카드').map(p => (
+                        <option key={p.id} value={p.name}>{p.name}{p.billingDay ? ` (결제일 ${p.billingDay}일)` : ''}</option>
+                      ))}
+                    </select>
+                  </FieldRow>
+                )}
                 <div style={{ marginBottom: '14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
                     <label style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>금액 (원)</label>
@@ -1114,21 +1208,28 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>날짜</label>
                   <input type="date" value={form.entryDate ?? today()} onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} style={inputStyle} />
                 </div>
-                {/* 결제수단 */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>결제수단</label>
-                  <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputStyle}>
-                    <option value="">선택 안함</option>
-                    {(['통장', '카드'] as const).map(type => {
-                      const group = paymentMethods.filter(p => p.type === type);
-                      if (group.length === 0) return null;
-                      return (
-                        <optgroup key={type} label={type}>
-                          {group.map(p => <option key={p.id} value={p.name}>{p.name}{p.billingDay ? ` (${p.billingDay}일)` : ''}</option>)}
-                        </optgroup>
-                      );
-                    })}
-                  </select>
+                {/* 통장 + 카드 (결제수단 분리) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>통장</label>
+                    <select value={form.account ?? ''} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} style={inputStyle}>
+                      <option value="">선택 안함</option>
+                      {paymentMethods.filter(p => p.type === '통장').map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {paymentMethods.some(p => p.type === '카드') && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#5f6368', fontWeight: 600, marginBottom: '5px' }}>카드</label>
+                      <select value={form.cardName ?? ''} onChange={e => setForm(f => ({ ...f, cardName: e.target.value || undefined }))} style={inputStyle}>
+                        <option value="">선택 안함</option>
+                        {paymentMethods.filter(p => p.type === '카드').map(p => (
+                          <option key={p.id} value={p.name}>{p.name}{p.billingDay ? ` (${p.billingDay}일)` : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
                 {/* 금액 */}
                 <div>
@@ -1677,11 +1778,20 @@ const EntryRow: React.FC<{
             <span style={{ fontSize: '10px', background: '#E3F2FD', color: '#1565c0', borderRadius: '4px', padding: '1px 5px' }}>이체</span>
           )}
         </div>
-        {(entry.merchant || entry.accountMain || entry.account || entry.memo) && (
+        {(entry.merchant || entry.accountMain || entry.account || entry.cardName || entry.memo) && (
           <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '2px' }}>
             {entry.merchant && <span style={{ color: '#5f6368', fontWeight: 600 }}>{entry.merchant}</span>}
             {entry.accountMain && <span>{entry.merchant ? ' · ' : ''}{entry.accountMain}</span>}
             {entry.account && <span> › {entry.account}</span>}
+            {entry.cardName && (
+              <span style={{
+                marginLeft: '4px', fontSize: '10px', background: '#fff3e0',
+                color: '#E65100', border: '1px solid #FFB74D',
+                borderRadius: '4px', padding: '1px 5px',
+              }}>
+                💳 {entry.cardName}
+              </span>
+            )}
             {entry.memo && <span> · {entry.memo}</span>}
           </div>
         )}

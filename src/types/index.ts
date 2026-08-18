@@ -575,6 +575,7 @@ export interface BudgetEntry {
   subcategory?: string;
   accountMain?: string; // 통장 대분류 (고정비통장/변동비통장/이벤트통장)
   account?: string;     // 통장 중분류 (생활비/데이트 등)
+  cardName?: string;    // 결제 카드명 (account와 별도 — 통장에서 출금 + 카드로 결제)
   amount: number;       // 원 단위
   isFixed: boolean;
   isInvestment: boolean;

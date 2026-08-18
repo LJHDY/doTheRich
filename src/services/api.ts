@@ -724,6 +724,7 @@ const toEntry = (d: any): BudgetEntry => ({
   subcategory: d.subcategory,
   accountMain: d.account_main,
   account: d.account,
+  cardName: d.card_name,
   amount: d.amount,
   isFixed: d.is_fixed ?? false,
   isInvestment: d.is_investment ?? false,
@@ -749,6 +750,7 @@ export const createBudgetEntry = async (payload: Omit<BudgetEntry, 'id' | 'creat
     subcategory: payload.subcategory ?? null,
     account_main: payload.accountMain ?? null,
     account: payload.account ?? null,
+    card_name: payload.cardName ?? null,
     amount: payload.amount,
     is_fixed: payload.isFixed,
     is_investment: payload.isInvestment,
@@ -768,6 +770,7 @@ export const updateBudgetEntry = async (id: number, payload: Partial<Omit<Budget
   if (payload.subcategory !== undefined) body.subcategory = payload.subcategory;
   if (payload.accountMain !== undefined) body.account_main = payload.accountMain;
   if (payload.account !== undefined) body.account = payload.account;
+  if (payload.cardName !== undefined) body.card_name = payload.cardName;
   if (payload.amount !== undefined) body.amount = payload.amount;
   if (payload.isFixed !== undefined) body.is_fixed = payload.isFixed;
   if (payload.isInvestment !== undefined) body.is_investment = payload.isInvestment;
@@ -797,6 +800,7 @@ export const bulkCreateBudgetEntries = async (
       subcategory: payload.subcategory ?? null,
       account_main: payload.accountMain ?? null,
       account: payload.account ?? null,
+      card_name: payload.cardName ?? null,
       amount: payload.amount,
       is_fixed: payload.isFixed,
       is_investment: payload.isInvestment,
