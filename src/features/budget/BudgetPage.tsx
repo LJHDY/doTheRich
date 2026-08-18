@@ -84,6 +84,20 @@ const toYearMonth = (d: Date) =>
 const displayYearMonth = (ym: string) =>
   `${ym.slice(0, 4)}년 ${Number(ym.slice(4))}월`;
 
+/** 카드 결제일 기준 청구 기간 계산
+ * 예: billingDay=24, yearMonth='202608' → { from:'2026-07-24', to:'2026-08-23', label:'7/24~8/23' }
+ * billingDay=1 → to는 전달 말일 (Date day=0 트릭)
+ */
+const getCardBillingPeriod = (billingDay: number, yearMonth: string) => {
+  const year = Number(yearMonth.slice(0, 4));
+  const month = Number(yearMonth.slice(4)); // 1-indexed
+  const fromDate = new Date(year, month - 2, billingDay); // 전달 결제일
+  const toDate   = new Date(year, month - 1, billingDay - 1); // 이번달 결제일 전날
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const label = `${fromDate.getMonth() + 1}/${billingDay}~${month}/${toDate.getDate()}`;
+  return { from: fmt(fromDate), to: fmt(toDate), label };
+};
+
 const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
   entryDate: today(),
   entryType: 'EXPENSE',
@@ -147,6 +161,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   );
   const [yearMonth, setYearMonth] = useState<string>(toYearMonth(new Date()));
   const [entries, setEntries] = useState<BudgetEntry[]>([]);
+  const [prevMonthEntries, setPrevMonthEntries] = useState<BudgetEntry[]>([]); // 카드 청구 기간 계산용 전달 항목
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -212,6 +227,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   }, [userId, yearMonth]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ─── 카드 청구 기간용 전달 항목 로드 — billingDay 있는 카드가 1개라도 있을 때만 실행
+  useEffect(() => {
+    const hasBillingCards = paymentMethods.some(p => p.type === '카드' && p.billingDay);
+    if (!hasBillingCards) { setPrevMonthEntries([]); return; }
+    const year = Number(yearMonth.slice(0, 4));
+    const month = Number(yearMonth.slice(4));
+    const prevYm = toYearMonth(new Date(year, month - 2, 1)); // 전달 yearMonth
+    getBudgetEntries(userId, prevYm)
+      .then(setPrevMonthEntries)
+      .catch(() => setPrevMonthEntries([]));
+  }, [userId, yearMonth, paymentMethods]);
 
   // ─── 월 이동 ─────────────────────────────────────────────────
   const moveMonth = (delta: number) => {
@@ -662,33 +689,57 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           );
         })()}
 
-        {/* ── 카드별 지출 현황 — cardName이 있는 항목만 집계 */}
+        {/* ── 카드별 지출 현황 — billingDay 있으면 청구 기간 기준, 없으면 이번달 전체 */}
         {(() => {
           const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
           const cardPMs = paymentMethods.filter(p => p.type === '카드');
           if (cardPMs.length === 0) return null;
 
-          // cardName 기준 지출 합산 (이체·투자 제외)
           const cardNames = new Set(cardPMs.map(p => p.name));
-          const cardMap: Record<string, number> = {};
+
+          // 카드별 청구 기간 기준 지출 합산
+          const cardData: Record<string, { spent: number; period?: string }> = {};
+          for (const pm of cardPMs) {
+            let pool: BudgetEntry[];
+            let period: string | undefined;
+            if (pm.billingDay) {
+              const { from, to, label } = getCardBillingPeriod(pm.billingDay, yearMonth);
+              period = label;
+              // 전달 항목 중 from 이후 + 이번달 항목 중 to 이하를 합산
+              pool = [
+                ...prevMonthEntries.filter(e => e.entryDate >= from),
+                ...entries.filter(e => e.entryDate <= to),
+              ].filter(e => e.entryType === 'EXPENSE' && !isXfer(e));
+            } else {
+              pool = entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e));
+            }
+            const spent = pool.reduce((s, e) => {
+              if (e.cardName === pm.name) return s + e.amount;
+              if (!e.cardName && e.account === pm.name) return s + e.amount; // 레거시
+              return s;
+            }, 0);
+            cardData[pm.name] = { spent, period };
+          }
+
+          // 등록되지 않은 카드명으로 지출된 항목 (이번달 전체 기준)
+          const legacyMap: Record<string, number> = {};
           for (const e of entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e))) {
-            // 신규: cardName 필드에 저장된 항목
-            if (e.cardName) {
-              cardMap[e.cardName] = (cardMap[e.cardName] ?? 0) + e.amount;
-            // 레거시: 이전에 카드를 account 필드에 저장한 항목
-            } else if (e.account && cardNames.has(e.account)) {
-              cardMap[e.account] = (cardMap[e.account] ?? 0) + e.amount;
+            if (e.cardName && !cardNames.has(e.cardName)) {
+              legacyMap[e.cardName] = (legacyMap[e.cardName] ?? 0) + e.amount;
+            } else if (!e.cardName && e.account && cardNames.has(e.account) && !cardData[e.account]) {
+              legacyMap[e.account] = (legacyMap[e.account] ?? 0) + e.amount;
             }
           }
-          const hasAnyCardData = Object.keys(cardMap).length > 0;
-          if (!hasAnyCardData) return null;
+
+          const hasAnyData = cardPMs.some(pm => cardData[pm.name]?.spent > 0) || Object.keys(legacyMap).length > 0;
+          if (!hasAnyData) return null;
 
           return (
             <div style={{ padding: '8px 20px 0' }}>
               <div style={{ fontSize: '12px', fontWeight: 700, color: '#344054', marginBottom: '6px' }}>💳 카드별 지출</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {cardPMs.map(pm => {
-                  const spent = cardMap[pm.name] ?? 0;
+                  const { spent, period } = cardData[pm.name] ?? { spent: 0 };
                   if (spent === 0) return null;
                   const isSelected = cardFilter === pm.name;
                   return (
@@ -704,10 +755,14 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                         transition: 'all 0.15s',
                       }}
                     >
-                      <div style={{ fontWeight: 700, color: isSelected ? '#E65100' : '#1a3a5c', marginBottom: '4px' }}>
+                      <div style={{ fontWeight: 700, color: isSelected ? '#E65100' : '#1a3a5c', marginBottom: '2px' }}>
                         {pm.name}
-                        {pm.billingDay ? <span style={{ fontSize: '10px', color: '#9aa0a6', marginLeft: '4px' }}>결제일 {pm.billingDay}일</span> : null}
+                        {pm.billingDay && <span style={{ fontSize: '10px', color: '#9aa0a6', marginLeft: '4px' }}>결제일 {pm.billingDay}일</span>}
                       </div>
+                      {/* 청구 기간 표시 */}
+                      {period && (
+                        <div style={{ fontSize: '10px', color: '#9aa0a6', marginBottom: '4px' }}>{period}</div>
+                      )}
                       <div style={{ color: '#E06060', fontWeight: 700, fontSize: '13px' }}>
                         -{formatAmountShort(spent)}
                       </div>
@@ -715,7 +770,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   );
                 })}
                 {/* 등록 안된 카드로 지출된 항목 */}
-                {Object.entries(cardMap).filter(([name]) => !cardPMs.some(p => p.name === name)).map(([name, spent]) => (
+                {Object.entries(legacyMap).map(([name, spent]) => (
                   <div
                     key={name}
                     onClick={() => { setAccountFilter(null); setCardFilter(prev => prev === name ? null : name); }}
