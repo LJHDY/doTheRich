@@ -430,6 +430,18 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
                       </span>
                     )}
                   </div>
+                  {/* 1순위·꼴찌 단지 미리보기 — 2개 이상일 때만 표시 */}
+                  {zone.complexes.length >= 2 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '10px', color: '#a07600' }}>
+                        👍 {zone.complexes[0].complexName}
+                      </span>
+                      <span style={{ fontSize: '10px', color: '#999' }}>·</span>
+                      <span style={{ fontSize: '10px', color: '#b05050' }}>
+                        👎 {zone.complexes[zone.complexes.length - 1].complexName}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* 사진·삭제 버튼 영역 */}
