@@ -199,10 +199,23 @@ const MapPage: React.FC<MapPageProps> = ({
       // 표시 가격의 출처 구분 — 호가면 (호), 매매가면 (매), 금액대만 있으면 없음
       const priceTag = complex.askingPrice ? '호' : complex.price ? '매' : null;
 
-      // 표시할 평형 결정 — areaTypePriceRanges에서 현재 priceRange와 일치하는 것 우선, 없으면 첫 번째
+      // 표시할 평형 결정 — basePrice와 areaTypePrices 실매매가를 비교해 가장 가까운 평형 선택
+      // (basePrice = MIN(asking/trade price) 이므로 가장 싼 평형에 해당, priceRange 기반 매핑은 오매핑 발생)
       const rawAreaType = (() => {
         if (!complex.areaTypes?.length) return null;
         if (complex.areaTypes.length === 1) return complex.areaTypes[0];
+        // areaTypePrices(평형별 실매매가)가 있으면 basePrice에 가장 가까운 평형 사용
+        if (complex.areaTypePrices && Object.keys(complex.areaTypePrices).length > 0) {
+          const entries = Object.entries(complex.areaTypePrices) as [string, number][];
+          if (basePrice) {
+            return entries.reduce((prev, curr) =>
+              Math.abs(curr[1] - basePrice) < Math.abs(prev[1] - basePrice) ? curr : prev
+            )[0];
+          }
+          // basePrice 없으면 가장 저렴한 평형 (MIN 방향과 동일)
+          return entries.reduce((prev, curr) => curr[1] < prev[1] ? curr : prev)[0];
+        }
+        // fallback: priceRange 문자열 매핑
         if (complex.priceRange && complex.areaTypePriceRanges) {
           const match = Object.entries(complex.areaTypePriceRanges)
             .find(([, range]) => range === complex.priceRange);
