@@ -393,18 +393,24 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   );
   const maxBarsH = Math.max(0, ...allWeekLanes.map(l => l.length * (BAR_H + BAR_GAP)));
 
-  // 이번 달에 실제로 발생하는 일정 목록
-  // 반복 이벤트는 isEventActiveOn으로 직접 확인 (schedulesByDate 우회 — 클로저 타이밍 문제 방지)
+  // 이번 달 일정 목록 — 오늘 포함 이후만 표시 (지난 일정 제외)
+  // 반복 이벤트는 이번 달 발생일 중 오늘 이후인 게 있을 때만 포함
   const schedulesThisMonth = useMemo(() => {
     const pad2 = (n: number) => String(n).padStart(2, '0');
     return schedules.filter(s => {
-      if (!s.repeatType) return true; // 일반 이벤트는 백엔드가 이번 달 것만 반환
-      for (let d = 1; d <= daysInMonth; d++) {
-        if (isEventActiveOn(s, `${year}-${pad2(month)}-${pad2(d)}`)) return true;
+      if (s.repeatType) {
+        // 반복 이벤트: 이번 달 오늘 이후 발생일이 있으면 포함
+        for (let d = 1; d <= daysInMonth; d++) {
+          const ds = `${year}-${pad2(month)}-${pad2(d)}`;
+          if (ds >= todayStr && isEventActiveOn(s, ds)) return true;
+        }
+        return false;
       }
-      return false;
-    });
-  }, [schedules, year, month, daysInMonth]);
+      // 일반 이벤트: 종료일(없으면 시작일) 기준으로 오늘 이상인 것만
+      const endStr = s.endDate && s.endDate > s.eventDate ? s.endDate : s.eventDate;
+      return endStr >= todayStr;
+    }).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+  }, [schedules, year, month, daysInMonth, todayStr]);
 
   // 이번 달 할일 — 날짜 오름차순 정렬
   const todosThisMonth = useMemo(() => {
@@ -595,8 +601,12 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
               }}
             >
               <span>
-                {month}월 전체 일정 ({schedulesThisMonth.length}건)
-                {todosThisMonth.length > 0 && (
+                {month}월 일정 ({schedulesThisMonth.length}건)
+                {isMobile ? (
+                  todosThisMonth.length > 0 && (
+                    <span style={{ marginLeft: '8px', color: '#7DC8A0' }}>· 할일 {todosThisMonth.length}건</span>
+                  )
+                ) : (
                   <span style={{ marginLeft: '8px', color: '#7DC8A0' }}>· 할일 {todosThisMonth.length}건</span>
                 )}
               </span>
@@ -604,115 +614,140 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
             </button>
 
             {listOpen && (
+              // 데스크탑: 좌(일정) · 우(할일) 50:50 나란히 / 모바일: 세로 적층
               <div style={{
-                padding: isMobile ? '0 16px 10px' : '0 20px 10px',
-                display: 'flex', flexDirection: 'column', gap: '4px',
-                maxHeight: isMobile ? '240px' : '280px', overflowY: 'auto',
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: 'stretch',
               }}>
-                {schedulesThisMonth.length === 0 ? (
-                  <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '4px 2px' }}>이번 달 일정이 없습니다.</div>
-                ) : schedulesThisMonth.map((s, si) => {
-                  const name = catName(s.category);
-                  const isImportant = s.category === 'IMPORTANT';
-                  // 반복 이벤트는 이번 달 첫 발생일로 이동, 일반은 시작일로 이동
-                  const jumpDate = s.repeatType
-                    ? (Object.keys(schedulesByDate).filter(d => d.startsWith(`${year}-${String(month).padStart(2,'0')}`) && (schedulesByDate[d] ?? []).some(x => x.id === s.id)).sort()[0] ?? s.eventDate)
-                    : s.eventDate;
-                  return (
-                    <div
-                      key={s.id}
-                      onClick={() => setSelectedDate(jumpDate)}
-                      style={{
-                        display: 'flex', gap: '8px', alignItems: 'center',
-                        padding: '5px 10px', borderRadius: '7px',
-                        background: isImportant ? '#fff5f5' : '#f9f9fb',
-                        border: isImportant ? '1px solid #ffcdd2' : '1px solid transparent',
-                        fontSize: '12px', cursor: 'pointer',
-                      }}
-                    >
-                      <span style={{
-                        width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
-                        background: catColor(s.category, si),
-                      }} />
-                      <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[s.userId] ?? ''}</span>
-                      <span style={{ color: '#9aa0a6', flexShrink: 0, fontSize: '11px' }}>
-                        {s.repeatType ? (
-                          // 반복 이벤트: 이번 달 발생 날짜들 나열 (최대 3개)
-                          (() => {
-                            const pad2 = (n: number) => String(n).padStart(2, '0');
-                            const days: string[] = [];
-                            for (let d = 1; d <= daysInMonth; d++) {
-                              const ds = `${year}-${pad2(month)}-${pad2(d)}`;
-                              if (isEventActiveOn(s, ds)) days.push(`${month}/${d}`);
-                            }
-                            const label = { weekly: '매주', monthly: '매달', yearly: '매년' }[s.repeatType] ?? '';
-                            return `${label} ${days.slice(0, 3).join(', ')}${days.length > 3 ? '…' : ''}`;
-                          })()
-                        ) : (
-                          <>
-                            {s.eventDate.slice(5).replace('-', '/')}
-                            {s.endDate && s.endDate > s.eventDate ? ` ~ ${s.endDate.slice(5).replace('-', '/')}` : ''}
-                          </>
+                {/* ── 일정 목록 ── */}
+                <div style={{
+                  flex: 1,
+                  padding: isMobile ? '0 16px 10px' : '8px 12px 12px 20px',
+                  display: 'flex', flexDirection: 'column', gap: '4px',
+                  maxHeight: isMobile ? '240px' : '260px', overflowY: 'auto',
+                  borderRight: isMobile ? 'none' : '1px solid #f0f0f0',
+                }}>
+                  {!isMobile && (
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#5f6368', marginBottom: '2px', flexShrink: 0 }}>
+                      📅 일정 {schedulesThisMonth.length}건
+                    </div>
+                  )}
+                  {schedulesThisMonth.length === 0 ? (
+                    <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '4px 2px' }}>이후 일정이 없습니다.</div>
+                  ) : schedulesThisMonth.map((s, si) => {
+                    const name = catName(s.category);
+                    const isImportant = s.category === 'IMPORTANT';
+                    // 반복 이벤트는 이번 달 오늘 이후 첫 발생일로 이동
+                    const jumpDate = s.repeatType
+                      ? (Object.keys(schedulesByDate)
+                          .filter(d => d >= todayStr && d.startsWith(`${year}-${String(month).padStart(2,'0')}`) && (schedulesByDate[d] ?? []).some(x => x.id === s.id))
+                          .sort()[0] ?? s.eventDate)
+                      : s.eventDate;
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => setSelectedDate(jumpDate)}
+                        style={{
+                          display: 'flex', gap: '8px', alignItems: 'center',
+                          padding: '5px 10px', borderRadius: '7px',
+                          background: isImportant ? '#fff5f5' : '#f9f9fb',
+                          border: isImportant ? '1px solid #ffcdd2' : '1px solid transparent',
+                          fontSize: '12px', cursor: 'pointer', flexShrink: 0,
+                        }}
+                      >
+                        <span style={{
+                          width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
+                          background: catColor(s.category, si),
+                        }} />
+                        <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[s.userId] ?? ''}</span>
+                        <span style={{ color: '#9aa0a6', flexShrink: 0, fontSize: '11px' }}>
+                          {s.repeatType ? (
+                            (() => {
+                              const pad2 = (n: number) => String(n).padStart(2, '0');
+                              const days: string[] = [];
+                              for (let d = 1; d <= daysInMonth; d++) {
+                                const ds = `${year}-${pad2(month)}-${pad2(d)}`;
+                                if (ds >= todayStr && isEventActiveOn(s, ds)) days.push(`${month}/${d}`);
+                              }
+                              const label = { weekly: '매주', monthly: '매달', yearly: '매년' }[s.repeatType] ?? '';
+                              return `${label} ${days.slice(0, 3).join(', ')}${days.length > 3 ? '…' : ''}`;
+                            })()
+                          ) : (
+                            <>
+                              {s.eventDate.slice(5).replace('-', '/')}
+                              {s.endDate && s.endDate > s.eventDate ? ` ~ ${s.endDate.slice(5).replace('-', '/')}` : ''}
+                            </>
+                          )}
+                          {s.eventTime ? ` ${s.eventTime}` : ''}
+                        </span>
+                        {name && (
+                          <span style={{
+                            fontSize: '10px', borderRadius: '4px', padding: '0 5px', flexShrink: 0,
+                            background: isImportant ? '#ffcdd2' : '#e8f0fe',
+                            color: isImportant ? '#c62828' : '#1565c0',
+                            fontWeight: 600,
+                          }}>
+                            {name}
+                          </span>
                         )}
-                        {s.eventTime ? ` ${s.eventTime}` : ''}
-                      </span>
-                      {name && (
-                        <span style={{
-                          fontSize: '10px', borderRadius: '4px', padding: '0 5px', flexShrink: 0,
-                          background: isImportant ? '#ffcdd2' : '#e8f0fe',
-                          color: isImportant ? '#c62828' : '#1565c0',
-                          fontWeight: 600,
-                        }}>
-                          {name}
+                        <span style={{ color: '#344054', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {scheduleTitle(s)}
                         </span>
-                      )}
-                      <span style={{ color: '#344054', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {scheduleTitle(s)}
-                      </span>
-                      {s.repeatType && (
-                        <span style={{ color: '#6a1b9a', fontSize: '10px', background: '#f3e5f5', borderRadius: '3px', padding: '0 4px', flexShrink: 0 }}>
-                          반복
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* 할일 목록 — 일정 목록 아래 구분선 후 표시 */}
-                {todosThisMonth.length > 0 && (
-                  <>
-                    <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0 2px', paddingTop: '6px' }}>
-                      <span style={{ fontSize: '11px', color: '#7DC8A0', fontWeight: 700 }}>✅ 할일</span>
-                    </div>
-                    {todosThisMonth.map(t => (
-                      <div key={t.id} style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '4px 8px', borderRadius: '7px', background: '#f4fbf6',
-                      }}>
-                        <input
-                          type="checkbox"
-                          checked={isTodoDone(t)}
-                          onChange={() => handleToggleTodo(t)}
-                          style={{ cursor: 'pointer', accentColor: '#7DC8A0', width: '14px', height: '14px', flexShrink: 0 }}
-                        />
-                        <span style={{ fontSize: '11px', color: '#9aa0a6', flexShrink: 0 }}>
-                          {t.todoDate.slice(5).replace('-', '/')}
-                          {t.endDate && t.endDate > t.todoDate ? ` ~ ${t.endDate.slice(5).replace('-', '/')}` : ''}
-                        </span>
-                        <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[t.userId] ?? ''}</span>
-                        <span style={{
-                          fontSize: '12px', color: isTodoDone(t) ? '#9aa0a6' : '#344054',
-                          textDecoration: isTodoDone(t) ? 'line-through' : 'none',
-                          flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>{t.title}</span>
-                        <button
-                          onClick={() => handleDeleteTodo(t.id)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: '14px', flexShrink: 0, lineHeight: 1, padding: '0 2px' }}
-                        >×</button>
+                        {s.repeatType && (
+                          <span style={{ color: '#6a1b9a', fontSize: '10px', background: '#f3e5f5', borderRadius: '3px', padding: '0 4px', flexShrink: 0 }}>
+                            반복
+                          </span>
+                        )}
                       </div>
-                    ))}
-                  </>
-                )}
+                    );
+                  })}
+                </div>
+
+                {/* ── 할일 목록 ── */}
+                <div style={{
+                  flex: 1,
+                  padding: isMobile ? '0 16px 10px' : '8px 20px 12px 12px',
+                  display: 'flex', flexDirection: 'column', gap: '4px',
+                  maxHeight: isMobile ? '200px' : '260px', overflowY: 'auto',
+                  borderTop: isMobile ? '1px solid #f0f0f0' : 'none',
+                  marginTop: isMobile ? '4px' : 0,
+                }}>
+                  {!isMobile && (
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#7DC8A0', marginBottom: '2px', flexShrink: 0 }}>
+                      ✅ 할일 {todosThisMonth.length}건
+                    </div>
+                  )}
+                  {todosThisMonth.length === 0 ? (
+                    <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '4px 2px' }}>할일이 없습니다.</div>
+                  ) : todosThisMonth.map(t => (
+                    <div key={t.id} style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '4px 8px', borderRadius: '7px', background: '#f4fbf6', flexShrink: 0,
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={isTodoDone(t)}
+                        onChange={() => handleToggleTodo(t)}
+                        style={{ cursor: 'pointer', accentColor: '#7DC8A0', width: '14px', height: '14px', flexShrink: 0 }}
+                      />
+                      <span style={{ fontSize: '11px', color: '#9aa0a6', flexShrink: 0 }}>
+                        {t.todoDate.slice(5).replace('-', '/')}
+                        {t.endDate && t.endDate > t.todoDate ? ` ~ ${t.endDate.slice(5).replace('-', '/')}` : ''}
+                      </span>
+                      <span style={{ fontSize: '13px', flexShrink: 0 }}>{USER_EMOJI[t.userId] ?? ''}</span>
+                      <span style={{
+                        fontSize: '12px', color: isTodoDone(t) ? '#9aa0a6' : '#344054',
+                        textDecoration: isTodoDone(t) ? 'line-through' : 'none',
+                        flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{t.title}</span>
+                      <button
+                        onClick={() => handleDeleteTodo(t.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: '14px', flexShrink: 0, lineHeight: 1, padding: '0 2px' }}
+                      >×</button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
