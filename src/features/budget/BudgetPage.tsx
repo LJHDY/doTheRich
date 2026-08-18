@@ -2004,7 +2004,7 @@ const EntryRow: React.FC<{
                 background: entry.isInterestFree ? '#E8F5E9' : '#EDE7F6',
                 color: entry.isInterestFree ? '#2E7D32' : '#6A1B9A',
                 border: `1px solid ${entry.isInterestFree ? '#A5D6A7' : '#CE93D8'}`,
-                borderRadius: '4px', padding: '1px 5px', fontWeight: 600,
+                borderRadius: '4px', padding: '1px 5px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
               }}>
                 {entry.installmentSeq}/{entry.installmentMonths}{entry.isInterestFree ? ' 무이자' : ''}
               </span>
