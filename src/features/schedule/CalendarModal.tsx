@@ -412,10 +412,18 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
     }).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
   }, [schedules, year, month, daysInMonth, todayStr]);
 
-  // 이번 달 할일 — 날짜 오름차순 정렬
+  // 이번 달 할일 — 완료 + 날짜 지난 항목 제외, 날짜 오름차순
   const todosThisMonth = useMemo(() => {
-    return [...todos].sort((a, b) => a.todoDate.localeCompare(b.todoDate) || a.id - b.id);
-  }, [todos]);
+    return todos
+      .filter(t => {
+        const endStr = t.endDate && t.endDate > t.todoDate ? t.endDate : t.todoDate;
+        // 날짜가 아직 오늘 이후면 완료 여부 무관하게 표시
+        if (endStr >= todayStr) return true;
+        // 날짜가 지났으면 미완료만 표시
+        return !isTodoDone(t);
+      })
+      .sort((a, b) => a.todoDate.localeCompare(b.todoDate) || a.id - b.id);
+  }, [todos, todayStr]);
 
   // 할일 저장
   const handleSaveTodo = async () => {
