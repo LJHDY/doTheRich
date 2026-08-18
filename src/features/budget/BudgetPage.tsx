@@ -23,6 +23,7 @@ import {
   createBudgetEntry,
   updateBudgetEntry,
   deleteBudgetEntry,
+  deleteBudgetEntriesByGroup,
   bulkCreateBudgetEntries,
   getAllAssetSnapshots,
   upsertAssetSnapshotCell,
@@ -458,6 +459,25 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   };
 
   const handleDelete = async (entry: BudgetEntry) => {
+    // 할부 항목은 단건 vs 전체 선택
+    if (entry.installmentGroupId && entry.installmentMonths && entry.installmentMonths > 1) {
+      const choice = window.confirm(
+        `💳 할부 항목입니다 (${entry.installmentSeq}/${entry.installmentMonths}회차)\n\n` +
+        `[확인] 할부 전체 삭제 (${entry.installmentMonths}개월 분)\n` +
+        `[취소] 이 항목만 삭제`
+      );
+      try {
+        if (choice) {
+          // 전체 삭제: group_id 기준
+          await deleteBudgetEntriesByGroup(entry.installmentGroupId);
+          setEntries(prev => prev.filter(e => e.installmentGroupId !== entry.installmentGroupId));
+        } else {
+          await deleteBudgetEntry(entry.id);
+          setEntries(prev => prev.filter(e => e.id !== entry.id));
+        }
+      } catch { alert('삭제에 실패했습니다'); }
+      return;
+    }
     if (!window.confirm(`"${entry.category}" 항목을 삭제할까요?`)) return;
     try {
       await deleteBudgetEntry(entry.id);

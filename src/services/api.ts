@@ -798,6 +798,11 @@ export const deleteBudgetEntry = async (id: number): Promise<void> => {
   await api.delete(`/api/budget/entries/${id}`);
 };
 
+export const deleteBudgetEntriesByGroup = async (groupId: string): Promise<number> => {
+  const { data } = await api.delete(`/api/budget/entries/group/${groupId}`);
+  return data.deleted as number;
+};
+
 // 여러 가계부 항목을 한 번에 저장 (달력 일괄 등록용)
 export const bulkCreateBudgetEntries = async (
   entries: Omit<BudgetEntry, 'id' | 'createdAt'>[]
