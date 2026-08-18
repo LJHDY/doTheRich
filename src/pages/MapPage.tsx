@@ -169,10 +169,11 @@ const MapPage: React.FC<MapPageProps> = ({
   // 마커 아이콘 생성 — 모바일·데스크탑 동일한 카드형
   const createMarkerIcon = useCallback(
     (complex: ApartmentComplex, isSelected: boolean) => {
-      // 호가 우선, 없으면 매매가, 없으면 금액대 숫자로 fallback — 억 단위 변환
+      // 호가 우선, 없으면 매매가, 없으면 금액대 숫자로 fallback
       const basePrice = complex.askingPrice || complex.price;
+      // 억·백만 단위를 각각 floor — 반올림 없이 표시 (예: 10.15억, 10.05억)
       const priceUk = basePrice
-        ? Math.round(basePrice / 10000000) / 10
+        ? Math.floor(basePrice / 100000000) + Math.floor((basePrice % 100000000) / 1000000) / 100
         : (() => { const m = complex.priceRange?.match(/^(\d+)/); return m ? parseInt(m[1]) : null; })();
 
       // 가격 기준 색상 구분: 선택=보라, 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=회색
@@ -184,9 +185,33 @@ const MapPage: React.FC<MapPageProps> = ({
         : priceUk < 20 ? '#E06060'
         : '#607d8b';
 
-      const priceDisplay = priceUk !== null ? `${priceUk}억` : (complex.priceRange ?? '-');
+      // 가격 문자열 — 백만원 단위까지 표시, 후행 0 제거 (예: 10.15억, 10.05억, 10.5억, 10억)
+      const priceDisplay = basePrice
+        ? (() => {
+            const uk = Math.floor(basePrice / 100000000);
+            const baekMan = Math.floor((basePrice % 100000000) / 1000000); // 0~99
+            if (baekMan === 0) return `${uk}억`;
+            // 2자리 패딩 후 후행 0 제거: 5→"05", 10→"1", 15→"15", 50→"5"
+            const decStr = String(baekMan).padStart(2, '0').replace(/0+$/, '');
+            return `${uk}.${decStr}억`;
+          })()
+        : (complex.priceRange ?? '-');
       // 표시 가격의 출처 구분 — 호가면 (호), 매매가면 (매), 금액대만 있으면 없음
       const priceTag = complex.askingPrice ? '호' : complex.price ? '매' : null;
+
+      // 표시할 평형 결정 — areaTypePriceRanges에서 현재 priceRange와 일치하는 것 우선, 없으면 첫 번째
+      const rawAreaType = (() => {
+        if (!complex.areaTypes?.length) return null;
+        if (complex.areaTypes.length === 1) return complex.areaTypes[0];
+        if (complex.priceRange && complex.areaTypePriceRanges) {
+          const match = Object.entries(complex.areaTypePriceRanges)
+            .find(([, range]) => range === complex.priceRange);
+          if (match) return match[0];
+        }
+        return complex.areaTypes[0];
+      })();
+      // 숫자만 추출 (예: "59㎡" → "59")
+      const areaTypeBadge = rawAreaType ? rawAreaType.replace(/[^0-9]/g, '') : null;
       const yearDisplay = complex.builtYear
         ? `${String(complex.builtYear).replace(/[^0-9]/g, '')}년`
         : '-';
@@ -227,7 +252,7 @@ const MapPage: React.FC<MapPageProps> = ({
           ">
             ${favBadge}
             <div style="font-size:10px;font-weight:700;color:#1a3a5c;overflow:hidden;text-overflow:ellipsis;max-width:108px;">${safeShortName}</div>
-            <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}${priceTag ? `<span style="font-size:9px;font-weight:600;opacity:0.7;margin-left:2px;">(${priceTag})</span>` : ''}</div>
+            <div style="font-size:11px;font-weight:800;color:${priceTextColor};margin:1px 0;">${priceDisplay}${areaTypeBadge ? `<span style="display:inline-block;font-size:9px;font-weight:700;border:1.5px solid ${priceTextColor};border-radius:2px;padding:0 2px;margin-left:3px;line-height:1.5;opacity:0.8;vertical-align:middle;">${areaTypeBadge}</span>` : ''}${priceTag ? `<span style="font-size:9px;font-weight:600;opacity:0.7;margin-left:2px;">(${priceTag})</span>` : ''}</div>
             <div style="font-size:9px;color:#80868b;">${yearDisplay}&nbsp;·&nbsp;${unitDisplay}</div>
           </div>
         `,
@@ -253,7 +278,7 @@ const MapPage: React.FC<MapPageProps> = ({
     // 마커 아이콘 외관을 결정하는 필드만 포함한 fingerprint — 하나라도 바뀌면 아이콘 재생성
     // 선택 상태, 가격, 즐겨찾기, 임장유형, 연식, 세대수가 변경될 때만 setIcon 호출
     const makeFingerprint = (c: ApartmentComplex, isSelected: boolean) =>
-      `${isSelected}-${c.price}-${c.askingPrice}-${c.priceRange}-${c.isFavorite}-${c.visitType}-${c.builtYear}-${c.unitCount}`;
+      `${isSelected}-${c.price}-${c.askingPrice}-${c.priceRange}-${c.isFavorite}-${c.visitType}-${c.builtYear}-${c.unitCount}-${c.areaTypes?.join(',')}`;
 
     const newIdSet = new Set(validComplexes.map((c) => c.id));
 
