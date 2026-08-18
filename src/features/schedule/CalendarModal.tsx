@@ -417,10 +417,10 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
     return todos
       .filter(t => {
         const endStr = t.endDate && t.endDate > t.todoDate ? t.endDate : t.todoDate;
-        // 날짜가 아직 오늘 이후면 완료 여부 무관하게 표시
         if (endStr >= todayStr) return true;
-        // 날짜가 지났으면 미완료만 표시
-        return !isTodoDone(t);
+        // 날짜가 지났으면: 다일 할일은 doneDate 기준, 단일은 isDone 기준
+        const done = t.endDate && t.endDate > t.todoDate ? !!t.doneDate : t.isDone;
+        return !done;
       })
       .sort((a, b) => a.todoDate.localeCompare(b.todoDate) || a.id - b.id);
   }, [todos, todayStr]);

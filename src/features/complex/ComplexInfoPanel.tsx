@@ -375,7 +375,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
-  }, [editingMemo, memoText]);
+  }, [editingMemo, memoText, memoHook.ref]);
   const [showRecordTooltip, setShowRecordTooltip] = useState(false);
   const [showStageTooltip, setShowStageTooltip] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
