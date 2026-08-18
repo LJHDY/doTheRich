@@ -11,20 +11,36 @@
 - 모든 소스 파일에 **한국어 주석** 작성 (로직 설명, Why 위주).
 - TypeScript 타입 오류 없이 `npx tsc --noEmit` 통과 확인 후 완료 보고.
 - **API 응답은 반드시 camelCase로 변환** — 백엔드(Python)는 snake_case 반환. `api.ts` 내 함수에서 `data.map(item => ({ camelCaseKey: item.snake_key }))` 변환 레이어 적용. `return data` 그대로 쓰지 않는다.
+- **새 파일은 기능별 패키지 구조로 생성** — `src/features/{feature}/` 또는 `src/shared/` 아래에 생성. `src/components/`, `src/pages/`, `src/utils/` 직접 사용 금지.
 - 작업 완료 후 이 파일의 해당 섹션을 업데이트한다.
 
 ---
 
 ## 프로젝트 개요
 
-**DoTheRich** — 부동산 시세 트래킹 앱 (개인용)
+**DoTheRich** — 부동산 + 가계부 + 자산관리 통합 개인용 앱
 
-- 지도 위에 아파트 단지 마커 표시
-- 단지별 매매가/전세가 시세 기록 추적
-- 평형별 시세 변동 그래프 시각화
-- 네이버 검색으로 단지 등록, 지하철 도보 시간 자동 계산
-- 단지 비교 기능 (최대 3개 동시 비교)
-- 주요 지구 소요시간 기반 입지 등급 (S/A/B/C)
+**부동산 기능**
+- 네이버 지도 위 아파트 단지 마커 표시 (호가/매매가, 평형 배지)
+- 단지별 매매가/전세가 시세 기록 추적 + 평형별 시세 변동 그래프
+- 네이버 검색으로 단지 등록 (학군·인프라·유해시설·교통 자동 입력)
+- 입지 등급 (S/A/B/C) — 출퇴근 시간·직장밀도·학군·인프라 종합
+- 단지 비교 기능 (최대 3개 카드 뷰 + 1:1 비교평가)
+- 생활권 관리 — 구획 그리기, 단지 순위, 분위기 체크리스트
+- 임장 체크리스트 (분위기/단지/매물 3종, 카테고리 2레벨)
+- 구별 시세 현황 — 서울 25구 × 5개 평형대 히트맵 테이블
+- 공공단지 지도 표시 — 수도권 150세대↑ 건축물대장 기반
+- 지도 경로 그리기·저장·수정
+
+**가계부 / 자산 기능**
+- 월별 가계부 — 수입/지출/고정비/투자/이체 분류, 통장별 잔액
+- 자산 스냅샷 — 날짜별 자산 현황 테이블, 세부 내역, 이력 그래프
+- AI 재무 분석 리포트 (Gemini) — 월별 소비패턴·투자·통장쪼개기 분석
+- 시장 리포트 (Gemini + yfinance) — 미국/한국/원자재/환율 지표 + AI 분석
+
+**기타**
+- 캘린더 — 일정 추가, 할일 관리, 네이버 캘린더 OAuth 연동
+- 공통코드 관리 — DB 기반 코드 그룹 CRUD
 
 ---
 
@@ -36,7 +52,11 @@
 | 지도 | Naver Maps API (CDN) |
 | 차트 | Recharts |
 | HTTP | Axios (`src/services/api.ts`) |
+| 좌표 변환 | proj4 (EPSG:5179 → WGS84, 행정구역 GeoJSON) |
+| AI 분석 | Google Gemini API (`gemini-3.5-flash`) — 재무 분석·시장 리포트 |
 | 백엔드 | Python + FastAPI (로컬: `http://localhost:8000`, 운영: Railway) |
+| DB | Railway MySQL (SQLAlchemy ORM) |
+| 인증 | Naver OAuth 2.0 (캘린더 연동) |
 
 ---
 
@@ -62,39 +82,67 @@
 
 ```
 src/
-├── App.tsx                   # 최상위 — 상태 관리, 레이아웃, 모달 제어
+├── App.tsx                         # 최상위 — 전역 상태, 레이아웃, 모달 제어
 ├── index.tsx
-├── types/
-│   └── index.ts              # 전체 타입 정의 + formatPrice / toUkUnit / calcCommuteGrade 유틸
-├── services/
-│   └── api.ts                # axios 인스턴스 + API 함수
-├── constants/
-│   └── hazardCategories.ts   # 유해시설 매크로 카테고리 매핑 (11개 파일 → 7개 그룹), 폐기물/화학 세분류 정리
-├── utils/
-│   └── districtGeoJson.ts    # EPSG:5179 → WGS84 변환 (proj4), 행정구역 GeoJSON 캐시
-├── pages/
-│   └── MapPage.tsx           # 네이버 지도 초기화, 마커 렌더링
-└── components/
-    ├── PriceRangeFilter.tsx  # 헤더 금액대 필터 버튼
-    ├── ComplexListModal.tsx  # 금액대 클릭 시 단지 목록 팝업
-    ├── CompareListModal.tsx  # 비교하기 단지 선택 패널 (헤더 하단 드롭다운) + 비교평가 모드 토글
-    ├── ComparisonEvalPanel.tsx # 1:1 비교평가 패널 (사진+메모, 가치평가, 가격비교, 결론)
-    ├── CompareCard.tsx       # 비교 뷰 단지 카드 (ComplexInfoPanel과 동일 표시, 수정/삭제 기능 제외)
-    ├── ChecklistSection.tsx  # 임장 체크리스트 섹션 (ComplexInfoPanel 내부 사용)
-    ├── CommuteGradeBadge.tsx # 입지 등급 배지 (S/A/B/C) — 공통 컴포넌트
-    ├── DistrictSelector.tsx  # 행정구역 경계 선택 드롭다운
-    ├── FilterPanel.tsx       # 종합 필터 패널
-    ├── SearchBar.tsx         # 네이버 장소 검색
-    ├── RegisterModal.tsx     # 단지 등록 폼 (가격·교통·출퇴근 입력)
-    ├── ComplexInfoPanel.tsx  # 우측 단지 상세 패널
-    ├── LivingZonePanel.tsx   # 우측 생활권 관리 패널 (ComplexInfoPanel과 상호 배타)
-    ├── RoutePanel.tsx        # 우측 경로 관리 패널 (지도 클릭 경로 그리기·수정·삭제)
-    ├── PriceChart.tsx        # 평형×매매/전세 다중 라인 차트
-    └── PriceInputForm.tsx    # 시세 기록 추가 폼 (패널 내)
+├── types/index.ts                  # 전체 타입 정의 + formatPrice / toUkUnit / calcCommuteGrade 유틸
+├── services/api.ts                 # axios 인스턴스 + API 함수 (snake_case → camelCase 변환 포함)
+├── hooks/
+│   ├── useIsMobile.ts              # 모바일 여부 감지
+│   └── useNumberedTextarea.ts      # 번호 목록 자동 서식 훅
+├── features/
+│   ├── map/                        # 지도 관련
+│   │   ├── MapPage.tsx             # 네이버 지도 초기화, 마커·경로·구획 렌더링
+│   │   ├── DistrictSelector.tsx    # 행정구역 경계 선택 드롭다운
+│   │   ├── FilterPanel.tsx         # 종합 필터 패널
+│   │   ├── PriceRangeFilter.tsx    # 헤더 금액대 필터 버튼
+│   │   ├── RoutePanel.tsx          # 경로 관리 패널 (그리기·수정·삭제)
+│   │   ├── SearchBar.tsx           # 네이버 장소 검색
+│   │   └── utils/
+│   │       ├── districtGeoJson.ts  # EPSG:5179 → WGS84 변환 (proj4), GeoJSON 캐시
+│   │       └── geo.ts              # pointInPolygon (Ray casting) 등 지오 유틸
+│   ├── complex/                    # 단지 관련
+│   │   ├── ComplexInfoPanel.tsx    # 우측 단지 상세 패널
+│   │   ├── ComplexListModal.tsx    # 단지 목록 팝업 (금액대·평형·검색 필터)
+│   │   ├── RegisterModal.tsx       # 단지 등록 폼
+│   │   ├── PriceChart.tsx          # 평형×매매/전세 다중 라인 차트
+│   │   ├── PriceInputForm.tsx      # 시세 기록 추가 폼
+│   │   ├── PhotoSlideModal.tsx     # 단지 사진 슬라이드 모달
+│   │   ├── CommuteGradeBadge.tsx   # 입지 등급 배지 (S/A/B/C)
+│   │   ├── AffordabilityPanel.tsx  # 매입 여력 패널
+│   │   ├── RealEstateAnalysisModal.tsx # 부동산 분석 모달
+│   │   └── constants/
+│   │       ├── hazardCategories.ts # 유해시설 매크로 카테고리 매핑 (11파일 → 7그룹)
+│   │       ├── hazardLocations.ts  # 유해시설 위치 데이터
+│   │       └── hanRiverParks.ts    # 한강공원 위치 데이터
+│   ├── compare/                    # 단지 비교
+│   │   ├── CompareCard.tsx         # 비교 뷰 단지 카드 (1/3 너비)
+│   │   ├── CompareListModal.tsx    # 비교 단지 선택 패널 + 비교평가 모드 토글
+│   │   └── ComparisonEvalPanel.tsx # 1:1 비교평가 패널 (사진·평가·결론)
+│   ├── checklist/                  # 임장 체크리스트
+│   │   ├── ChecklistModal.tsx      # 단지 체크리스트 모달 (분위기/단지/매물 탭)
+│   │   ├── ChecklistSection.tsx    # 체크리스트 섹션 컴포넌트
+│   │   └── ChecklistTemplatePanel.tsx # 전역 템플릿 관리 패널
+│   ├── living-zone/                # 생활권 관리
+│   │   ├── LivingZonePanel.tsx     # 생활권 사이드패널 (구획·순위·체크리스트)
+│   │   └── ZonePhotoModal.tsx      # 생활권 사진 모달
+│   ├── budget/                     # 가계부 / 자산
+│   │   ├── BudgetPage.tsx          # 전체화면 가계부 (내역·통장·자산·통합·AI분석)
+│   │   ├── UserSelectModal.tsx     # 유저 선택 모달
+│   │   └── budgetConstants.ts      # ASSET_COLUMNS, ACCOUNT_GROUPS 등 상수
+│   ├── schedule/                   # 캘린더 / 일정
+│   │   ├── CalendarModal.tsx       # 캘린더 모달 (일정·할일·고정비·네이버 연동)
+│   │   └── ScheduleFormModal.tsx   # 일정 추가/수정 폼
+│   └── district-stats/             # 구별 시세
+│       └── DistrictStatsPanel.tsx  # 서울 25구 × 평형대 히트맵 테이블
+└── shared/                         # 기능에 종속되지 않는 공통 모듈
+    ├── PasswordGate.tsx            # 앱 진입 비밀번호 게이트
+    ├── CameraStampButton.tsx       # 카메라 스탬프 버튼
+    └── imageUtils.ts               # 이미지 압축 유틸
+
 public/
-├── favicon.ico               # 파비콘
-├── do_the_rich.png           # 헤더 로고 이미지
-└── data/                     # 유해시설 JSON 데이터 (공공데이터 기반, 브라우저에서 fetch)
+├── favicon.ico
+├── do_the_rich.png                 # 헤더 로고
+└── data/                           # 유해시설 JSON (공공데이터, 브라우저 fetch)
     ├── waste-facilities.json            # 폐기물 처리시설 (10,568개)
     ├── chemical-facilities.json         # 화학·위험 제조시설 (3,588개)
     ├── construction-material-factories.json # 건설재료 공장 (2,086개)
@@ -343,27 +391,31 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - 지역구 셀렉트 필터 (기존 생활권에서 추출) + "+ 생활권 추가" 버튼
 - 생활권 생성 폼: 이름 + 지역구 셀렉트 (`complexes`의 `region` distinct 목록), Enter/저장
 - 생활권 카드: 클릭 펼침/닫힘, 지역구 배지 + 단지 수 + 메모 미리보기
+  - 접힌 상태에서도 "👍 1순위명 · 👎 꼴찌명" 표시 (단지 2개 이상일 때)
 - 메모 인라인 편집 (✏ 버튼 or 텍스트 클릭)
-- 단지 목록: 이름·금액대 읽기전용 표시 + 👍 버튼 (대장 단지 지정/해제 토글)
-  - 대장 단지 행: 노란 배경(`#fff8e1`) + 단지명 왼쪽에 👍 이모지
-  - 활성 버튼: 노란 배경 + 진하게 / 비활성: 투명 테두리만
+- **단지 순위 목록**: 포함 단지를 `complex_rankings` 순서대로 정렬 표시
+  - 1순위: 노란 배경 + 👍 이모지 / 꼴찌: 연빨강 배경 + 👎 이모지 (단지 2개↑일 때)
+  - ▲▼ 버튼으로 순위 조정 → `PATCH /api/living-zones/:id/rankings` 즉시 저장
+  - `rankingSaving` 상태로 저장 중 버튼 비활성화
 - **단지 선택 체크박스 패널**: "단지 수정" / "+ 단지 추가" 버튼 클릭 시 펼침
-  - ⚠️ 지역구 조건 없이 모든 단지 표시 (기존에는 `zone.district === c.region` 조건 있었으나 제거)
+  - 지역구 조건 없이 모든 단지 표시
   - 기존 포함된 단지 미리 체크 (`pendingIds` Set 초기화)
   - 체크/해제로 추가·제거 예약, 저장 시 `Promise.all`로 일괄 반영
   - 하단 "X개 선택됨" + 취소/저장 버튼
-- **구획 그리기**: 포함 단지 섹션 헤더의 "구획 그리기" 버튼 → `onStartZoneDrawing(zoneId)` 콜백 → 지도 폴리곤 입력 모드
+- **구획 그리기**: "구획 그리기" 버튼 → `onStartZoneDrawing(zoneId)` 콜백 → 지도 폴리곤 입력 모드
 - 생활권 삭제: 카드 우측 × → 2단계 확인
 - 신규 생활권 생성 후 자동 펼침
-- `onZonePolygonsChange` prop: 생활권 로드 시 폴리곤이 있는 생활권 좌표 목록 + 대장 단지명을 App.tsx에 전달 → MapPage 오버레이 갱신
+- `onZonePolygonsChange` prop: 폴리곤 있는 생활권 좌표 목록 + 1순위 단지명을 App.tsx에 전달 → MapPage 오버레이 갱신
 
 ### `MapPage.tsx`
 - 네이버 지도 초기화 (서울 중심, zoom 12)
-- 단지마다 CSS 회전 핀 마커 (30×30px, `border-radius:50% 50% 50% 4px` + `rotate(-45deg)`)
-  - 색상: 10억 미만=파랑, 15억 미만=노랑, 20억 미만=빨강, 그 외=검정
-  - 마커 hover 시 단지명 tooltip 표시 — tooltip은 `document.body` 직속 div (`z-index:2147483647`)로 생성해 Naver Maps의 CSS transform stacking context를 탈출, 항상 최상위 렌더링
-  - `window.__mkTipShow / __mkTipHide` 전역 함수로 마커 인라인 이벤트에서 제어
-- 마커 클릭 → InfoWindow + `onComplexSelect`
+- 단지마다 **카드형 마커** — 단지명·호가(없으면 매매가)·평형 배지 표시
+  - 가격: 호가(`askingPrice`) 우선, 없으면 매매가(`price`) fallback
+  - 백만원 단위까지 표시 (예: 10.15억), 소수점 trailing zero 제거
+  - 평형 배지: `areaTypePriceRanges`에서 현재 금액대 일치 평형 표시, 없으면 `areaTypes[0]`
+  - 즐겨찾기 단지: 단지명 앞 ★ 접두사
+  - 임장유형 테두리 색상: ATMOSPHERE=연초록/COMPLEX=초록/LISTING=진초록/NONE=흰색
+- 마커 클릭 → `onComplexSelect`
 - 지도 클릭 → 역방향 지오코딩 → `onMapClick` 콜백으로 주소 전달
 - `focusLocation` 변경 시 지도 중심/줌(15) 이동
 - `overlayMarkers` 변경 시 학교·인프라·유해시설 오버레이 마커 렌더링
@@ -380,7 +432,7 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - **생활권 구획 그리기**:
   - `isDrawingZone=true` 시 지도 커서 `crosshair`, 별도 클릭 리스너 등록 → `onZonePointAdd(lat, lng)` 콜백
   - `drawingZonePoints` 변경 시: 초록 원 꼭지점 마커 + 3개 이상이면 반투명 초록 Polygon / 2개 이하면 Polyline
-  - `zonePolygons` 변경 시: 저장된 구획을 반투명 초록 `shortdash` Polygon + 생활권 이름 라벨 마커로 표시 (대장 단지 있으면 이름 아래 두 번째 줄에 "👍 단지명")
+  - `zonePolygons` 변경 시: 저장된 구획을 반투명 초록 `shortdash` Polygon + 생활권 이름 라벨 마커로 표시 (1순위 단지 있으면 이름 아래 두 번째 줄에 "👍 단지명")
   - `zoneClickListenerRef` / `zonePolygonRef` / `zoneMarkersRef` / `zoneSavedPolygonsRef` / `zoneLabelMarkersRef`로 수명 관리
 - **공공단지 마커** (`publicComplexes` prop):
   - 줌 14 미만: 숨김 / 줌 14~14: 단지명만 / 줌 15+: 연식·세대수·용적·주차 세부정보 (CSS `pc-detail` 클래스로 마커 재생성 없이 토글)
@@ -564,17 +616,9 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 
 | 항목 | 설명 |
 |------|------|
-| `SchoolInfo` / `InfraInfo` 모델에 `latitude`, `longitude` (Float) 추가 | 단지 선택 시 지도 오버레이 마커 표시에 사용 |
 | `ApartmentComplex` 응답에 `priceItems` 포함 | 금액대 필터에서 평형 정보 표시 가능 |
 | MOLIT 동 단위 필터링 | 법정동 기반 포스트 필터링 추가 |
 | 실거래가 정확도 개선 | 단지명 매핑 로직 개선 후 RegisterModal 주석 해제 |
-
-### 완료된 백엔드 추가 작업
-- ✅ `hazard_info` 테이블: `macro_category VARCHAR(50)`, `sub_category VARCHAR(50)` 컬럼 추가 (앱 시작 시 idempotent `ALTER TABLE` 마이그레이션)
-- ✅ `commute_time` 테이블: `distance_km DOUBLE` 컬럼 추가 (동일 방식)
-- ✅ `HazardInfoDto`/`HazardInfoRequest`: `macro_category`, `sub_category` 포함
-- ✅ `CommuteTimeDto`/`CommuteTimeRequest`: `distance_km` 포함
-- ✅ `complex_service.py`: `add_hazard_infos`, `update_hazard_info`, `update_commute_times`, `register` 함수에서 새 필드 저장
 
 ---
 
@@ -877,19 +921,16 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
   - 백엔드 환경변수: `NAVER_CALENDAR_CLIENT_ID`, `NAVER_CALENDAR_CLIENT_SECRET`, `NAVER_CALENDAR_REDIRECT_URI`, `FRONTEND_URL`
   - Client ID: `WBfVi2rORQVH_MpbPv4q` (Railway 환경변수에 설정)
 
+- [x] 지도 마커 가격 백만원 단위 표시 + 평형 배지
+  - 백만원 단위까지 표시 (`Math.floor` 버림, trailing zero 제거): 10.15억, 10.1억, 10억
+  - 평형 배지: 현재 금액대와 일치하는 `areaTypePriceRanges` 평형 표시, 작은 폰트(7px) 테두리 박스
+- [x] 생활권 카드 헤더에 꼴찌 단지명 표시 — 접힌 상태에서 "👍 1순위 · 👎 꼴찌" 형태
+- [x] 기능별 패키지 구조 재편 — `components/` + `pages/` + `utils/` → `features/{map,complex,compare,checklist,living-zone,budget,schedule,district-stats}/` + `shared/`
+
 ## 미완성 / TODO
 
-- [x] 학군·인프라 검색 드롭다운 이중표시 버그 수정 — IME Enter 이중발화(`isComposing` 가드) + 시퀀스 번호로 stale 비동기 결과 폐기 + 결과 1건이면 자동선택
-- [x] 경사도(slopeType)/아파트구조(buildingStructure)/용적률(floorAreaRatio) 추가 — RegisterModal 입력, ComplexInfoPanel 표시+인라인편집, CompareCard 표시전용
-- [x] 종합 필터 기능 — FilterPanel 컴포넌트, 헤더 "필터" 버튼 (활성 시 `필터 N/M` 뱃지)
-  - 필터 항목: 즐겨찾기, 지역구, 임장유형, 세대수, 연식, 직장밀도·입지·학군·환경 등급, 재개발, 경사도, 구조
-  - `ActiveFilters` / `EMPTY_FILTERS` / `isFiltersActive()` → `types/index.ts`
-  - `applyFilters()` → `FilterPanel.tsx` export, App.tsx에서 `filteredComplexes = useMemo(...)`
-  - MapPage에 `filteredComplexes` 전달 → 필터 적용 단지만 지도 마커 표시
-  - 결과 목록: 등급 배지(교/학/환) + 단지명 검색, 클릭 시 지도 이동 + 패널 오픈
 - [ ] 실거래가 자동조회 (RegisterModal 주석 해제) — 정확도 개선 필요
 - [ ] 금액대 필터 버튼에 평형 표시 — 백엔드 priceItems 포함 필요
-- [ ] 시세 기록 삭제 기능
 - [ ] 시세 그래프 기간 필터 (3개월 / 6개월 / 1년)
 - [ ] 지도 마커 클러스터링
 - [ ] 반응형 레이아웃 (모바일)
