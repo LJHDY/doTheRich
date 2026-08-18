@@ -400,8 +400,17 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         const groupId = crypto.randomUUID(); // 같은 할부 묶음 ID
         const newEntries: BudgetEntry[] = [];
 
+        // 카드 결제일(billingDay) 기준: 결제 다음 달 결제일부터 시작
+        // billingDay 없으면 구매일 기준 다음 달부터 (fallback)
+        const cardPM = paymentMethods.find(p => p.name === form.cardName && p.type === '카드');
+        const billingDay = cardPM?.billingDay ?? null;
+
         for (let i = 0; i < months; i++) {
-          const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, baseDate.getDate());
+          // 1회차: 구매월+1의 결제일, 2회차: 구매월+2의 결제일 …
+          const targetMonth = baseDate.getMonth() + 1 + i; // 0-based month + 1 (다음 달) + i
+          const d = billingDay
+            ? new Date(baseDate.getFullYear(), targetMonth, billingDay)
+            : new Date(baseDate.getFullYear(), targetMonth, baseDate.getDate());
           const monthEntryDate = d.toISOString().slice(0, 10);
           const monthYearMonth = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
           const monthAmount = perMonth + (i === 0 ? remainder : 0);
