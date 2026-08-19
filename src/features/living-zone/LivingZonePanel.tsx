@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ApartmentComplex, LivingZone, ZoneChecklistResultItem, ChecklistInputType } from '../../types';
 import {
   getLivingZones, createLivingZone, updateLivingZoneMemo,
@@ -62,6 +62,9 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
 
   // 순위 변경 저장 중 상태 (zoneId → boolean)
   const [rankingSaving, setRankingSaving] = useState<Record<number, boolean>>({});
+  // 드래그앤드롭 — 드래그 중인 항목 추적
+  const dragSrcRef = useRef<{ zoneId: number; complexId: number } | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null); // "zoneId-complexId"
 
   // 생활권별 분위기 체크리스트 (zoneId → items)
   const [zoneChecklists, setZoneChecklists] = useState<Record<number, ZoneChecklistResultItem[]>>({});
@@ -214,14 +217,16 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
     setCheckboxSaving(false);
   };
 
-  // 단지 순위 이동 — direction: 'up'이면 위로, 'down'이면 아래로
-  const handleReorder = async (zone: LivingZone, complexId: number, direction: 'up' | 'down') => {
+  // 드래그앤드롭으로 단지 순위 변경
+  const handleDrop = async (zone: LivingZone, targetComplexId: number) => {
+    const src = dragSrcRef.current;
+    if (!src || src.zoneId !== zone.id || src.complexId === targetComplexId) return;
     const ids = zone.complexes.map(c => c.complexId);
-    const idx = ids.indexOf(complexId);
-    if (direction === 'up' && idx <= 0) return;
-    if (direction === 'down' && idx >= ids.length - 1) return;
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    [ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]];
+    const fromIdx = ids.indexOf(src.complexId);
+    const toIdx = ids.indexOf(targetComplexId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    ids.splice(fromIdx, 1);
+    ids.splice(toIdx, 0, src.complexId);
     setRankingSaving(prev => ({ ...prev, [zone.id]: true }));
     try {
       const updated = await reorderZoneComplexes(zone.id, ids);
@@ -238,6 +243,8 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
       });
     } catch {}
     setRankingSaving(prev => ({ ...prev, [zone.id]: false }));
+    dragSrcRef.current = null;
+    setDragOverKey(null);
   };
 
   const handleDeleteZone = async (zoneId: number) => {
@@ -583,17 +590,29 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
                             const isLast = idx === zone.complexes.length - 1;
                             // 2개 이상일 때만 👍/👎 표시
                             const hasRank = zone.complexes.length > 1;
+                            const dndKey = `${zone.id}-${c.complexId}`;
+                            const isDragOver = dragOverKey === dndKey;
                             return (
                               <div
                                 key={c.id}
+                                draggable={!rankingSaving[zone.id]}
+                                onDragStart={() => { dragSrcRef.current = { zoneId: zone.id, complexId: c.complexId }; }}
+                                onDragOver={e => { e.preventDefault(); setDragOverKey(dndKey); }}
+                                onDragLeave={() => setDragOverKey(null)}
+                                onDrop={() => handleDrop(zone, c.complexId)}
+                                onDragEnd={() => { dragSrcRef.current = null; setDragOverKey(null); }}
                                 style={{
                                   display: 'flex', alignItems: 'center',
                                   padding: '6px 10px',
-                                  backgroundColor: isFirst && hasRank ? '#fff8e1' : isLast && hasRank ? '#fff5f5' : '#fff',
+                                  backgroundColor: isDragOver ? '#e8f4fd' : isFirst && hasRank ? '#fff8e1' : isLast && hasRank ? '#fff5f5' : '#fff',
                                   borderRadius: '6px',
-                                  border: isFirst && hasRank ? '1px solid #FFD97D' : isLast && hasRank ? '1px solid #ffb3b3' : '1px solid #e8eaed',
+                                  border: isDragOver ? '1px dashed #4BAAD4' : isFirst && hasRank ? '1px solid #FFD97D' : isLast && hasRank ? '1px solid #ffb3b3' : '1px solid #e8eaed',
+                                  cursor: rankingSaving[zone.id] ? 'not-allowed' : 'grab',
+                                  transition: 'background-color 0.1s, border-color 0.1s',
                                 }}
                               >
+                                {/* 드래그 핸들 */}
+                                <span style={{ fontSize: '14px', color: '#bdbdbd', marginRight: '6px', flexShrink: 0, userSelect: 'none' }}>⠿</span>
                                 <div style={{ minWidth: 0, flex: 1 }}>
                                   {hasRank && isFirst && <span style={{ marginRight: '4px', fontSize: '12px' }}>👍</span>}
                                   {hasRank && isLast && <span style={{ marginRight: '4px', fontSize: '12px' }}>👎</span>}
@@ -605,31 +624,6 @@ const LivingZonePanel: React.FC<Props> = ({ complexes, onClose, isMobile, onStar
                                       borderRadius: '8px', padding: '1px 5px',
                                     }}>{full.priceRange}</span>
                                   )}
-                                </div>
-                                {/* 순위 이동 버튼 — 저장 중이거나 이동 불가 시 비활성 */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', marginLeft: '6px', flexShrink: 0 }}>
-                                  <button
-                                    onClick={() => handleReorder(zone, c.complexId, 'up')}
-                                    disabled={rankingSaving[zone.id] || isFirst}
-                                    title="순위 올리기"
-                                    style={{
-                                      background: 'transparent', border: '1px solid #d0d0d0',
-                                      borderRadius: '3px', padding: '0 4px', lineHeight: '14px',
-                                      fontSize: '10px', cursor: isFirst ? 'default' : 'pointer',
-                                      color: isFirst ? '#ccc' : '#555',
-                                    }}
-                                  >▲</button>
-                                  <button
-                                    onClick={() => handleReorder(zone, c.complexId, 'down')}
-                                    disabled={rankingSaving[zone.id] || isLast}
-                                    title="순위 내리기"
-                                    style={{
-                                      background: 'transparent', border: '1px solid #d0d0d0',
-                                      borderRadius: '3px', padding: '0 4px', lineHeight: '14px',
-                                      fontSize: '10px', cursor: isLast ? 'default' : 'pointer',
-                                      color: isLast ? '#ccc' : '#555',
-                                    }}
-                                  >▼</button>
                                 </div>
                               </div>
                             );
