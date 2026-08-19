@@ -771,7 +771,7 @@ export interface ConsultationLog {
 export interface MarketReport {
   id: number;
   reportDate: string;                         // YYYY-MM-DD
-  reportType: 'global' | 'kr_close';          // 글로벌(기본) | 국내장마감
+  reportType: 'global' | 'kr_close' | 'premarket'; // 글로벌(기본) | 국내장마감 | 미국장 프리마켓
   marketData: Record<string, MarketTicker>;   // sp500, nasdaq, kospi 등
   fearGreed: FearGreedData | null;            // CNN Fear & Greed Index
   krSectors: KrSectorData[];                  // 섹터별 등락률 (kr_close 전용)

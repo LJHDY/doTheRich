@@ -2806,7 +2806,7 @@ const MarketReportView: React.FC = () => {
               >
                 {reports.map(r => (
                   <option key={r.id} value={r.id}>
-                    {r.reportType === 'kr_close' ? '🇰🇷' : '🌏'} {r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}
+                    {r.reportType === 'kr_close' ? '🇰🇷' : r.reportType === 'premarket' ? '🌙' : '🌏'} {r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}
                   </option>
                 ))}
               </select>
@@ -3158,7 +3158,7 @@ const MarketReportView: React.FC = () => {
               {selected.content && (
                 <div style={{ background: '#fff', borderRadius: '12px', padding: '20px 24px', border: '1px solid #e0f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: '20px' }}>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '12px', paddingBottom: '8px', borderBottom: '2px solid #e0f0ff' }}>
-                    AI 시장 분석 · {selected.reportDate}
+                    {selected.reportType === 'kr_close' ? '🇰🇷 국내장마감 분석' : selected.reportType === 'premarket' ? '🌙 미국장 프리마켓 브리핑' : '🌏 글로벌 시장 분석'} · {selected.reportDate}
                     {(selected.updatedAt ?? selected.createdAt) && (
                       <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400, marginLeft: '10px' }}>{formatKST(selected.updatedAt ?? selected.createdAt)} 업데이트</span>
                     )}
