@@ -556,6 +556,45 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
 
               <button onClick={nextMonth} style={{ background: 'none', border: 'none', fontSize: isMobile ? '18px' : '22px', cursor: 'pointer', color: '#5f6368', lineHeight: 1 }}>›</button>
 
+              {/* D-Day 칩 목록 — nextMonth 버튼 오른쪽, 모바일에서는 숨김 */}
+              {!isMobile && (() => {
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                // target_date 오름차순 정렬 후 최대 5개 표시
+                const sorted = [...ddays]
+                  .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
+                  .slice(0, 5);
+                if (sorted.length === 0) return null;
+                return (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginLeft: '8px' }}>
+                    {sorted.map(d => {
+                      const diff = Math.round((new Date(d.targetDate + 'T00:00:00').getTime() - today.getTime()) / 86400000);
+                      // diff===0: 빨강, 1~7: 주황, 8~30: 노란 갈색, 나머지(먼 미래 or 과거): 회색
+                      const badgeColor =
+                        diff === 0 ? '#E06060'
+                        : diff > 0 && diff <= 7 ? '#FF9800'
+                        : diff > 0 && diff <= 30 ? '#e0a800'
+                        : '#9aa0a6';
+                      const label = diff === 0 ? 'D-Day' : diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`;
+                      return (
+                        <div
+                          key={d.id}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            fontSize: '11px', borderRadius: '6px', padding: '2px 8px',
+                            background: badgeColor,
+                          }}
+                        >
+                          {/* 배지: D-n 숫자 */}
+                          <span style={{ fontWeight: 700, color: '#fff' }}>{label}</span>
+                          {/* 제목: 배지 바로 옆 회색 */}
+                          <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 400 }}>{d.title}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
               {/* 연월 피커 드롭다운 */}
               {showPicker && (
                 <div style={{
@@ -892,17 +931,11 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
                         >
                           {/* 날짜 숫자 + 고정비 원 */}
                           <div style={{ height: DAY_NUM_H, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              <span style={{
-                                fontWeight: isToday ? 800 : 500,
-                                fontSize: isMobile ? '13px' : '15px',
-                                color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
-                              }}>{day}</span>
-                              {/* D-Day 마킹 — 해당 날짜에 D-Day 있을 때 표시 */}
-                              {ddays.some(d => d.targetDate === dateStr) && (
-                                <span style={{ fontSize: '8px', color: '#E06060', fontWeight: 700, lineHeight: 1 }}>📌</span>
-                              )}
-                            </div>
+                            <span style={{
+                              fontWeight: isToday ? 800 : 500,
+                              fontSize: isMobile ? '13px' : '15px',
+                              color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
+                            }}>{day}</span>
                             {/* 고정비 납부일 표시 원 */}
                             {(feCalendar?.ldy?.[dateStr] || feCalendar?.juhae?.[dateStr]) && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingTop: '2px' }}>

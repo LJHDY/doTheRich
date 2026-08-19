@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, ActiveFilters, EMPTY_FILTERS, isFiltersActive, PublicComplex } from './types';
-import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon, getPublicComplexGuList, collectPublicComplexes, getPublicComplexes, getDdays } from './services/api';
-import { Dday } from './types';
+import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon, getPublicComplexGuList, collectPublicComplexes, getPublicComplexes } from './services/api';
 import { pointInPolygon } from './features/map/utils/geo';
 import { HAN_RIVER_PARKS } from './features/complex/constants/hanRiverParks';
 import MapPage from './features/map/MapPage';
@@ -117,8 +116,6 @@ const App: React.FC = () => {
   const [budgetOpen, setBudgetOpen] = useState(() => sessionStorage.getItem('budget_open') === 'true');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
-  const [ddays, setDdays] = useState<Dday[]>([]);
-  const loadDdays = useCallback(() => { getDdays().then(setDdays).catch(() => {}); }, []);
   useEffect(() => { sessionStorage.setItem('budget_open', String(budgetOpen)); }, [budgetOpen]);
 
   // 유저 미선택 시 선택 모달 표시 — 가계부 열기 시점에 확인
@@ -327,9 +324,6 @@ const App: React.FC = () => {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isDrawingZone]);
-
-  // D-Day 마운트 시 로드
-  useEffect(() => { loadDdays(); }, [loadDdays]);
 
   // 구 목록 마운트 시 한 번 로드 (수집 패널 + 공공단지 조회에 공통 사용)
   useEffect(() => {
@@ -892,43 +886,16 @@ const App: React.FC = () => {
                   color: affordOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >대출분석</button>
-              {/* 달력 + D-Day 배지 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                <button
-                  onClick={() => setCalendarOpen(v => !v)}
-                  style={{
-                    padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                    border: `1px solid ${calendarOpen ? '#89CFF0' : '#dadce0'}`,
-                    borderRadius: '6px', backgroundColor: calendarOpen ? '#e0f8ff' : '#fff',
-                    color: calendarOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                >📅 달력</button>
-                {/* 가장 가까운 D-Day 배지 — 미래 D-Day 중 최소값 */}
-                {(() => {
-                  const today = new Date(); today.setHours(0, 0, 0, 0);
-                  const upcoming = ddays
-                    .map(d => ({ ...d, diff: Math.round((new Date(d.targetDate + 'T00:00:00').getTime() - today.getTime()) / 86400000) }))
-                    .filter(d => d.diff >= 0)
-                    .sort((a, b) => a.diff - b.diff)[0];
-                  if (!upcoming) return null;
-                  const color = upcoming.diff === 0 ? '#E06060' : upcoming.diff <= 7 ? '#FF9800' : upcoming.diff <= 30 ? '#e0a800' : '#9aa0a6';
-                  const label = upcoming.diff === 0 ? 'D-Day' : `D-${upcoming.diff}`;
-                  return (
-                    <div
-                      onClick={() => setCalendarOpen(true)}
-                      title={upcoming.title}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '4px',
-                        padding: '3px 8px', borderRadius: '6px', cursor: 'pointer',
-                        background: color, color: '#fff', fontSize: '11px', fontWeight: 700,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      📌 {label}
-                    </div>
-                  );
-                })()}
-              </div>
+              {/* 달력 */}
+              <button
+                onClick={() => setCalendarOpen(v => !v)}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: `1px solid ${calendarOpen ? '#89CFF0' : '#dadce0'}`,
+                  borderRadius: '6px', backgroundColor: calendarOpen ? '#e0f8ff' : '#fff',
+                  color: calendarOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >📅 달력</button>
               {/* 가계부 */}
               <button
                 onClick={() => {
@@ -1247,7 +1214,7 @@ const App: React.FC = () => {
       </div>
 
       {/* 달력 모달 */}
-      {calendarOpen && <CalendarModal onClose={() => setCalendarOpen(false)} onDdayChange={loadDdays} />}
+      {calendarOpen && <CalendarModal onClose={() => setCalendarOpen(false)} />}
       {contactsOpen && <ContactsModal onClose={() => setContactsOpen(false)} />}
 
       {/* 가계부 전체화면 */}
