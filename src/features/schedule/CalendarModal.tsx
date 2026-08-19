@@ -750,6 +750,34 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
                             반복
                           </span>
                         )}
+                        {/* D-Day 등록 버튼 — 반복 일정 제외, 이미 등록된 경우 빨간 핀 */}
+                        {!s.repeatType && (() => {
+                          const already = ddays.find(d => d.title === s.title && d.targetDate === s.eventDate);
+                          return (
+                            <button
+                              onClick={async e => {
+                                e.stopPropagation();
+                                if (already) {
+                                  if (!window.confirm('D-Day를 삭제하시겠습니까?')) return;
+                                  await deleteDday(already.id);
+                                  setDdays(prev => prev.filter(d => d.id !== already.id));
+                                  onDdayChange?.();
+                                } else {
+                                  const created = await createDday({ userId: s.userId, title: s.title, targetDate: s.eventDate });
+                                  setDdays(prev => [...prev, created].sort((a, b) => a.targetDate.localeCompare(b.targetDate)));
+                                  onDdayChange?.();
+                                }
+                              }}
+                              title={already ? 'D-Day 해제' : 'D-Day 등록'}
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                fontSize: '13px', padding: '0 2px', flexShrink: 0,
+                                opacity: already ? 1 : 0.35,
+                                color: already ? '#E06060' : '#666',
+                              }}
+                            >📌</button>
+                          );
+                        })()}
                       </div>
                     );
                   })}
