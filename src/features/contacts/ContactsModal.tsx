@@ -312,9 +312,11 @@ function ConsultationSection({ contactId, col }: LogSectionProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [editLog, setEditLog] = useState<ConsultationLog | null>(null);
   const [logForm, setLogForm] = useState({ consultDate: todayStr(), title: '', content: '' });
+  const [pendingAudioFile, setPendingAudioFile] = useState<File | null>(null);  // 폼에서 선택된 파일
   const [saving, setSaving] = useState(false);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
-  const audioInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);     // 기존 로그 녹음 첨부용
+  const formAudioInputRef = useRef<HTMLInputElement>(null); // 폼 내 녹음 선택용
   const uploadTargetRef = useRef<number | null>(null);
 
   const loadLogs = useCallback(async () => {
@@ -327,16 +329,18 @@ function ConsultationSection({ contactId, col }: LogSectionProps) {
   const openAdd = () => {
     setEditLog(null);
     setLogForm({ consultDate: todayStr(), title: '', content: '' });
+    setPendingAudioFile(null);
     setFormOpen(true);
   };
 
   const openEdit = (lg: ConsultationLog) => {
     setEditLog(lg);
     setLogForm({ consultDate: lg.consultDate, title: lg.title, content: lg.content ?? '' });
+    setPendingAudioFile(null);
     setFormOpen(true);
   };
 
-  const closeLogForm = () => { setFormOpen(false); setEditLog(null); };
+  const closeLogForm = () => { setFormOpen(false); setEditLog(null); setPendingAudioFile(null); };
 
   const handleSaveLog = async () => {
     if (!logForm.title.trim()) { alert('제목을 입력해 주세요.'); return; }
@@ -344,10 +348,18 @@ function ConsultationSection({ contactId, col }: LogSectionProps) {
     try {
       const payload = { consultDate: logForm.consultDate, title: logForm.title.trim(), content: logForm.content.trim() || undefined };
       if (editLog) {
-        const updated = await updateConsultationLog(contactId, editLog.id, payload);
+        let updated = await updateConsultationLog(contactId, editLog.id, payload);
+        // 폼에서 새 파일을 선택한 경우 즉시 업로드
+        if (pendingAudioFile) {
+          updated = await uploadConsultationAudio(contactId, editLog.id, pendingAudioFile);
+        }
         setLogs(prev => prev.map(l => l.id === editLog.id ? updated : l));
       } else {
-        const created = await createConsultationLog(contactId, payload);
+        let created = await createConsultationLog(contactId, payload);
+        // 신규 생성 직후 선택된 파일이 있으면 업로드
+        if (pendingAudioFile) {
+          created = await uploadConsultationAudio(contactId, created.id, pendingAudioFile);
+        }
         setLogs(prev => [created, ...prev]);
       }
       closeLogForm();
@@ -424,6 +436,26 @@ function ConsultationSection({ contactId, col }: LogSectionProps) {
             <textarea value={logForm.content} onChange={e => setLogForm(f => ({ ...f, content: e.target.value }))}
               placeholder="상담 내용을 자유롭게 기록하세요" rows={3}
               style={{ ...logInputStyle, resize: 'vertical', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
+          </div>
+          {/* 녹음 첨부 — 폼 안에서 바로 선택 가능 */}
+          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button type="button" onClick={() => formAudioInputRef.current?.click()}
+              style={{ padding: '4px 12px', fontSize: '11px', fontWeight: 600, border: `1px solid ${col.active}`, borderRadius: '5px', backgroundColor: col.bg, color: col.active, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              🎙 녹음 첨부
+            </button>
+            {pendingAudioFile ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '11px', color: '#5f6368', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {pendingAudioFile.name}
+                </span>
+                <button type="button" onClick={() => setPendingAudioFile(null)}
+                  style={{ padding: '0 4px', fontSize: '13px', border: 'none', background: 'none', color: '#E06060', cursor: 'pointer', flexShrink: 0 }}>×</button>
+              </div>
+            ) : (
+              <span style={{ fontSize: '11px', color: '#bdbdbd' }}>선택된 파일 없음</span>
+            )}
+            <input ref={formAudioInputRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.aac,.ogg,.webm,.amr"
+              style={{ display: 'none' }} onChange={e => { setPendingAudioFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
           </div>
           <div style={{ display: 'flex', gap: '6px', marginTop: '8px', justifyContent: 'flex-end' }}>
             <button onClick={closeLogForm} style={{ padding: '5px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>취소</button>
