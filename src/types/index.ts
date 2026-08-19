@@ -796,6 +796,25 @@ export interface Schedule {
   createdAt: string | null;
 }
 
+/** 투자 메모 첨부 이미지 */
+export interface InvestmentMemoImage {
+  id: number;
+  memoId: number;
+  imageUrl: string;
+  imageFileName: string;
+  displayOrder: number;
+}
+
+/** 투자 메모 */
+export interface InvestmentMemo {
+  id: number;
+  title: string;
+  content: string | null;
+  images: InvestmentMemoImage[];
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 /** 금액을 "0,000원" 형식으로 포맷 */
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';

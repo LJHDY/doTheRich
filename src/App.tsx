@@ -27,6 +27,7 @@ import { BUDGET_USER_STORAGE_KEY } from './features/budget/budgetConstants';
 import RealEstateAnalysisModal from './features/complex/RealEstateAnalysisModal';
 import CalendarModal from './features/schedule/CalendarModal';
 import ContactsModal from './features/contacts/ContactsModal';
+import InvestmentMemoModal from './features/investment-memo/InvestmentMemoModal';
 import CameraStampButton from './shared/CameraStampButton';
 
 const App: React.FC = () => {
@@ -116,6 +117,7 @@ const App: React.FC = () => {
   const [budgetOpen, setBudgetOpen] = useState(() => sessionStorage.getItem('budget_open') === 'true');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
+  const [investmentMemoOpen, setInvestmentMemoOpen] = useState(false);
   useEffect(() => { sessionStorage.setItem('budget_open', String(budgetOpen)); }, [budgetOpen]);
 
   // 유저 미선택 시 선택 모달 표시 — 가계부 열기 시점에 확인
@@ -1216,6 +1218,7 @@ const App: React.FC = () => {
       {/* 달력 모달 */}
       {calendarOpen && <CalendarModal onClose={() => setCalendarOpen(false)} />}
       {contactsOpen && <ContactsModal onClose={() => setContactsOpen(false)} />}
+      {investmentMemoOpen && <InvestmentMemoModal onClose={() => setInvestmentMemoOpen(false)} />}
 
       {/* 가계부 전체화면 */}
       {budgetOpen && <BudgetPage onClose={() => setBudgetOpen(false)} />}
@@ -1440,6 +1443,7 @@ const App: React.FC = () => {
           showCleanup
           onRefresh={loadComplexes}
           onContactsOpen={() => { setMyComplexListOpen(false); setContactsOpen(true); }}
+          onInvestmentMemoOpen={() => { setMyComplexListOpen(false); setInvestmentMemoOpen(true); }}
         />
       )}
 

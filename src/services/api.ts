@@ -1545,4 +1545,54 @@ export const deleteDday = async (id: number): Promise<void> => {
   await api.delete(`/api/ddays/${id}`);
 };
 
+// ── 투자 메모 ────────────────────────────────────────────────────────────────
+
+import { InvestmentMemo, InvestmentMemoImage } from '../types';
+
+const toMemoImage = (i: any): InvestmentMemoImage => ({
+  id: i.id, memoId: i.memoId, imageUrl: i.imageUrl,
+  imageFileName: i.imageFileName, displayOrder: i.displayOrder,
+});
+
+const toMemo = (m: any): InvestmentMemo => ({
+  id: m.id, title: m.title, content: m.content ?? null,
+  images: (m.images ?? []).map(toMemoImage),
+  createdAt: m.createdAt ?? null,
+  updatedAt: m.updatedAt ?? null,
+});
+
+export const getInvestmentMemos = async (q?: string): Promise<InvestmentMemo[]> => {
+  const params = q ? { q } : {};
+  const { data } = await api.get('/api/investment-memos', { params });
+  return data.map(toMemo);
+};
+
+export const createInvestmentMemo = async (payload: { title: string; content?: string }): Promise<InvestmentMemo> => {
+  const { data } = await api.post('/api/investment-memos', { title: payload.title, content: payload.content ?? null });
+  return toMemo(data);
+};
+
+export const updateInvestmentMemo = async (id: number, payload: { title?: string; content?: string | null }): Promise<InvestmentMemo> => {
+  const { data } = await api.patch(`/api/investment-memos/${id}`, payload);
+  return toMemo(data);
+};
+
+export const deleteInvestmentMemo = async (id: number): Promise<void> => {
+  await api.delete(`/api/investment-memos/${id}`);
+};
+
+export const uploadInvestmentMemoImage = async (memoId: number, file: File): Promise<InvestmentMemoImage> => {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await api.post(`/api/investment-memos/${memoId}/images`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60_000,
+  });
+  return toMemoImage(data);
+};
+
+export const deleteInvestmentMemoImage = async (memoId: number, imageId: number): Promise<void> => {
+  await api.delete(`/api/investment-memos/${memoId}/images/${imageId}`);
+};
+
 export default api;
