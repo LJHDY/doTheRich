@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CommonCode, Schedule } from '../../types';
-import { createSchedule, deleteSchedule, getCommonCodes, updateSchedule } from '../../services/api';
+import { createDday, createSchedule, deleteSchedule, getCommonCodes, updateSchedule } from '../../services/api';
 import { BUDGET_USER_STORAGE_KEY, BUDGET_USERS } from '../budget/budgetConstants';
 
 interface Props {
@@ -8,6 +8,8 @@ interface Props {
   schedules: Schedule[];      // 해당 날짜의 기존 일정 목록
   onClose: () => void;
   onSaved: () => void;        // 저장/삭제 후 부모 리로드 트리거
+  onDdayChange?: () => void;  // D-Day 등록 시 헤더 배지 갱신
+  ddayCount?: number;         // 현재 D-Day 등록 수 (최대 5개 제한용)
 }
 
 // 일정 작성자 옵션 — 동영/주해/공통
@@ -55,12 +57,13 @@ const emptyForm = (date: string, userId: string) => ({
   category: '', repeatType: '', pushToNaver: true,
 });
 
-const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved }) => {
+const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved, onDdayChange, ddayCount = 0 }) => {
   const defaultUserId = localStorage.getItem(BUDGET_USER_STORAGE_KEY) || BUDGET_USERS[0].id;
   const [catCodes, setCatCodes] = useState<CommonCode[]>([]);
   const [form, setForm] = useState(emptyForm(date, defaultUserId));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [registerAsDday, setRegisterAsDday] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -115,6 +118,11 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
         await updateSchedule(editingId, payload);
       } else {
         await createSchedule(payload);
+        // D-Day 동시 등록 (신규 추가 + 반복 없음 + 최대 5개 미만일 때만)
+        if (registerAsDday && !form.repeatType && ddayCount < 5) {
+          await createDday({ userId: form.userId, title: form.title.trim(), targetDate: form.eventDate });
+          onDdayChange?.();
+        }
       }
       resetForm();
       onSaved();
@@ -312,6 +320,21 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved 
             />
             <span>N 네이버 캘린더에 등록</span>
           </label>
+          {/* D-Day 등록 체크박스 — 신규 추가 + 반복 없음 + 5개 미만일 때만 표시 */}
+          {!editingId && !form.repeatType && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#5f6368', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={registerAsDday}
+                onChange={e => setRegisterAsDday(e.target.checked)}
+                disabled={ddayCount >= 5}
+                style={{ width: '15px', height: '15px', accentColor: '#E06060', cursor: ddayCount >= 5 ? 'not-allowed' : 'pointer' }}
+              />
+              <span style={{ color: registerAsDday ? '#E06060' : '#5f6368' }}>
+                📌 D-Day로 등록{ddayCount >= 5 ? ' (최대 5개)' : ''}
+              </span>
+            </label>
+          )}
 
           {/* 버튼 */}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>

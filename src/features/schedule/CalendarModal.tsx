@@ -1163,7 +1163,9 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
           date={selectedDate}
           schedules={selectedSchedules}
           onClose={() => setSelectedDate(null)}
-          onSaved={() => { load(); }}
+          onSaved={() => { load(); getDdays().then(setDdays).catch(() => {}); }}
+          onDdayChange={() => { getDdays().then(setDdays).catch(() => {}); onDdayChange?.(); }}
+          ddayCount={ddays.length}
         />
       )}
 
