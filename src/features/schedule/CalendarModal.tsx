@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CommonCode, FixedExpenseCalendar, Schedule, Todo } from '../../types';
+import { CommonCode, Dday, FixedExpenseCalendar, Schedule, Todo } from '../../types';
 import {
+  createDday,
   createTodo,
+  deleteDday,
   deleteTodo,
   disconnectNaverCalendar,
   getCommonCodes,
+  getDdays,
   getFixedExpenseCalendar,
   getNaverCalendarAuthUrl,
   getNaverCalendarStatus,
@@ -19,6 +22,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 
 interface Props {
   onClose: () => void;
+  onDdayChange?: () => void; // 헤더 D-Day 배지 갱신용 콜백
 }
 
 // 카테고리별 색상 (순환) — IMPORTANT는 항상 빨간색
@@ -237,7 +241,17 @@ function buildLanes(
   return lanes;
 }
 
-const CalendarModal: React.FC<Props> = ({ onClose }) => {
+// D-Day 유틸
+const calcDdayDiff = (targetDate: string): number => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(targetDate + 'T00:00:00');
+  return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+};
+const ddayLabel = (diff: number) => diff === 0 ? 'D-Day' : diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`;
+const ddayBadgeColor = (diff: number) =>
+  diff === 0 ? '#E06060' : diff > 0 && diff <= 7 ? '#FF9800' : diff > 0 && diff <= 30 ? '#FFD97D' : '#bdbdbd';
+
+const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
   const isMobile = useIsMobile();
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
@@ -254,6 +268,13 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   const [feCalendar, setFeCalendar]     = useState<FixedExpenseCalendar | null>(null);
   const [fePopup, setFePopup]           = useState<{ date: string; x: number; y: number } | null>(null);
   const [todos, setTodos]               = useState<Todo[]>([]);
+  const [ddays, setDdays]               = useState<Dday[]>([]);
+  const [ddayFormOpen, setDdayFormOpen] = useState(false);
+  const [ddayTitle, setDdayTitle]       = useState('');
+  const [ddayDate, setDdayDate]         = useState('');
+  const [ddayUser, setDdayUser]         = useState<'ldy' | 'juhae' | 'common'>('common');
+  const [ddaySaving, setDdaySaving]     = useState(false);
+  const [ddayOpen, setDdayOpen]         = useState(true);
   const [dateActionPopup, setDateActionPopup] = useState<{ date: string; x: number; y: number } | null>(null);
   const [todoForm, setTodoForm]         = useState<{ date: string } | null>(null);
   const [todoInput, setTodoInput]       = useState('');
@@ -266,6 +287,7 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
   // CALENDAR_CATEGORY 공통코드 로드 (detailCode → detailCodeName 변환용)
   useEffect(() => {
     getCommonCodes('CALENDAR_CATEGORY').then(setCatCodes).catch(() => {});
+    getDdays().then(setDdays).catch(() => {});
   }, []);
 
   const catName = (code: string | null) =>
@@ -435,6 +457,26 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
     setTodoInput('');
     setTodoEndDate('');
     setTodoForm(null);
+  };
+
+  // D-Day 저장
+  const handleSaveDday = async () => {
+    if (!ddayTitle.trim() || !ddayDate) return;
+    setDdaySaving(true);
+    try {
+      const created = await createDday({ userId: ddayUser, title: ddayTitle.trim(), targetDate: ddayDate });
+      setDdays(prev => [...prev, created].sort((a, b) => a.targetDate.localeCompare(b.targetDate)));
+      onDdayChange?.();
+      setDdayTitle(''); setDdayDate(''); setDdayFormOpen(false);
+    } finally { setDdaySaving(false); }
+  };
+
+  // D-Day 삭제
+  const handleDeleteDday = async (id: number) => {
+    if (!window.confirm('D-Day를 삭제하시겠습니까?')) return;
+    await deleteDday(id);
+    setDdays(prev => prev.filter(d => d.id !== id));
+    onDdayChange?.();
   };
 
   const todayStr2 = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -822,11 +864,17 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
                         >
                           {/* 날짜 숫자 + 고정비 원 */}
                           <div style={{ height: DAY_NUM_H, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                            <span style={{
-                              fontWeight: isToday ? 800 : 500,
-                              fontSize: isMobile ? '13px' : '15px',
-                              color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
-                            }}>{day}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <span style={{
+                                fontWeight: isToday ? 800 : 500,
+                                fontSize: isMobile ? '13px' : '15px',
+                                color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
+                              }}>{day}</span>
+                              {/* D-Day 마킹 — 해당 날짜에 D-Day 있을 때 표시 */}
+                              {ddays.some(d => d.targetDate === dateStr) && (
+                                <span style={{ fontSize: '8px', color: '#E06060', fontWeight: 700, lineHeight: 1 }}>📌</span>
+                              )}
+                            </div>
                             {/* 고정비 납부일 표시 원 */}
                             {(feCalendar?.ldy?.[dateStr] || feCalendar?.juhae?.[dateStr]) && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingTop: '2px' }}>
@@ -947,6 +995,138 @@ const CalendarModal: React.FC<Props> = ({ onClose }) => {
           </div>
 
         </div>
+      </div>
+
+      {/* ── D-Day 관리 섹션 ── */}
+      <div style={{ borderTop: '1px solid #f0f0f0', flexShrink: 0 }}>
+        {/* 섹션 헤더 */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: isMobile ? '10px 16px' : '10px 20px',
+        }}>
+          <button
+            onClick={() => setDdayOpen(v => !v)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}
+          >
+            <span style={{ fontSize: isMobile ? '12px' : '13px', color: '#5f6368', fontWeight: 600 }}>
+              📌 D-Day ({ddays.length}건)
+            </span>
+            <span style={{ fontSize: '12px', color: '#9aa0a6' }}>{ddayOpen ? '▲' : '▼'}</span>
+          </button>
+          {!ddayFormOpen && (
+            <button
+              onClick={() => setDdayFormOpen(true)}
+              style={{
+                padding: '4px 12px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid #E06060', borderRadius: '12px',
+                background: '#fff5f5', color: '#E06060', cursor: 'pointer',
+              }}
+            >+ 추가</button>
+          )}
+        </div>
+
+        {ddayOpen && (
+          <div style={{ padding: isMobile ? '0 16px 14px' : '0 20px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {/* 추가 폼 */}
+            {ddayFormOpen && (
+              <div style={{
+                padding: '12px', borderRadius: '10px', border: '1px solid #ffcdd2',
+                background: '#fff5f5', display: 'flex', flexDirection: 'column', gap: '8px',
+              }}>
+                <input
+                  value={ddayTitle}
+                  onChange={e => setDdayTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSaveDday(); if (e.key === 'Escape') setDdayFormOpen(false); }}
+                  placeholder="D-Day 제목 (예: 잔금일, 계약 만료)"
+                  autoFocus
+                  style={{
+                    padding: '8px 12px', fontSize: '13px', border: '1px solid #e0e0e0',
+                    borderRadius: '8px', outline: 'none', boxSizing: 'border-box', width: '100%',
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <input
+                    type="date"
+                    value={ddayDate}
+                    onChange={e => setDdayDate(e.target.value)}
+                    style={{
+                      flex: 1, padding: '7px 10px', fontSize: '13px',
+                      border: '1px solid #e0e0e0', borderRadius: '8px', outline: 'none',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {(['ldy', 'juhae', 'common'] as const).map(uid => (
+                      <button
+                        key={uid}
+                        onClick={() => setDdayUser(uid)}
+                        style={{
+                          padding: '6px 8px', fontSize: '11px', borderRadius: '6px', cursor: 'pointer',
+                          border: ddayUser === uid ? '2px solid #E06060' : '1px solid #dadce0',
+                          background: ddayUser === uid ? '#fff5f5' : '#fff',
+                          color: ddayUser === uid ? '#E06060' : '#5f6368',
+                          fontWeight: ddayUser === uid ? 700 : 400,
+                        }}
+                      >{uid === 'ldy' ? '🐴' : uid === 'juhae' ? '☀️' : '❤️'}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => { setDdayFormOpen(false); setDdayTitle(''); setDdayDate(''); }}
+                    style={{ padding: '6px 14px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}
+                  >취소</button>
+                  <button
+                    onClick={handleSaveDday}
+                    disabled={!ddayTitle.trim() || !ddayDate || ddaySaving}
+                    style={{
+                      padding: '6px 16px', fontSize: '12px', fontWeight: 700, border: 'none',
+                      borderRadius: '6px', background: ddayTitle.trim() && ddayDate ? '#E06060' : '#ccc',
+                      color: '#fff', cursor: ddayTitle.trim() && ddayDate ? 'pointer' : 'default',
+                    }}
+                  >{ddaySaving ? '저장 중...' : '저장'}</button>
+                </div>
+              </div>
+            )}
+
+            {/* D-Day 목록 */}
+            {ddays.length === 0 && !ddayFormOpen ? (
+              <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '4px 2px' }}>등록된 D-Day가 없습니다.</div>
+            ) : (
+              ddays.map(d => {
+                const diff = calcDdayDiff(d.targetDate);
+                const badgeColor = ddayBadgeColor(diff);
+                const userEmoji = d.userId === 'ldy' ? '🐴' : d.userId === 'juhae' ? '☀️' : '❤️';
+                return (
+                  <div key={d.id} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '8px 12px', borderRadius: '8px',
+                    background: diff === 0 ? '#fff0f0' : diff < 0 ? '#f8f8f8' : '#fff',
+                    border: `1px solid ${diff === 0 ? '#ffb3b3' : '#e8eaed'}`,
+                  }}>
+                    {/* D-Day 배지 */}
+                    <span style={{
+                      fontSize: '11px', fontWeight: 800, color: '#fff',
+                      background: badgeColor, borderRadius: '6px',
+                      padding: '2px 7px', flexShrink: 0, minWidth: '46px', textAlign: 'center',
+                    }}>{ddayLabel(diff)}</span>
+                    {/* 제목 + 날짜 */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: diff < 0 ? '#9aa0a6' : '#202124', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {userEmoji} {d.title}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#9aa0a6' }}>{d.targetDate}</div>
+                    </div>
+                    {/* 삭제 버튼 */}
+                    <button
+                      onClick={() => handleDeleteDday(d.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: '16px', padding: '0 2px', flexShrink: 0 }}
+                    >×</button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
 
       {/* 날짜 클릭 → 일정 등록/수정 모달 */}

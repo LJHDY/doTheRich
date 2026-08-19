@@ -37,6 +37,7 @@ import {
   Schedule,
   Contact,
   ConsultationLog,
+  Dday,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1505,6 +1506,39 @@ export const getNaverCalendars = async (userId: string): Promise<NaverCalendarIt
 
 export const selectNaverCalendar = async (userId: string, calendarId: string): Promise<void> => {
   await api.patch(`/api/naver-calendar/calendars/${userId}`, { calendarId });
+};
+
+// ── D-Day ────────────────────────────────────────────────────────────────────
+const toDday = (d: any): Dday => ({
+  id: d.id,
+  userId: d.userId,
+  title: d.title,
+  targetDate: d.targetDate,
+  createdAt: d.createdAt,
+});
+
+export const getDdays = async (): Promise<Dday[]> => {
+  const { data } = await api.get('/api/ddays');
+  return data.map(toDday);
+};
+
+export const createDday = async (payload: { userId: string; title: string; targetDate: string }): Promise<Dday> => {
+  const { data } = await api.post('/api/ddays', {
+    user_id: payload.userId, title: payload.title, target_date: payload.targetDate,
+  });
+  return toDday(data);
+};
+
+export const updateDday = async (id: number, payload: { title?: string; targetDate?: string }): Promise<Dday> => {
+  const body: any = {};
+  if (payload.title !== undefined) body.title = payload.title;
+  if (payload.targetDate !== undefined) body.target_date = payload.targetDate;
+  const { data } = await api.patch(`/api/ddays/${id}`, body);
+  return toDday(data);
+};
+
+export const deleteDday = async (id: number): Promise<void> => {
+  await api.delete(`/api/ddays/${id}`);
 };
 
 export default api;

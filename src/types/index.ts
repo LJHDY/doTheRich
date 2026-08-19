@@ -689,6 +689,14 @@ export interface Todo {
   createdAt: string;
 }
 
+export interface Dday {
+  id: number;
+  userId: string;       // "ldy" | "juhae" | "common"
+  title: string;
+  targetDate: string;   // YYYY-MM-DD
+  createdAt: string;
+}
+
 /** 고정비 캘린더 — 납부일별 항목 + 납부 여부 */
 export interface FixedExpenseCalendarItem {
   id: number;
