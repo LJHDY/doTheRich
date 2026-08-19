@@ -36,6 +36,7 @@ import {
   MarketReport,
   Schedule,
   Contact,
+  ConsultationLog,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1082,6 +1083,67 @@ export const updateContact = async (id: number, payload: Partial<Omit<Contact, '
 
 export const deleteContact = async (id: number): Promise<void> => {
   await api.delete(`/api/contacts/${id}`);
+};
+
+// ── 상담 기록 ────────────────────────────────────────────────────────────────
+const toLog = (l: any): ConsultationLog => ({
+  id: l.id,
+  contactId: l.contact_id,
+  consultDate: l.consult_date,
+  title: l.title,
+  content: l.content,
+  audioUrl: l.audio_url,
+  createdAt: l.created_at,
+});
+
+export const getConsultationLogs = async (contactId: number): Promise<ConsultationLog[]> => {
+  const { data } = await api.get(`/api/contacts/${contactId}/consultations`);
+  return (data as any[]).map(toLog);
+};
+
+export const createConsultationLog = async (
+  contactId: number,
+  payload: { consultDate: string; title: string; content?: string }
+): Promise<ConsultationLog> => {
+  const { data } = await api.post(`/api/contacts/${contactId}/consultations`, {
+    consult_date: payload.consultDate,
+    title: payload.title,
+    content: payload.content,
+  });
+  return toLog(data);
+};
+
+export const updateConsultationLog = async (
+  contactId: number,
+  logId: number,
+  payload: { consultDate?: string; title?: string; content?: string }
+): Promise<ConsultationLog> => {
+  const { data } = await api.patch(`/api/contacts/${contactId}/consultations/${logId}`, {
+    ...(payload.consultDate && { consult_date: payload.consultDate }),
+    ...(payload.title !== undefined && { title: payload.title }),
+    ...(payload.content !== undefined && { content: payload.content }),
+  });
+  return toLog(data);
+};
+
+export const uploadConsultationAudio = async (contactId: number, logId: number, file: File): Promise<ConsultationLog> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await api.post(
+    `/api/contacts/${contactId}/consultations/${logId}/audio`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 }
+  );
+  return toLog(data);
+};
+
+export const deleteConsultationAudio = async (contactId: number, logId: number): Promise<ConsultationLog> => {
+  const { data } = await api.delete(`/api/contacts/${contactId}/consultations/${logId}/audio`);
+  return toLog(data);
+};
+
+export const deleteConsultationLog = async (contactId: number, logId: number): Promise<void> => {
+  await api.delete(`/api/contacts/${contactId}/consultations/${logId}`);
 };
 
 export const getFixedExpenseCalendar = async (yearMonth: string): Promise<FixedExpenseCalendar> => {

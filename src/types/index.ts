@@ -748,6 +748,17 @@ export interface Contact {
   createdAt: string;
 }
 
+/** 연락처별 상담 기록 (텍스트 + 녹음파일) */
+export interface ConsultationLog {
+  id: number;
+  contactId: number;
+  consultDate: string;   // YYYY-MM-DD
+  title: string;
+  content?: string;
+  audioUrl?: string;     // R2 공개 URL
+  createdAt: string;
+}
+
 /** 시장 리포트 — 매일 KST 07:00(글로벌) / 16:00(국내장마감) 자동 생성 */
 export interface MarketReport {
   id: number;
