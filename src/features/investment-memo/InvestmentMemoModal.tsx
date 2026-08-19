@@ -4,6 +4,7 @@ import {
   createInvestmentMemo, deleteInvestmentMemo, deleteInvestmentMemoImage,
   getInvestmentMemos, updateInvestmentMemo, uploadInvestmentMemoImage,
 } from '../../services/api';
+import AutoResizeTextarea from '../../shared/AutoResizeTextarea';
 
 interface Props {
   onClose: () => void;
@@ -174,21 +175,12 @@ const InvestmentMemoModal: React.FC<Props> = ({ onClose }) => {
                 style={INPUT}
                 autoFocus
               />
-              <textarea
+              <AutoResizeTextarea
                 value={formContent}
-                onChange={e => {
-                  setFormContent(e.target.value);
-                  // 내용 길이에 따라 높이 자동 조정
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${e.target.scrollHeight}px`;
-                }}
-                ref={el => {
-                  // 폼 열릴 때(기존 내용 있을 때) 초기 높이 설정
-                  if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
-                }}
+                onChange={e => setFormContent(e.target.value)}
                 placeholder="내용 (선택)"
                 rows={5}
-                style={{ ...INPUT, resize: 'none', overflow: 'hidden' }}
+                style={INPUT}
               />
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                 <button
