@@ -35,6 +35,7 @@ import {
   CommonCode,
   MarketReport,
   Schedule,
+  Contact,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1050,6 +1051,37 @@ export const updateTodo = async (id: number, payload: { title?: string; isDone?:
 };
 export const deleteTodo = async (id: number): Promise<void> => {
   await api.delete(`/api/todos/${id}`);
+};
+
+// ── 연락처 (부동산/대출상담사) ─────────────────────────────────────
+const toContact = (c: any): Contact => ({
+  id: c.id,
+  type: c.type,
+  name: c.name,
+  company: c.company,
+  phone: c.phone,
+  region: c.region,
+  memo: c.memo,
+  createdAt: c.created_at,
+});
+
+export const getContacts = async (): Promise<Contact[]> => {
+  const { data } = await api.get('/api/contacts');
+  return (data as any[]).map(toContact);
+};
+
+export const createContact = async (payload: Omit<Contact, 'id' | 'createdAt'>): Promise<Contact> => {
+  const { data } = await api.post('/api/contacts', payload);
+  return toContact(data);
+};
+
+export const updateContact = async (id: number, payload: Partial<Omit<Contact, 'id' | 'createdAt'>>): Promise<Contact> => {
+  const { data } = await api.patch(`/api/contacts/${id}`, payload);
+  return toContact(data);
+};
+
+export const deleteContact = async (id: number): Promise<void> => {
+  await api.delete(`/api/contacts/${id}`);
 };
 
 export const getFixedExpenseCalendar = async (yearMonth: string): Promise<FixedExpenseCalendar> => {

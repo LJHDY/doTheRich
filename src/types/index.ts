@@ -736,6 +736,18 @@ export interface KrTopGainer {
   close: number | null;
 }
 
+/** 부동산/대출상담사 연락처 */
+export interface Contact {
+  id: number;
+  type: '부동산' | '대출상담사';
+  name: string;
+  company?: string;
+  phone?: string;
+  region?: string;
+  memo?: string;
+  createdAt: string;
+}
+
 /** 시장 리포트 — 매일 KST 07:00(글로벌) / 16:00(국내장마감) 자동 생성 */
 export interface MarketReport {
   id: number;
