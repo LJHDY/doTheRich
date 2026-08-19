@@ -368,14 +368,6 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [memoSaving, setMemoSaving] = useState(false);
   const [memoError, setMemoError] = useState<string | null>(null);
 
-  // 메모 textarea 자동 높이 조절 — 편집 모드 진입 시 및 텍스트 변경 시
-  useEffect(() => {
-    if (!editingMemo) return;
-    const el = memoHook.ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [editingMemo, memoText, memoHook.ref]);
   const [showRecordTooltip, setShowRecordTooltip] = useState(false);
   const [showStageTooltip, setShowStageTooltip] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);

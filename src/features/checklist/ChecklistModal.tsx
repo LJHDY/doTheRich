@@ -86,14 +86,6 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
   }, []);
   const memoTextarea = useNumberedTextarea(form.memo, handleMemoChange);
 
-  // 매물 메모 textarea 자동 높이 — 폼 열릴 때(form 변경) 및 메모 입력 시
-  useEffect(() => {
-    const el = memoTextarea.ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [form.memo, memoTextarea.ref]);
-
   const loadAtmosphere = useCallback(async () => {
     setLoading(true);
     try {
