@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { analyzeRealEstate, ComplexAnalysis, getComplexAnalyses } from '../../services/api';
 import { ApartmentComplex } from '../../types';
@@ -156,21 +156,40 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
+  const [attachedImages, setAttachedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 모달 열릴 때 이력 로드
   useEffect(() => {
     getComplexAnalyses().then(data => {
       setHistories(data);
-      // 현재 비교 단지와 동일한 최신 이력이 있으면 자동 선택
       if (data.length > 0) setSelectedId(data[0].id);
     }).catch(() => {});
   }, []);
+
+  const handleImageAdd = (files: FileList | null) => {
+    if (!files) return;
+    const added = Array.from(files).filter(f => f.type.startsWith('image/')).slice(0, 5 - attachedImages.length);
+    if (added.length === 0) return;
+    setAttachedImages(prev => [...prev, ...added].slice(0, 5));
+    added.forEach(f => {
+      const reader = new FileReader();
+      reader.onload = e => setImagePreviews(prev => [...prev, e.target?.result as string].slice(0, 5));
+      reader.readAsDataURL(f);
+    });
+  };
+
+  const handleImageRemove = (idx: number) => {
+    setAttachedImages(prev => prev.filter((_, i) => i !== idx));
+    setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const handleAnalyze = async () => {
     setAnalyzing(true);
     setError('');
     try {
-      const result = await analyzeRealEstate(complexes.map(c => c.id));
+      const result = await analyzeRealEstate(complexes.map(c => c.id), attachedImages.length > 0 ? attachedImages : undefined);
       setHistories(prev => [result, ...prev]);
       setSelectedId(result.id);
     } catch (e: any) {
@@ -264,10 +283,60 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
                   flexShrink: 0,
                 }}
               >
-                {analyzing ? '⚙️ 분석 중…' : '✨ 지금 분석'}
+                {analyzing ? '⚙️ 분석 중…' : attachedImages.length > 0 ? `✨ 분석 (이미지 ${attachedImages.length}장)` : '✨ 지금 분석'}
               </button>
             )}
           </div>
+
+          {/* 이미지 첨부 영역 — 단지 2개 이상일 때만 표시 */}
+          {complexes.length >= 2 && (
+            <div style={{ marginTop: '12px' }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={e => handleImageAdd(e.target.files)}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                {/* 첨부된 이미지 썸네일 */}
+                {imagePreviews.map((src, i) => (
+                  <div key={i} style={{ position: 'relative', width: '56px', height: '56px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #dadce0', flexShrink: 0 }}>
+                    <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      onClick={() => handleImageRemove(i)}
+                      style={{
+                        position: 'absolute', top: '1px', right: '1px',
+                        background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: '50%',
+                        width: '16px', height: '16px', cursor: 'pointer',
+                        color: '#fff', fontSize: '10px', lineHeight: '16px', padding: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >×</button>
+                  </div>
+                ))}
+                {/* 추가 버튼 — 최대 5장 */}
+                {attachedImages.length < 5 && (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      width: '56px', height: '56px', borderRadius: '8px',
+                      border: '1.5px dashed #89CFF0', background: '#f0f8fd',
+                      cursor: 'pointer', color: '#4BAAD4', fontSize: '20px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}
+                    title="그래프 이미지 첨부 (최대 5장)"
+                  >+</button>
+                )}
+                <span style={{ fontSize: '11px', color: '#9aa0a6' }}>
+                  {attachedImages.length > 0
+                    ? `이미지 ${attachedImages.length}장 첨부됨 — Gemini가 함께 분석합니다`
+                    : '가격·거래량 그래프 이미지 첨부 시 함께 분석 (최대 5장)'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 본문 */}

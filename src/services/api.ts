@@ -1402,11 +1402,15 @@ export const getComplexAnalyses = async (): Promise<ComplexAnalysis[]> => {
   return res.data;
 };
 
-export const analyzeRealEstate = async (complexIds: number[]): Promise<ComplexAnalysis> => {
-  // Gemini 응답에 최대 60초 소요 → 기본 10초 타임아웃 대신 90초로 지정
-  const res = await api.post<ComplexAnalysis>('/api/ai/real-estate/analyze', {
-    complex_ids: complexIds,
-  }, { timeout: 90_000 });
+export const analyzeRealEstate = async (complexIds: number[], images?: File[]): Promise<ComplexAnalysis> => {
+  // 이미지 첨부 시 multipart/form-data, 없으면 JSON
+  const form = new FormData();
+  form.append('complex_ids', JSON.stringify(complexIds));
+  (images ?? []).forEach(f => form.append('images', f));
+  const res = await api.post<ComplexAnalysis>('/api/ai/real-estate/analyze', form, {
+    timeout: 120_000,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   return res.data;
 };
 
