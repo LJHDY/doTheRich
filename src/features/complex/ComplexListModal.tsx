@@ -12,6 +12,7 @@ interface Props {
   favoritesOnly?: boolean; // true면 즐겨찾기 단지만 표시
   showCleanup?: boolean;   // true면 "단지 정리" 버튼 표시 (내 단지 전용)
   onRefresh?: () => void;  // 삭제 완료 후 단지 목록 새로고침 콜백
+  onContactsOpen?: () => void; // 연락처 모달 열기 콜백
 }
 
 // 현재 필터(range/areaType)에 매칭되는 평형 목록 반환
@@ -40,7 +41,7 @@ const getPriceForAreaType = (complex: ApartmentComplex, at: string | null): numb
 
 const ComplexListModal: React.FC<Props> = ({
   range, areaType, complexes, onClose, onSelect,
-  top = 56, favoritesOnly = false, showCleanup = false, onRefresh,
+  top = 56, favoritesOnly = false, showCleanup = false, onRefresh, onContactsOpen,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
@@ -270,6 +271,16 @@ const ComplexListModal: React.FC<Props> = ({
                   borderRadius: '8px', padding: '5px 14px',
                 }}
               >{deleting ? '삭제 중...' : `선택 삭제 (${checkedKeys.size})`}</button>
+            )}
+            {onContactsOpen && (
+              <button
+                onClick={onContactsOpen}
+                style={{
+                  fontSize: '12px', fontWeight: 600, padding: '4px 10px',
+                  border: '1px solid #89CFF0', borderRadius: '8px',
+                  backgroundColor: '#D4EFFC', color: '#2a6090', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >📋 연락처</button>
             )}
             <button
               onClick={onClose}

@@ -656,12 +656,6 @@ const App: React.FC = () => {
                     },
                   },
                   {
-                    label: '📋 연락처',
-                    active: contactsOpen,
-                    activeColor: '#2a6090', activeBg: '#D4EFFC',
-                    onClick: () => { setContactsOpen(v => !v); setMobileMenuOpen(false); },
-                  },
-                  {
                     label: '📅 달력',
                     active: calendarOpen,
                     activeColor: '#2a6090', activeBg: '#e0f8ff',
@@ -878,16 +872,6 @@ const App: React.FC = () => {
                   color: affordOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >대출분석</button>
-              {/* 연락처 */}
-              <button
-                onClick={() => setContactsOpen(v => !v)}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: `1px solid ${contactsOpen ? '#89CFF0' : '#dadce0'}`,
-                  borderRadius: '6px', backgroundColor: contactsOpen ? '#D4EFFC' : '#fff',
-                  color: contactsOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >📋 연락처</button>
               {/* 달력 */}
               <button
                 onClick={() => setCalendarOpen(v => !v)}
@@ -1441,6 +1425,7 @@ const App: React.FC = () => {
           top={headerHeight}
           showCleanup
           onRefresh={loadComplexes}
+          onContactsOpen={() => { setMyComplexListOpen(false); setContactsOpen(true); }}
         />
       )}
 
