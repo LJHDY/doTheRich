@@ -556,10 +556,9 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
 
               <button onClick={nextMonth} style={{ background: 'none', border: 'none', fontSize: isMobile ? '18px' : '22px', cursor: 'pointer', color: '#5f6368', lineHeight: 1 }}>›</button>
 
-              {/* D-Day 칩 목록 — nextMonth 버튼 오른쪽, 모바일에서는 숨김 */}
+              {/* D-Day 칩 목록 — nextMonth 버튼 오른쪽 (데스크탑만) */}
               {!isMobile && (() => {
                 const today = new Date(); today.setHours(0, 0, 0, 0);
-                // target_date 오름차순 정렬 후 최대 5개 표시
                 const sorted = [...ddays]
                   .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
                   .slice(0, 5);
@@ -568,7 +567,6 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginLeft: '8px' }}>
                     {sorted.map(d => {
                       const diff = Math.round((new Date(d.targetDate + 'T00:00:00').getTime() - today.getTime()) / 86400000);
-                      // diff===0: 빨강, 1~7: 주황, 8~30: 노란 갈색, 나머지(먼 미래 or 과거): 회색
                       const badgeColor =
                         diff === 0 ? '#E06060'
                         : diff > 0 && diff <= 7 ? '#FF9800'
@@ -576,17 +574,8 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
                         : '#9aa0a6';
                       const label = diff === 0 ? 'D-Day' : diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`;
                       return (
-                        <div
-                          key={d.id}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: '4px',
-                            fontSize: '11px', borderRadius: '6px', padding: '2px 8px',
-                            background: badgeColor,
-                          }}
-                        >
-                          {/* 배지: D-n 숫자 */}
+                        <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', borderRadius: '6px', padding: '2px 8px', background: badgeColor }}>
                           <span style={{ fontWeight: 700, color: '#fff' }}>{label}</span>
-                          {/* 제목: 배지 바로 옆 회색 */}
                           <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 400 }}>{d.title}</span>
                         </div>
                       );
@@ -660,6 +649,36 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
               <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6' }}>×</button>
             </div>
           </div>
+
+          {/* D-Day 칩 목록 — 모바일 전용, 헤더 아래 별도 줄 */}
+          {isMobile && ddays.length > 0 && (() => {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const sorted = [...ddays]
+              .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
+              .slice(0, 5);
+            return (
+              <div style={{
+                padding: '6px 16px 6px', borderBottom: '1px solid #f0f0f0',
+                display: 'flex', flexWrap: 'wrap', gap: '4px', background: '#fff',
+              }}>
+                {sorted.map(d => {
+                  const diff = Math.round((new Date(d.targetDate + 'T00:00:00').getTime() - today.getTime()) / 86400000);
+                  const badgeColor =
+                    diff === 0 ? '#E06060'
+                    : diff > 0 && diff <= 7 ? '#FF9800'
+                    : diff > 0 && diff <= 30 ? '#e0a800'
+                    : '#9aa0a6';
+                  const label = diff === 0 ? 'D-Day' : diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`;
+                  return (
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', borderRadius: '6px', padding: '2px 8px', background: badgeColor }}>
+                      <span style={{ fontWeight: 700, color: '#fff' }}>{label}</span>
+                      <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 400 }}>{d.title}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* 네이버 캘린더 연동 패널 */}
           {showNaverPanel && (
