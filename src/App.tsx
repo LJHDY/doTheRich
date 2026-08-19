@@ -311,6 +311,20 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isDrawingRoute, handleUndoLastPoint]);
 
+  // 구획 그리기 중 Backspace → 직전 점 삭제
+  useEffect(() => {
+    if (!isDrawingZone) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Backspace') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+      e.preventDefault();
+      setDrawingZonePoints(prev => prev.slice(0, -1));
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isDrawingZone]);
+
   // 구 목록 마운트 시 한 번 로드 (수집 패널 + 공공단지 조회에 공통 사용)
   useEffect(() => {
     if (guList.length > 0) return;

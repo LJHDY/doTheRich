@@ -25,6 +25,16 @@ const emptyContactForm = (type: ContactType) => ({
   type, company: '', name: '', phone: '', region: '', memo: '',
 });
 
+const formatPhone = (val: string): string => {
+  const d = val.replace(/\D/g, '');
+  if (d.length === 8)  return d.replace(/(\d{4})(\d{4})/, '$1-$2');
+  if (d.length === 10) return d.startsWith('02')
+    ? d.replace(/(\d{2})(\d{4})(\d{4})/, '$1-$2-$3')
+    : d.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+  if (d.length === 11) return d.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+  return val;
+};
+
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '7px 10px', fontSize: '13px',
   border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
@@ -175,7 +185,7 @@ export default function ContactsModal({ onClose }: Props) {
               </div>
               <div>
                 <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>전화번호</label>
-                <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: formatPhone(e.target.value) }))}
                   placeholder="010-0000-0000" style={inputStyle} />
               </div>
               <div>
