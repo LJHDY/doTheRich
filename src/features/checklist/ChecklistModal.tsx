@@ -86,6 +86,14 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
   }, []);
   const memoTextarea = useNumberedTextarea(form.memo, handleMemoChange);
 
+  // 매물 메모 textarea 자동 높이 — 폼 열릴 때(form 변경) 및 메모 입력 시
+  useEffect(() => {
+    const el = memoTextarea.ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [form.memo, memoTextarea.ref]);
+
   const loadAtmosphere = useCallback(async () => {
     setLoading(true);
     try {
@@ -535,12 +543,11 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                     onBlur={memoTextarea.onBlur}
                     onCompositionEnd={memoTextarea.onCompositionEnd}
                     placeholder="메모..."
-                    rows={2}
                     style={{
                       width: '100%', fontSize: '12px', padding: '5px 8px',
                       border: '1px solid #dadce0', borderRadius: '6px', outline: 'none',
                       boxSizing: 'border-box', resize: 'none', overflow: 'hidden',
-                      fontFamily: 'inherit',
+                      fontFamily: 'inherit', minHeight: '48px',
                     }}
                   />
                 </div>
