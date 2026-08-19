@@ -1058,8 +1058,8 @@ export const deleteTodo = async (id: number): Promise<void> => {
 const toContact = (c: any): Contact => ({
   id: c.id,
   type: c.type,
-  name: c.name,
   company: c.company,
+  name: c.name,
   phone: c.phone,
   region: c.region,
   memo: c.memo,

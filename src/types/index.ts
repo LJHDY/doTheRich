@@ -740,8 +740,8 @@ export interface KrTopGainer {
 export interface Contact {
   id: number;
   type: '부동산' | '대출상담사';
-  name: string;
-  company?: string;
+  company: string;      // 회사/사무소명 (메인 표시, 필수)
+  name?: string;        // 담당자 이름 (선택)
   phone?: string;
   region?: string;
   memo?: string;

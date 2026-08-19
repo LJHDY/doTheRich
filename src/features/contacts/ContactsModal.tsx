@@ -22,7 +22,7 @@ const todayStr = () => {
 };
 
 const emptyContactForm = (type: ContactType) => ({
-  type, name: '', company: '', phone: '', region: '', memo: '',
+  type, company: '', name: '', phone: '', region: '', memo: '',
 });
 
 const inputStyle: React.CSSProperties = {
@@ -69,7 +69,7 @@ export default function ContactsModal({ onClose }: Props) {
 
   const openEditForm = (c: Contact) => {
     setEditId(c.id);
-    setForm({ type: c.type as ContactType, name: c.name, company: c.company ?? '', phone: c.phone ?? '', region: c.region ?? '', memo: c.memo ?? '' });
+    setForm({ type: c.type as ContactType, company: c.company, name: c.name ?? '', phone: c.phone ?? '', region: c.region ?? '', memo: c.memo ?? '' });
     setFormOpen(true);
     setExpandedId(null);
   };
@@ -77,13 +77,13 @@ export default function ContactsModal({ onClose }: Props) {
   const closeForm = () => { setFormOpen(false); setEditId(null); };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { alert('이름을 입력해 주세요.'); return; }
+    if (!form.company.trim()) { alert('회사/사무소명을 입력해 주세요.'); return; }
     setSaving(true);
     try {
       const payload = {
         type: form.type as ContactType,
-        name: form.name.trim(),
-        company: form.company.trim() || undefined,
+        company: form.company.trim(),
+        name: form.name.trim() || undefined,
         phone: form.phone.trim() || undefined,
         region: form.region.trim() || undefined,
         memo: form.memo.trim() || undefined,
@@ -164,14 +164,14 @@ export default function ContactsModal({ onClose }: Props) {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <div>
-                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>이름 *</label>
-                <input ref={nameRef} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="담당자 이름" style={inputStyle} />
+                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>회사/사무소 *</label>
+                <input ref={nameRef} value={form.company} onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
+                  placeholder="회사명 또는 사무소명" style={inputStyle} />
               </div>
               <div>
-                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>회사/사무소</label>
-                <input value={form.company} onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
-                  placeholder="회사명" style={inputStyle} />
+                <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>담당자 이름</label>
+                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="(선택)" style={inputStyle} />
               </div>
               <div>
                 <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>전화번호</label>
@@ -251,19 +251,21 @@ function ContactCard({ contact, col, expanded, onExpand, onEdit, onDelete }: Car
           backgroundColor: col.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: '18px', color: col.active, fontWeight: 700,
         }}>
-          {contact.name.charAt(0)}
+          {contact.company.charAt(0)}
         </div>
         {/* 정보 */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a1a2e' }}>{contact.name}</span>
-            {contact.company && <span style={{ fontSize: '12px', color: '#5f6368' }}>{contact.company}</span>}
+            <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a1a2e' }}>{contact.company}</span>
             {contact.region && (
               <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 8px', backgroundColor: col.bg, color: col.active, borderRadius: '10px' }}>
                 {contact.region}
               </span>
             )}
           </div>
+          {contact.name && (
+            <span style={{ fontSize: '12px', color: '#5f6368', display: 'block', marginTop: '2px' }}>{contact.name}</span>
+          )}
           {contact.phone && (
             <a href={`tel:${contact.phone}`} onClick={e => e.stopPropagation()}
               style={{ fontSize: '13px', color: col.active, textDecoration: 'none', display: 'block', marginTop: '3px' }}>
