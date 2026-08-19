@@ -926,6 +926,14 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
   - 평형 배지: 현재 금액대와 일치하는 `areaTypePriceRanges` 평형 표시, 작은 폰트(7px) 테두리 박스
 - [x] 생활권 카드 헤더에 꼴찌 단지명 표시 — 접힌 상태에서 "👍 1순위 · 👎 꼴찌" 형태
 - [x] 기능별 패키지 구조 재편 — `components/` + `pages/` + `utils/` → `features/{map,complex,compare,checklist,living-zone,budget,schedule,district-stats}/` + `shared/`
+- [x] 생활권 구획 그리기 — 폴리곤 채우기 대신 경로처럼 선으로 연결, 3개 이상 점일 때 닫힘 예시 점선 표시
+- [x] 연락처 기능 (`src/features/contacts/ContactsModal.tsx`)
+  - 부동산/대출상담사 탭별 CRUD (이름·회사·전화·지역·메모)
+  - 전화번호 클릭 시 바로 전화 연결 (tel: 링크)
+  - 상담 기록 (날짜·제목·내용) + 녹음파일 Cloudflare R2 업로드/삭제
+  - `<audio>` 태그 인라인 재생, 오디오 MIME 타입 mp3/m4a/wav/aac/ogg/webm/amr 지원
+  - 헤더 Row2 "📋 연락처" 버튼 + 모바일 메뉴 항목
+  - 백엔드: `contacts`, `consultation_logs` 테이블, `GET/POST/PATCH/DELETE /api/contacts`, `/api/contacts/:id/consultations`, `/audio`
 
 ## 미완성 / TODO
 
