@@ -38,6 +38,8 @@ import {
   Contact,
   ConsultationLog,
   Dday,
+  InvestmentMemo,
+  InvestmentMemoImage,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1546,8 +1548,6 @@ export const deleteDday = async (id: number): Promise<void> => {
 };
 
 // ── 투자 메모 ────────────────────────────────────────────────────────────────
-
-import { InvestmentMemo, InvestmentMemoImage } from '../types';
 
 const toMemoImage = (i: any): InvestmentMemoImage => ({
   id: i.id, memoId: i.memoId, imageUrl: i.imageUrl,
