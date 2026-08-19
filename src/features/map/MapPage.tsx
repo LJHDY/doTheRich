@@ -100,7 +100,8 @@ const MapPage: React.FC<MapPageProps> = ({
   const onRoutePointAddRef = useRef(onRoutePointAdd);
   // 생활권 구획 그리기 — 폴리곤 오버레이·마커·클릭 리스너 수명 관리
   const zoneClickListenerRef = useRef<any>(null);
-  const zonePolygonRef = useRef<any>(null);
+  const zonePolylineRef = useRef<any>(null);    // 그리는 중인 구획 선
+  const zoneClosingLineRef = useRef<any>(null); // 마지막 점→첫 점 닫힘 예시선
   const zoneMarkersRef = useRef<any[]>([]);
   const onZonePointAddRef = useRef(onZonePointAdd);
   // 저장된 생활권 구획 폴리곤 오버레이 배열
@@ -1205,48 +1206,52 @@ const MapPage: React.FC<MapPageProps> = ({
     const map = mapInstanceRef.current;
     if (!map || !window.naver) return;
     // 기존 오버레이 제거
-    if (zonePolygonRef.current) { zonePolygonRef.current.setMap(null); zonePolygonRef.current = null; }
+    if (zonePolylineRef.current) { zonePolylineRef.current.setMap(null); zonePolylineRef.current = null; }
+    if (zoneClosingLineRef.current) { zoneClosingLineRef.current.setMap(null); zoneClosingLineRef.current = null; }
     zoneMarkersRef.current.forEach(m => m.setMap(null));
     zoneMarkersRef.current = [];
 
     const pts = drawingZonePoints ?? [];
     if (pts.length === 0) return;
 
-    // 꼭지점 마커 — 초록 원
+    // 꼭지점 마커 — 첫 점=진초록, 나머지=연초록 원
     pts.forEach((p, i) => {
       const isFirst = i === 0;
       const m = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(p.lat, p.lng),
         map,
         icon: {
-          content: `<div style="width:10px;height:10px;border-radius:50%;background:${isFirst ? '#2e7d32' : '#7DC8A0'};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
-          anchor: new window.naver.maps.Point(5, 5),
+          content: `<div style="width:${isFirst ? 12 : 10}px;height:${isFirst ? 12 : 10}px;border-radius:50%;background:${isFirst ? '#2e7d32' : '#7DC8A0'};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
+          anchor: new window.naver.maps.Point(isFirst ? 6 : 5, isFirst ? 6 : 5),
         },
         zIndex: 20,
       });
       zoneMarkersRef.current.push(m);
     });
 
-    // 3개 이상 점이면 폴리곤 표시, 미만이면 폴리라인만
-    if (pts.length >= 3) {
-      zonePolygonRef.current = new window.naver.maps.Polygon({
-        paths: [pts.map(p => new window.naver.maps.LatLng(p.lat, p.lng))],
-        fillColor: '#7DC8A0',
-        fillOpacity: 0.2,
+    // 경로처럼 폴리라인으로만 표시 (점 2개 이상부터)
+    if (pts.length >= 2) {
+      zonePolylineRef.current = new window.naver.maps.Polyline({
+        path: pts.map(p => new window.naver.maps.LatLng(p.lat, p.lng)),
         strokeColor: '#2e7d32',
-        strokeWeight: 2.5,
+        strokeWeight: 3,
         strokeOpacity: 0.9,
         strokeStyle: 'shortdash',
         map,
-        clickable: false,
       });
-    } else if (pts.length >= 2) {
-      zonePolygonRef.current = new window.naver.maps.Polyline({
-        path: pts.map(p => new window.naver.maps.LatLng(p.lat, p.lng)),
+    }
+
+    // 3개 이상이면 마지막 점→첫 점 닫힘 예시선 (반투명)
+    if (pts.length >= 3) {
+      zoneClosingLineRef.current = new window.naver.maps.Polyline({
+        path: [
+          new window.naver.maps.LatLng(pts[pts.length - 1].lat, pts[pts.length - 1].lng),
+          new window.naver.maps.LatLng(pts[0].lat, pts[0].lng),
+        ],
         strokeColor: '#2e7d32',
-        strokeWeight: 2.5,
-        strokeOpacity: 0.9,
-        strokeStyle: 'shortdash',
+        strokeWeight: 2,
+        strokeOpacity: 0.4,
+        strokeStyle: 'dot',
         map,
       });
     }
