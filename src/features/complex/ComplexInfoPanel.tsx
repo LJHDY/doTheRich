@@ -2159,17 +2159,24 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
           {checklistScore ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ flex: 1, height: '7px', borderRadius: '4px', backgroundColor: '#f0f0f0', overflow: 'hidden' }}>
-                <div style={{
-                  width: `${Math.round(checklistScore.score / checklistScore.maxScore * 100)}%`,
-                  height: '100%', borderRadius: '4px', transition: 'width 0.3s',
-                  backgroundColor: checklistScore.score / checklistScore.maxScore >= 0.7 ? '#7DC8A0'
-                    : checklistScore.score / checklistScore.maxScore >= 0.4 ? '#FFD97D' : '#F08080',
-                }} />
-              </div>
-              <span style={{ fontSize: '12px', fontWeight: 700, color: '#202124', flexShrink: 0 }}>
-                {checklistScore.score}<span style={{ fontSize: '11px', color: '#80868b', fontWeight: 400 }}>/{checklistScore.maxScore}점</span>
-              </span>
+              {(() => {
+                const pct = checklistScore.score / checklistScore.maxScore;
+                const score100 = Math.round(pct * 100);
+                return (
+                  <>
+                    <div style={{ flex: 1, height: '7px', borderRadius: '4px', backgroundColor: '#f0f0f0', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${score100}%`,
+                        height: '100%', borderRadius: '4px', transition: 'width 0.3s',
+                        backgroundColor: pct >= 0.7 ? '#7DC8A0' : pct >= 0.4 ? '#FFD97D' : '#F08080',
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#202124', flexShrink: 0 }}>
+                      {score100}<span style={{ fontSize: '11px', color: '#80868b', fontWeight: 400 }}>/100점</span>
+                    </span>
+                  </>
+                );
+              })()}
             </div>
           ) : checklistRatedCount > 0 ? (
             <div style={{ fontSize: '12px', color: '#80868b' }}>
