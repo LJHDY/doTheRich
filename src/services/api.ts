@@ -1603,6 +1603,11 @@ export const getWorkouts = async (userId: string, workoutDate: string): Promise<
   return data as WorkoutLog[];
 };
 
+export const getWorkoutCalendar = async (yearMonth: string): Promise<string[]> => {
+  const { data } = await api.get('/api/workouts/calendar', { params: { year_month: yearMonth } });
+  return data as string[];
+};
+
 export const createWorkout = async (payload: Omit<WorkoutLog, 'id' | 'createdAt'>): Promise<WorkoutLog> => {
   const { data } = await api.post('/api/workouts', payload);
   return data as WorkoutLog;

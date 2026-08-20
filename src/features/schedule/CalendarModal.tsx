@@ -13,6 +13,7 @@ import {
   getNaverCalendarStatus,
   getSchedules,
   getTodos,
+  getWorkoutCalendar,
   NaverCalendarStatus,
   selectNaverCalendar,
   updateTodo,
@@ -268,6 +269,7 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
   const [feCalendar, setFeCalendar]     = useState<FixedExpenseCalendar | null>(null);
   const [fePopup, setFePopup]           = useState<{ date: string; x: number; y: number } | null>(null);
   const [todos, setTodos]               = useState<Todo[]>([]);
+  const [workoutDates, setWorkoutDates] = useState<Set<string>>(new Set());
   const [ddays, setDdays]               = useState<Dday[]>([]);
   const [ddayFormOpen, setDdayFormOpen] = useState(false);
   const [ddayTitle, setDdayTitle]       = useState('');
@@ -333,14 +335,16 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
     setLoading(true);
     const ym6 = yearMonth.replace('-', ''); // YYYY-MM → YYYYMM
     try {
-      const [sched, feData, todoData] = await Promise.all([
+      const [sched, feData, todoData, wDates] = await Promise.all([
         getSchedules(yearMonth),
         getFixedExpenseCalendar(ym6),
         getTodos(yearMonth),
+        getWorkoutCalendar(yearMonth),
       ]);
       setSchedules(sched);
       setFeCalendar(feData);
       setTodos(todoData);
+      setWorkoutDates(new Set(wDates));
     } finally { setLoading(false); }
   }, [yearMonth]);
 
@@ -948,13 +952,18 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
                           onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#e0f4fc' : '#f8fbff'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#f0f8fd' : '#fff'; }}
                         >
-                          {/* 날짜 숫자 + 고정비 원 */}
+                          {/* 날짜 숫자 + 고정비 원 + 운동 */}
                           <div style={{ height: DAY_NUM_H, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                             <span style={{
                               fontWeight: isToday ? 800 : 500,
                               fontSize: isMobile ? '13px' : '15px',
                               color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
                             }}>{day}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px', paddingTop: '1px' }}>
+                              {/* 운동 기록 💪 */}
+                              {workoutDates.has(dateStr) && (
+                                <span style={{ fontSize: isMobile ? '9px' : '10px', lineHeight: 1 }}>💪</span>
+                              )}
                             {/* 고정비 납부일 표시 원 */}
                             {(feCalendar?.ldy?.[dateStr] || feCalendar?.juhae?.[dateStr]) && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingTop: '2px' }}>
@@ -981,6 +990,7 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
                                 })}
                               </div>
                             )}
+                            </div>
                           </div>
 
                           {/* 다일 이벤트 바 영역 높이 확보 */}
