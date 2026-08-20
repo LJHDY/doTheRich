@@ -269,7 +269,8 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
   const [feCalendar, setFeCalendar]     = useState<FixedExpenseCalendar | null>(null);
   const [fePopup, setFePopup]           = useState<{ date: string; x: number; y: number } | null>(null);
   const [todos, setTodos]               = useState<Todo[]>([]);
-  const [workoutDates, setWorkoutDates] = useState<Set<string>>(new Set());
+  // { userId: { date: workoutTypes[] } }
+  const [workoutCalendar, setWorkoutCalendar] = useState<Record<string, Record<string, string[]>>>({});
   const [ddays, setDdays]               = useState<Dday[]>([]);
   const [ddayFormOpen, setDdayFormOpen] = useState(false);
   const [ddayTitle, setDdayTitle]       = useState('');
@@ -344,7 +345,7 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
       setSchedules(sched);
       setFeCalendar(feData);
       setTodos(todoData);
-      setWorkoutDates(new Set(wDates));
+      setWorkoutCalendar(wDates);
     } finally { setLoading(false); }
   }, [yearMonth]);
 
@@ -960,10 +961,23 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
                               color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
                             }}>{day}</span>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px', paddingTop: '1px' }}>
-                              {/* 운동 기록 💪 */}
-                              {workoutDates.has(dateStr) && (
-                                <span style={{ fontSize: isMobile ? '9px' : '10px', lineHeight: 1 }}>💪</span>
-                              )}
+                              {/* 운동 기록 — 유저별·종류별 이모지 */}
+                              {(['ldy', 'juhae'] as const).map(uid => {
+                                const types = workoutCalendar[uid]?.[dateStr];
+                                if (!types || types.length === 0) return null;
+                                const emojiMap: Record<string, string> = uid === 'ldy'
+                                  ? { TENNIS: '🎾', HEALTH: '💪', RUNNING: '🏃‍♂️' }
+                                  : { TENNIS: '🎾', HEALTH: '💪', RUNNING: '🏃‍♀️' };
+                                return (
+                                  <div key={uid} style={{ display: 'flex', gap: '1px', lineHeight: 1 }}>
+                                    {types.map(t => (
+                                      <span key={t} style={{ fontSize: isMobile ? '9px' : '10px' }}>
+                                        {emojiMap[t] ?? '💪'}
+                                      </span>
+                                    ))}
+                                  </div>
+                                );
+                              })}
                             {/* 고정비 납부일 표시 원 */}
                             {(feCalendar?.ldy?.[dateStr] || feCalendar?.juhae?.[dateStr]) && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingTop: '2px' }}>
