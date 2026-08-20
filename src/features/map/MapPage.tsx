@@ -138,8 +138,8 @@ const MapPage: React.FC<MapPageProps> = ({
     if (!mapRef.current || !window.naver) return;
 
     const map = new window.naver.maps.Map(mapRef.current, {
-      center: new window.naver.maps.LatLng(37.5665, 126.9780),
-      zoom: 12,
+      center: new window.naver.maps.LatLng(37.5326, 126.9897), // 용산구청
+      zoom: 14,
       zoomControl: true,
       zoomControlOptions: {
         position: window.naver.maps.Position.TOP_RIGHT,
@@ -394,11 +394,8 @@ const MapPage: React.FC<MapPageProps> = ({
       // 4) 변경 없음 — 아무 작업 안 함
     });
 
-    // fitBounds 최초 로드 시 1회만
-    if (validComplexes.length > 0 && !boundsInitializedRef.current) {
-      mapInstanceRef.current.fitBounds(bounds, { padding: 60 });
-      boundsInitializedRef.current = true;
-    }
+    // fitBounds 초기 자동 확장 제거 — 용산구청 고정 시작점 유지
+    boundsInitializedRef.current = true;
   }, [complexes, selectedComplex, createMarkerIcon]);
 
   // 선택된 단지로 지도 이동
