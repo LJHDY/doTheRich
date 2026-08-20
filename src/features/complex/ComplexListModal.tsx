@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ApartmentComplex, JeonseOnlyItem, formatPrice } from '../../types';
 import { deletePriceHistoryByAreaType, getJeonseOnlyItems } from '../../services/api';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 interface Props {
   range: string;           // '' = 전체, '7억대' = 특정 금액대
@@ -44,6 +45,7 @@ const ComplexListModal: React.FC<Props> = ({
   range, areaType, complexes, onClose, onSelect,
   top = 56, favoritesOnly = false, showCleanup = false, onRefresh, onContactsOpen, onInvestmentMemoOpen,
 }) => {
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -273,32 +275,36 @@ const ComplexListModal: React.FC<Props> = ({
                 }}
               >{deleting ? '삭제 중...' : `선택 삭제 (${checkedKeys.size})`}</button>
             )}
-            {onContactsOpen && (
-              <button
-                onClick={onContactsOpen}
-                style={{
-                  fontSize: '12px', fontWeight: 600, padding: '4px 10px',
-                  border: '1px solid #89CFF0', borderRadius: '8px',
-                  backgroundColor: '#D4EFFC', color: '#2a6090', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >📋 연락처</button>
+            {/* 데스크탑에서만 헤더 우측에 버튼 표시 — 모바일은 아래 별도 행 */}
+            {!isMobile && onContactsOpen && (
+              <button onClick={onContactsOpen} style={{ fontSize: '12px', fontWeight: 600, padding: '4px 10px', border: '1px solid #89CFF0', borderRadius: '8px', backgroundColor: '#D4EFFC', color: '#2a6090', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                📋 연락처
+              </button>
             )}
-            {onInvestmentMemoOpen && (
-              <button
-                onClick={onInvestmentMemoOpen}
-                style={{
-                  fontSize: '12px', fontWeight: 600, padding: '4px 10px',
-                  border: '1px solid #89CFF0', borderRadius: '8px',
-                  backgroundColor: '#D4EFFC', color: '#2a6090', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >📝 투자메모</button>
+            {!isMobile && onInvestmentMemoOpen && (
+              <button onClick={onInvestmentMemoOpen} style={{ fontSize: '12px', fontWeight: 600, padding: '4px 10px', border: '1px solid #89CFF0', borderRadius: '8px', backgroundColor: '#D4EFFC', color: '#2a6090', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                📝 투자메모
+              </button>
             )}
-            <button
-              onClick={onClose}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#80868b', padding: 0, lineHeight: 1 }}
-            >×</button>
+            <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#80868b', padding: 0, lineHeight: 1 }}>×</button>
           </div>
         </div>
+
+        {/* 모바일 전용: 연락처·투자메모 버튼 행 */}
+        {isMobile && (onContactsOpen || onInvestmentMemoOpen) && !cleanupMode && (
+          <div style={{ display: 'flex', gap: '8px', padding: '8px 16px', borderBottom: '1px solid #e8eaed', background: '#fff' }}>
+            {onContactsOpen && (
+              <button onClick={onContactsOpen} style={{ fontSize: '12px', fontWeight: 600, padding: '6px 14px', border: '1px solid #89CFF0', borderRadius: '8px', backgroundColor: '#D4EFFC', color: '#2a6090', cursor: 'pointer' }}>
+                📋 연락처
+              </button>
+            )}
+            {onInvestmentMemoOpen && (
+              <button onClick={onInvestmentMemoOpen} style={{ fontSize: '12px', fontWeight: 600, padding: '6px 14px', border: '1px solid #89CFF0', borderRadius: '8px', backgroundColor: '#D4EFFC', color: '#2a6090', cursor: 'pointer' }}>
+                📝 투자메모
+              </button>
+            )}
+          </div>
+        )}
 
         {/* 스크롤 영역 */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
