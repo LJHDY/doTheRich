@@ -40,6 +40,7 @@ import {
   Dday,
   InvestmentMemo,
   InvestmentMemoImage,
+  WorkoutLog,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1593,6 +1594,22 @@ export const uploadInvestmentMemoImage = async (memoId: number, file: File): Pro
 
 export const deleteInvestmentMemoImage = async (memoId: number, imageId: number): Promise<void> => {
   await api.delete(`/api/investment-memos/${memoId}/images/${imageId}`);
+};
+
+// ── 운동 기록 ────────────────────────────────────────────────────────────────
+
+export const getWorkouts = async (userId: string, workoutDate: string): Promise<WorkoutLog[]> => {
+  const { data } = await api.get('/api/workouts', { params: { user_id: userId, workout_date: workoutDate } });
+  return data as WorkoutLog[];
+};
+
+export const createWorkout = async (payload: Omit<WorkoutLog, 'id' | 'createdAt'>): Promise<WorkoutLog> => {
+  const { data } = await api.post('/api/workouts', payload);
+  return data as WorkoutLog;
+};
+
+export const deleteWorkout = async (id: number): Promise<void> => {
+  await api.delete(`/api/workouts/${id}`);
 };
 
 export default api;

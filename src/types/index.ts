@@ -815,6 +815,29 @@ export interface InvestmentMemo {
   updatedAt: string | null;
 }
 
+export type WorkoutType = 'TENNIS' | 'HEALTH' | 'RUNNING';
+
+/** 운동 기록 — workout_log 테이블 1:1 매핑 */
+export interface WorkoutLog {
+  id: number;
+  userId: string;
+  workoutDate: string;           // ISO date (YYYY-MM-DD)
+  workoutType: WorkoutType;
+  durationMinutes?: number | null;
+  memo?: string | null;
+  // 테니스
+  gameCount?: number | null;
+  // 헬스
+  muscleGroup?: string | null;
+  exerciseName?: string | null;
+  weightKg?: number | null;
+  reps?: number | null;
+  sets?: number | null;
+  // 러닝
+  distanceKm?: number | null;
+  createdAt?: string | null;
+}
+
 /** 금액을 "0,000원" 형식으로 포맷 */
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';
