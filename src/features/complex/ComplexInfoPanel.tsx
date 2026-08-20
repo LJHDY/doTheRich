@@ -141,6 +141,16 @@ interface CommuteEditRow {
   transferCount: string;
   transferLines: string[]; // 환승 노선명 배열 (저장 시 ' ➡️ '로 join)
   distanceKm?: number;     // 직선거리 (km) — 좌표 있으면 자동 계산
+  // 커스텀 목적지 전용 필드
+  isCustom?: boolean;
+  destLat?: number;
+  destLng?: number;
+  destLabel?: string;
+  searchQuery?: string;
+  searchResults?: SearchItem[];
+  showSearchDropdown?: boolean;
+  isSearching?: boolean;
+  localKey?: number; // React key용 고유 번호
 }
 
 // 네이버 지도 경로 URL 생성용 목적지 좌표 — RegisterModal과 동일
@@ -432,10 +442,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [subwayRows, setSubwayRows] = useState<SubwayEditRow[]>([]);
   const [deletedSubwayIds, setDeletedSubwayIds] = useState<number[]>([]);
   const [savingSubway, setSavingSubway] = useState(false);
-  // 출퇴근 시간 편집 상태 — 5개 고정 목적지 행
+  // 출퇴근 시간 편집 상태 — 5개 고정 목적지 행 + 커스텀 목적지
   const [editingCommute, setEditingCommute] = useState(false);
   const [commuteRows, setCommuteRows] = useState<CommuteEditRow[]>([]);
   const [savingCommute, setSavingCommute] = useState(false);
+  const customCommuteKeyRef = useRef(0);
   const [showPeakChart, setShowPeakChart] = useState(false);
   const [showMetroMap, setShowMetroMap] = useState(false);
   const [metroZoom, setMetroZoom] = useState(1);
@@ -1436,15 +1447,13 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
   // 출퇴근 시간 편집 시작 — 기존 데이터로 5개 행 초기화
   const startEditCommute = () => {
-    const rows: CommuteEditRow[] = COMMUTE_DESTINATIONS.map(dest => {
+    const fixedRows: CommuteEditRow[] = COMMUTE_DESTINATIONS.map(dest => {
       const existing = complex?.commuteTimes?.find(ct => ct.destination === dest);
-      // transferLines: 기존 문자열이 있으면 ' ➡️ '로 분리, 없으면 transferCount+1 만큼 빈 배열 생성
       const transferLines = existing?.transferLines
         ? existing.transferLines.split(' ➡️ ').filter(Boolean)
         : (existing?.transferCount != null
             ? Array(existing.transferCount + 1).fill('')
             : ['']);
-      // 직선거리: 기존 저장값 우선, 없으면 좌표로 계산
       const destCoordEntry = DESTINATION_COORDS[dest];
       const distanceKm = existing?.distanceKm
         ?? (destCoordEntry && complex?.latitude && complex?.longitude
@@ -1459,7 +1468,26 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         distanceKm,
       };
     });
-    setCommuteRows(rows);
+    // 5개 고정 목적지 외 커스텀 목적지 로드 (기존 저장된 것)
+    const customRows: CommuteEditRow[] = (complex?.commuteTimes ?? [])
+      .filter(ct => !COMMUTE_DESTINATIONS.includes(ct.destination))
+      .map(ct => {
+        const transferLines = ct.transferLines
+          ? ct.transferLines.split(' ➡️ ').filter(Boolean)
+          : (ct.transferCount != null ? Array(ct.transferCount + 1).fill('') : ['']);
+        return {
+          destination: ct.destination,
+          minutes: ct.minutes != null ? String(ct.minutes) : '',
+          transportType: ct.transportType || '지하철',
+          transferCount: ct.transferCount != null ? String(ct.transferCount) : '0',
+          transferLines,
+          distanceKm: ct.distanceKm,
+          isCustom: true,
+          localKey: ++customCommuteKeyRef.current,
+          searchQuery: ct.destination,
+        };
+      });
+    setCommuteRows([...fixedRows, ...customRows]);
     setEditingCommute(true);
   };
 
@@ -1505,6 +1533,67 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     } finally {
       setSavingCommute(false);
     }
+  };
+
+  // 커스텀 목적지 추가
+  const addCustomCommuteRow = () => {
+    setCommuteRows(prev => [...prev, {
+      destination: '',
+      minutes: '',
+      transportType: '지하철',
+      transferCount: '0',
+      transferLines: [''],
+      isCustom: true,
+      localKey: ++customCommuteKeyRef.current,
+      searchQuery: '',
+      searchResults: [],
+      showSearchDropdown: false,
+      isSearching: false,
+    }]);
+  };
+
+  // 커스텀 목적지 역 검색
+  const searchCustomDestination = async (i: number) => {
+    const row = commuteRows[i];
+    if (!row.searchQuery?.trim()) return;
+    setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, isSearching: true, showSearchDropdown: false } : r));
+    try {
+      const { data } = await api.get<{ items: SearchItem[] }>('/api/search/local', {
+        params: { query: row.searchQuery!.trim() + ' 역' },
+      });
+      setCommuteRows(prev => prev.map((r, idx) =>
+        idx === i ? { ...r, isSearching: false, searchResults: data.items, showSearchDropdown: data.items.length > 0 } : r
+      ));
+    } catch {
+      setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, isSearching: false } : r));
+    }
+  };
+
+  // 커스텀 목적지 검색 결과 선택
+  const selectCustomDestination = (i: number, item: SearchItem) => {
+    const lat = parseFloat(item.mapy) / 1e7;
+    const lng = parseFloat(item.mapx) / 1e7;
+    const label = stripHtml(item.title);
+    const distanceKm = complex?.latitude && complex?.longitude
+      ? parseFloat(haversineKm(complex.latitude, complex.longitude, lat, lng).toFixed(2))
+      : undefined;
+    setCommuteRows(prev => prev.map((r, idx) =>
+      idx === i ? {
+        ...r,
+        destination: label,
+        destLat: lat,
+        destLng: lng,
+        destLabel: label,
+        distanceKm,
+        showSearchDropdown: false,
+        searchResults: [],
+      } : r
+    ));
+  };
+
+  // 커스텀 목적지 행 삭제
+  const removeCustomCommuteRow = (i: number) => {
+    setCommuteRows(prev => prev.filter((_, idx) => idx !== i));
   };
 
   if (!complex) {
@@ -2359,42 +2448,141 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             )}
           </div>
 
-          {/* 편집 모드 — 5개 목적지 카드 스타일 입력 */}
+          {/* 편집 모드 — 5개 고정 + 커스텀 목적지 카드 스타일 입력 */}
           {editingCommute ? (
             <div>
               {commuteRows.map((row, i) => {
-                const destCoords = DESTINATION_COORDS[row.destination];
+                const destCoords = row.isCustom ? null : DESTINATION_COORDS[row.destination];
+                // 커스텀 행: 저장된 좌표 or 검색으로 선택된 좌표 사용
+                const customLat = row.isCustom ? row.destLat : undefined;
+                const customLng = row.isCustom ? row.destLng : undefined;
+                const canQuery = row.isCustom ? !!(customLat && customLng) : !!(destCoords);
                 return (
-                  <div key={row.destination} style={{
-                    border: '1px solid #e8eaed', borderRadius: '10px',
-                    padding: '8px 10px', marginBottom: '6px', background: '#f8f9fa',
+                  <div key={row.isCustom ? `custom-${row.localKey}` : row.destination} style={{
+                    border: `1px solid ${row.isCustom ? '#d4e8fc' : '#e8eaed'}`, borderRadius: '10px',
+                    padding: '8px 10px', marginBottom: '6px',
+                    background: row.isCustom ? '#f0f8fd' : '#f8f9fa',
                   }}>
-                    {/* Line 1: 목적지 라벨 + 직선거리 + 조회 버튼 */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#202124' }}>{row.destination}</span>
-                        {destCoords && complex.latitude && complex.longitude && (
-                          <span style={{ fontSize: '10px', color: '#80868b' }}>
-                            {haversineKm(complex.latitude, complex.longitude, destCoords.lat, destCoords.lng).toFixed(1)}km
-                          </span>
+                    {/* 커스텀 행 헤더: 역 검색 입력 + 검색버튼 + × 삭제 */}
+                    {row.isCustom && (
+                      <div style={{ marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <input
+                            placeholder="역 이름 검색 (예: 강남)"
+                            value={row.searchQuery ?? ''}
+                            onChange={e => setCommuteRows(prev => prev.map((r, idx) =>
+                              idx === i ? { ...r, searchQuery: e.target.value } : r
+                            ))}
+                            onKeyDown={e => { if (e.key === 'Enter') searchCustomDestination(i); }}
+                            style={{ ...editInputStyle, flex: 1, fontSize: '11px' }}
+                          />
+                          <button
+                            onClick={() => searchCustomDestination(i)}
+                            disabled={row.isSearching}
+                            style={{
+                              padding: '3px 8px', fontSize: '11px',
+                              border: '1px solid #89CFF0', borderRadius: '6px',
+                              background: '#D4EFFC', color: '#1a6fa8',
+                              cursor: 'pointer', flexShrink: 0,
+                            }}
+                          >{row.isSearching ? '…' : '검색'}</button>
+                          <button
+                            onClick={() => removeCustomCommuteRow(i)}
+                            style={{
+                              padding: '3px 6px', fontSize: '11px',
+                              border: '1px solid #f5c6cb', borderRadius: '6px',
+                              background: '#fff5f5', color: '#e06060',
+                              cursor: 'pointer', flexShrink: 0,
+                            }}
+                          >×</button>
+                        </div>
+                        {/* 검색 결과 드롭다운 */}
+                        {row.showSearchDropdown && (row.searchResults ?? []).length > 0 && (
+                          <div style={{
+                            border: '1px solid #e8eaed', borderRadius: '6px',
+                            background: '#fff', maxHeight: '140px', overflowY: 'auto',
+                            marginTop: '4px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                          }}>
+                            {(row.searchResults ?? []).map((item, si) => (
+                              <div
+                                key={si}
+                                onClick={() => selectCustomDestination(i, item)}
+                                style={{
+                                  padding: '6px 10px', fontSize: '11px', cursor: 'pointer',
+                                  borderBottom: si < (row.searchResults!.length - 1) ? '1px solid #f0f0f0' : 'none',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#f0f8fd')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '')}
+                              >
+                                <div style={{ fontWeight: 600, color: '#202124' }}>{stripHtml(item.title)}</div>
+                                <div style={{ color: '#80868b', fontSize: '10px', marginTop: '2px' }}>{item.roadAddress || item.address}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {/* 선택된 역 표시 */}
+                        {row.destLabel && (
+                          <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#1a6fa8' }}>{row.destLabel}</span>
+                            {row.distanceKm != null && (
+                              <span style={{ fontSize: '10px', color: '#80868b' }}>{row.distanceKm}km</span>
+                            )}
+                          </div>
                         )}
                       </div>
-                      <button
-                        onClick={() => {
-                          if (!destCoords || !complex.latitude || !complex.longitude) return;
-                          const start = `${complex.longitude},${complex.latitude},${encodeURIComponent(complex.complexName)}`;
-                          const goal = `${destCoords.lng},${destCoords.lat},${encodeURIComponent(destCoords.label)}`;
-                          window.open(`https://map.naver.com/p/directions/${start}/${goal}/-/transit`, '_blank', 'noopener,noreferrer');
-                        }}
-                        style={{
-                          padding: '3px 8px', fontSize: '11px', fontWeight: 600,
-                          border: '1px solid #34a853', borderRadius: '6px',
-                          backgroundColor: '#e6f4ea', color: '#5AAF84',
-                          cursor: 'pointer', flexShrink: 0,
-                        }}
-                        title="네이버 지도에서 대중교통 경로 확인"
-                      >조회</button>
-                    </div>
+                    )}
+
+                    {/* 고정 행 헤더: 목적지 라벨 + 직선거리 + 조회 버튼 */}
+                    {!row.isCustom && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#202124' }}>{row.destination}</span>
+                          {destCoords && complex.latitude && complex.longitude && (
+                            <span style={{ fontSize: '10px', color: '#80868b' }}>
+                              {haversineKm(complex.latitude, complex.longitude, destCoords.lat, destCoords.lng).toFixed(1)}km
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (!destCoords || !complex.latitude || !complex.longitude) return;
+                            const start = `${complex.longitude},${complex.latitude},${encodeURIComponent(complex.complexName)}`;
+                            const goal = `${destCoords.lng},${destCoords.lat},${encodeURIComponent(destCoords.label)}`;
+                            window.open(`https://map.naver.com/p/directions/${start}/${goal}/-/transit`, '_blank', 'noopener,noreferrer');
+                          }}
+                          disabled={!canQuery}
+                          style={{
+                            padding: '3px 8px', fontSize: '11px', fontWeight: 600,
+                            border: '1px solid #34a853', borderRadius: '6px',
+                            backgroundColor: canQuery ? '#e6f4ea' : '#f5f5f5',
+                            color: canQuery ? '#5AAF84' : '#bbb',
+                            cursor: canQuery ? 'pointer' : 'default', flexShrink: 0,
+                          }}
+                          title="네이버 지도에서 대중교통 경로 확인"
+                        >조회</button>
+                      </div>
+                    )}
+
+                    {/* 커스텀 행 조회 버튼 (역 선택 후 활성화) */}
+                    {row.isCustom && canQuery && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6px' }}>
+                        <button
+                          onClick={() => {
+                            if (!customLat || !customLng || !complex.latitude || !complex.longitude) return;
+                            const start = `${complex.longitude},${complex.latitude},${encodeURIComponent(complex.complexName)}`;
+                            const goal = `${customLng},${customLat},${encodeURIComponent(row.destLabel ?? row.destination)}`;
+                            window.open(`https://map.naver.com/p/directions/${start}/${goal}/-/transit`, '_blank', 'noopener,noreferrer');
+                          }}
+                          style={{
+                            padding: '3px 8px', fontSize: '11px', fontWeight: 600,
+                            border: '1px solid #34a853', borderRadius: '6px',
+                            backgroundColor: '#e6f4ea', color: '#5AAF84',
+                            cursor: 'pointer', flexShrink: 0,
+                          }}
+                          title="네이버 지도에서 대중교통 경로 확인"
+                        >조회</button>
+                      </div>
+                    )}
 
                     {/* Line 2: 분 + 환승횟수 + 교통수단 */}
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -2450,7 +2638,17 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   </div>
                 );
               })}
-              <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+              {/* 커스텀 목적지 추가 버튼 */}
+              <button
+                onClick={addCustomCommuteRow}
+                style={{
+                  width: '100%', padding: '6px', fontSize: '11px',
+                  border: '1px dashed #89CFF0', borderRadius: '8px',
+                  background: 'none', color: '#4BAAD4', cursor: 'pointer',
+                  marginBottom: '8px',
+                }}
+              >+ 목적지 추가</button>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '0' }}>
                 <button
                   onClick={saveCommute}
                   disabled={savingCommute}
