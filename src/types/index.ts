@@ -833,6 +833,7 @@ export interface WorkoutLog {
   weightKg?: number | null;
   reps?: number | null;
   sets?: number | null;
+  setsData?: { weight: number | null; reps: number }[] | null; // 세트별 무게·횟수 목록
   // 러닝
   distanceKm?: number | null;
   createdAt?: string | null;
