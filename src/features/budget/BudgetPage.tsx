@@ -335,6 +335,13 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     if (!transferFrom || !transferTo) { alert('출금·입금 통장을 모두 선택해주세요'); return; }
     if (transferFrom === transferTo) { alert('출금·입금 통장이 같습니다'); return; }
     if (!amount) { alert('금액을 입력해주세요'); return; }
+    // 보내는 통장 잔액 확인 — 잔액 부족 시 이체 불가
+    const fromAcc = summary.accountMap[transferFrom] ?? { income: 0, expense: 0 };
+    const fromBalance = fromAcc.income - fromAcc.expense;
+    if (fromBalance < amount) {
+      alert(`잔액 부족: ${transferFrom} 잔액 ${fromBalance.toLocaleString()}원 < 이체 금액 ${amount.toLocaleString()}원`);
+      return;
+    }
     const entryDate = form.entryDate ?? today();
     const resolvedYearMonth = entryDate.replace(/-/g, '').slice(0, 6);
     const label = `이체: ${transferFrom} → ${transferTo}`;
