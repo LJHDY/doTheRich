@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api, { getChecklistTemplates, upsertChecklistResult, searchNearby } from '../../services/api';
+import api, { getChecklistTemplates, upsertChecklistResult, searchNearby, getTransitRoutes, TransitRoute } from '../../services/api';
 import { uploadComplexPhotos } from '../../services/api';
 import { compressImages } from '../../shared/imageUtils';
 import { ApartmentComplex, ChecklistTemplate } from '../../types';
@@ -354,6 +354,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
   ]);
   const [subwayInfos, setSubwayInfos] = useState<SubwayRow[]>([]);
   // 기본 목적지 5개를 빈 값으로 미리 채워둠 — 사용자가 분만 입력하면 됨
+  const [transitPicker, setTransitPicker] = useState<{ routes: TransitRoute[]; rowIdx: number } | null>(null);
+  const [transitLoading, setTransitLoading] = useState<number | null>(null);
+
   const [commuteTimes, setCommuteTimes] = useState<CommuteRow[]>(
     DESTINATIONS.map(d => {
       const dest = DESTINATION_COORDS[d];
@@ -914,6 +917,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
   };
 
   return (
+    <>
     <div style={wrapperStyle}>
       {/* 헤더 — 데스크탑: 드래그 핸들 / 모바일: 일반 헤더 */}
       <div
@@ -1280,25 +1284,23 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
                   const km = haversineKm(initialData.latitude, initialData.longitude, dest.lat, dest.lng);
                   return <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>{km.toFixed(1)}km</span>;
                 })()}
-                {/* 네이버 지도 경로 버튼 — DESTINATION_COORDS에 있는 기본 목적지만 활성화 */}
+                {/* 카카오 대중교통 경로 조회 버튼 */}
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const dest = DESTINATION_COORDS[row.destination];
-                    if (!dest) return;
-                    const start = `${initialData.longitude},${initialData.latitude},${encodeURIComponent(form.complexName || '출발지')}`;
-                    const goal = `${dest.lng},${dest.lat},${encodeURIComponent(dest.label)}`;
-                    window.open(
-                      `https://map.naver.com/p/directions/${start}/${goal}/-/transit`,
-                      '_blank',
-                      'noopener,noreferrer'
-                    );
+                    if (!dest || !initialData.latitude || !initialData.longitude) return;
+                    setTransitLoading(i);
+                    try {
+                      const routes = await getTransitRoutes(initialData.latitude, initialData.longitude, dest.lat, dest.lng);
+                      setTransitPicker({ routes, rowIdx: i });
+                    } catch { alert('경로 조회에 실패했습니다'); }
+                    finally { setTransitLoading(null); }
                   }}
-                  disabled={!DESTINATION_COORDS[row.destination]}
+                  disabled={!DESTINATION_COORDS[row.destination] || transitLoading === i}
                   style={actionBtn('#7DC8A0', !DESTINATION_COORDS[row.destination])}
-                  title="네이버 지도에서 경로 확인"
                 >
-                  지도
+                  {transitLoading === i ? '...' : '조회'}
                 </button>
               </div>
 
@@ -1824,6 +1826,60 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
           }}>{submitting ? '등록 중...' : '등록'}</button>
         </div>
     </div>
+
+    {/* 대중교통 경로 선택 팝업 */}
+    {transitPicker && (
+      <div style={{
+        position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)',
+        zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }} onClick={() => setTransitPicker(null)}>
+        <div style={{
+          backgroundColor: '#fff', borderRadius: '12px', padding: '16px',
+          width: '320px', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+        }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c' }}>경로 선택</span>
+            <button onClick={() => setTransitPicker(null)} style={{ background: 'none', border: 'none', fontSize: '16px', cursor: 'pointer', color: '#80868b' }}>×</button>
+          </div>
+          {transitPicker.routes.map((route, idx) => {
+            const typeLabel = route.type === 'SUBWAY' ? '🚇 지하철' : route.type === 'BUS' ? '🚌 버스' : '🚇🚌 버스+지하철';
+            const typeColor = route.type === 'SUBWAY' ? '#1a73e8' : route.type === 'BUS' ? '#34a853' : '#9334e8';
+            return (
+              <div key={idx}
+                onClick={() => {
+                  const tc = route.transfers;
+                  const lines = route.lineNames.length > 0 ? route.lineNames : Array(tc + 1).fill('');
+                  updateCommute(transitPicker.rowIdx, {
+                    minutes: String(route.minutes),
+                    transferCount: String(tc),
+                    transportType: route.type === 'SUBWAY' ? '지하철' : route.type === 'BUS' ? '버스' : '버스+지하철',
+                    transferLines: lines,
+                  });
+                  setTransitPicker(null);
+                }}
+                style={{
+                  border: '1px solid #e8eaed', borderRadius: '8px', padding: '10px 12px',
+                  marginBottom: '8px', cursor: 'pointer',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f0f8fd')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: typeColor }}>{typeLabel}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#202124' }}>{route.minutes}분</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#5f6368' }}>
+                  환승 {route.transfers}회
+                  {route.lineNames.length > 0 && <span style={{ marginLeft: '6px' }}>· {route.lineNames.join(' ➡️ ')}</span>}
+                </div>
+                {route.fare > 0 && <div style={{ fontSize: '10px', color: '#9e9e9e', marginTop: '2px' }}>{route.fare.toLocaleString()}원</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
