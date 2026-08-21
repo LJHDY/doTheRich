@@ -1642,4 +1642,23 @@ export const searchNearby = async (
   return data;
 };
 
+// 카카오 대중교통 경로 탐색 결과 단건
+export interface TransitRoute {
+  minutes: number;
+  transfers: number;
+  type: 'SUBWAY' | 'BUS' | 'BUS_AND_SUBWAY';
+  lineNames: string[];  // ["2호선", "9호선"] 등
+  fare: number;
+}
+
+export const getTransitRoutes = async (
+  startLat: number, startLng: number,
+  endLat: number, endLng: number,
+): Promise<TransitRoute[]> => {
+  const { data } = await api.get<{ routes: TransitRoute[] }>('/api/directions/transit', {
+    params: { start_lat: startLat, start_lng: startLng, end_lat: endLat, end_lng: endLng },
+  });
+  return data.routes;
+};
+
 export default api;

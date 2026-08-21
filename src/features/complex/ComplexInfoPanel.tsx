@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, calcChecklistScore } from '../../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby } from '../../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute } from '../../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -445,6 +445,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [savingSubway, setSavingSubway] = useState(false);
   // 출퇴근 시간 편집 상태 — 5개 고정 목적지 행 + 커스텀 목적지
   const [editingCommute, setEditingCommute] = useState(false);
+  const [transitPicker, setTransitPicker] = useState<{ routes: TransitRoute[]; rowIdx: number } | null>(null);
+  const [transitLoading, setTransitLoading] = useState<number | null>(null); // 로딩 중인 행 idx
   const [commuteRows, setCommuteRows] = useState<CommuteEditRow[]>([]);
   const [savingCommute, setSavingCommute] = useState(false);
   const customCommuteKeyRef = useRef(0);
@@ -2587,13 +2589,16 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                           )}
                         </div>
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             if (!destCoords || !complex.latitude || !complex.longitude) return;
-                            const start = `${complex.longitude},${complex.latitude},${encodeURIComponent(complex.complexName)}`;
-                            const goal = `${destCoords.lng},${destCoords.lat},${encodeURIComponent(destCoords.label)}`;
-                            window.open(`https://map.naver.com/p/directions/${start}/${goal}/-/transit`, '_blank', 'noopener,noreferrer');
+                            setTransitLoading(i);
+                            try {
+                              const routes = await getTransitRoutes(complex.latitude, complex.longitude, destCoords.lat, destCoords.lng);
+                              setTransitPicker({ routes, rowIdx: i });
+                            } catch { alert('경로 조회에 실패했습니다'); }
+                            finally { setTransitLoading(null); }
                           }}
-                          disabled={!canQuery}
+                          disabled={!canQuery || transitLoading === i}
                           style={{
                             padding: '3px 8px', fontSize: '11px', fontWeight: 600,
                             border: '1px solid #34a853', borderRadius: '6px',
@@ -2601,8 +2606,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                             color: canQuery ? '#5AAF84' : '#bbb',
                             cursor: canQuery ? 'pointer' : 'default', flexShrink: 0,
                           }}
-                          title="네이버 지도에서 대중교통 경로 확인"
-                        >조회</button>
+                        >{transitLoading === i ? '조회 중...' : '조회'}</button>
                       </div>
                     )}
 
@@ -2610,20 +2614,23 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     {row.isCustom && canQuery && (
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6px' }}>
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             if (!customLat || !customLng || !complex.latitude || !complex.longitude) return;
-                            const start = `${complex.longitude},${complex.latitude},${encodeURIComponent(complex.complexName)}`;
-                            const goal = `${customLng},${customLat},${encodeURIComponent(row.destLabel ?? row.destination)}`;
-                            window.open(`https://map.naver.com/p/directions/${start}/${goal}/-/transit`, '_blank', 'noopener,noreferrer');
+                            setTransitLoading(i);
+                            try {
+                              const routes = await getTransitRoutes(complex.latitude, complex.longitude, customLat, customLng);
+                              setTransitPicker({ routes, rowIdx: i });
+                            } catch { alert('경로 조회에 실패했습니다'); }
+                            finally { setTransitLoading(null); }
                           }}
+                          disabled={transitLoading === i}
                           style={{
                             padding: '3px 8px', fontSize: '11px', fontWeight: 600,
                             border: '1px solid #34a853', borderRadius: '6px',
                             backgroundColor: '#e6f4ea', color: '#5AAF84',
                             cursor: 'pointer', flexShrink: 0,
                           }}
-                          title="네이버 지도에서 대중교통 경로 확인"
-                        >조회</button>
+                        >{transitLoading === i ? '조회 중...' : '조회'}</button>
                       </div>
                     )}
 
@@ -2710,6 +2717,61 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   }}
                 >취소</button>
               </div>
+
+              {/* 대중교통 경로 선택 팝업 */}
+              {transitPicker && (
+                <div style={{
+                  position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)',
+                  zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }} onClick={() => setTransitPicker(null)}>
+                  <div style={{
+                    backgroundColor: '#fff', borderRadius: '12px', padding: '16px',
+                    width: '320px', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+                  }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c' }}>경로 선택</span>
+                      <button onClick={() => setTransitPicker(null)} style={{ background: 'none', border: 'none', fontSize: '16px', cursor: 'pointer', color: '#80868b' }}>×</button>
+                    </div>
+                    {transitPicker.routes.map((route, idx) => {
+                      const typeLabel = route.type === 'SUBWAY' ? '🚇 지하철' : route.type === 'BUS' ? '🚌 버스' : '🚇🚌 버스+지하철';
+                      const typeColor = route.type === 'SUBWAY' ? '#1a73e8' : route.type === 'BUS' ? '#34a853' : '#9334e8';
+                      return (
+                        <div key={idx}
+                          onClick={() => {
+                            const tc = route.transfers;
+                            const lines = route.lineNames;
+                            const paddedLines = lines.length > 0 ? lines : Array(tc + 1).fill('');
+                            setCommuteRows(prev => prev.map((r, ri) => ri === transitPicker.rowIdx ? {
+                              ...r,
+                              minutes: String(route.minutes),
+                              transferCount: String(tc),
+                              transportType: route.type === 'SUBWAY' ? 'SUBWAY' : route.type === 'BUS' ? 'BUS' : 'BUS_AND_SUBWAY',
+                              transferLines: paddedLines,
+                            } : r));
+                            setTransitPicker(null);
+                          }}
+                          style={{
+                            border: '1px solid #e8eaed', borderRadius: '8px', padding: '10px 12px',
+                            marginBottom: '8px', cursor: 'pointer', transition: 'background 0.15s',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f0f8fd')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff')}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: typeColor }}>{typeLabel}</span>
+                            <span style={{ fontSize: '13px', fontWeight: 800, color: '#202124' }}>{route.minutes}분</span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#5f6368' }}>
+                            환승 {route.transfers}회
+                            {route.lineNames.length > 0 && <span style={{ marginLeft: '6px' }}>· {route.lineNames.join(' ➡️ ')}</span>}
+                          </div>
+                          {route.fare > 0 && <div style={{ fontSize: '10px', color: '#9e9e9e', marginTop: '2px' }}>{route.fare.toLocaleString()}원</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             /* 읽기 모드 */
