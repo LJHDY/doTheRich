@@ -479,11 +479,13 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
     if (!initialData.latitude || !initialData.longitude) return;
     const lat = initialData.latitude;
     const lng = initialData.longitude;
+    const region = extractRegion(initialData.address);
     setInfraAutoLoading(true);
     Promise.allSettled([
-      searchNearby(lat, lng, 'MART'),
+      // MART/DEPT: 지역구 + 브랜드 키워드 정확도순, HOSPITAL: 반경 검색 유지
+      searchNearby(lat, lng, 'MART', 2000, region || undefined),
       searchNearby(lat, lng, 'HOSPITAL'),
-      searchNearby(lat, lng, 'DEPARTMENT_STORE'),
+      searchNearby(lat, lng, 'DEPARTMENT_STORE', 2000, region || undefined),
     ]).then(results => {
       const TYPE_MAP: Record<number, string> = { 0: 'MART', 1: 'HOSPITAL', 2: 'DEPARTMENT_STORE' };
       const rows: InfraRow[] = [];

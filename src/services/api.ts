@@ -1628,14 +1628,16 @@ export interface NearbyPlace {
 }
 
 // 카카오 로컬 API — 반경 내 인프라 자동탐지 (MART | HOSPITAL | DEPARTMENT_STORE)
+// region 지정 시 MART/DEPARTMENT_STORE는 지역구+브랜드 키워드 정확도순 검색
 export const searchNearby = async (
   lat: number,
   lng: number,
   type: 'MART' | 'HOSPITAL' | 'DEPARTMENT_STORE',
   radius = 2000,
+  region?: string,
 ): Promise<NearbyPlace[]> => {
   const { data } = await api.get<NearbyPlace[]>('/api/search/nearby', {
-    params: { lat, lng, type, radius },
+    params: { lat, lng, type, radius, ...(region ? { region } : {}) },
   });
   return data;
 };
