@@ -19,6 +19,7 @@ import {
   updateTodo,
 } from '../../services/api';
 import ScheduleFormModal, { USER_EMOJI } from './ScheduleFormModal';
+import DayScheduleModal from './DayScheduleModal';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
 interface Props {
@@ -279,6 +280,7 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
   const [ddaySaving, setDdaySaving]     = useState(false);
   const [ddayOpen, setDdayOpen]         = useState(true);
   const [dateActionPopup, setDateActionPopup] = useState<{ date: string; x: number; y: number } | null>(null);
+  const [dayScheduleDate, setDayScheduleDate] = useState<string | null>(null);
   const [todoForm, setTodoForm]         = useState<{ date: string } | null>(null);
   const [todoInput, setTodoInput]       = useState('');
   const [todoUser, setTodoUser]         = useState<'ldy' | 'juhae' | 'common'>('ldy');
@@ -1337,7 +1339,28 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
           >
             ✅ 할일 추가
           </button>
+          <button
+            onClick={() => { setDayScheduleDate(dateActionPopup.date); setDateActionPopup(null); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '8px 12px', borderRadius: '8px', border: 'none',
+              background: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: '#344054',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f0f8fd'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+          >
+            🗓 하루 스케줄
+          </button>
         </div>
+      )}
+
+      {/* 하루 스케줄 모달 */}
+      {dayScheduleDate && (
+        <DayScheduleModal
+          date={dayScheduleDate}
+          userId="ldy"
+          onClose={() => setDayScheduleDate(null)}
+        />
       )}
 
       {/* 할일 추가 폼 모달 */}

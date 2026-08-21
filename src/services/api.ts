@@ -38,6 +38,7 @@ import {
   Contact,
   ConsultationLog,
   Dday,
+  DayScheduleBlock,
   InvestmentMemo,
   InvestmentMemoImage,
   WorkoutLog,
@@ -1659,6 +1660,22 @@ export const getTransitRoutes = async (
     params: { start_lat: startLat, start_lng: startLng, end_lat: endLat, end_lng: endLng },
   });
   return data.routes;
+};
+
+// ── 하루 스케줄 ────────────────────────────────────────────────────────────────
+export const getDaySchedule = async (scheduleDate: string, userId: string): Promise<DayScheduleBlock[]> => {
+  const { data } = await api.get<{ blocks: DayScheduleBlock[] }>('/api/day-schedules', {
+    params: { schedule_date: scheduleDate, user_id: userId },
+  });
+  return data.blocks;
+};
+
+export const upsertDaySchedule = async (
+  scheduleDate: string,
+  userId: string,
+  blocks: DayScheduleBlock[],
+): Promise<void> => {
+  await api.put('/api/day-schedules', { user_id: userId, schedule_date: scheduleDate, blocks });
 };
 
 export default api;

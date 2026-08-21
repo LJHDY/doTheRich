@@ -131,7 +131,8 @@ src/
 │   │   └── budgetConstants.ts      # ASSET_COLUMNS, ACCOUNT_GROUPS 등 상수
 │   ├── schedule/                   # 캘린더 / 일정
 │   │   ├── CalendarModal.tsx       # 캘린더 모달 (일정·할일·고정비·네이버 연동)
-│   │   └── ScheduleFormModal.tsx   # 일정 추가/수정 폼
+│   │   ├── ScheduleFormModal.tsx   # 일정 추가/수정 폼
+│   │   └── DayScheduleModal.tsx    # 원형 24시간 스케줄 모달 (SVG 드래그, 10분 단위)
 │   └── district-stats/             # 구별 시세
 │       └── DistrictStatsPanel.tsx  # 서울 25구 × 평형대 히트맵 테이블
 └── shared/                         # 기능에 종속되지 않는 공통 모듈
@@ -245,6 +246,10 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 // UNIQUE(commonCode, detailCode) 제약
 // 자산 셀 복합키: common_code='ASSET_CELL', detail_code='{codeKey}_{USERID}' (예: STOCK_LDY)
 //   detailCodeName을 ','로 split → 세부 내역 모달 계좌명 템플릿으로 사용
+
+// 하루 스케줄 블록 (원형 시간표 한 조각)
+DayScheduleBlock { id, startMin: number, endMin: number, label, color }
+// startMin/endMin: 0~1440, 10분 단위. UNIQUE(user_id, schedule_date) DB 저장
 ```
 
 ### 유틸 함수
@@ -281,8 +286,10 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 | PATCH | `/api/complexes/:id/infra-infos/:iid` | 인프라 정보 단건 수정 |
 | GET | `/api/complexes/:id/price-history` | 시세 기록 목록 |
 | POST | `/api/complexes/:id/price-history` | 시세 기록 추가 |
+| GET | `/api/search/nearby?lat=&lng=&type=&radius=&region=` | 카카오 로컬 API 인프라 탐지 — `region` 지정 시 `{region} {brand}` 키워드 정확도순 검색 (MART/DEPT/HOSPITAL), 미지정 시 반경 카테고리 검색 |
 | GET | `/api/search/local?query=` | 네이버 장소 검색 (지도 역 조회 등) |
 | GET | `/api/directions/walking` | 네이버 도보 경로 (분) |
+| GET | `/api/directions/transit?start_lat=&start_lng=&end_lat=&end_lng=` | 카카오 대중교통 경로 — `routes[]{minutes,transfers,type,lineNames,fare}` 반환, 지하철→버스+지하철→버스 정렬 |
 | GET | `/api/real-estate/trade/latest` | 실거래가 조회 (MOLIT) — ⚠️ 주석처리 중 |
 | GET | `/api/real-estate/jeonse/latest` | 전세가 조회 (MOLIT) — ⚠️ 주석처리 중 |
 | POST | `/api/batch/real-estate-price` | 실거래가/전세가 배치 수집 (수동 실행) |
@@ -338,6 +345,8 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 | GET | `/api/market-reports` | 시장 리포트 목록 (최신순) |
 | GET | `/api/market-reports/latest` | 최신 시장 리포트 1건 |
 | POST | `/api/market-reports/generate?report_date=YYYY-MM-DD` | 시장 리포트 즉시 생성 (202 백그라운드, 같은 날짜 재생성 시 덮어씀) |
+| GET | `/api/day-schedules?date=YYYY-MM-DD&user_id=` | 하루 스케줄 조회 — `{ blocks: DayScheduleBlock[] }` |
+| PUT | `/api/day-schedules` | 하루 스케줄 저장 — `{ user_id, schedule_date, blocks }` (upsert) |
 
 ---
 
@@ -450,6 +459,9 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - 교통정보: 역명 → 네이버 API 호선 자동 조회 + 도보시간 계산
 - 출퇴근시간: 강남/시청/여의도/발산/마곡나루 + 분 입력
   - 직선거리(`distanceKm`) 자동 계산 — `DESTINATION_COORDS`로 단지 좌표와 Haversine 거리 계산, "조회" 버튼 옆에 `{km}km` 표시
+  - **"조회" 버튼**: 카카오 대중교통 API(`/api/directions/transit`) 호출 → 경로 리스트 팝업 표시 (지하철→버스+지하철→버스 정렬), 선택 시 분·환승횟수·교통수단·환승노선 자동 입력
+  - 교통수단 드롭다운: `['지하철', '버스+지하철', '버스', '도보']` — 선택한 경로 type에 따라 자동 셋팅
+- **인프라 자동탐지**: 단지 주소에서 지역구 추출(`extractRegion`) 후 MART/HOSPITAL/DEPT `searchNearby` 병렬 호출, 결과를 인프라 입력 행으로 자동 채움
 - **유해시설 자동탐지**: 단지 좌표 기준 2km 반경 내 시설 자동 제안
   - `Promise.allSettled`로 11개 JSON 파일 병렬 fetch
   - `동물병원` 포함 시설명 필터링 제외
@@ -472,10 +484,14 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - **섹션 순서**: 단지정보(참고가·메모) → 종합평가 → 체크리스트 → 지하철 → 직장 → 교통 → 학군 → 환경 → 유해시설 → 재개발정보 → 임장유형 → 시세변동 → 최근기록
 - **종합평가**: 직장·교통·학군·환경 4칸 그리드, 각 S/A/B/C 배지 (데이터 없으면 `-`) — 클릭 시 해당 섹션으로 스크롤 (섹션 없으면 무동작)
 - **직장**: `complex.grade` 기반 배지 + 종사자수·사업체수 (`RegionWorkplaceConst`, DB 미저장)
-- **교통**: 항상 표시. 데이터 없으면 안내 문구. ✏ 버튼 → 편집 모드: 5개 고정 목적지 카드 스타일(강남/시청/여의도/발산/마곡나루), "조회" 버튼으로 네이버 지도 대중교통 경로 팝업, 분·환승횟수·환승노선(➡️ 구분자)·교통수단 입력 후 PATCH `/commute-times` (일괄 교체). `CommuteGradeBadge` 배지 표시. 환승 노선은 `transferLines` 필드(`' ➡️ '` join 문자열)로 저장·표시
+- **교통**: 항상 표시. 데이터 없으면 안내 문구. ✏ 버튼 → 편집 모드: 5개 고정 목적지 카드 스타일(강남/시청/여의도/발산/마곡나루), "조회" 버튼으로 카카오 대중교통 경로 팝업 (`/api/directions/transit`) → 경로 리스트 선택 시 분·환승·교통수단·노선명 자동 입력, 저장 시 PATCH `/commute-times` (일괄 교체). `CommuteGradeBadge` 배지 표시. 환승 노선은 `transferLines` 필드(`' ➡️ '` join 문자열)로 저장·표시
+  - 커스텀 목적지 행도 "조회" 버튼 동일 방식 (커스텀 목적지 lat/lng 사용)
+  - 교통수단 드롭다운: `['지하철', '버스+지하철', '버스', '도보']` — 선택 경로 type에 따라 자동 셋팅
   - **읽기 모드**: 목적지명 옆에 직선거리 `{distanceKm}km` 표시 (데이터 있을 때만)
 - **학군**: 중학교 `achievementScore` 기준 등급 배지 (S≥95/A≥90/B≥85/C) — 중학교 없으면 배지 미표시
 - **환경**: 주변 인프라, 항상 등급 배지 표시 (백화점 2개↑=S / 1개=A / 마트 1개↑=B / 나머지=C)
+  - **인프라 자동탐지**: 등록된 인프라 없으면 `useEffect(complex?.id)` 트리거 → `Promise.allSettled([MART, HOSPITAL, DEPT_STORE])` 카카오 API 병렬 호출 (지역구 기반 키워드 검색) → 결과를 `newInfraRows`로 채워 "+ 추가" 저장 가능 상태로 표시
+    - `loadingInfraSuggestions` 상태: 조회 중 "주변 인프라 조회 중..." 표시, 저장 버튼 숨김
 - **유해시설**: 항상 섹션 표시. 등록된 유해시설이 없을 때 자동탐지 실행
   - `useEffect(complex?.id)` 트리거 → `Promise.allSettled` 11개 JSON 병렬 fetch
   - 단지 좌표 기준 2km 이내 + `동물병원` 미포함 시설 필터링
@@ -686,7 +702,7 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - [x] 경로 지도 표시 토글 — 패널에서 경로 클릭 시 activeRouteIds 토글, 패널 닫기 시 전체 제거
 - [x] 경로 삭제 confirm — `window.confirm()` 후 DELETE
 - [x] 경로 백엔드 CRUD — SQLAlchemy Route 모델(points=JSON Text), FastAPI 라우터, 서비스 계층, 앱 시작 시 테이블 자동 생성
-- [x] ComplexInfoPanel 교통(출퇴근 시간) 인라인 편집 — ✏ 버튼으로 편집 진입, 5개 고정 목적지(강남/시청/여의도/발산/마곡나루) 행 표시, "조회" 버튼으로 네이버 지도 대중교통 팝업, 분·환승·교통수단 입력 후 PATCH /commute-times 저장 (일괄 교체)
+- [x] ComplexInfoPanel 교통(출퇴근 시간) 인라인 편집 — ✏ 버튼으로 편집 진입, 5개 고정 목적지(강남/시청/여의도/발산/마곡나루) 행 표시, "조회" 버튼으로 카카오 대중교통 경로 팝업 (경로 선택 후 자동 입력), 분·환승·교통수단 입력 후 PATCH /commute-times 저장 (일괄 교체)
 - [x] 시세 차트 동일 날짜 중복 포인트 버그 수정 — dateMap 머징으로 같은 날짜 기록을 하나의 X축 포인트로 합산
 - [x] ComplexInfoPanel 헤더 평형별 금액 표시 — `latestItemPerAreaType`으로 전체 이력에서 평형별 최신 가격 집계 (단건 POST로 추가된 평형도 모두 표시)
 - [x] CompareCard 전면 재작성 — ComplexInfoPanel과 표시 내용 완전 동기화 (수정/삭제 기능 제외), 참고가·교통·환경·임장유형·최근5건 동일 표시
@@ -826,6 +842,7 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
   - 헤더 "💰 가계부" 버튼 → 전체화면 오버레이 (z-index 9000)
   - localStorage `budget_user_id`로 세션 유저 저장, 👤 버튼 클릭 시 `UserSelectModal`로 재선택 가능
   - **내역 탭**: 총 수입/지출/잔액 카드, 고정비/변동비/투자 소요약, 통장별 현황, 필터(전체/수입/지출/고정비/투자/이체), 항목 목록
+    - 지출 등록 시 `accountMain`(통장/카드) 미선택이면 저장 불가 (alert 표시)
     - 전체 탭 콘텐츠를 단일 스크롤 컨테이너로 감싸 (내부 리스트 별도 스크롤 제거)
     - **이체(이체 필터)**: `isXfer = e.isTransfer || e.category === '이체'` 헬퍼로 판정 — `is_transfer` DB 컬럼 마이그레이션 이전 항목도 `category='이체'`로 fallback 처리
     - **요약 계산 규칙**: 이체는 수입·지출 모두에서 제외 / 투자(`isInvestment=true`)는 지출에서 분리해 별도 집계
@@ -927,6 +944,21 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 - [x] 생활권 카드 헤더에 꼴찌 단지명 표시 — 접힌 상태에서 "👍 1순위 · 👎 꼴찌" 형태
 - [x] 기능별 패키지 구조 재편 — `components/` + `pages/` + `utils/` → `features/{map,complex,compare,checklist,living-zone,budget,schedule,district-stats}/` + `shared/`
 - [x] 생활권 구획 그리기 — 폴리곤 채우기 대신 경로처럼 선으로 연결, 3개 이상 점일 때 닫힘 예시 점선 표시
+- [x] 인프라 자동탐지 (RegisterModal + ComplexInfoPanel) — 카카오 로컬 API로 마트/대학병원/백화점 자동 조회
+  - `GET /api/search/nearby?region=` — 지역구+브랜드 키워드 정확도순 검색, 반경 2km, 주차장/지하 제외
+  - MART: 이마트/코스트코/롯데마트/홈플러스/NC백화점 브랜드명으로 시작하는 것만 (이마트에브리데이 제외)
+  - DEPT: 현대/신세계/롯데/갤러리아백화점 브랜드명 시작 + 주차장·지하 제외
+  - HOSPITAL: `{region} 대학병원` 키워드 → place_name에 "대학병원" 또는 "종합병원" 포함 필터
+  - 백엔드 `_dist_m()`: `sort=accuracy` 시 distance 미제공 → Haversine 거리 직접 계산
+  - RegisterModal: 주소에서 `extractRegion()`으로 지역구 추출 후 조회
+  - ComplexInfoPanel: `complex.region` 사용, 인프라 없을 때 `useEffect(complex?.id)` 자동 실행
+- [x] 대중교통 경로 선택 팝업 — `GET /api/directions/transit` (카카오 publictraffic API)
+  - 출퇴근 편집 모드 "조회" 버튼 클릭 → 경로 리스트 팝업 (`transitPicker` 상태)
+  - 경로 카드: 소요시간·환승횟수·교통수단·요금·노선명 목록 (지하철→버스+지하철→버스 정렬)
+  - 선택 시 분/환승/교통수단/transferLines 자동 입력 (transportType 한글값으로 변환)
+  - vehicles[] per step = 동일 구간 대체 수단 목록 → `vehicles[0]`만 취해 대표 노선명으로 사용
+  - RegisterModal·ComplexInfoPanel 두 곳 모두 동일 방식 적용
+- [x] 가계부 지출 등록 시 통장/카드 필수 (`accountMain` 미선택 시 저장 불가, alert 표시)
 - [x] 연락처 기능 (`src/features/contacts/ContactsModal.tsx`)
   - 부동산/대출상담사 탭별 CRUD (이름·회사·전화·지역·메모)
   - 전화번호 클릭 시 바로 전화 연결 (tel: 링크)
@@ -934,6 +966,11 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
   - `<audio>` 태그 인라인 재생, 오디오 MIME 타입 mp3/m4a/wav/aac/ogg/webm/amr 지원
   - 헤더 Row2 "📋 연락처" 버튼 + 모바일 메뉴 항목
   - 백엔드: `contacts`, `consultation_logs` 테이블, `GET/POST/PATCH/DELETE /api/contacts`, `/api/contacts/:id/consultations`, `/audio`
+- [x] 하루 스케줄 기능 — 달력 날짜 클릭 → 🗓 하루 스케줄 버튼 → 원형 24시간 시간표 모달
+  - SVG 도넛 차트, 시계 방향 드래그로 블록 추가, 10분 단위 스냅
+  - 블록별 이름 + 12색 팔레트 선택, 클릭 삭제
+  - 백엔드: `day_schedule` 테이블 (user_id + schedule_date UNIQUE, blocks JSON)
+  - `GET/PUT /api/day-schedules`, `DayScheduleBlock` 타입, `getDaySchedule`/`upsertDaySchedule` API 함수
 
 ## 미완성 / TODO
 

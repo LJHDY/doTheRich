@@ -697,6 +697,15 @@ export interface Dday {
   createdAt: string;
 }
 
+// 하루 스케줄 블록 (원형 시간표 한 조각)
+export interface DayScheduleBlock {
+  id: string;
+  startMin: number;  // 0~1430 (10분 단위)
+  endMin: number;    // 10~1440
+  label: string;
+  color: string;
+}
+
 /** 고정비 캘린더 — 납부일별 항목 + 납부 여부 */
 export interface FixedExpenseCalendarItem {
   id: number;
