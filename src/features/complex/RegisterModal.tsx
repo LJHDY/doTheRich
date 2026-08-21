@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api, { getChecklistTemplates, upsertChecklistResult } from '../../services/api';
+import api, { getChecklistTemplates, upsertChecklistResult, searchNearby } from '../../services/api';
 import { uploadComplexPhotos } from '../../services/api';
 import { compressImages } from '../../shared/imageUtils';
 import { ApartmentComplex, ChecklistTemplate } from '../../types';
@@ -470,6 +470,46 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
         });
       }
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 인프라 자동탐지 — 카카오 로컬 API로 2km 반경 마트·대학병원·백화점 조회
+  const [infraAutoLoading, setInfraAutoLoading] = useState(false);
+  useEffect(() => {
+    if (!initialData.latitude || !initialData.longitude) return;
+    const lat = initialData.latitude;
+    const lng = initialData.longitude;
+    setInfraAutoLoading(true);
+    Promise.allSettled([
+      searchNearby(lat, lng, 'MART'),
+      searchNearby(lat, lng, 'HOSPITAL'),
+      searchNearby(lat, lng, 'DEPARTMENT_STORE'),
+    ]).then(results => {
+      const TYPE_MAP: Record<number, string> = { 0: 'MART', 1: 'HOSPITAL', 2: 'DEPARTMENT_STORE' };
+      const rows: InfraRow[] = [];
+      results.forEach((result, idx) => {
+        if (result.status !== 'fulfilled') return;
+        result.value.forEach(place => {
+          rows.push({
+            infraType: TYPE_MAP[idx],
+            infraName: place.name,
+            infraAddress: place.address,
+            distance: String(Math.max(1, Math.round(place.distanceM / 67))), // 도보 분 추정 (67m/분)
+            latitude: place.lat,
+            longitude: place.lng,
+            fetching: false,
+            searchResults: [],
+            showDropdown: false,
+          });
+        });
+      });
+      if (rows.length > 0) {
+        setInfraInfos(prev => {
+          const existingNames = new Set(prev.map(r => r.infraName));
+          return [...prev, ...rows.filter(r => !existingNames.has(r.infraName))];
+        });
+      }
+    }).finally(() => setInfraAutoLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1411,7 +1451,12 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
           }}>+ 학교 추가</button>
 
           {/* 주변 인프라 */}
-          <div style={sectionTitle}>주변 인프라</div>
+          <div style={{ ...sectionTitle, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            주변 인프라
+            {infraAutoLoading && (
+              <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400 }}>🔍 자동탐지 중…</span>
+            )}
+          </div>
           {infraInfos.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 70px 28px', gap: '6px', marginBottom: '4px' }}>
               <span style={{ ...labelStyle, marginBottom: 0 }}>유형</span>
