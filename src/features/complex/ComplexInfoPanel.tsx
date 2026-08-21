@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, calcChecklistScore } from '../../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo } from '../../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby } from '../../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -432,6 +432,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [newHazardRows, setNewHazardRows] = useState<HazardAddRow[]>([]);
   const [savingNewHazards, setSavingNewHazards] = useState(false);
   const [loadingHazardSuggestions, setLoadingHazardSuggestions] = useState(false);
+  const [loadingInfraSuggestions, setLoadingInfraSuggestions] = useState(false);
   // 체크리스트 모달 상태
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [checklistRatedCount, setChecklistRatedCount] = useState(0);
@@ -1199,6 +1200,48 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       hazardRowCounter.current = cnt;
       setNewHazardRows(nearby);
     }).finally(() => setLoadingHazardSuggestions(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complex?.id]);
+
+  // 인프라 자동탐지 — 저장된 인프라 없을 때 카카오 API로 주변 마트/병원/백화점 조회
+  useEffect(() => {
+    setNewInfraRows([]);
+    if (!complex?.id || !complex.latitude || !complex.longitude) return;
+    if ((complex.infraInfos ?? []).length > 0) return;
+
+    const lat = complex.latitude;
+    const lng = complex.longitude;
+    const region = complex.region || '';
+
+    setLoadingInfraSuggestions(true);
+    let cnt = infraRowCounter.current;
+    const TYPE_MAP: Record<number, string> = { 0: 'MART', 1: 'HOSPITAL', 2: 'DEPARTMENT_STORE' };
+    Promise.allSettled([
+      searchNearby(lat, lng, 'MART', 2000, region || undefined),
+      searchNearby(lat, lng, 'HOSPITAL'),
+      searchNearby(lat, lng, 'DEPARTMENT_STORE', 2000, region || undefined),
+    ]).then(results => {
+      const rows: InfraAddRow[] = [];
+      results.forEach((result, idx) => {
+        if (result.status !== 'fulfilled') return;
+        result.value.forEach(place => {
+          rows.push({
+            localId: ++cnt,
+            infraType: TYPE_MAP[idx],
+            infraName: place.name,
+            infraAddress: place.address,
+            distance: String(Math.max(1, Math.round(place.distanceM / 67))),
+            latitude: place.lat,
+            longitude: place.lng,
+            fetching: false,
+            searchResults: [],
+            showDropdown: false,
+          });
+        });
+      });
+      infraRowCounter.current = cnt;
+      setNewInfraRows(rows);
+    }).finally(() => setLoadingInfraSuggestions(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complex?.id]);
 
@@ -2982,9 +3025,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             </div>
           )}
 
-          {/* 데이터 없을 때 안내 */}
+          {/* 데이터 없을 때 안내 / 자동탐지 로딩 */}
           {(complex.infraInfos ?? []).length === 0 && newInfraRows.length === 0 && (
-            <div style={{ fontSize: '12px', color: '#9e9e9e', paddingBottom: '4px' }}>등록된 인프라 없음</div>
+            <div style={{ fontSize: '12px', color: '#9e9e9e', paddingBottom: '4px' }}>
+              {loadingInfraSuggestions ? '주변 인프라 조회 중...' : '등록된 인프라 없음'}
+            </div>
           )}
 
           {/* 기존 인프라 항목 목록 */}
@@ -3124,7 +3169,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             ))}
 
           {/* 추가 행이 1개 이상일 때 일괄 저장 버튼 */}
-          {newInfraRows.length > 0 && (
+          {newInfraRows.length > 0 && !loadingInfraSuggestions && (
             <div style={{ marginTop: '8px' }}>
               <button onClick={saveNewInfras} disabled={savingNewInfras}
                 style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewInfras ? '#9e9e9e' : '#e37400', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
