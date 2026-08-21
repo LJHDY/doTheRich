@@ -1314,7 +1314,7 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
                   style={{ ...inputStyle, width: '46px', flexShrink: 0 }} />
                 <select value={row.transportType} onChange={e => updateCommute(i, { transportType: e.target.value })}
                   style={{ ...inputStyle, flex: 1, minWidth: '70px' }}>
-                  {['지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
+                  {['지하철', '버스+지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
                 </select>
                 <button onClick={() => removeCommute(i)} style={iconBtn('#E06060')}>×</button>
               </div>

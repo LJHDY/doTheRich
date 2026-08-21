@@ -2657,7 +2657,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         onChange={e => setCommuteRows(prev => prev.map((r, idx) => idx === i ? { ...r, transportType: e.target.value } : r))}
                         style={{ ...editInputStyle, flex: 1 }}
                       >
-                        {['지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
+                        {['지하철', '버스+지하철', '버스', '도보'].map(t => <option key={t}>{t}</option>)}
                       </select>
                     </div>
 
@@ -2745,7 +2745,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                               ...r,
                               minutes: String(route.minutes),
                               transferCount: String(tc),
-                              transportType: route.type === 'SUBWAY' ? 'SUBWAY' : route.type === 'BUS' ? 'BUS' : 'BUS_AND_SUBWAY',
+                              transportType: route.type === 'SUBWAY' ? '지하철' : route.type === 'BUS' ? '버스' : '버스+지하철',
                               transferLines: paddedLines,
                             } : r));
                             setTransitPicker(null);
