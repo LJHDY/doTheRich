@@ -2630,6 +2630,8 @@ const MarketReportView: React.FC = () => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [toast, setToast] = useState('');
   const [vixTipOpen, setVixTipOpen] = useState(false);
+  // 상승 종목 테이블 접기/펼치기 (기본 접힘)
+  const [gainersOpen, setGainersOpen] = useState<Record<string, boolean>>({});
 
   const load = async () => {
     setLoading(true);
@@ -3081,41 +3083,56 @@ const MarketReportView: React.FC = () => {
                   );
                 };
 
-                const GainerTable = ({ title, items }: { title: string; items: KrTopGainer[] }) => {
+                const GainerTable = ({ marketKey, title, items }: { marketKey: string; title: string; items: KrTopGainer[] }) => {
                   if (items.length === 0) return null;
+                  const isOpen = !!gainersOpen[marketKey];
+                  const toggle = () => setGainersOpen(prev => ({ ...prev, [marketKey]: !prev[marketKey] }));
                   return (
                     <div style={{ marginBottom: '14px' }}>
-                      <SectionHeader label={`${title} 상승률 상위 종목`} />
-                      <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #dde4ed', overflow: 'hidden' }}>
-                        {/* 헤더 */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 70px 80px', alignItems: 'center', padding: '5px 12px', background: '#f8fafc', borderBottom: '1px solid #e8edf3' }}>
-                          {['#', '종목명', '등락률', '종가'].map((h, i) => (
-                            <span key={i} style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, textAlign: i >= 2 ? 'right' : 'left' }}>{h}</span>
-                          ))}
+                      {/* 헤더 — 클릭으로 접기/펼치기 */}
+                      <div
+                        onClick={toggle}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: '6px' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                          <div style={{ width: '3px', height: '14px', borderRadius: '2px', background: accent, flexShrink: 0 }} />
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>{title} 상승률 상위 종목</span>
+                          <span style={{ fontSize: '11px', color: '#9aa0a6' }}>({items.length}개)</span>
                         </div>
-                        {items.map((g, i) => {
-                          const isPos = g.changePct >= 0;
-                          return (
-                            <div key={i} style={{
-                              display: 'grid', gridTemplateColumns: '24px 1fr 70px 80px',
-                              alignItems: 'center', padding: '6px 12px',
-                              borderBottom: i < items.length - 1 ? '1px solid #f0f4f8' : 'none',
-                            }}>
-                              <span style={{ fontSize: '11px', color: '#b0bec5', fontWeight: 600 }}>{i + 1}</span>
-                              <div>
-                                <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a3a5c' }}>{g.name}</div>
-                                <div style={{ fontSize: '10px', color: '#b0bec5' }}>{g.ticker}</div>
-                              </div>
-                              <span style={{ fontSize: '13px', fontWeight: 700, textAlign: 'right', color: isPos ? '#2e7d32' : '#c62828' }}>
-                                {isPos ? '+' : ''}{g.changePct.toFixed(2)}%
-                              </span>
-                              <span style={{ fontSize: '12px', textAlign: 'right', color: '#344054' }}>
-                                {g.close != null ? g.close.toLocaleString() : '-'}
-                              </span>
-                            </div>
-                          );
-                        })}
+                        <span style={{ fontSize: '12px', color: '#9aa0a6', userSelect: 'none' }}>{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>
                       </div>
+                      {isOpen && (
+                        <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #dde4ed', overflow: 'hidden' }}>
+                          {/* 테이블 헤더 */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 70px 80px', alignItems: 'center', padding: '5px 12px', background: '#f8fafc', borderBottom: '1px solid #e8edf3' }}>
+                            {['#', '종목명', '등락률', '종가'].map((h, i) => (
+                              <span key={i} style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, textAlign: i >= 2 ? 'right' : 'left' }}>{h}</span>
+                            ))}
+                          </div>
+                          {items.map((g, i) => {
+                            const isPos = g.changePct >= 0;
+                            return (
+                              <div key={i} style={{
+                                display: 'grid', gridTemplateColumns: '24px 1fr 70px 80px',
+                                alignItems: 'center', padding: '6px 12px',
+                                borderBottom: i < items.length - 1 ? '1px solid #f0f4f8' : 'none',
+                              }}>
+                                <span style={{ fontSize: '11px', color: '#b0bec5', fontWeight: 600 }}>{i + 1}</span>
+                                <div>
+                                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a3a5c' }}>{g.name}</div>
+                                  <div style={{ fontSize: '10px', color: '#b0bec5' }}>{g.ticker}</div>
+                                </div>
+                                <span style={{ fontSize: '13px', fontWeight: 700, textAlign: 'right', color: isPos ? '#2e7d32' : '#c62828' }}>
+                                  {isPos ? '+' : ''}{g.changePct.toFixed(2)}%
+                                </span>
+                                <span style={{ fontSize: '12px', textAlign: 'right', color: '#344054' }}>
+                                  {g.close != null ? g.close.toLocaleString() : '-'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 };
@@ -3133,7 +3150,7 @@ const MarketReportView: React.FC = () => {
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px', paddingBottom: '4px', borderBottom: '2px solid #fce4e4' }}>🇰🇷 KOSPI</div>
                         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
                           <SectorTable title="섹터" items={kospiSec} />
-                          <GainerTable title="주도주" items={kospiGain} />
+                          <GainerTable marketKey="KOSPI" title="주도주" items={kospiGain} />
                         </div>
                       </div>
                     )}
@@ -3143,7 +3160,7 @@ const MarketReportView: React.FC = () => {
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px', paddingBottom: '4px', borderBottom: '2px solid #fce4e4' }}>📊 KOSDAQ</div>
                         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
                           <SectorTable title="섹터" items={kosdaqSec} />
-                          <GainerTable title="주도주" items={kosdaqGain} />
+                          <GainerTable marketKey="KOSDAQ" title="주도주" items={kosdaqGain} />
                         </div>
                       </div>
                     )}

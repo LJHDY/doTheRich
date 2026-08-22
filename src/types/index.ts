@@ -750,7 +750,10 @@ export interface KrTopGainer {
   ticker: string;
   name: string;
   changePct: number;
+  changePrice?: number;
   close: number | null;
+  tradeVolume?: number;
+  tradeAmount?: number;
 }
 
 /** 투자자별 매매동향 — 1거래일치 */
