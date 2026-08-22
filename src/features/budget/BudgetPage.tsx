@@ -468,6 +468,28 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   };
 
   const handleDelete = async (entry: BudgetEntry) => {
+    // 이체 항목 — merchant·날짜·금액이 동일한 쌍을 함께 삭제
+    const isXfer = entry.isTransfer || entry.category === '이체';
+    if (isXfer) {
+      const paired = entries.filter(
+        e => e.id !== entry.id &&
+          (e.isTransfer || e.category === '이체') &&
+          e.entryDate === entry.entryDate &&
+          e.amount === entry.amount &&
+          e.merchant === entry.merchant
+      );
+      const confirmMsg = paired.length > 0
+        ? `이체 항목을 삭제할까요?\n\n연결된 항목 (${paired.map(e => `${e.entryType === 'INCOME' ? '입금' : '출금'} ${e.account ?? ''}`).join(', ')})도 함께 삭제됩니다.`
+        : `이체 항목을 삭제할까요? (연결 항목 없음)`;
+      if (!window.confirm(confirmMsg)) return;
+      try {
+        const toDelete = [entry, ...paired];
+        await Promise.all(toDelete.map(e => deleteBudgetEntry(e.id)));
+        const deletedIds = new Set(toDelete.map(e => e.id));
+        setEntries(prev => prev.filter(e => !deletedIds.has(e.id)));
+      } catch { alert('삭제에 실패했습니다'); }
+      return;
+    }
     // 할부 항목은 단건 vs 전체 선택
     if (entry.installmentGroupId && entry.installmentMonths && entry.installmentMonths > 1) {
       const choice = window.confirm(
