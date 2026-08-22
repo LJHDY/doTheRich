@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DayScheduleBlock } from '../../types';
 import { getDaySchedule, upsertDaySchedule } from '../../services/api';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -20,10 +21,8 @@ const COLORS = [
 ];
 
 // ── 분 ↔ 각도 ─────────────────────────────────────────────────────────────────
-// 분(0~1440) → SVG 라디안 (12시 방향 = -π/2)
 const minToRad = (min: number) => (min / 1440) * 2 * Math.PI - Math.PI / 2;
 
-// SVG 좌표 → 분 (10분 스냅)
 const coordToMin = (svgX: number, svgY: number): number => {
   let angle = Math.atan2(svgY - CY, svgX - CX) + Math.PI / 2;
   if (angle < 0) angle += 2 * Math.PI;
@@ -53,26 +52,25 @@ const donutPath = (startMin: number, endMin: number, ro = R_OUT, ri = R_IN): str
   ].join(' ');
 };
 
-// ── 분 → "HH:MM" ─────────────────────────────────────────────────────────────
 const fmtMin = (min: number) => {
   const h = Math.floor(min / 60) % 24;
   const m = min % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
-// ── 컴포넌트 ──────────────────────────────────────────────────────────────────
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
+// ── 컴포넌트 ──────────────────────────────────────────────────────────────────
 const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
+  const isMobile = useIsMobile(700);
+
   const [blocks, setBlocks]         = useState<DayScheduleBlock[]>([]);
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
 
-  // 드래그 상태
   const [dragStart, setDragStart]   = useState<number | null>(null);
   const [dragEnd, setDragEnd]       = useState<number | null>(null);
 
-  // 블록 추가 팝업
   const [pending, setPending]       = useState<{ s: number; e: number } | null>(null);
   const [newLabel, setNewLabel]     = useState('');
   const [newColor, setNewColor]     = useState(COLORS[0]);
@@ -81,7 +79,6 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
   const svgRef   = useRef<SVGSVGElement>(null);
   const labelRef = useRef<HTMLInputElement>(null);
 
-  // ── 데이터 로드 ────────────────────────────────────────────────────────────
   useEffect(() => {
     setLoading(true);
     getDaySchedule(date, userId)
@@ -90,17 +87,14 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
       .finally(() => setLoading(false));
   }, [date, userId]);
 
-  // 색상 자동 순환
   useEffect(() => {
     setNewColor(COLORS[blocks.length % COLORS.length]);
   }, [blocks.length]);
 
-  // pending 오픈 시 label 포커스
   useEffect(() => {
     if (pending) setTimeout(() => labelRef.current?.focus(), 50);
   }, [pending]);
 
-  // ── API 저장 ───────────────────────────────────────────────────────────────
   const persist = async (next: DayScheduleBlock[]) => {
     setBlocks(next);
     setSaving(true);
@@ -111,8 +105,8 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
     }
   };
 
-  // ── SVG 좌표 변환 ──────────────────────────────────────────────────────────
-  const getSvgMin = (e: React.MouseEvent<SVGSVGElement>): number => {
+  // ── 포인터 이벤트 — 마우스·터치 통합 좌표 변환 ───────────────────────────
+  const getSvgPoint = (e: React.PointerEvent<SVGSVGElement>): number => {
     const rect = svgRef.current!.getBoundingClientRect();
     return coordToMin(
       (e.clientX - rect.left) * (400 / rect.width),
@@ -120,7 +114,7 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
     );
   };
 
-  const isInRing = (e: React.MouseEvent<SVGSVGElement>): boolean => {
+  const isInRing = (e: React.PointerEvent<SVGSVGElement>): boolean => {
     const rect = svgRef.current!.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (400 / rect.width) - CX;
     const y = (e.clientY - rect.top)  * (400 / rect.height) - CY;
@@ -128,32 +122,40 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
     return r >= R_IN && r <= R_OUT + 20;
   };
 
-  // ── 드래그 이벤트 ──────────────────────────────────────────────────────────
-  const onMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (e.button !== 0 || !isInRing(e)) return;
-    const min = getSvgMin(e);
+  const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!isInRing(e)) return;
+    // 포인터 캡처: 링 밖으로 이동해도 드래그 유지 (터치 슬라이드 방지 포함)
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const min = getSvgPoint(e);
     setDragStart(min);
     setDragEnd(min);
   };
 
-  const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+  const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (dragStart === null) return;
-    setDragEnd(getSvgMin(e));
+    setDragEnd(getSvgPoint(e));
   };
 
-  const onMouseUp = (e: React.MouseEvent<SVGSVGElement>) => {
+  const onPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
     if (dragStart === null) return;
-    const end = getSvgMin(e);
+    const end = getSvgPoint(e);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+
+    const savedStart = dragStart;
     setDragStart(null);
     setDragEnd(null);
 
-    // 시계 방향 스팬 계산
-    let span = end - dragStart;
+    let span = end - savedStart;
     if (span < 0) span += 1440;
-    if (span < 10) return; // 10분 미만 무시
+    if (span < 10) return;
 
-    const endMin = dragStart + span;
-    setPending({ s: dragStart, e: endMin > 1440 ? 1440 : endMin });
+    const endMin = savedStart + span;
+    setPending({ s: savedStart, e: endMin > 1440 ? 1440 : endMin });
+  };
+
+  const onPointerCancel = () => {
+    setDragStart(null);
+    setDragEnd(null);
   };
 
   // ── 블록 확정 ──────────────────────────────────────────────────────────────
@@ -177,7 +179,6 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
     persist(blocks.filter(b => b.id !== id));
   };
 
-  // ── 드래그 미리보기 ────────────────────────────────────────────────────────
   const previewPath = (() => {
     if (dragStart === null || dragEnd === null) return null;
     let span = dragEnd - dragStart;
@@ -187,20 +188,30 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
     return donutPath(dragStart, end > 1440 ? 1440 : end);
   })();
 
-  // ── 렌더 ───────────────────────────────────────────────────────────────────
+  // 모바일: SVG 크기 축소, 레이아웃 세로 전환
+  const svgSize = isMobile ? Math.min(window.innerWidth * 0.88, 320) : 360;
+
   return (
     <div
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-        zIndex: 10100, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 10100, display: 'flex', justifyContent: 'center',
+        // 모바일: 하단 시트, 데스크탑: 화면 중앙
+        alignItems: isMobile ? 'flex-end' : 'center',
+        padding: isMobile ? '0' : '0',
       }}
     >
       <div style={{
-        background: '#fff', borderRadius: '16px', padding: '24px',
-        width: '820px', maxWidth: '96vw', maxHeight: '92vh',
+        background: '#fff',
+        borderRadius: isMobile ? '20px 20px 0 0' : '16px',
+        padding: isMobile ? '20px 16px 28px' : '24px',
+        width: isMobile ? '100%' : '820px',
+        maxWidth: isMobile ? '100%' : '96vw',
+        maxHeight: isMobile ? '92vh' : '92vh',
         display: 'flex', flexDirection: 'column', gap: '16px',
-        boxShadow: '0 12px 48px rgba(0,0,0,0.28)', overflow: 'hidden',
+        boxShadow: '0 12px 48px rgba(0,0,0,0.28)',
+        overflowY: 'auto',
       }}>
 
         {/* 헤더 */}
@@ -217,11 +228,18 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
           </div>
         </div>
 
-        {/* 본문 */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>불러오는 중…</div>
         ) : (
-          <div style={{ display: 'flex', gap: '24px', overflow: 'auto', flex: 1, minHeight: 0 }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: '24px',
+            overflow: isMobile ? 'visible' : 'auto',
+            flex: 1,
+            minHeight: 0,
+            alignItems: isMobile ? 'center' : 'flex-start',
+          }}>
 
             {/* ── 원형 SVG ── */}
             <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -231,12 +249,19 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
               <svg
                 ref={svgRef}
                 viewBox="0 0 400 400"
-                width="360" height="360"
-                style={{ cursor: dragStart !== null ? 'crosshair' : 'default', userSelect: 'none', display: 'block' }}
-                onMouseDown={onMouseDown}
-                onMouseMove={onMouseMove}
-                onMouseUp={onMouseUp}
-                onMouseLeave={() => { setDragStart(null); setDragEnd(null); }}
+                width={svgSize}
+                height={svgSize}
+                style={{
+                  cursor: dragStart !== null ? 'crosshair' : 'default',
+                  userSelect: 'none',
+                  display: 'block',
+                  // 터치 기기에서 스크롤 대신 SVG 드래그 동작
+                  touchAction: 'none',
+                }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerCancel}
               >
                 {/* 배경 링 */}
                 <circle cx={CX} cy={CY} r={R_OUT} fill="#f5f7fa" />
@@ -331,8 +356,14 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
               </svg>
             </div>
 
-            {/* ── 우측 패널 ── */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0, overflowY: 'auto' }}>
+            {/* ── 우측(모바일: 하단) 패널 ── */}
+            <div style={{
+              flex: 1,
+              display: 'flex', flexDirection: 'column', gap: '12px',
+              minWidth: 0,
+              width: isMobile ? '100%' : undefined,
+              overflowY: isMobile ? 'visible' : 'auto',
+            }}>
 
               {/* 블록 추가 팝업 */}
               {pending && (
@@ -367,7 +398,7 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
                         key={c}
                         onClick={() => setNewColor(c)}
                         style={{
-                          width: '24px', height: '24px', borderRadius: '50%', background: c, cursor: 'pointer',
+                          width: '28px', height: '28px', borderRadius: '50%', background: c, cursor: 'pointer',
                           outline: newColor === c ? `3px solid ${c}` : 'none',
                           outlineOffset: '2px',
                           boxShadow: newColor === c ? '0 0 0 2px #fff inset' : 'none',
@@ -379,15 +410,15 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
                     <button
                       onClick={confirmBlock}
                       style={{
-                        flex: 1, padding: '9px', borderRadius: '8px', border: 'none',
-                        background: '#89CFF0', color: '#fff', fontWeight: 700, fontSize: '13px', cursor: 'pointer',
+                        flex: 1, padding: '11px', borderRadius: '8px', border: 'none',
+                        background: '#89CFF0', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer',
                       }}
                     >추가</button>
                     <button
                       onClick={() => { setPending(null); setLabelError(false); }}
                       style={{
-                        padding: '9px 18px', borderRadius: '8px',
-                        border: '1px solid #dadce0', background: '#fff', fontSize: '13px', cursor: 'pointer',
+                        padding: '11px 18px', borderRadius: '8px',
+                        border: '1px solid #dadce0', background: '#fff', fontSize: '14px', cursor: 'pointer',
                       }}
                     >취소</button>
                   </div>
@@ -410,12 +441,9 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
                         onClick={() => { if (window.confirm(`"${b.label}" 블록을 삭제하시겠습니까?`)) deleteBlock(b.id); }}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '8px',
-                          padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
+                          padding: '10px 12px', borderRadius: '8px', cursor: 'pointer',
                           background: `${b.color}18`, border: `1.5px solid ${b.color}55`,
-                          transition: 'opacity .15s',
                         }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-                        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
                       >
                         <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: b.color, flexShrink: 0 }} />
                         <span style={{ fontWeight: 600, fontSize: '13px', color: '#344054', flex: 1 }}>{b.label}</span>
@@ -431,7 +459,6 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
                 )}
               </div>
 
-              {/* 합계 */}
               {blocks.length > 0 && (
                 <div style={{ fontSize: '11px', color: '#9aa0a6', borderTop: '1px solid #f0f0f0', paddingTop: '8px' }}>
                   총 {blocks.reduce((s, b) => s + b.endMin - b.startMin, 0)}분 / 1440분 (
@@ -440,7 +467,7 @@ const DayScheduleModal: React.FC<Props> = ({ date, userId, onClose }) => {
               )}
 
               {!pending && (
-                <div style={{ fontSize: '11px', color: '#b0b8c8', lineHeight: '1.7', marginTop: 'auto' }}>
+                <div style={{ fontSize: '11px', color: '#b0b8c8', lineHeight: '1.7', marginTop: isMobile ? '4px' : 'auto' }}>
                   💡 원 위에서 <b>시계 방향으로 드래그</b>하면 블록을 추가합니다.<br />
                   활동 목록 항목을 클릭하면 삭제됩니다.
                 </div>
