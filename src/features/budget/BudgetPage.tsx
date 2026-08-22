@@ -369,7 +369,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     // 투자 항목은 카테고리 불필요 (투자 유형으로 대체)
     if (!isInvest && !form.category) { alert('카테고리를 선택해주세요'); return; }
     if (!amount) { alert('금액을 입력해주세요'); return; }
-    if (form.entryType === 'EXPENSE' && !form.accountMain) { alert('통장/카드를 선택해주세요'); return; }
+    if (form.entryType === 'EXPENSE' && !form.accountMain && !form.cardName) { alert('통장/카드를 선택해주세요'); return; }
     // 투자 항목의 카테고리는 투자 유형 값으로 자동 설정
     const resolvedCategory = isInvest ? (form.investmentType || '투자') : (form.category ?? '');
     const entryDate = form.entryDate ?? today();
