@@ -347,11 +347,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     const label = `이체: ${transferFrom} → ${transferTo}`;
     const base = { userId, yearMonth: resolvedYearMonth, entryDate, isFixed: false, isInvestment: false, isTransfer: true, memo: form.memo || undefined };
     try {
-      const [exp, inc] = await Promise.all([
-        createBudgetEntry({ ...base, entryType: 'EXPENSE', category: '이체', account: transferFrom, amount, merchant: label }),
-        createBudgetEntry({ ...base, entryType: 'INCOME',  category: '이체', account: transferTo,   amount, merchant: label }),
-      ]);
-      if (resolvedYearMonth === yearMonth) setEntries(prev => [exp, inc, ...prev]);
+      // 순차 생성: 출금 먼저 → 입금 생성 시 출금 id 참조 → 출금 PATCH로 입금 id 역참조
+      const exp = await createBudgetEntry({ ...base, entryType: 'EXPENSE', category: '이체', account: transferFrom, amount, merchant: label });
+      const inc = await createBudgetEntry({ ...base, entryType: 'INCOME',  category: '이체', account: transferTo,   amount, merchant: label, transferPairId: exp.id });
+      const updatedExp = await updateBudgetEntry(exp.id, { transferPairId: inc.id });
+      if (resolvedYearMonth === yearMonth) setEntries(prev => [updatedExp, inc, ...prev]);
       closeForm();
     } catch { alert('이체 저장에 실패했습니다'); }
   };
@@ -468,24 +468,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   };
 
   const handleDelete = async (entry: BudgetEntry) => {
-    // 이체 항목 — merchant·날짜·금액이 동일한 쌍을 함께 삭제
+    // 이체 항목 — transferPairId로 연결된 상대 항목 함께 삭제
     const isXfer = entry.isTransfer || entry.category === '이체';
     if (isXfer) {
-      const paired = entries.filter(
-        e => e.id !== entry.id &&
-          (e.isTransfer || e.category === '이체') &&
-          e.entryDate === entry.entryDate &&
-          e.amount === entry.amount &&
-          e.merchant === entry.merchant
-      );
-      const confirmMsg = paired.length > 0
-        ? `이체 항목을 삭제할까요?\n\n연결된 항목 (${paired.map(e => `${e.entryType === 'INCOME' ? '입금' : '출금'} ${e.account ?? ''}`).join(', ')})도 함께 삭제됩니다.`
+      const paired = entry.transferPairId ? entries.find(e => e.id === entry.transferPairId) : undefined;
+      const confirmMsg = paired
+        ? `이체 항목을 삭제할까요?\n\n연결된 ${paired.entryType === 'INCOME' ? '입금' : '출금'} 항목 (${paired.account ?? paired.accountMain ?? ''})도 함께 삭제됩니다.`
         : `이체 항목을 삭제할까요? (연결 항목 없음)`;
       if (!window.confirm(confirmMsg)) return;
       try {
-        const toDelete = [entry, ...paired];
-        await Promise.all(toDelete.map(e => deleteBudgetEntry(e.id)));
-        const deletedIds = new Set(toDelete.map(e => e.id));
+        const toDelete = paired ? [entry.id, paired.id] : [entry.id];
+        await Promise.all(toDelete.map(id => deleteBudgetEntry(id)));
+        const deletedIds = new Set(toDelete);
         setEntries(prev => prev.filter(e => !deletedIds.has(e.id)));
       } catch { alert('삭제에 실패했습니다'); }
       return;

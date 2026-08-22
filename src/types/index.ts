@@ -580,7 +580,8 @@ export interface BudgetEntry {
   isFixed: boolean;
   isInvestment: boolean;
   investmentType?: string;
-  isTransfer?: boolean;  // 이체 여부
+  isTransfer?: boolean;   // 이체 여부
+  transferPairId?: number; // 이체 쌍 상대 항목 id (출금↔입금 연결)
   merchant?: string;    // 지출처 (예: 스타벅스, 쿠팡)
   installmentMonths?: number;   // 할부 총 개월수 (null=일시불)
   installmentSeq?: number;      // 할부 회차 (1부터 시작)
