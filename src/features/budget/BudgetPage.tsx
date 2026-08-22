@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useIsMobile } from '../../hooks/useIsMobile';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, ReferenceLine,
   PieChart, Pie, Cell, Tooltip as PieTooltip,
 } from 'recharts';
 import {
@@ -2648,6 +2649,8 @@ const MarketReportView: React.FC = () => {
   const [vixTipOpen, setVixTipOpen] = useState(false);
   // 상승 종목 테이블 접기/펼치기 (기본 접힘)
   const [gainersOpen, setGainersOpen] = useState<Record<string, boolean>>({});
+  // 투자자 순매수 동향 뷰 토글 (table | chart)
+  const [investorFlowView, setInvestorFlowView] = useState<'table' | 'chart'>('table');
 
   const load = async () => {
     setLoading(true);
@@ -3233,45 +3236,93 @@ const MarketReportView: React.FC = () => {
                 // 날짜 포맷: YYYYMMDD → MM/DD
                 const fmtDate = (d: string) => d.length === 8 ? `${d.slice(4, 6)}/${d.slice(6, 8)}` : d;
 
+                // 그래프용 데이터: 날짜별 주요 투자자 순매수 (개인/외국인/기관계)
+                const CHART_COLS = [
+                  { key: 'individual', label: '개인',   color: '#4e79a7' },
+                  { key: 'foreign',    label: '외국인', color: '#f28e2b' },
+                  { key: 'institution', label: '기관계', color: '#59a14f' },
+                ];
+                const chartData = flow.map(day => {
+                  const row: Record<string, string | number> = { date: fmtDate(day.date) };
+                  CHART_COLS.forEach(c => {
+                    row[c.key] = day.investors[c.key]?.diffHundredMillion ?? 0;
+                  });
+                  return row;
+                });
+
                 return (
                   <div style={{ marginBottom: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
                       <div style={{ width: '3px', height: '14px', borderRadius: '2px', background: '#c0404a', flexShrink: 0 }} />
                       <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>KOSPI 투자자별 순매수 동향 (억원)</span>
+                      <button
+                        onClick={() => setInvestorFlowView(v => v === 'table' ? 'chart' : 'table')}
+                        style={{
+                          marginLeft: 'auto', fontSize: '11px', fontWeight: 600,
+                          padding: '3px 10px', borderRadius: '14px', cursor: 'pointer',
+                          border: '1px solid #89CFF0', color: investorFlowView === 'chart' ? '#fff' : '#1a3a5c',
+                          background: investorFlowView === 'chart' ? '#89CFF0' : '#f0f8fd',
+                        }}
+                      >
+                        {investorFlowView === 'chart' ? '표로 보기' : '그래프로 보기'}
+                      </button>
                     </div>
-                    <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #dde4ed', background: '#fff' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '480px' }}>
-                        <thead>
-                          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e0e6ef' }}>
-                            <th style={{ padding: '6px 10px', textAlign: 'left', color: '#9aa0a6', fontWeight: 600, whiteSpace: 'nowrap' }}>날짜</th>
-                            {activeCols.map(c => (
-                              <th key={c.key} style={{ padding: '6px 8px', textAlign: 'right', color: '#9aa0a6', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.label}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {flow.map((day, i) => (
-                            <tr key={day.date} style={{ borderBottom: i < flow.length - 1 ? '1px solid #f0f4f8' : 'none' }}>
-                              <td style={{ padding: '6px 10px', color: '#344054', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtDate(day.date)}</td>
-                              {activeCols.map(c => {
-                                const inv = day.investors[c.key];
-                                const val = inv ? inv.diffHundredMillion : 0;
-                                return (
-                                  <td key={c.key} style={{
-                                    padding: '5px 8px', textAlign: 'right', fontWeight: 600,
-                                    color: inv ? cellColor(val) : '#ccc',
-                                    background: inv ? cellBg(val) : 'transparent',
-                                    whiteSpace: 'nowrap',
-                                  }}>
-                                    {inv ? fmtAmt(val) : '-'}
-                                  </td>
-                                );
-                              })}
+
+                    {investorFlowView === 'table' ? (
+                      <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #dde4ed', background: '#fff' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '480px' }}>
+                          <thead>
+                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e0e6ef' }}>
+                              <th style={{ padding: '6px 10px', textAlign: 'left', color: '#9aa0a6', fontWeight: 600, whiteSpace: 'nowrap' }}>날짜</th>
+                              {activeCols.map(c => (
+                                <th key={c.key} style={{ padding: '6px 8px', textAlign: 'right', color: '#9aa0a6', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.label}</th>
+                              ))}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {flow.map((day, i) => (
+                              <tr key={day.date} style={{ borderBottom: i < flow.length - 1 ? '1px solid #f0f4f8' : 'none' }}>
+                                <td style={{ padding: '6px 10px', color: '#344054', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtDate(day.date)}</td>
+                                {activeCols.map(c => {
+                                  const inv = day.investors[c.key];
+                                  const val = inv ? inv.diffHundredMillion : 0;
+                                  return (
+                                    <td key={c.key} style={{
+                                      padding: '5px 8px', textAlign: 'right', fontWeight: 600,
+                                      color: inv ? cellColor(val) : '#ccc',
+                                      background: inv ? cellBg(val) : 'transparent',
+                                      whiteSpace: 'nowrap',
+                                    }}>
+                                      {inv ? fmtAmt(val) : '-'}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #dde4ed', padding: '12px 8px 8px 0' }}>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9aa0a6' }} />
+                            <YAxis tick={{ fontSize: 10, fill: '#9aa0a6' }} tickFormatter={(v: number) => `${(v / 1).toFixed(0)}`} />
+                            <Tooltip
+                              formatter={(value: number, name: string) => [fmtAmt(value), name]}
+                              labelStyle={{ fontSize: 11, fontWeight: 700 }}
+                              contentStyle={{ fontSize: 11 }}
+                            />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <ReferenceLine y={0} stroke="#aaa" strokeWidth={1} />
+                            {CHART_COLS.map(c => (
+                              <Bar key={c.key} dataKey={c.key} name={c.label} fill={c.color} radius={[3, 3, 0, 0]} maxBarSize={20} />
+                            ))}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
