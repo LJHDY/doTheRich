@@ -8,6 +8,7 @@ import {
   disconnectNaverCalendar,
   getCommonCodes,
   getDdays,
+  getDayScheduleDates,
   getFixedExpenseCalendar,
   getNaverCalendarAuthUrl,
   getNaverCalendarStatus,
@@ -281,6 +282,8 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
   const [ddayOpen, setDdayOpen]         = useState(true);
   const [dateActionPopup, setDateActionPopup] = useState<{ date: string; x: number; y: number } | null>(null);
   const [dayScheduleDate, setDayScheduleDate] = useState<string | null>(null);
+  // 하루 스케줄이 존재하는 날짜 Set (달력 🗓️ 표시용)
+  const [scheduledDates, setScheduledDates] = useState<Set<string>>(new Set());
   const [todoForm, setTodoForm]         = useState<{ date: string } | null>(null);
   const [todoInput, setTodoInput]       = useState('');
   const [todoUser, setTodoUser]         = useState<'ldy' | 'juhae' | 'common'>('ldy');
@@ -338,16 +341,18 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
     setLoading(true);
     const ym6 = yearMonth.replace('-', ''); // YYYY-MM → YYYYMM
     try {
-      const [sched, feData, todoData, wDates] = await Promise.all([
+      const [sched, feData, todoData, wDates, dsDates] = await Promise.all([
         getSchedules(yearMonth),
         getFixedExpenseCalendar(ym6),
         getTodos(yearMonth),
         getWorkoutCalendar(yearMonth),
+        getDayScheduleDates(yearMonth),
       ]);
       setSchedules(sched);
       setFeCalendar(feData);
       setTodos(todoData);
       setWorkoutCalendar(wDates);
+      setScheduledDates(new Set(dsDates));
     } finally { setLoading(false); }
   }, [yearMonth]);
 
@@ -955,13 +960,25 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
                           onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#e0f4fc' : '#f8fbff'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isToday ? '#f0f8fd' : '#fff'; }}
                         >
-                          {/* 날짜 숫자 + 고정비 원 + 운동 */}
+                          {/* 날짜 숫자 + 하루스케줄 🗓️ + 고정비 원 + 운동 */}
                           <div style={{ height: DAY_NUM_H, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                            <span style={{
-                              fontWeight: isToday ? 800 : 500,
-                              fontSize: isMobile ? '13px' : '15px',
-                              color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
-                            }}>{day}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                              <span style={{
+                                fontWeight: isToday ? 800 : 500,
+                                fontSize: isMobile ? '13px' : '15px',
+                                color: isToday ? '#1565c0' : isSun ? '#E06060' : isSat ? '#1565c0' : '#344054',
+                              }}>{day}</span>
+                              {scheduledDates.has(dateStr) && (
+                                <span
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setDayScheduleDate(dateStr);
+                                  }}
+                                  title="하루 스케줄 보기"
+                                  style={{ fontSize: isMobile ? '10px' : '11px', lineHeight: 1, cursor: 'pointer' }}
+                                >🗓️</span>
+                              )}
+                            </div>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px', paddingTop: '1px' }}>
                               {/* 운동 기록 — 유저별·종류별 이모지 */}
                               {(['ldy', 'juhae'] as const).map(uid => {
@@ -1359,7 +1376,11 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
         <DayScheduleModal
           date={dayScheduleDate}
           userId="ldy"
-          onClose={() => setDayScheduleDate(null)}
+          onClose={() => {
+            setDayScheduleDate(null);
+            // 스케줄 저장/삭제 후 달력 🗓️ 표시 갱신
+            getDayScheduleDates(yearMonth).then(dates => setScheduledDates(new Set(dates))).catch(() => {});
+          }}
         />
       )}
 

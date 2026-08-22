@@ -1670,6 +1670,14 @@ export const getTransitRoutes = async (
 };
 
 // ── 하루 스케줄 ────────────────────────────────────────────────────────────────
+/** 해당 월에 하루 스케줄이 존재하는 날짜 목록 (YYYY-MM-DD 배열) — 달력 🗓️ 표시용 */
+export const getDayScheduleDates = async (yearMonth: string): Promise<string[]> => {
+  const { data } = await api.get<{ dates: string[] }>('/api/day-schedules/dates', {
+    params: { year_month: yearMonth },
+  });
+  return data.dates;
+};
+
 export const getDaySchedule = async (scheduleDate: string, userId: string): Promise<DayScheduleBlock[]> => {
   const { data } = await api.get<{ blocks: DayScheduleBlock[] }>('/api/day-schedules', {
     params: { schedule_date: scheduleDate, user_id: userId },
