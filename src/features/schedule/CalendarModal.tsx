@@ -1299,7 +1299,7 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
           style={{
             position: 'fixed',
             left: Math.max(4, Math.min(dateActionPopup.x, window.innerWidth - 160)),
-            top: Math.min(dateActionPopup.y, window.innerHeight - 100),
+            top: Math.min(dateActionPopup.y, window.innerHeight - 180),
             zIndex: 10001,
             background: '#fff',
             border: '1px solid #e0e0e0',
