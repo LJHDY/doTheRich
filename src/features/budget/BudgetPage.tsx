@@ -56,7 +56,7 @@ import {
   generateKrCloseReport,
   deleteMarketReport,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 import WorkoutTab from './WorkoutTab';
 
@@ -3163,6 +3163,81 @@ const MarketReportView: React.FC = () => {
                       >
                         <span style={{ fontSize: '14px' }}>N</span> 네이버 증권
                       </a>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 투자자별 순매수 동향 — kr_close 리포트 전용 */}
+              {selected.reportType === 'kr_close' && selected.krInvestorFlow && selected.krInvestorFlow.length > 0 && (() => {
+                const flow: KrInvestorDayFlow[] = selected.krInvestorFlow;
+                // 표시할 투자자 컬럼 순서 (백엔드 key 기준)
+                const COLS: { key: string; label: string }[] = [
+                  { key: 'individual',    label: '개인' },
+                  { key: 'foreign',       label: '외국인' },
+                  { key: 'institution',   label: '기관계' },
+                  { key: 'financial_inv', label: '금융투자' },
+                  { key: 'insurance',     label: '보험' },
+                  { key: 'trust_samo',    label: '투신사모' },
+                  { key: 'bank',          label: '은행' },
+                  { key: 'other_fin',     label: '기타금융' },
+                  { key: 'pension',       label: '연기금' },
+                  { key: 'other_corp',    label: '기타법인' },
+                ];
+                // 데이터가 있는 컬럼만 필터
+                const activeCols = COLS.filter(c =>
+                  flow.some(d => d.investors[c.key] !== undefined)
+                );
+                const fmtAmt = (v: number) => {
+                  const abs = Math.abs(v);
+                  const str = abs >= 10000
+                    ? `${(abs / 10000).toFixed(1).replace(/\.0$/, '')}조`
+                    : `${abs.toLocaleString()}억`;
+                  return v >= 0 ? `+${str}` : `-${str}`;
+                };
+                const cellColor = (v: number) => v >= 0 ? '#1b5e20' : '#b71c1c';
+                const cellBg    = (v: number) => v >= 0 ? '#f1f8f1' : '#fff5f5';
+                // 날짜 포맷: YYYYMMDD → MM/DD
+                const fmtDate = (d: string) => d.length === 8 ? `${d.slice(4, 6)}/${d.slice(6, 8)}` : d;
+
+                return (
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
+                      <div style={{ width: '3px', height: '14px', borderRadius: '2px', background: '#c0404a', flexShrink: 0 }} />
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>KOSPI 투자자별 순매수 동향 (억원)</span>
+                    </div>
+                    <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #dde4ed', background: '#fff' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '480px' }}>
+                        <thead>
+                          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e0e6ef' }}>
+                            <th style={{ padding: '6px 10px', textAlign: 'left', color: '#9aa0a6', fontWeight: 600, whiteSpace: 'nowrap' }}>날짜</th>
+                            {activeCols.map(c => (
+                              <th key={c.key} style={{ padding: '6px 8px', textAlign: 'right', color: '#9aa0a6', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.label}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {flow.map((day, i) => (
+                            <tr key={day.date} style={{ borderBottom: i < flow.length - 1 ? '1px solid #f0f4f8' : 'none' }}>
+                              <td style={{ padding: '6px 10px', color: '#344054', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtDate(day.date)}</td>
+                              {activeCols.map(c => {
+                                const inv = day.investors[c.key];
+                                const val = inv ? inv.diffHundredMillion : 0;
+                                return (
+                                  <td key={c.key} style={{
+                                    padding: '5px 8px', textAlign: 'right', fontWeight: 600,
+                                    color: inv ? cellColor(val) : '#ccc',
+                                    background: inv ? cellBg(val) : 'transparent',
+                                    whiteSpace: 'nowrap',
+                                  }}>
+                                    {inv ? fmtAmt(val) : '-'}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 );

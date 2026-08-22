@@ -753,6 +753,12 @@ export interface KrTopGainer {
   close: number | null;
 }
 
+/** 투자자별 매매동향 — 1거래일치 */
+export interface KrInvestorDayFlow {
+  date: string;   // 'YYYYMMDD'
+  investors: Record<string, { label: string; diffHundredMillion: number }>;
+}
+
 /** 부동산/대출상담사 연락처 */
 export interface Contact {
   id: number;
@@ -785,6 +791,7 @@ export interface MarketReport {
   fearGreed: FearGreedData | null;            // CNN Fear & Greed Index
   krSectors: KrSectorData[];                  // 섹터별 등락률 (kr_close 전용)
   krTopGainers: KrTopGainer[];               // 상승률 상위 종목 (kr_close 전용)
+  krInvestorFlow: KrInvestorDayFlow[];        // 투자자별 매매동향 최근 5거래일 (kr_close 전용)
   content: string;                            // Gemini 분석 마크다운
   createdAt: string | null;
   updatedAt: string | null;

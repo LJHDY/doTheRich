@@ -1368,6 +1368,10 @@ export const getMarketReports = async (): Promise<MarketReport[]> => {
         changePct: g.changePct,
         close: g.close,
       })),
+      krInvestorFlow: (r.krInvestorFlow || []).map((d: any) => ({
+        date: d.date,
+        investors: d.investors,
+      })),
       content: r.content,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
