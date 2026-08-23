@@ -2183,7 +2183,7 @@ const EntryRow: React.FC<{
               <>
                 <span> › {entry.account}</span>
                 {myAccountNames && !myAccountNames.has(entry.account) && otherUserName && (
-                  <span style={{ marginLeft: '4px', fontSize: '10px', background: '#fce4ec', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: '4px', padding: '1px 5px' }}>
+                  <span style={{ marginLeft: '4px', fontSize: '10px', background: '#f0f0f0', color: '#344054', border: '1px solid #d0d0d0', borderRadius: '4px', padding: '1px 5px' }}>
                     {otherUserName}
                   </span>
                 )}
@@ -2199,7 +2199,7 @@ const EntryRow: React.FC<{
                   💳 {entry.cardName}
                 </span>
                 {myAccountNames && !myAccountNames.has(entry.cardName) && otherUserName && (
-                  <span style={{ marginLeft: '3px', fontSize: '10px', background: '#fce4ec', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: '4px', padding: '1px 5px' }}>
+                  <span style={{ marginLeft: '3px', fontSize: '10px', background: '#f0f0f0', color: '#344054', border: '1px solid #d0d0d0', borderRadius: '4px', padding: '1px 5px' }}>
                     {otherUserName}
                   </span>
                 )}
