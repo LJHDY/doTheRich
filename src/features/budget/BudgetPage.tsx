@@ -374,7 +374,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     if (categoryFilters.size > 0) base = base.filter(e => categoryFilters.has(e.category));
     // 통장 필터 — account(중분류) 또는 accountMain(대분류) 일치
     // accountMainFilter: 해당 pm의 accountMain값도 같이 매칭 (accountMain-only 수입 항목 포함)
-    if (accountFilter) {
+    if (accountFilter === '__UNASSIGNED__') {
+      // 미분류: 내 결제수단(통장·카드) 어느 것도 해당 안 되는 항목
+      const myNames = new Set([
+        ...paymentMethods.map(p => p.name),
+        ...paymentMethods.filter(p => p.accountMain).map(p => p.accountMain!),
+      ]);
+      base = base.filter(e =>
+        !myNames.has(e.account ?? '') &&
+        !myNames.has(e.accountMain ?? '') &&
+        !myNames.has(e.cardName ?? '')
+      );
+    } else if (accountFilter) {
       const pm = paymentMethods.find(p => p.name === accountFilter);
       base = base.filter(e =>
         e.account === accountFilter ||
@@ -831,8 +842,26 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 Object.entries(summary.accountMap).forEach(([k, v]) => {
                   if (!knownNames.has(k)) { unassigned.income += v.income; unassigned.expense += v.expense; }
                 });
-                const unassignedCard =(unassigned.income > 0 || unassigned.expense > 0) ? (
-                  <AccountCard key="미분류" accName="미분류 (통장 미지정)" opening={0} income={unassigned.income} expense={unassigned.expense} dimmed />
+                const unassignedCard = (unassigned.income > 0 || unassigned.expense > 0) ? (
+                  <div
+                    key="미분류"
+                    onClick={() => { setCardFilter(null); setAccountFilter(prev => prev === '__UNASSIGNED__' ? null : '__UNASSIGNED__'); }}
+                    style={{
+                      background: accountFilter === '__UNASSIGNED__' ? '#fef9e7' : '#fafafa',
+                      border: `1px solid ${accountFilter === '__UNASSIGNED__' ? '#f0c040' : '#e0e0e0'}`,
+                      borderRadius: '10px', padding: '10px 14px', minWidth: '160px', fontSize: '12px',
+                      cursor: 'pointer',
+                      boxShadow: accountFilter === '__UNASSIGNED__' ? '0 0 0 2px #f0c04060' : 'none',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: '#9aa0a6', marginBottom: '6px' }}>미분류 (통장 미지정)</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#5f6368' }}>
+                      {unassigned.income > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>+ 수입</span><span style={{ color: '#4CAF50', fontWeight: 600 }}>{formatAmountShort(unassigned.income)}</span></div>}
+                      {unassigned.expense > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>- 지출</span><span style={{ color: '#E06060', fontWeight: 600 }}>{formatAmountShort(unassigned.expense)}</span></div>}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#bbb', marginTop: '6px' }}>클릭하여 이력 보기</div>
+                  </div>
                 ) : null;
 
                 // 합계 카드 — 이체 제외 수입/지출 (요약의 총수입·총지출과 일치)
@@ -1138,12 +1167,14 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             <span
               onClick={() => setAccountFilter(null)}
               style={{
-                fontSize: '12px', fontWeight: 700, color: '#1565c0',
-                background: '#e0f0ff', border: '1px solid #4BAAD4',
+                fontSize: '12px', fontWeight: 700,
+                color: accountFilter === '__UNASSIGNED__' ? '#7d6608' : '#1565c0',
+                background: accountFilter === '__UNASSIGNED__' ? '#fef9e7' : '#e0f0ff',
+                border: `1px solid ${accountFilter === '__UNASSIGNED__' ? '#f0c040' : '#4BAAD4'}`,
                 borderRadius: '12px', padding: '2px 10px', cursor: 'pointer',
               }}
             >
-              🏦 {accountFilter} ×
+              {accountFilter === '__UNASSIGNED__' ? '미분류 ×' : `🏦 ${accountFilter} ×`}
             </span>
           </div>
         )}
@@ -1248,9 +1279,14 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 항목이 없습니다. + 추가로 기록을 시작하세요.
               </div>
             )}
-            {!loading && filtered.map(entry => (
-              <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete} />
-            ))}
+            {!loading && (() => {
+              const myAccountNames = new Set(paymentMethods.map(p => p.name));
+              const otherUserName = BUDGET_USERS.find(u => u.id !== userId)?.name;
+              return filtered.map(entry => (
+                <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete}
+                  myAccountNames={myAccountNames} otherUserName={otherUserName} />
+              ));
+            })()}
           </div>
         )}
       </div>
@@ -2076,7 +2112,10 @@ const CalendarView: React.FC<{
             </div>
           ) : (
             selectedEntries.map(e => (
-              <EntryRow key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete} />
+              <EntryRow key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete}
+                myAccountNames={new Set(paymentMethods.map(p => p.name))}
+                otherUserName={BUDGET_USERS.find(u => u.id !== userId)?.name}
+              />
             ))
           )}
         </div>
@@ -2089,7 +2128,9 @@ const EntryRow: React.FC<{
   entry: BudgetEntry;
   onEdit: (e: BudgetEntry) => void;
   onDelete: (e: BudgetEntry) => void;
-}> = ({ entry, onEdit, onDelete }) => {
+  myAccountNames?: Set<string>; // 내 결제수단 이름 Set — 미포함 시 상대방 결제수단으로 표시
+  otherUserName?: string;       // 상대방 이름 (예: '주해')
+}> = ({ entry, onEdit, onDelete, myAccountNames, otherUserName }) => {
   const isIncome = entry.entryType === 'INCOME';
   const dateStr = entry.entryDate.slice(5); // "08-12"
 
@@ -2125,15 +2166,31 @@ const EntryRow: React.FC<{
           <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '2px' }}>
             {entry.merchant && <span style={{ color: '#5f6368', fontWeight: 600 }}>{entry.merchant}</span>}
             {entry.accountMain && <span>{entry.merchant ? ' · ' : ''}{entry.accountMain}</span>}
-            {entry.account && <span> › {entry.account}</span>}
+            {entry.account && (
+              <>
+                <span> › {entry.account}</span>
+                {myAccountNames && !myAccountNames.has(entry.account) && otherUserName && (
+                  <span style={{ marginLeft: '4px', fontSize: '10px', background: '#fce4ec', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: '4px', padding: '1px 5px' }}>
+                    {otherUserName}
+                  </span>
+                )}
+              </>
+            )}
             {entry.cardName && (
-              <span style={{
-                marginLeft: '4px', fontSize: '10px', background: '#fff3e0',
-                color: '#E65100', border: '1px solid #FFB74D',
-                borderRadius: '4px', padding: '1px 5px',
-              }}>
-                💳 {entry.cardName}
-              </span>
+              <>
+                <span style={{
+                  marginLeft: '4px', fontSize: '10px', background: '#fff3e0',
+                  color: '#E65100', border: '1px solid #FFB74D',
+                  borderRadius: '4px', padding: '1px 5px',
+                }}>
+                  💳 {entry.cardName}
+                </span>
+                {myAccountNames && !myAccountNames.has(entry.cardName) && otherUserName && (
+                  <span style={{ marginLeft: '3px', fontSize: '10px', background: '#fce4ec', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: '4px', padding: '1px 5px' }}>
+                    {otherUserName}
+                  </span>
+                )}
+              </>
             )}
             {/* 할부 배지 — installment_seq/months DB 컬럼 기반 */}
             {entry.installmentSeq && entry.installmentMonths && (
