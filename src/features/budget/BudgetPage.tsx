@@ -58,7 +58,7 @@ import {
   generateKrCloseReport,
   deleteMarketReport,
 } from '../../services/api';
-import { AssetSnapshotCell, BudgetEntry, CommonCode, FixedExpense, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 import WorkoutTab from './WorkoutTab';
 
@@ -4245,7 +4245,7 @@ const AssetView: React.FC = () => {
   const gtSum = gt0 + gt1;
 
   // ── 그래프 옵션 상태 ──────────────────────────────────────────────────
-  const [chartMode, setChartMode] = useState<'USER' | 'LIQUIDITY'>('USER');
+  const [chartMode, setChartMode] = useState<'USER' | 'LIQUIDITY' | 'DETAIL'>('USER');
   // 제외할 자산 항목 키 (기본: 보증금·퇴직금·주택청약저축 — 변동이 적어 그래프 왜곡 유발)
   const [chartExcludeKeys, setChartExcludeKeys] = useState<Set<string>>(
     new Set(['보증금', '퇴직금', '주택청약저축'])
@@ -4259,50 +4259,99 @@ const AssetView: React.FC = () => {
   // 유저별 모드에서 개인 라인 표시 여부 (false = 합산만)
   const [chartShowSplit, setChartShowSplit] = useState(true);
 
-  // ── 차트 데이터 계산 — cellMap/dates를 직접 참조해 deps 명시 ──────────
+  // ── 세부 항목별 그래프 상태 ───────────────────────────────────────────
+  const [detailChartAsset, setDetailChartAsset] = useState<string>('주식');
+  const [allDetails, setAllDetails] = useState<Map<string, AssetSnapshotDetail[]>>(new Map());
+  const [detailsLoading, setDetailsLoading] = useState(false);
+
+  // DETAIL 모드 진입 시 모든 날짜의 세부 내역 일괄 병렬 조회
+  useEffect(() => {
+    if (chartMode !== 'DETAIL' || dates.length === 0) return;
+    setDetailsLoading(true);
+    Promise.all(dates.map(d =>
+      getAssetSnapshotDetails(d).then(rows => [d, rows] as [string, AssetSnapshotDetail[]])
+    ))
+      .then(pairs => setAllDetails(new Map(pairs)))
+      .catch(() => {})
+      .finally(() => setDetailsLoading(false));
+  }, [chartMode, dates]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 차트 데이터 계산 — 원 단위로 저장해 tooltip 정확도 유지 ───────────
   const chartDataByUser = useMemo(() => {
-    const toKrwLocal = (assetType: string, amount: number) =>
+    const toKrw = (assetType: string, amount: number) =>
       ASSET_COLUMNS.find(c => c.key === assetType)?.isDollar ? Math.round(amount * exchangeRate) : amount;
     const cols = ASSET_COLUMNS.filter(c => !chartExcludeKeys.has(c.key));
-    const grandKrwLocal = (date: string, userId: string) =>
-      cols.reduce((s, c) => s + toKrwLocal(c.key, cellMap[date]?.[userId]?.[c.key] ?? 0), 0);
+    const grandKrw = (date: string, userId: string) =>
+      cols.reduce((s, c) => s + toKrw(c.key, cellMap[date]?.[userId]?.[c.key] ?? 0), 0);
     return [...dates].reverse().map(date => {
-      const v0 = grandKrwLocal(date, u0.id);
-      const v1 = grandKrwLocal(date, u1.id);
-      const toUk = (v: number) => Math.round(v / 1e6) / 100;
+      const v0 = grandKrw(date, u0.id);
+      const v1 = grandKrw(date, u1.id);
       return {
         label: date.slice(5),
         fullDate: date,
-        [u0.name]: toUk(v0),
-        [u1.name]: toUk(v1),
-        '합산': toUk(v0 + v1),
+        [u0.name]: Math.round(v0),
+        [u1.name]: Math.round(v1),
+        '합산': Math.round(v0 + v1),
       };
     });
   }, [cellMap, dates, exchangeRate, u0, u1, chartExcludeKeys]);
 
   const chartDataByLiquidity = useMemo(() => {
-    const toKrwLocal = (assetType: string, amount: number) =>
+    const toKrw = (assetType: string, amount: number) =>
       ASSET_COLUMNS.find(c => c.key === assetType)?.isDollar ? Math.round(amount * exchangeRate) : amount;
-    const getKrwLocal = (date: string, userId: string, key: string) =>
-      toKrwLocal(key, cellMap[date]?.[userId]?.[key] ?? 0);
+    const getKrw = (date: string, userId: string, key: string) =>
+      toKrw(key, cellMap[date]?.[userId]?.[key] ?? 0);
     const cols = ASSET_COLUMNS.filter(c => !chartExcludeKeys.has(c.key));
     return [...dates].reverse().map(date => {
-      const toUk = (v: number) => Math.round(v / 1e6) / 100;
       const liquid = cols
         .filter(c => c.group === '즉시 사용 가능')
-        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrwLocal(date, u.id, c.key), 0), 0);
+        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrw(date, u.id, c.key), 0), 0);
       const illiquid = cols
         .filter(c => c.group === '즉시 사용 불가')
-        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrwLocal(date, u.id, c.key), 0), 0);
+        .reduce((s, c) => s + BUDGET_USERS.reduce((us, u) => us + getKrw(date, u.id, c.key), 0), 0);
       return {
         label: date.slice(5),
         fullDate: date,
-        '즉시 사용 가능': toUk(liquid),
-        '즉시 사용 불가': toUk(illiquid),
-        '합산': toUk(liquid + illiquid),
+        '즉시 사용 가능': Math.round(liquid),
+        '즉시 사용 불가': Math.round(illiquid),
+        '합산': Math.round(liquid + illiquid),
       };
     });
   }, [cellMap, dates, exchangeRate, chartExcludeKeys]);
+
+  // 세부 항목별 차트 데이터 — "유저명 · 계좌명" 키로 계좌별 라인 생성
+  const DETAIL_COLORS = ['#1565c0', '#E06060', '#4CAF50', '#FF9800', '#9C27B0', '#00BCD4', '#795548', '#607D8B', '#E91E63', '#009688'];
+  const chartDataByDetail = useMemo(() => {
+    if (allDetails.size === 0) return { data: [] as Record<string, any>[], seriesKeys: [] as string[] };
+    const isDollar = ASSET_COLUMNS.find(c => c.key === detailChartAsset)?.isDollar ?? false;
+
+    // 날짜 오름차순으로 순회해 계좌 키 순서 확정
+    const keyOrder: string[] = [];
+    const seen = new Set<string>();
+    for (const date of [...dates].reverse()) {
+      const rows = allDetails.get(date) ?? [];
+      rows.filter(r => r.assetType === detailChartAsset).forEach(r => {
+        const uName = BUDGET_USERS.find(u => u.id === r.userId)?.name ?? r.userId;
+        const key = r.accountName ? `${uName} · ${r.accountName}` : uName;
+        if (!seen.has(key)) { seen.add(key); keyOrder.push(key); }
+      });
+    }
+
+    const data = [...dates].reverse().map(date => {
+      const rows = allDetails.get(date) ?? [];
+      const point: Record<string, any> = { label: date.slice(5), fullDate: date };
+      keyOrder.forEach(k => { point[k] = 0; });
+      rows.filter(r => r.assetType === detailChartAsset).forEach(r => {
+        const uName = BUDGET_USERS.find(u => u.id === r.userId)?.name ?? r.userId;
+        const key = r.accountName ? `${uName} · ${r.accountName}` : uName;
+        const amount = isDollar ? Math.round(r.amount * exchangeRate) : r.amount;
+        point[key] = (point[key] ?? 0) + amount;
+      });
+      return point;
+    });
+
+    return { data, seriesKeys: keyOrder };
+  }, [allDetails, detailChartAsset, dates, exchangeRate]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6' }}>불러오는 중…</div>;
 
@@ -4754,7 +4803,7 @@ const AssetView: React.FC = () => {
           <div>
             {/* 모드 토글 */}
             <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
-              {([['USER', '유저별'], ['LIQUIDITY', '유동성별']] as ['USER' | 'LIQUIDITY', string][]).map(([m, label]) => (
+              {([['USER', '유저별'], ['LIQUIDITY', '유동성별'], ['DETAIL', '세부 항목별']] as ['USER' | 'LIQUIDITY' | 'DETAIL', string][]).map(([m, label]) => (
                 <button key={m} onClick={() => setChartMode(m)} style={{
                   padding: '6px 16px', fontSize: '12px', fontWeight: chartMode === m ? 700 : 400,
                   borderRadius: '20px', border: `1px solid ${chartMode === m ? '#89CFF0' : '#dadce0'}`,
@@ -4773,49 +4822,72 @@ const AssetView: React.FC = () => {
                   cursor: 'pointer',
                 }}>{chartShowSplit ? '합산만 보기' : '개인별 보기'}</button>
               )}
+              {/* 세부 항목별: 자산 유형 선택 */}
+              {chartMode === 'DETAIL' && (
+                <select
+                  value={detailChartAsset}
+                  onChange={e => setDetailChartAsset(e.target.value)}
+                  style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid #89CFF0', borderRadius: '20px', background: '#f0f8fd', color: '#1a3a5c', cursor: 'pointer' }}
+                >
+                  {ASSET_COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                </select>
+              )}
             </div>
 
-            {/* 자산 항목 제외 토글 칩 */}
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontSize: '11px', color: '#9aa0a6', marginRight: '2px' }}>제외:</span>
-              {ASSET_COLUMNS.map(col => {
-                const excluded = chartExcludeKeys.has(col.key);
-                return (
-                  <button key={col.key} onClick={() => toggleChartExclude(col.key)} style={{
-                    padding: '3px 10px', fontSize: '11px',
-                    borderRadius: '12px',
-                    border: `1px solid ${excluded ? '#dadce0' : '#1565c0'}`,
-                    background: excluded ? '#f5f5f5' : '#e8f0fe',
-                    color: excluded ? '#aaa' : '#1565c0',
-                    textDecoration: excluded ? 'line-through' : 'none',
-                    cursor: 'pointer',
-                  }}>{col.label}</button>
-                );
-              })}
-            </div>
+            {/* 자산 항목 제외 토글 칩 (세부 항목별 모드에서는 숨김) */}
+            {chartMode !== 'DETAIL' && (
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', color: '#9aa0a6', marginRight: '2px' }}>제외:</span>
+                {ASSET_COLUMNS.map(col => {
+                  const excluded = chartExcludeKeys.has(col.key);
+                  return (
+                    <button key={col.key} onClick={() => toggleChartExclude(col.key)} style={{
+                      padding: '3px 10px', fontSize: '11px',
+                      borderRadius: '12px',
+                      border: `1px solid ${excluded ? '#dadce0' : '#1565c0'}`,
+                      background: excluded ? '#f5f5f5' : '#e8f0fe',
+                      color: excluded ? '#aaa' : '#1565c0',
+                      textDecoration: excluded ? 'line-through' : 'none',
+                      cursor: 'pointer',
+                    }}>{col.label}</button>
+                  );
+                })}
+              </div>
+            )}
 
             {dates.length < 2 ? (
               <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '13px' }}>
                 그래프를 보려면 스냅샷이 2개 이상 필요합니다.
               </div>
+            ) : chartMode === 'DETAIL' && detailsLoading ? (
+              <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '13px' }}>세부 내역 조회 중…</div>
             ) : (
               <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: '12px', padding: '20px' }}>
                 <ResponsiveContainer width="100%" height={340}>
                   <LineChart
-                    data={chartMode === 'USER' ? chartDataByUser : chartDataByLiquidity}
+                    data={
+                      chartMode === 'USER' ? chartDataByUser
+                      : chartMode === 'LIQUIDITY' ? chartDataByLiquidity
+                      : chartDataByDetail.data
+                    }
                     margin={{ top: 10, right: 20, left: 10, bottom: 10 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9aa0a6' }} />
                     <YAxis
                       tick={{ fontSize: 11, fill: '#9aa0a6' }}
-                      tickFormatter={v => `${v}억`}
-                      width={50}
+                      tickFormatter={v => {
+                        if (v === 0) return '0';
+                        if (Math.abs(v) >= 1e8) return `${(v / 1e8).toFixed(1)}억`;
+                        if (Math.abs(v) >= 1e4) return `${Math.round(v / 1e4).toLocaleString()}만`;
+                        return v.toLocaleString('ko-KR');
+                      }}
+                      width={60}
                     />
                     <Tooltip
                       formatter={(value: number, name: string) => [
-                        // 차트값은 억 단위(소수)이므로 원화로 역산 후 한글 표기
-                        formatAmountKorean(Math.round(value * 1e8)) || '0원',
+                        // 원 단위 정확 표시
+                        Math.round(value).toLocaleString('ko-KR') + '원',
                         name,
                       ]}
                       labelFormatter={label => `날짜: ${label}`}
@@ -4826,15 +4898,29 @@ const AssetView: React.FC = () => {
                       {chartShowSplit && <Line type="monotone" dataKey={u0.name} stroke="#1565c0" strokeWidth={2} dot={{ r: 4 }} />}
                       {chartShowSplit && <Line type="monotone" dataKey={u1.name} stroke="#E06060" strokeWidth={2} dot={{ r: 4 }} />}
                       <Line type="monotone" dataKey="합산" stroke="#4CAF50" strokeWidth={2.5} dot={{ r: 5 }} />
-                    </>) : (<>
+                    </>) : chartMode === 'LIQUIDITY' ? (<>
                       <Line type="monotone" dataKey="즉시 사용 가능" stroke="#4CAF50" strokeWidth={2} dot={{ r: 4 }} />
                       <Line type="monotone" dataKey="즉시 사용 불가" stroke="#FF9800" strokeWidth={2} dot={{ r: 4 }} />
                       <Line type="monotone" dataKey="합산" stroke="#1565c0" strokeWidth={2.5} dot={{ r: 5 }} />
+                    </>) : (<>
+                      {/* 세부 항목별: 계좌별 라인 */}
+                      {chartDataByDetail.seriesKeys.length === 0 ? null :
+                        chartDataByDetail.seriesKeys.map((key, i) => (
+                          <Line
+                            key={key}
+                            type="monotone"
+                            dataKey={key}
+                            stroke={DETAIL_COLORS[i % DETAIL_COLORS.length]}
+                            strokeWidth={2}
+                            dot={{ r: 4 }}
+                          />
+                        ))
+                      }
                     </>)}
                   </LineChart>
                 </ResponsiveContainer>
                 <div style={{ fontSize: '11px', color: '#9aa0a6', textAlign: 'right', marginTop: '8px' }}>
-                  Y축: 억 단위 · 미국주식·달러 현금은 {exchangeRate.toLocaleString()}원/$ 환율 적용
+                  미국주식·달러 현금은 {exchangeRate.toLocaleString()}원/$ 환율 적용
                 </div>
               </div>
             )}
