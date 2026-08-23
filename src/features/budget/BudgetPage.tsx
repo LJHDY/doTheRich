@@ -171,7 +171,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [prevMonthEntries, setPrevMonthEntries] = useState<BudgetEntry[]>([]); // 카드 청구 기간 계산용 전달 항목
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('ALL');
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [categoryFilters, setCategoryFilters] = useState<Set<string>>(new Set());
   const [accountFilter, setAccountFilter] = useState<string | null>(null); // 통장 단위 필터
   const [cardFilter, setCardFilter] = useState<string | null>(null);      // 카드 단위 필터
   const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem('budget_tab') as Tab) || 'ENTRIES');
@@ -371,7 +371,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       else if (filter === 'FIXED') base = base.filter(e => e.entryType === 'EXPENSE' && e.isFixed);
       else if (filter === 'INVEST') base = base.filter(e => e.isInvestment);
     }
-    if (categoryFilter) base = base.filter(e => e.category === categoryFilter);
+    if (categoryFilters.size > 0) base = base.filter(e => categoryFilters.has(e.category));
     // 통장 필터 — account(중분류) 또는 accountMain(대분류) 일치
     // accountMainFilter: 해당 pm의 accountMain값도 같이 매칭 (accountMain-only 수입 항목 포함)
     if (accountFilter) {
@@ -391,7 +391,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       );
     }
     return base;
-  }, [entries, filter, categoryFilter, accountFilter, cardFilter, paymentMethods]);
+  }, [entries, filter, categoryFilters, accountFilter, cardFilter, paymentMethods]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
   const resetInstallment = () => { setIsInstallment(false); setInstallmentMonths(2); setIsInterestFree(false); };
@@ -1045,8 +1045,12 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                       name={d.name}
                       pct={Math.round(d.value / total * 100)}
                       tipLabel={`${d.value.toLocaleString()}원 / ${d.count}건`}
-                      isActive={categoryFilter === d.name}
-                      onClick={() => setCategoryFilter(categoryFilter === d.name ? null : d.name)}
+                      isActive={categoryFilters.has(d.name)}
+                      onClick={() => setCategoryFilters(prev => {
+                        const next = new Set(prev);
+                        next.has(d.name) ? next.delete(d.name) : next.add(d.name);
+                        return next;
+                      })}
                     />
                   ))}
                 </div>
@@ -1088,22 +1092,44 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           );
         })()}
 
-        {/* 카테고리 필터 활성 배지 */}
-        {categoryFilter && (
-          <div style={{ padding: '6px 20px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '11px', color: '#5f6368' }}>카테고리 필터:</span>
-            <span
-              onClick={() => setCategoryFilter(null)}
-              style={{
-                fontSize: '12px', fontWeight: 700, color: '#1a3a5c',
-                background: '#e0f0ff', border: '1px solid #89CFF0',
-                borderRadius: '12px', padding: '2px 10px', cursor: 'pointer',
-              }}
-            >
-              {categoryFilter} ×
-            </span>
-          </div>
-        )}
+        {/* 카테고리 필터 활성 배지 + 선택 합산 */}
+        {categoryFilters.size > 0 && (() => {
+          const selectedTotal = filtered
+            .filter((e: BudgetEntry) => e.entryType === 'EXPENSE' && !e.isTransfer && e.category !== '이체')
+            .reduce((s: number, e: BudgetEntry) => s + e.amount, 0);
+          const catList = Array.from(categoryFilters);
+          return (
+            <div style={{ padding: '6px 20px 0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '11px', color: '#5f6368' }}>카테고리 필터:</span>
+              {catList.map(cat => (
+                <span
+                  key={cat}
+                  onClick={() => setCategoryFilters(prev => { const next = new Set(prev); next.delete(cat); return next; })}
+                  style={{
+                    fontSize: '12px', fontWeight: 700, color: '#1a3a5c',
+                    background: '#e0f0ff', border: '1px solid #89CFF0',
+                    borderRadius: '12px', padding: '2px 10px', cursor: 'pointer',
+                  }}
+                >
+                  {cat} ×
+                </span>
+              ))}
+              <span
+                onClick={() => setCategoryFilters(new Set())}
+                style={{ fontSize: '11px', color: '#9aa0a6', cursor: 'pointer', marginLeft: '2px' }}
+              >
+                전체 해제
+              </span>
+              <span style={{
+                marginLeft: 'auto', fontSize: '12px', fontWeight: 700,
+                color: '#b71c1c', background: '#fff5f5',
+                border: '1px solid #ffcdd2', borderRadius: '12px', padding: '2px 12px',
+              }}>
+                합계 {selectedTotal.toLocaleString()}원
+              </span>
+            </div>
+          );
+        })()}
 
         {/* 통장 필터 활성 배지 */}
         {accountFilter && (
@@ -1154,7 +1180,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             ['ALL', '전체'], ['INCOME', '수입'], ['EXPENSE', '지출'],
             ['FIXED', '고정비'], ['INVEST', '투자'], ['TRANSFER', '이체'],
           ] as [Filter, string][]).map(([val, label]) => (
-            <button key={val} onClick={() => { setFilter(val); setCategoryFilter(null); }} style={{
+            <button key={val} onClick={() => { setFilter(val); setCategoryFilters(new Set()); }} style={{
               padding: '5px 12px', fontSize: '12px', borderRadius: '20px',
               border: `1px solid ${filter === val ? '#89CFF0' : '#dadce0'}`,
               background: filter === val ? '#89CFF0' : '#fff',
