@@ -10,6 +10,7 @@ import {
   ACCOUNT_MAINS,
   ASSET_COLUMNS,
   ASSET_LIQUIDITY_COLORS,
+  BUDGET_CAT_CODES,
   BUDGET_USER_STORAGE_KEY,
   BUDGET_USERS,
   FIXED_EXPENSE_CATEGORIES,
@@ -177,6 +178,81 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
   const isMobile = useIsMobile();
+
+  // ─── 카테고리 — 공통코드 DB에서 로드, 없으면 상수로 자동 seed ───
+  const [varExpCats, setVarExpCats] = useState<string[]>(VARIABLE_EXPENSE_CATEGORIES);
+  const [fixExpCats, setFixExpCats] = useState<string[]>(FIXED_EXPENSE_CATEGORIES);
+  const [feItemCats, setFeItemCats] = useState<string[]>(FIXED_EXPENSE_ITEM_CATEGORIES);
+  const [incomeCatsDB, setIncomeCatsDB] = useState<{ name: string; subcategories: string[] }[]>(INCOME_CATEGORIES);
+  const [investTypesDB, setInvestTypesDB] = useState<string[]>([...INVESTMENT_TYPES]);
+
+  useEffect(() => {
+    /** 공통코드 그룹이 비어있으면 상수 값으로 자동 seed */
+    const seedGroup = async (
+      code: string, codeName: string,
+      entries: { detailCode: string; detailCodeName: string }[],
+    ) => {
+      await Promise.all(entries.map((e, i) =>
+        createCommonCode({ common_code: code, common_code_name: codeName, detail_code: e.detailCode, detail_code_name: e.detailCodeName, sort_order: i + 1 })
+      ));
+      invalidateCommonCodeCache(code);
+    };
+
+    const load = async () => {
+      const [varCodes, fixCodes, feCodes, incomeCodes, investCodes] = await Promise.all([
+        getCommonCodes(BUDGET_CAT_CODES.VAR_EXPENSE),
+        getCommonCodes(BUDGET_CAT_CODES.FIX_EXPENSE),
+        getCommonCodes(BUDGET_CAT_CODES.FE_ITEM),
+        getCommonCodes(BUDGET_CAT_CODES.INCOME),
+        getCommonCodes(BUDGET_CAT_CODES.INVEST),
+      ]);
+
+      if (varCodes.length > 0) {
+        setVarExpCats(varCodes.sort((a, b) => a.sortOrder - b.sortOrder).map(c => c.detailCodeName));
+      } else {
+        await seedGroup(BUDGET_CAT_CODES.VAR_EXPENSE, '변동비 카테고리',
+          VARIABLE_EXPENSE_CATEGORIES.map(n => ({ detailCode: n, detailCodeName: n })));
+      }
+
+      if (fixCodes.length > 0) {
+        setFixExpCats(fixCodes.sort((a, b) => a.sortOrder - b.sortOrder).map(c => c.detailCodeName));
+      } else {
+        await seedGroup(BUDGET_CAT_CODES.FIX_EXPENSE, '고정비 카테고리',
+          FIXED_EXPENSE_CATEGORIES.map(n => ({ detailCode: n, detailCodeName: n })));
+      }
+
+      if (feCodes.length > 0) {
+        setFeItemCats(feCodes.sort((a, b) => a.sortOrder - b.sortOrder).map(c => c.detailCodeName));
+      } else {
+        await seedGroup(BUDGET_CAT_CODES.FE_ITEM, '고정비 항목 카테고리',
+          FIXED_EXPENSE_ITEM_CATEGORIES.map(n => ({ detailCode: n, detailCodeName: n })));
+      }
+
+      if (incomeCodes.length > 0) {
+        // detailCodeName 형식: "카테고리명|서브1,서브2" (서브 없으면 파이프 생략)
+        setIncomeCatsDB(incomeCodes.sort((a, b) => a.sortOrder - b.sortOrder).map(c => {
+          const [name, subs] = c.detailCodeName.split('|');
+          return { name: name.trim(), subcategories: subs ? subs.split(',').map(s => s.trim()).filter(Boolean) : [] };
+        }));
+      } else {
+        await seedGroup(BUDGET_CAT_CODES.INCOME, '수입 카테고리',
+          INCOME_CATEGORIES.map(c => ({
+            detailCode: c.name,
+            detailCodeName: c.subcategories.length > 0 ? `${c.name}|${c.subcategories.join(',')}` : c.name,
+          })));
+      }
+
+      if (investCodes.length > 0) {
+        setInvestTypesDB(investCodes.sort((a, b) => a.sortOrder - b.sortOrder).map(c => c.detailCodeName));
+      } else {
+        await seedGroup(BUDGET_CAT_CODES.INVEST, '투자 유형',
+          [...INVESTMENT_TYPES].map(n => ({ detailCode: n, detailCodeName: n })));
+      }
+    };
+    load().catch(() => {});
+  // 마운트 시 1회만 실행
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 결제수단 목록 (userId 변경 시 재로드)
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -358,8 +434,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   };
 
   // 지출: isFixed 값에 따라 고정비/변동비 카테고리 목록 결정
-  const expenseCats = form.isFixed ? FIXED_EXPENSE_CATEGORIES : VARIABLE_EXPENSE_CATEGORIES;
-  const incomeCats = INCOME_CATEGORIES;
+  const expenseCats = form.isFixed ? fixExpCats : varExpCats;
+  const incomeCats = incomeCatsDB;
   const selectedIncomeCat = form.entryType === 'INCOME'
     ? incomeCats.find(c => c.name === form.category)
     : undefined;
@@ -370,7 +446,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     // 투자 항목은 카테고리 불필요 (투자 유형으로 대체)
     if (!isInvest && !form.category) { alert('카테고리를 선택해주세요'); return; }
     if (!amount) { alert('금액을 입력해주세요'); return; }
-    if (form.entryType === 'EXPENSE' && !form.accountMain && !form.cardName) { alert('통장/카드를 선택해주세요'); return; }
+    if (form.entryType === 'EXPENSE' && !form.accountMain && !form.account && !form.cardName) { alert('통장/카드를 선택해주세요'); return; }
     // 투자 항목의 카테고리는 투자 유형 값으로 자동 설정
     const resolvedCategory = isInvest ? (form.investmentType || '투자') : (form.category ?? '');
     const entryDate = form.entryDate ?? today();
@@ -1119,6 +1195,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               userId={userId}
               onEntriesAdded={newEntries => setEntries(prev => [...newEntries, ...prev])}
               paymentMethods={paymentMethods}
+              incomeCats={incomeCatsDB}
+              varExpCats={varExpCats}
             />
           </div>
         ) : (
@@ -1503,7 +1581,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               <FieldRow label="투자 유형">
                 <select value={form.investmentType ?? ''} onChange={e => setForm(f => ({ ...f, investmentType: e.target.value }))} style={inputStyle}>
                   <option value="">선택 안함</option>
-                  {INVESTMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  {investTypesDB.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </FieldRow>
             )}
@@ -1531,6 +1609,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           userName={userName}
           yearMonth={yearMonth}
           paymentMethods={paymentMethods}
+          feItemCats={feItemCats}
           onClose={() => setFixedExpenseOpen(false)}
           onPaid={entry => { setEntries(prev => [entry, ...prev]); }}
         />
@@ -1671,7 +1750,9 @@ const CalendarView: React.FC<{
   userId: string;
   onEntriesAdded: (newEntries: BudgetEntry[]) => void;
   paymentMethods: PaymentMethod[];
-}> = ({ yearMonth, entries, selectedDate, onSelectDate, onEdit, onDelete, userId, onEntriesAdded, paymentMethods }) => {
+  incomeCats: { name: string; subcategories: string[] }[];
+  varExpCats: string[];
+}> = ({ yearMonth, entries, selectedDate, onSelectDate, onEdit, onDelete, userId, onEntriesAdded, paymentMethods, incomeCats, varExpCats }) => {
   const year = Number(yearMonth.slice(0, 4));
   const month = Number(yearMonth.slice(4)) - 1;
 
@@ -1851,8 +1932,8 @@ const CalendarView: React.FC<{
               {/* 행 목록 */}
               {bulkRows.map((row) => {
                 const cats = row.entryType === 'INCOME'
-                  ? INCOME_CATEGORIES.map(c => c.name)
-                  : VARIABLE_EXPENSE_CATEGORIES;
+                  ? incomeCats.map((c: { name: string }) => c.name)
+                  : varExpCats;
                 return (
                   <div key={row.key} style={{ display: 'flex', gap: '4px', marginBottom: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                     {/* 수입/지출 토글 */}
@@ -1874,7 +1955,7 @@ const CalendarView: React.FC<{
                       style={{ ...bulkInputStyle, flex: '1 1 90px', minWidth: '80px' }}
                     >
                       <option value="">카테고리</option>
-                      {cats.map(c => <option key={c} value={c}>{c}</option>)}
+                      {cats.map((c: string) => <option key={c} value={c}>{c}</option>)}
                     </select>
                     {/* 지출처 (지출만) */}
                     {row.entryType === 'EXPENSE' && (
@@ -4834,9 +4915,10 @@ const FixedExpenseModal: React.FC<{
   userName: string;
   yearMonth: string;
   paymentMethods: PaymentMethod[];
+  feItemCats: string[];
   onClose: () => void;
   onPaid: (entry: BudgetEntry) => void;
-}> = ({ userId, userName, yearMonth, paymentMethods, onClose, onPaid }) => {
+}> = ({ userId, userName, yearMonth, paymentMethods, feItemCats, onClose, onPaid }) => {
   const [items, setItems] = useState<FixedExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -5099,7 +5181,7 @@ const FixedExpenseModal: React.FC<{
                     <div>
                       <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>카테고리</label>
                       <select
-                        value={FIXED_EXPENSE_ITEM_CATEGORIES.includes(form.category) ? form.category : (form.category ? '__custom__' : '')}
+                        value={feItemCats.includes(form.category) ? form.category : (form.category ? '__custom__' : '')}
                         onChange={e => {
                           if (e.target.value === '__custom__') return;
                           setForm(f => ({ ...f, category: e.target.value }));
@@ -5107,8 +5189,8 @@ const FixedExpenseModal: React.FC<{
                         style={inputSt}
                       >
                         <option value="">선택 안 함</option>
-                        {FIXED_EXPENSE_ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                        {form.category && !FIXED_EXPENSE_ITEM_CATEGORIES.includes(form.category) && (
+                        {feItemCats.map(c => <option key={c} value={c}>{c}</option>)}
+                        {form.category && !feItemCats.includes(form.category) && (
                           <option value="__custom__">{form.category} (직접입력)</option>
                         )}
                       </select>

@@ -167,6 +167,16 @@ export const INVESTMENT_TYPES = [
 
 export const BUDGET_USER_STORAGE_KEY = 'budget_user_id';
 
+// ─── 공통코드 그룹 키 (카테고리 DB 관리) ──────────────────────────
+// CommonCodeModal에서 해당 그룹명으로 조회·편집 가능
+export const BUDGET_CAT_CODES = {
+  VAR_EXPENSE:  'BUDGET_VAR_CAT',    // 변동비 카테고리
+  FIX_EXPENSE:  'BUDGET_FIX_CAT',    // 고정비 카테고리
+  FE_ITEM:      'BUDGET_FE_CAT',     // 고정비 항목 카테고리 (고정비 관리 폼)
+  INCOME:       'BUDGET_INCOME_CAT', // 수입 카테고리 (detailCodeName: "이름|서브1,서브2")
+  INVEST:       'BUDGET_INVEST_TYPE',// 투자 유형
+} as const;
+
 // ─── 고정비 항목 카테고리 ─────────────────────────────────────────
 // 이 목록에 카테고리를 추가하면 고정비 관리 폼 드롭다운에 반영됨
 export const FIXED_EXPENSE_ITEM_CATEGORIES: string[] = [
