@@ -967,10 +967,14 @@ export const getAssetSnapshotDetails = async (snapshotDate: string): Promise<Ass
 /** 세부 항목 일괄 저장 — 닫을 때 합산이 스냅샷 셀에 자동 반영됨 */
 export const bulkSaveAssetSnapshotDetails = async (
   snapshotDate: string,
+  userId: string,
+  assetType: string,
   items: { userId: string; assetType: string; accountName: string; amount: number }[],
 ): Promise<AssetSnapshotDetail[]> => {
   const { data } = await api.post('/api/assets/snapshots/details/bulk', {
     snapshot_date: snapshotDate,
+    user_id: userId,
+    asset_type: assetType,
     items: items.map(i => ({
       user_id: i.userId,
       asset_type: i.assetType,

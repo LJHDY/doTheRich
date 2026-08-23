@@ -4474,8 +4474,6 @@ const AssetDetailModal: React.FC<{
 }> = ({ snapshotDate, userId, assetType, userName, assetLabel, cellCode, assetCellCodes, isDollar, exchangeRate, onClose, onSaved }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  // 다른 셀의 기존 데이터 (저장 시 그대로 포함, 원 단위)
-  const [otherItems, setOtherItems] = useState<Array<{ userId: string; assetType: string; accountName: string; amountWon: number }>>([]);
   // 이 셀의 편집 가능 항목 (원 단위 입력)
   const [cellItems, setCellItems] = useState<LocalDetail[]>([]);
   // 이 셀에 매핑된 공통코드 정보 (ASSET_CELL 그룹)
@@ -4487,13 +4485,6 @@ const AssetDetailModal: React.FC<{
       // 공통코드: ASSET_CELL 그룹에서 detail_code === cellCode 매칭
       const cc = assetCellCodes.find(c => c.detailCode === cellCode) ?? null;
       setCellCommonCode(cc);
-
-      // 다른 셀 항목 (저장 시 그대로 포함)
-      setOtherItems(
-        detailData
-          .filter(d => !(d.userId === userId && d.assetType === assetType))
-          .map(d => ({ userId: d.userId, assetType: d.assetType, accountName: d.accountName, amountWon: d.amount }))
-      );
 
       // 이 셀의 기존 저장 데이터
       const savedItems = detailData.filter(d => d.userId === userId && d.assetType === assetType);
@@ -4565,11 +4556,8 @@ const AssetDetailModal: React.FC<{
   const handleSave = async () => {
     setSaving(true);
     try {
-      // 다른 셀 그대로 + 이 셀 새 항목 병합 후 일괄 저장
-      const othersPayload = otherItems.map(i => ({
-        userId: i.userId, assetType: i.assetType,
-        accountName: i.accountName, amount: i.amountWon,
-      }));
+      // 이 셀(userId+assetType)의 항목만 전송 — 백엔드가 해당 조합만 삭제·재삽입하므로
+      // 다른 유저 데이터는 건드리지 않아 동시 저장 시 충돌 없음
       const thisPayload = cellItems
         .filter(i => Number(i.amountStr.replace(/,/g, '')) > 0)
         .map(i => ({
@@ -4577,7 +4565,7 @@ const AssetDetailModal: React.FC<{
           accountName: i.accountName.trim(),
           amount: Number(i.amountStr.replace(/,/g, '')) || 0,
         }));
-      await bulkSaveAssetSnapshotDetails(snapshotDate, [...othersPayload, ...thisPayload]);
+      await bulkSaveAssetSnapshotDetails(snapshotDate, userId, assetType, thisPayload);
       onSaved();
       onClose();
     } finally {
