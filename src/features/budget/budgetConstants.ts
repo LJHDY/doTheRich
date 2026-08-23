@@ -127,6 +127,7 @@ export const VARIABLE_EXPENSE_CATEGORIES: string[] = [
   '미용/패션/쇼핑',
   '용돈',
   '경조사',
+  '선물',
   '모임',
   '세금',
   '주유비',
