@@ -375,17 +375,19 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     // 통장 필터 — account(중분류) 또는 accountMain(대분류) 일치
     // accountMainFilter: 해당 pm의 accountMain값도 같이 매칭 (accountMain-only 수입 항목 포함)
     if (accountFilter === '__UNASSIGNED__') {
-      // 미분류: accountMap 키(e.account || e.accountMain)가 등록된 통장 이름에 없는 항목
-      // cardName은 체크하지 않음 — 통장 미지정 카드 지출도 미분류로 표시해야 함
-      // (accountMap과 동일한 key 로직을 써야 카드 합산 금액과 일치)
+      // 미분류: 통장도 카드도 지정되지 않은 항목 (카드 지출은 카드 섹션에서 별도 표시)
       const bankAccounts = paymentMethods.filter(p => p.type === '통장');
       const bankNames = new Set([
         ...bankAccounts.map(p => p.name),
         ...bankAccounts.filter(p => p.accountMain).map(p => p.accountMain!),
       ]);
+      const cardNamesSet = new Set(paymentMethods.filter(p => p.type === '카드').map(p => p.name));
       base = base.filter(e => {
-        const key = e.account || e.accountMain || '미분류';
-        return !bankNames.has(key);
+        const key = e.account || e.accountMain || '';
+        if (bankNames.has(key)) return false;
+        if (e.cardName && cardNamesSet.has(e.cardName)) return false;
+        if (!e.cardName && e.account && cardNamesSet.has(e.account)) return false; // 레거시 카드
+        return true;
       });
     } else if (accountFilter) {
       const pm = paymentMethods.find(p => p.name === accountFilter);
@@ -835,14 +837,20 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   );
                 });
 
-                // 미분류 — 통장·accountMain 모두 미해당 항목
-                const knownNames = new Set([
+                // 미분류 — 통장·카드 어느 것도 미해당 항목 (카드는 아래 카드 섹션에서 별도 표시)
+                const bankNames = new Set([
                   ...bankAccounts.map(p => p.name),
                   ...bankAccounts.filter(p => p.accountMain).map(p => p.accountMain!),
                 ]);
+                const cardNamesSet = new Set(paymentMethods.filter(p => p.type === '카드').map(p => p.name));
                 const unassigned = { income: 0, expense: 0 };
-                Object.entries(summary.accountMap).forEach(([k, v]) => {
-                  if (!knownNames.has(k)) { unassigned.income += v.income; unassigned.expense += v.expense; }
+                entries.forEach(e => {
+                  const key = e.account || e.accountMain || '';
+                  if (bankNames.has(key)) return;                            // 통장 할당됨
+                  if (e.cardName && cardNamesSet.has(e.cardName)) return;   // 카드 할당됨
+                  if (!e.cardName && e.account && cardNamesSet.has(e.account)) return; // 레거시 카드
+                  if (e.entryType === 'INCOME') unassigned.income += e.amount;
+                  else unassigned.expense += e.amount;
                 });
                 const unassignedCard = (unassigned.income > 0 || unassigned.expense > 0) ? (
                   <div
