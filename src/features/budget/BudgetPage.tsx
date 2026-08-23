@@ -4168,10 +4168,26 @@ const AssetView: React.FC = () => {
   const [detailTarget, setDetailTarget] = useState<{ userId: string; assetType: string; userName: string; assetLabel: string; cellCode: string } | null>(null);
   // ASSET_CELL 공통코드 — 마운트 시 1회 조회, AssetDetailModal에 주입
   const [assetCellCodes, setAssetCellCodes] = useState<CommonCode[]>([]);
+  // 자동 환율: 가장 최신 국내장마감 리포트의 usdkrw 값
+  const [autoRateDate, setAutoRateDate] = useState<string | null>(null);
 
   useEffect(() => {
     getCommonCodes('ASSET_CELL').then(setAssetCellCodes);
   }, []);
+
+  // 마운트 시 최신 국내장마감 리포트에서 환율 자동 반영
+  useEffect(() => {
+    getMarketReports().then(reports => {
+      const latest = reports.find(r => r.reportType === 'kr_close' && r.marketData?.usdkrw?.close);
+      if (!latest) return;
+      const rate = Math.round(latest.marketData.usdkrw.close);
+      if (rate > 0) {
+        setExchangeRate(rate);
+        localStorage.setItem(EXCHANGE_RATE_KEY, String(rate));
+        setAutoRateDate(latest.reportDate);
+      }
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -4461,12 +4477,20 @@ const AssetView: React.FC = () => {
                 <span style={{ color: '#5f6368' }}>원/$</span>
               </>
             ) : (
-              <button
-                onClick={() => { setRateInput(String(exchangeRate)); setEditingRate(true); }}
-                style={{ background: '#f0f8fd', border: '1px solid #dadce0', borderRadius: '6px', padding: '3px 8px', fontSize: '12px', cursor: 'pointer', color: '#1a3a5c', fontWeight: 700 }}
-              >
-                {exchangeRate.toLocaleString('ko-KR')}원/$
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <button
+                  onClick={() => { setRateInput(String(exchangeRate)); setEditingRate(true); }}
+                  style={{ background: '#f0f8fd', border: '1px solid #dadce0', borderRadius: '6px', padding: '3px 8px', fontSize: '12px', cursor: 'pointer', color: '#1a3a5c', fontWeight: 700 }}
+                >
+                  {exchangeRate.toLocaleString('ko-KR')}원/$
+                </button>
+                {/* 자동 업데이트 출처 표시 */}
+                {autoRateDate && (
+                  <span style={{ fontSize: '10px', color: '#89CFF0', background: '#e8f7ff', border: '1px solid #c5e8f5', borderRadius: '4px', padding: '2px 5px' }}>
+                    자동 {autoRateDate}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>
