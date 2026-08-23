@@ -1709,20 +1709,44 @@ const _parseTopPicks = (raw: string | null): ScreeningTopPick[] => {
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
-    return arr.map((item: Record<string, unknown>) => ({
-      stockCode: String(item.stock_code ?? item.stockCode ?? ''),
-      corpCode: String(item.corp_code ?? item.corpCode ?? ''),
-      corpName: String(item.corp_name ?? item.corpName ?? ''),
-      market: (item.market as 'KOSPI' | 'KOSDAQ') ?? 'KOSPI',
-      roe: item.roe != null ? Number(item.roe) : null,
-      opMargin: item.op_margin != null ? Number(item.op_margin) : null,
-      debtRatio: item.debt_ratio != null ? Number(item.debt_ratio) : null,
-      revenueGrowth: item.revenue_growth != null ? Number(item.revenue_growth) : null,
-      pbr: item.pbr != null ? Number(item.pbr) : null,
-      marketCap: item.market_cap != null ? Number(item.market_cap) : null,
-      currentPrice: item.current_price != null ? Number(item.current_price) : null,
-      score: Number(item.score ?? 0),
-    }));
+    return arr.map((item: Record<string, unknown>) => {
+      // quarterly 파싱 (Python에서 camelCase로 저장됨)
+      const qRaw = item.quarterly as Record<string, Record<string, unknown>> | null | undefined;
+      const quarterly = qRaw ? {
+        q1: qRaw.q1 ? {
+          revenue: qRaw.q1.revenue != null ? Number(qRaw.q1.revenue) : null,
+          revenuePrev: qRaw.q1.revenuePrev != null ? Number(qRaw.q1.revenuePrev) : null,
+          opIncome: qRaw.q1.opIncome != null ? Number(qRaw.q1.opIncome) : null,
+          opIncomePrev: qRaw.q1.opIncomePrev != null ? Number(qRaw.q1.opIncomePrev) : null,
+          netIncome: qRaw.q1.netIncome != null ? Number(qRaw.q1.netIncome) : null,
+          netIncomePrev: qRaw.q1.netIncomePrev != null ? Number(qRaw.q1.netIncomePrev) : null,
+        } : undefined,
+        h1: qRaw.h1 ? {
+          revenue: qRaw.h1.revenue != null ? Number(qRaw.h1.revenue) : null,
+          revenuePrev: qRaw.h1.revenuePrev != null ? Number(qRaw.h1.revenuePrev) : null,
+          opIncome: qRaw.h1.opIncome != null ? Number(qRaw.h1.opIncome) : null,
+          opIncomePrev: qRaw.h1.opIncomePrev != null ? Number(qRaw.h1.opIncomePrev) : null,
+          netIncome: qRaw.h1.netIncome != null ? Number(qRaw.h1.netIncome) : null,
+          netIncomePrev: qRaw.h1.netIncomePrev != null ? Number(qRaw.h1.netIncomePrev) : null,
+        } : undefined,
+      } : null;
+
+      return {
+        stockCode: String(item.stock_code ?? item.stockCode ?? ''),
+        corpCode: String(item.corp_code ?? item.corpCode ?? ''),
+        corpName: String(item.corp_name ?? item.corpName ?? ''),
+        market: (item.market as 'KOSPI' | 'KOSDAQ') ?? 'KOSPI',
+        roe: item.roe != null ? Number(item.roe) : null,
+        opMargin: item.op_margin != null ? Number(item.op_margin) : null,
+        debtRatio: item.debt_ratio != null ? Number(item.debt_ratio) : null,
+        revenueGrowth: item.revenue_growth != null ? Number(item.revenue_growth) : null,
+        pbr: item.pbr != null ? Number(item.pbr) : null,
+        marketCap: item.market_cap != null ? Number(item.market_cap) : null,
+        currentPrice: item.current_price != null ? Number(item.current_price) : null,
+        score: Number(item.score ?? 0),
+        quarterly,
+      };
+    });
   } catch {
     return [];
   }
@@ -1732,6 +1756,7 @@ const _parseTopPicks = (raw: string | null): ScreeningTopPick[] => {
 const _toScreeningReport = (item: Record<string, unknown>): ScreeningReport => ({
   id: Number(item.id),
   reportDate: String(item.reportDate ?? ''),
+  marketType: (item.marketType as 'ALL' | 'KOSPI' | 'KOSDAQ') ?? 'ALL',
   bsnYear: item.bsnYear != null ? String(item.bsnYear) : null,
   universeCount: item.universeCount != null ? Number(item.universeCount) : null,
   screenedCount: item.screenedCount != null ? Number(item.screenedCount) : null,
@@ -1758,9 +1783,12 @@ export const getLatestScreeningReport = async (): Promise<ScreeningReport | null
 };
 
 /** DART 스크리닝 리포트 즉시 생성 요청 (202 Accepted) */
-export const generateScreeningReport = async (reportDate?: string): Promise<void> => {
+export const generateScreeningReport = async (reportDate?: string, marketType?: string): Promise<void> => {
   await api.post('/api/screening/reports/generate', null, {
-    params: reportDate ? { report_date: reportDate } : {},
+    params: {
+      ...(reportDate ? { report_date: reportDate } : {}),
+      ...(marketType ? { market_type: marketType } : {}),
+    },
   });
 };
 

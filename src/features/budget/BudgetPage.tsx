@@ -6130,14 +6130,21 @@ const _fmtMC = (val: number | null): string => {
 
 const ScreeningReportView: React.FC = () => {
   const isMobile = useIsMobile();
+  // 시장 유형 탭 — 생성 시 어떤 market_type을 생성할지 결정하고, 목록도 해당 유형만 표시
+  const [activeMarket, setActiveMarket] = useState<'ALL' | 'KOSPI' | 'KOSDAQ'>('ALL');
   // 리포트 목록·선택 상태
   const [reports, setReports] = useState<ScreeningReport[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState('');
-  // 상위 40개 테이블 — 기본 TOP 10만 표시, 전체 펼치기 토글
+  // 상위 40개 테이블 — 기본 TOP 30만 표시, 전체 펼치기 토글
   const [showAll, setShowAll] = useState(false);
+  // 분기 실적 확장 표시 — Set<stockCode>
+  const [expandedQuarterly, setExpandedQuarterly] = useState<Set<string>>(new Set());
+
+  // 시장 유형별 필터된 리포트 목록
+  const filteredReports = reports.filter(r => r.marketType === activeMarket);
 
   /** 리포트 목록 로드 */
   const load = async () => {
@@ -6145,7 +6152,9 @@ const ScreeningReportView: React.FC = () => {
     try {
       const data = await getScreeningReports();
       setReports(data);
-      if (data.length > 0 && selectedId === null) setSelectedId(data[0].id);
+      // 로드 후 현재 탭에 맞는 최신 리포트 자동 선택
+      const filtered = data.filter(r => r.marketType === activeMarket);
+      if (filtered.length > 0) setSelectedId(filtered[0].id);
     } catch {
       // 오류 무시 (빈 목록 유지)
     } finally {
@@ -6158,22 +6167,23 @@ const ScreeningReportView: React.FC = () => {
   /** 즉시 생성 → 5초 폴링으로 완료 감지 */
   const handleGenerate = async () => {
     setGenerating(true);
-    setToast('스크리닝 요청 중…');
+    setToast(`${activeMarket} 스크리닝 요청 중…`);
     try {
-      await generateScreeningReport();
-      setToast('DART 데이터 수집 중입니다. 완료 시 자동 업데이트됩니다. (최대 5분)');
-      const prevTopId = reports.length > 0 ? reports[0].id : null;
+      await generateScreeningReport(undefined, activeMarket);
+      setToast('DART 데이터 수집 중입니다. 완료 시 자동 업데이트됩니다. (최대 10분)');
+      const prevTopId = filteredReports.length > 0 ? filteredReports[0].id : null;
       let tries = 0;
       const poll = setInterval(async () => {
         tries++;
         const data = await getScreeningReports();
-        const isNew = data.length > 0 && data[0].id !== prevTopId;
-        if (isNew || tries >= 60) {
+        const newFiltered = data.filter(r => r.marketType === activeMarket);
+        const isNew = newFiltered.length > 0 && newFiltered[0].id !== prevTopId;
+        if (isNew || tries >= 120) {
           clearInterval(poll);
           setReports(data);
-          if (data.length > 0) setSelectedId(data[0].id);
+          if (newFiltered.length > 0) setSelectedId(newFiltered[0].id);
           setGenerating(false);
-          setToast(isNew ? '✅ 스크리닝 완료!' : '⚠️ 시간이 초과되었습니다. 잠시 후 새로고침해주세요.');
+          setToast(isNew ? `✅ ${activeMarket} 스크리닝 완료!` : '⚠️ 시간이 초과되었습니다. 잠시 후 새로고침해주세요.');
           setTimeout(() => setToast(''), 5000);
         }
       }, 5000);
@@ -6182,6 +6192,16 @@ const ScreeningReportView: React.FC = () => {
       setToast('❌ 요청에 실패했습니다.');
       setTimeout(() => setToast(''), 3000);
     }
+  };
+
+  /** 시장 탭 전환 시 해당 탭 최신 리포트 자동 선택 */
+  const handleMarketChange = (mkt: 'ALL' | 'KOSPI' | 'KOSDAQ') => {
+    setActiveMarket(mkt);
+    setShowAll(false);
+    setExpandedQuarterly(new Set());
+    const filtered = reports.filter(r => r.marketType === mkt);
+    if (filtered.length > 0) setSelectedId(filtered[0].id);
+    else setSelectedId(null);
   };
 
   /** 마크다운 → JSX (기존 AIReportView 패턴과 동일) */
@@ -6285,7 +6305,7 @@ const ScreeningReportView: React.FC = () => {
     return result;
   };
 
-  const selected = reports.find(r => r.id === selectedId) ?? null;
+  const selected = filteredReports.find(r => r.id === selectedId) ?? filteredReports[0] ?? null;
 
   // 날짜 포맷 — "2025-08-24" → "2025년 8월 24일"
   const fmtDate = (d: string) => {
@@ -6293,10 +6313,40 @@ const ScreeningReportView: React.FC = () => {
     return dt.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
-  // 표시할 종목 목록 (showAll 여부에 따라 TOP10 또는 TOP40)
+  // 표시할 종목 목록 — 기본 TOP 30 표시 (분기 실적 포함), 전체 펼치기 시 TOP 40
+  const DEFAULT_TOP = 30;
   const visiblePicks: ScreeningTopPick[] = selected
-    ? (showAll ? selected.topPicks : selected.topPicks.slice(0, 10))
+    ? (showAll ? selected.topPicks : selected.topPicks.slice(0, DEFAULT_TOP))
     : [];
+
+  // 분기 실적 토글 헬퍼
+  const toggleQuarterly = (code: string) => {
+    setExpandedQuarterly(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
+  // 분기 금액을 억 단위로 포맷 (조 단위까지)
+  const _fmtTrillion = (v: number | null | undefined): string => {
+    if (v == null) return '—';
+    const abs = Math.abs(v);
+    const sign = v < 0 ? '-' : '';
+    if (abs >= 1_000_000_000_000) return `${sign}${(abs / 1_000_000_000_000).toFixed(1)}조`;
+    if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(0)}억`;
+    if (abs >= 10_000_000) return `${sign}${(abs / 100_000_000).toFixed(2)}억`;
+    return `${sign}${(abs / 100_000_000).toFixed(2)}억`;
+  };
+
+  // YoY 성장률 계산
+  const _yoy = (cur: number | null | undefined, prev: number | null | undefined): string => {
+    if (cur == null || prev == null || prev === 0) return '—';
+    const pct = ((cur - prev) / Math.abs(prev)) * 100;
+    const sign = pct >= 0 ? '+' : '';
+    return `${sign}${pct.toFixed(1)}%`;
+  };
 
   // 테이블 셀 공통 스타일
   const thStyle: React.CSSProperties = {
@@ -6311,6 +6361,29 @@ const ScreeningReportView: React.FC = () => {
 
   return (
     <div style={{ flex: 1, overflowY: 'auto' }}>
+      {/* ── 시장 유형 탭 */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', borderBottom: '2px solid #e0e4e8', paddingBottom: '8px' }}>
+        {(['ALL', 'KOSPI', 'KOSDAQ'] as const).map(mkt => (
+          <button
+            key={mkt}
+            onClick={() => handleMarketChange(mkt)}
+            style={{
+              padding: '5px 14px', fontSize: '12px', borderRadius: '6px',
+              border: activeMarket === mkt ? '2px solid #89CFF0' : '1px solid #dadce0',
+              background: activeMarket === mkt ? '#e8f4fd' : '#fff',
+              color: activeMarket === mkt ? '#1565c0' : '#5f6368',
+              fontWeight: activeMarket === mkt ? 700 : 400,
+              cursor: 'pointer',
+            }}
+          >
+            {mkt === 'ALL' ? '전체' : mkt}
+            <span style={{ fontSize: '10px', marginLeft: '4px', color: '#9aa0a6' }}>
+              ({reports.filter(r => r.marketType === mkt).length})
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* ── 상단 컨트롤 바 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
         {/* 리포트 날짜 선택 */}
@@ -6319,8 +6392,8 @@ const ScreeningReportView: React.FC = () => {
           onChange={e => setSelectedId(Number(e.target.value))}
           style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #dadce0', background: '#fff', minWidth: '200px' }}
         >
-          {reports.length === 0 && <option value="">리포트 없음</option>}
-          {reports.map(r => (
+          {filteredReports.length === 0 && <option value="">리포트 없음</option>}
+          {filteredReports.map(r => (
             <option key={r.id} value={r.id}>
               {fmtDate(r.reportDate)} ({r.bsnYear ?? '?'}년 기준)
             </option>
@@ -6337,7 +6410,7 @@ const ScreeningReportView: React.FC = () => {
             background: generating ? '#b0bec5' : '#89CFF0', color: '#fff', fontWeight: 600,
           }}
         >
-          {generating ? '⏳ 생성 중…' : '✨ 즉시 생성'}
+          {generating ? '⏳ 생성 중…' : `✨ ${activeMarket} 생성`}
         </button>
 
         {/* 새로고침 버튼 */}
@@ -6401,15 +6474,18 @@ const ScreeningReportView: React.FC = () => {
           {selected.topPicks.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '8px' }}>
-                🏆 우량주 TOP {showAll ? selected.topPicks.length : 10}
-                {!showAll && selected.topPicks.length > 10 && (
+                🏆 우량주 TOP {showAll ? selected.topPicks.length : DEFAULT_TOP}
+                {!showAll && selected.topPicks.length > DEFAULT_TOP && (
                   <span style={{ fontSize: '12px', color: '#9aa0a6', fontWeight: 400, marginLeft: '8px' }}>
-                    (상위 10개 표시 중)
+                    (상위 {DEFAULT_TOP}개 표시 중)
                   </span>
                 )}
+                <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400, marginLeft: '8px' }}>
+                  — 📊 아이콘 클릭 시 분기 실적 확장
+                </span>
               </div>
               <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #e0e4e8' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '640px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '680px' }}>
                   <thead>
                     <tr>
                       <th style={{ ...thStyle, textAlign: 'center' }}>순위</th>
@@ -6422,65 +6498,177 @@ const ScreeningReportView: React.FC = () => {
                       <th style={thStyle}>매출성장률(%)</th>
                       <th style={thStyle}>PBR</th>
                       <th style={thStyle}>스코어</th>
+                      <th style={thStyle}>분기실적</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visiblePicks.map((pick, idx) => (
-                      <tr key={pick.stockCode} style={{ background: idx % 2 === 0 ? '#fff' : '#fafbfc' }}>
-                        {/* 순위 */}
-                        <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: idx < 3 ? '#c8882a' : '#5f6368' }}>
-                          {idx + 1}
-                        </td>
-                        {/* 종목명 */}
-                        <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 600, color: '#1a3a5c' }}>
-                          {pick.corpName}
-                          <span style={{ fontSize: '11px', color: '#9aa0a6', marginLeft: '4px' }}>({pick.stockCode})</span>
-                        </td>
-                        {/* 시장 */}
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <span style={{
-                            fontSize: '10px', padding: '2px 6px', borderRadius: '4px',
-                            background: pick.market === 'KOSPI' ? '#e3f2fd' : '#f3e5f5',
-                            color: pick.market === 'KOSPI' ? '#1565c0' : '#6a1b9a',
-                            fontWeight: 600,
-                          }}>
-                            {pick.market}
-                          </span>
-                        </td>
-                        {/* 시총 */}
-                        <td style={tdStyle}>{_fmtMC(pick.marketCap)}</td>
-                        {/* ROE */}
-                        <td style={{ ...tdStyle, color: _numColor(pick.roe) }}>
-                          {_fmtNum(pick.roe, true)}
-                        </td>
-                        {/* 영업이익률 */}
-                        <td style={{ ...tdStyle, color: _numColor(pick.opMargin) }}>
-                          {_fmtNum(pick.opMargin, true)}
-                        </td>
-                        {/* 부채비율 — 낮을수록 좋음(invert) */}
-                        <td style={{ ...tdStyle, color: _numColor(pick.debtRatio, true) }}>
-                          {_fmtNum(pick.debtRatio, false, 0)}
-                        </td>
-                        {/* 매출성장률 */}
-                        <td style={{ ...tdStyle, color: _numColor(pick.revenueGrowth) }}>
-                          {_fmtNum(pick.revenueGrowth, true)}
-                        </td>
-                        {/* PBR */}
-                        <td style={tdStyle}>
-                          {pick.pbr !== null ? pick.pbr.toFixed(2) : '—'}
-                        </td>
-                        {/* 스코어 */}
-                        <td style={{ ...tdStyle, fontWeight: 700, color: '#1a3a5c' }}>
-                          {pick.score.toFixed(1)}
-                        </td>
-                      </tr>
-                    ))}
+                    {visiblePicks.map((pick, idx) => {
+                      const isExpanded = expandedQuarterly.has(pick.stockCode);
+                      const hasQuarterly = !!(pick.quarterly?.q1 || pick.quarterly?.h1);
+                      const rowBg = idx % 2 === 0 ? '#fff' : '#fafbfc';
+
+                      return (
+                        <React.Fragment key={pick.stockCode}>
+                          <tr style={{ background: rowBg }}>
+                            {/* 순위 */}
+                            <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: idx < 3 ? '#c8882a' : '#5f6368' }}>
+                              {idx + 1}
+                            </td>
+                            {/* 종목명 */}
+                            <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 600, color: '#1a3a5c' }}>
+                              {pick.corpName}
+                              <span style={{ fontSize: '11px', color: '#9aa0a6', marginLeft: '4px' }}>({pick.stockCode})</span>
+                            </td>
+                            {/* 시장 */}
+                            <td style={{ ...tdStyle, textAlign: 'center' }}>
+                              <span style={{
+                                fontSize: '10px', padding: '2px 6px', borderRadius: '4px',
+                                background: pick.market === 'KOSPI' ? '#e3f2fd' : '#f3e5f5',
+                                color: pick.market === 'KOSPI' ? '#1565c0' : '#6a1b9a',
+                                fontWeight: 600,
+                              }}>
+                                {pick.market}
+                              </span>
+                            </td>
+                            {/* 시총 */}
+                            <td style={tdStyle}>{_fmtMC(pick.marketCap)}</td>
+                            {/* ROE */}
+                            <td style={{ ...tdStyle, color: _numColor(pick.roe) }}>
+                              {_fmtNum(pick.roe, true)}
+                            </td>
+                            {/* 영업이익률 */}
+                            <td style={{ ...tdStyle, color: _numColor(pick.opMargin) }}>
+                              {_fmtNum(pick.opMargin, true)}
+                            </td>
+                            {/* 부채비율 — 낮을수록 좋음(invert) */}
+                            <td style={{ ...tdStyle, color: _numColor(pick.debtRatio, true) }}>
+                              {_fmtNum(pick.debtRatio, false, 0)}
+                            </td>
+                            {/* 매출성장률 */}
+                            <td style={{ ...tdStyle, color: _numColor(pick.revenueGrowth) }}>
+                              {_fmtNum(pick.revenueGrowth, true)}
+                            </td>
+                            {/* PBR */}
+                            <td style={tdStyle}>
+                              {pick.pbr !== null ? pick.pbr.toFixed(2) : '—'}
+                            </td>
+                            {/* 스코어 */}
+                            <td style={{ ...tdStyle, fontWeight: 700, color: '#1a3a5c' }}>
+                              {pick.score.toFixed(1)}
+                            </td>
+                            {/* 분기 실적 토글 버튼 */}
+                            <td style={{ ...tdStyle, textAlign: 'center' }}>
+                              {hasQuarterly ? (
+                                <button
+                                  onClick={() => toggleQuarterly(pick.stockCode)}
+                                  style={{
+                                    background: isExpanded ? '#e8f4fd' : 'none',
+                                    border: isExpanded ? '1px solid #89CFF0' : '1px solid #dadce0',
+                                    borderRadius: '4px', cursor: 'pointer',
+                                    fontSize: '12px', padding: '2px 6px', color: '#1565c0',
+                                  }}
+                                >
+                                  📊{isExpanded ? '▲' : '▼'}
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: '11px', color: '#dadce0' }}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                          {/* 분기 실적 확장 행 */}
+                          {isExpanded && hasQuarterly && (
+                            <tr style={{ background: '#f0f8ff' }}>
+                              <td colSpan={11} style={{ padding: '10px 16px', borderBottom: '2px solid #89CFF0' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#1565c0', marginBottom: '8px' }}>
+                                  📊 {pick.corpName} 분기별 실적 ({new Date().getFullYear()}년)
+                                </div>
+                                <table style={{ borderCollapse: 'collapse', fontSize: '12px', width: '100%', maxWidth: '640px' }}>
+                                  <thead>
+                                    <tr style={{ background: '#d0e8f8' }}>
+                                      <th style={{ ...thStyle, fontSize: '11px', borderRight: '1px solid #c9dce8' }}>항목</th>
+                                      {pick.quarterly?.q1 && (
+                                        <th style={{ ...thStyle, fontSize: '11px', borderRight: '1px solid #c9dce8' }}>1분기</th>
+                                      )}
+                                      {pick.quarterly?.q1 && (
+                                        <th style={{ ...thStyle, fontSize: '11px', borderRight: '1px solid #c9dce8' }}>1Q YoY</th>
+                                      )}
+                                      {pick.quarterly?.h1 && (
+                                        <th style={{ ...thStyle, fontSize: '11px', borderRight: '1px solid #c9dce8' }}>반기(H1)</th>
+                                      )}
+                                      {pick.quarterly?.h1 && (
+                                        <th style={{ ...thStyle, fontSize: '11px' }}>H1 YoY</th>
+                                      )}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(['매출액', '영업이익', '당기순이익'] as const).map((label, li) => {
+                                      const keys = [
+                                        ['revenue', 'revenuePrev'],
+                                        ['opIncome', 'opIncomePrev'],
+                                        ['netIncome', 'netIncomePrev'],
+                                      ] as const;
+                                      const [curKey, prevKey] = keys[li];
+                                      const q1 = pick.quarterly?.q1;
+                                      const h1 = pick.quarterly?.h1;
+                                      return (
+                                        <tr key={label} style={{ background: li % 2 === 0 ? '#fff' : '#f5f9ff', borderBottom: '1px solid #e0ecf8' }}>
+                                          <td style={{ padding: '5px 8px', fontWeight: 600, color: '#344054', borderRight: '1px solid #e0ecf8', whiteSpace: 'nowrap' }}>
+                                            {label}
+                                          </td>
+                                          {q1 && (
+                                            <td style={{ padding: '5px 8px', textAlign: 'right', borderRight: '1px solid #e0ecf8', color: '#1a3a5c' }}>
+                                              {_fmtTrillion((q1 as Record<string, number | null | undefined>)[curKey])}
+                                            </td>
+                                          )}
+                                          {q1 && (
+                                            <td style={{
+                                              padding: '5px 8px', textAlign: 'right', borderRight: '1px solid #e0ecf8',
+                                              color: _numColor(
+                                                q1[curKey] != null && q1[prevKey] != null && q1[prevKey] !== 0
+                                                  ? ((q1[curKey]! - q1[prevKey]!) / Math.abs(q1[prevKey]!)) * 100
+                                                  : null
+                                              ),
+                                            }}>
+                                              {_yoy((q1 as Record<string, number | null | undefined>)[curKey], (q1 as Record<string, number | null | undefined>)[prevKey])}
+                                            </td>
+                                          )}
+                                          {h1 && (
+                                            <td style={{ padding: '5px 8px', textAlign: 'right', borderRight: '1px solid #e0ecf8', color: '#1a3a5c' }}>
+                                              {_fmtTrillion((h1 as Record<string, number | null | undefined>)[curKey])}
+                                            </td>
+                                          )}
+                                          {h1 && (
+                                            <td style={{
+                                              padding: '5px 8px', textAlign: 'right',
+                                              color: _numColor(
+                                                h1[curKey] != null && h1[prevKey] != null && h1[prevKey] !== 0
+                                                  ? ((h1[curKey]! - h1[prevKey]!) / Math.abs(h1[prevKey]!)) * 100
+                                                  : null
+                                              ),
+                                            }}>
+                                              {_yoy((h1 as Record<string, number | null | undefined>)[curKey], (h1 as Record<string, number | null | undefined>)[prevKey])}
+                                            </td>
+                                          )}
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                                <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '6px' }}>
+                                  * YoY: 전기 동일 기간 대비 성장률 | 금액: 원 단위 (DART 연결재무제표 기준)
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
 
               {/* 전체 펼치기/접기 버튼 */}
-              {selected.topPicks.length > 10 && (
+              {selected.topPicks.length > DEFAULT_TOP && (
                 <button
                   onClick={() => setShowAll(v => !v)}
                   style={{

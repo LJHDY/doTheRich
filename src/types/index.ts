@@ -922,6 +922,16 @@ export const formatAmountCompact = (amount: number): string => {
 // ─── DART 재무 스크리닝 ─────────────────────────────────────────────────────
 
 /** DART 스크리닝 통과 개별 종목 재무 데이터 */
+/** 분기별 재무 실적 (1분기/반기 보고서 공통 구조) */
+export interface QuarterlyFinancialResult {
+  revenue?: number | null;        // 매출액 (원)
+  revenuePrev?: number | null;    // 전기 매출액 (YoY 계산용)
+  opIncome?: number | null;       // 영업이익 (원)
+  opIncomePrev?: number | null;   // 전기 영업이익
+  netIncome?: number | null;      // 당기순이익 (원)
+  netIncomePrev?: number | null;  // 전기 당기순이익
+}
+
 export interface ScreeningTopPick {
   stockCode: string;
   corpCode: string;
@@ -935,17 +945,22 @@ export interface ScreeningTopPick {
   marketCap: number | null;      // 시총 (억원)
   currentPrice?: number | null;  // 현재가 (원)
   score: number;                 // 종합 스코어 (0~100)
+  quarterly?: {                  // 분기 실적 (TOP 30만 포함)
+    q1?: QuarterlyFinancialResult;   // 1분기 (5월 이후 가용)
+    h1?: QuarterlyFinancialResult;   // 반기 (8월 이후 가용)
+  } | null;
 }
 
 /** DART 우량주 스크리닝 리포트 1건 */
 export interface ScreeningReport {
   id: number;
-  reportDate: string;            // YYYY-MM-DD
-  bsnYear: string | null;        // 기준 사업연도
-  universeCount: number | null;  // 분석 대상 종목 수
-  screenedCount: number | null;  // 1차 필터 통과 종목 수
-  topPicks: ScreeningTopPick[];  // JSON 파싱된 TOP 40 종목
-  content: string | null;        // Gemini 마크다운 분석
+  reportDate: string;                          // YYYY-MM-DD
+  marketType: 'ALL' | 'KOSPI' | 'KOSDAQ';    // 시장 유형
+  bsnYear: string | null;                      // 기준 사업연도
+  universeCount: number | null;                // 분석 대상 종목 수
+  screenedCount: number | null;                // 1차 필터 통과 종목 수
+  topPicks: ScreeningTopPick[];                // JSON 파싱된 TOP 40 종목
+  content: string | null;                      // Gemini 마크다운 분석
   createdAt: string;
   updatedAt: string;
 }

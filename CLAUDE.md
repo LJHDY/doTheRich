@@ -345,6 +345,9 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
 | GET | `/api/market-reports` | 시장 리포트 목록 (최신순) |
 | GET | `/api/market-reports/latest` | 최신 시장 리포트 1건 |
 | POST | `/api/market-reports/generate?report_date=YYYY-MM-DD` | 시장 리포트 즉시 생성 (202 백그라운드, 같은 날짜 재생성 시 덮어씀) |
+| GET | `/api/screening/reports` | DART 스크리닝 리포트 목록 (최신순, ALL+KOSPI+KOSDAQ 전체) |
+| GET | `/api/screening/reports/latest` | 최신 스크리닝 리포트 1건 |
+| POST | `/api/screening/reports/generate?market_type=ALL` | 스크리닝 리포트 즉시 생성 (202 백그라운드, market_type=ALL|KOSPI|KOSDAQ) |
 | GET | `/api/day-schedules?date=YYYY-MM-DD&user_id=` | 하루 스케줄 조회 — `{ blocks: DayScheduleBlock[] }` |
 | PUT | `/api/day-schedules` | 하루 스케줄 저장 — `{ user_id, schedule_date, blocks }` (upsert) |
 
@@ -900,8 +903,12 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
   - 모달: 리포트 선택 드롭다운 + "✨ 즉시 생성" 버튼(5초 폴링) + 새로고침
   - **티커 그리드** 5개 그룹: 미국 증시(sp500/nasdaq/dow) / 공포·채권(vix/us10y/us30y/us3m) / 원자재(wti/gold) / 환율·달러(dxy/usdkrw) / 한국·아시아(kospi/kosdaq/nikkei)
     - 종가·변동·변동% 표시, 양수=초록/음수=빨강
-  - **Gemini 분석 7개 섹션**: 전일 시장 총평 / 핵심 지표 심층 분석(금리·달러·VIX·원자재) / 시장 구조 분석 / 국내 시장 전망 / 투자 방향성(단기·중기·리스크관리) / 주요 리스크 / 뉴스 시사점
+  - **Gemini 분석 7개 섹션 (글로벌)**: 전일 시장 총평 / 핵심 지표 심층 분석(금리·달러·VIX·원자재) / 시장 구조 분석 / 국내 시장 전망 / 투자 방향성(단기·중기·리스크관리) / 주요 리스크 / 뉴스 시사점
+  - **Gemini 분석 8개 섹션 (국내장마감)**: 오늘의 국내 시장 총평 / 주도 섹터 분석 / 오늘의 주도주 / 거시환경 영향 분석 / **🔮 투자자 수급 심층 분석 및 내일 전망** / 내일 시장 전략 요약 / 주요 리스크 / 뉴스 시사점
+    - 수급 심층 분석: ①외국인(연속일수·규모·환율상관·지수괴리) ②기관(연기금역추세·증권선행) ③개인(역지표) ④수급신호 등급(🟢강세/🟡중립/🔴약세) + 내일 KOSPI 시나리오
+    - 프롬프트에 누적 순매수·연속방향 사전 계산값 주입 → AI 수치 오류 방지
   - `MarketReport` / `MarketTicker` 타입 (`types/index.ts`), `getMarketReports` / `generateMarketReport` API (`api.ts`)
+  - 프론트: 글로벌/국내장마감/프리마켓 타입 탭으로 분리, 탭별 셀렉트 + 생성 버튼
   - 백엔드: `market_report` 테이블 (report_date UNIQUE upsert), `market_data_service.py`, `market_report_service.py`, `routers/market_report.py`
     - yfinance 14개 티커 + RSS 5개 피드 수집
     - 파생 지표 자동 계산: 10Y-3M 수익률 곡선 상태, VIX 레벨 해석
@@ -971,6 +978,37 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
   - 블록별 이름 + 12색 팔레트 선택, 클릭 삭제
   - 백엔드: `day_schedule` 테이블 (user_id + schedule_date UNIQUE, blocks JSON)
   - `GET/PUT /api/day-schedules`, `DayScheduleBlock` 타입, `getDaySchedule`/`upsertDaySchedule` API 함수
+
+- [x] DART 우량주 스크리닝 리포트 (`ScreeningReportView`, `financial_screening_report` 테이블)
+  - 가계부 AI 탭 내 "📋 우량주 스크리닝" 서브탭으로 표시
+  - 매주 토요일 22:00 UTC (일요일 07:00 KST) APScheduler 자동 생성 (ALL + KOSPI + KOSDAQ 3회 순차)
+  - **시장 유형 (market_type)**: ALL | KOSPI | KOSDAQ — 각각 별도 리포트 저장 (report_date + market_type 복합 UNIQUE)
+  - **스크리닝 흐름 (7단계 + 분기)**:
+    1. pykrx로 KOSPI 200 + KOSDAQ 100 유니버스 구성 (시총 기준, 전영업일)
+       → market_type=KOSPI/KOSDAQ 시 해당 시장만 필터
+    2. DART corpCode.xml ZIP 다운로드 → {stock_code: corp_code} 매핑
+    3. DART fnlttMultiAcnt API 100개씩 배치 조회 (CFS 연결 우선, OFS 별도 fallback, reprt_code=11011 연간)
+    4. ROE/영업이익률/부채비율/매출성장률 계산 → 1차 필터 (자본잠식 없음, 흑자, 부채비율<500%)
+    5. yfinance로 시총/현재가 보완 ({code}.KS / {code}.KQ)
+    6. 2차 스코어링 (ROE 25% + 영업이익률 25% + 매출성장률 20% + 부채안정성 15% + PBR역수 15%) → TOP 40 선별
+    5b. TOP 30 분기 실적 조회 — Q1 (11013, 5월 이후) + H1 (11012, 8월 이후) — 한 번 API 호출로 최대 100개 동시 조회
+    7. Gemini API로 종합 분석 (TOP10 테이블 + 섹터 패턴 + 숨은 강자 + 주의사항)
+  - **UI 구성**:
+    - 시장 탭 (전체/KOSPI/KOSDAQ) — 탭별 필터된 리포트 목록 + "✨ {시장} 생성" 버튼
+    - 날짜 셀렉트 (탭 필터 기준) + 즉시 생성 버튼 (5초 폴링, 최대 120회) + 새로고침
+    - 메타 정보 카드 + 우량주 테이블 + Gemini 분석 마크다운
+  - **우량주 테이블**: 순위/종목명(코드)/시장/시총/ROE/영업이익률/부채비율/매출성장률/PBR/스코어/분기실적
+    - 수치 색상: ROE·영업이익률·매출성장률 높을수록 초록 / 부채비율 낮을수록 초록
+    - 상위 30개 기본 표시(분기 포함), "전체 N개 보기" 버튼으로 TOP 40 펼침
+    - 📊 버튼 클릭 시 분기 실적 확장 행 표시 (매출/영업이익/순이익 × Q1/H1 × YoY 성장률)
+  - `ScreeningReport` / `ScreeningTopPick` / `QuarterlyFinancialResult` 타입 (`types/index.ts`)
+  - `generateScreeningReport(reportDate?, marketType?)` — market_type 파라미터 추가
+  - 백엔드: `financial_screening_report` 테이블 — `market_type VARCHAR(10)` 컬럼 추가 (migration idempotent)
+    - `GET /api/screening/reports` — 리포트 목록 (최신순)
+    - `GET /api/screening/reports/latest` — 최신 리포트 1건
+    - `POST /api/screening/reports/generate?market_type=ALL|KOSPI|KOSDAQ` — 즉시 생성 (202)
+  - 환경변수: `DART_API_KEY` (Railway), `GEMINI_API_KEY` (기존)
+  - `_fetch_dart_financials_batch(reprt_code)` 파라미터 추가 — 연간/분기 공통 함수 재사용
 
 ## 미완성 / TODO
 
