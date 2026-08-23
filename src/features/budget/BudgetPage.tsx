@@ -1298,6 +1298,9 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           {/* 결제수단 관리 패널 (통장/카드 CRUD) */}
           <PaymentMethodPanel userId={userId} paymentMethods={paymentMethods} onChanged={setPaymentMethods} />
 
+          {/* 공용 통장 현황 — 동영/주해 양쪽 이체·사용 내역 통합 조회 */}
+          <SharedAccountSection defaultYearMonth={yearMonth} />
+
           {/* 섹션 구분선 */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: '12px',
@@ -3637,6 +3640,243 @@ const AccountManagementView: React.FC = () => {
 
       {/* 공통코드 관리 모달 */}
       {showCommonCode && <CommonCodeModal onClose={() => setShowCommonCode(false)} />}
+    </div>
+  );
+};
+
+// ─── 공용 통장 현황 ────────────────────────────────────────────
+// 생활비·데이트·여행·비상금 통장처럼 (동영)/(주해) 구분 없는 통장을 공용으로 판별
+// 두 유저의 이체·사용 내역을 합산해 잔액·이체이력·사용이력 표시
+
+const SharedAccountSection: React.FC<{ defaultYearMonth: string }> = ({ defaultYearMonth }) => {
+  const [yearMonth, setYearMonth] = useState(defaultYearMonth);
+  const [allEntries, setAllEntries] = useState<BudgetEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedAcc, setExpandedAcc] = useState<string | null>(null);
+  // 카드별 활성 탭 (기본: 이체 이력)
+  const [accHistTabs, setAccHistTabs] = useState<Record<string, 'transfer' | 'usage'>>({});
+
+  // 부모 defaultYearMonth 변경 시 동기화
+  useEffect(() => { setYearMonth(defaultYearMonth); }, [defaultYearMonth]);
+
+  // 월 이동
+  const moveMonth = (delta: number) => {
+    const y = Number(yearMonth.slice(0, 4));
+    const m = Number(yearMonth.slice(4));
+    const total = y * 12 + m - 1 + delta;
+    const ny = Math.floor(total / 12);
+    const nm = (total % 12) + 1;
+    setYearMonth(`${ny}${String(nm).padStart(2, '0')}`);
+  };
+
+  // 두 유저 내역 병렬 조회
+  useEffect(() => {
+    setLoading(true);
+    Promise.all(BUDGET_USERS.map(u => getBudgetEntries(u.id, yearMonth)))
+      .then(results => setAllEntries(results.flat()))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [yearMonth]);
+
+  // 공용 통장 = (동영)/(주해) 미포함 통장
+  const sharedAccounts = useMemo(
+    () => ACCOUNT_GROUPS.flatMap(g => g.accounts).filter(a => !a.name.includes('(동영)') && !a.name.includes('(주해)')),
+    [],
+  );
+
+  const isXferEntry = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+  const getUserName = (uid: string) => BUDGET_USERS.find(u => u.id === uid)?.name ?? uid;
+  const ymLabel = `${yearMonth.slice(0, 4)}년 ${Number(yearMonth.slice(4))}월`;
+
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      {/* 섹션 헤더 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '8px 0 16px' }}>
+        <div style={{ flex: 1, height: '2px', background: 'linear-gradient(to right, #89CFF0, #e0f0ff)' }} />
+        <span style={{
+          fontSize: '12px', fontWeight: 700, color: '#4BAAD4',
+          padding: '4px 14px', border: '1.5px solid #89CFF0',
+          borderRadius: '20px', background: '#f0f8fd', whiteSpace: 'nowrap',
+        }}>
+          🏦 공용 통장 현황
+        </span>
+        <div style={{ flex: 1, height: '2px', background: 'linear-gradient(to left, #89CFF0, #e0f0ff)' }} />
+      </div>
+
+      {/* 월 네비게이터 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '14px' }}>
+        <button onClick={() => moveMonth(-1)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#89CFF0', lineHeight: 1 }}>‹</button>
+        <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', minWidth: '110px', textAlign: 'center' }}>{ymLabel}</span>
+        <button onClick={() => moveMonth(1)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#89CFF0', lineHeight: 1 }}>›</button>
+        {loading && <span style={{ fontSize: '11px', color: '#9aa0a6' }}>조회 중…</span>}
+      </div>
+
+      {/* 공용 통장 카드 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {sharedAccounts.map(acc => {
+          const accName = acc.name;
+
+          // 이체 입금: 이 통장으로 들어온 이체 (INCOME side)
+          const xferIn = allEntries.filter(e => isXferEntry(e) && e.entryType === 'INCOME' && e.account === accName);
+          // 이체 출금: 이 통장에서 나간 이체 (EXPENSE side)
+          const xferOut = allEntries.filter(e => isXferEntry(e) && e.entryType === 'EXPENSE' && e.account === accName);
+          // 사용 이력: 이 통장에서 실제 지출 (비이체 지출)
+          const usages = allEntries.filter(e =>
+            !isXferEntry(e) && e.entryType === 'EXPENSE' &&
+            (e.account === accName || e.accountMain === accName),
+          );
+
+          const totalIn   = xferIn.reduce((s, e) => s + e.amount, 0);
+          const totalOut  = xferOut.reduce((s, e) => s + e.amount, 0);
+          const totalUsed = usages.reduce((s, e) => s + e.amount, 0);
+          const balance   = totalIn - totalOut - totalUsed;
+
+          const isExpanded = expandedAcc === accName;
+          const histTab    = accHistTabs[accName] ?? 'transfer';
+
+          // 이체 이력: 입금 + 출금 합쳐서 날짜 내림차순
+          const allXfers     = [...xferIn, ...xferOut].sort((a, b) => b.entryDate.localeCompare(a.entryDate));
+          const sortedUsages = [...usages].sort((a, b) => b.entryDate.localeCompare(a.entryDate));
+          const hasData      = totalIn > 0 || totalOut > 0 || totalUsed > 0;
+
+          return (
+            <div key={accName} style={{
+              background: '#fff',
+              border: `1px solid ${isExpanded ? '#89CFF0' : '#e8ecf0'}`,
+              borderRadius: '12px', overflow: 'hidden',
+              boxShadow: isExpanded ? '0 0 0 2px #89CFF030' : '0 1px 3px rgba(0,0,0,0.05)',
+              transition: 'box-shadow 0.15s, border-color 0.15s',
+            }}>
+              {/* 카드 헤더 */}
+              <div
+                onClick={() => setExpandedAcc(isExpanded ? null : accName)}
+                style={{
+                  padding: '12px 16px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '12px',
+                  background: isExpanded ? '#f0f8fd' : '#fff',
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, color: '#1a3a5c', fontSize: '14px', marginBottom: '8px' }}>
+                    {accName}
+                  </div>
+                  {hasData ? (
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '12px', color: '#5f6368' }}>
+                      <span>이체 입금 <strong style={{ color: '#2e7d32' }}>+{formatAmountShort(totalIn)}</strong></span>
+                      {totalOut > 0 && (
+                        <span>이체 출금 <strong style={{ color: '#e65100' }}>-{formatAmountShort(totalOut)}</strong></span>
+                      )}
+                      <span>사용 <strong style={{ color: '#E06060' }}>-{formatAmountShort(totalUsed)}</strong></span>
+                      <span style={{ borderLeft: '1px solid #e0e0e0', paddingLeft: '12px' }}>
+                        잔액 <strong style={{ color: balance >= 0 ? '#1565c0' : '#E06060', fontSize: '13px' }}>
+                          {balance < 0 ? '-' : ''}{formatAmountShort(Math.abs(balance))}
+                        </strong>
+                      </span>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: '#bbb' }}>{ymLabel} 내역 없음</span>
+                  )}
+                </div>
+                <span style={{
+                  fontSize: '14px', color: '#89CFF0', flexShrink: 0,
+                  display: 'inline-block',
+                  transform: isExpanded ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s',
+                }}>▼</span>
+              </div>
+
+              {/* 이력 패널 (펼침) */}
+              {isExpanded && (
+                <div style={{ borderTop: '1px solid #f0f0f0' }}>
+                  {/* 탭 */}
+                  <div style={{ display: 'flex', borderBottom: '1px solid #f0f0f0' }}>
+                    {(['transfer', 'usage'] as const).map(t => (
+                      <button
+                        key={t}
+                        onClick={e => { e.stopPropagation(); setAccHistTabs(prev => ({ ...prev, [accName]: t })); }}
+                        style={{
+                          flex: 1, padding: '10px 8px', border: 'none',
+                          fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                          background: histTab === t ? '#f0f8fd' : '#fafafa',
+                          color: histTab === t ? '#1a3a5c' : '#9aa0a6',
+                          borderBottom: histTab === t ? '2px solid #89CFF0' : '2px solid transparent',
+                        }}
+                      >
+                        {t === 'transfer'
+                          ? `🔄 이체 이력 (${allXfers.length}건)`
+                          : `💳 사용 이력 (${sortedUsages.length}건)`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 이력 목록 */}
+                  <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                    {histTab === 'transfer' ? (
+                      allXfers.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '24px', color: '#9aa0a6', fontSize: '12px' }}>이체 내역이 없습니다</div>
+                      ) : allXfers.map(e => (
+                        <div key={e.id} style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          padding: '10px 16px', borderBottom: '1px solid #f8f9fa',
+                        }}>
+                          <span style={{ color: '#9aa0a6', fontSize: '11px', whiteSpace: 'nowrap', minWidth: '30px' }}>{e.entryDate.slice(5)}</span>
+                          <span style={{
+                            padding: '2px 7px', borderRadius: '8px', fontSize: '10px', fontWeight: 700,
+                            background: e.entryType === 'INCOME' ? '#e8f5e9' : '#fff3e0',
+                            color: e.entryType === 'INCOME' ? '#2e7d32' : '#e65100',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {e.entryType === 'INCOME' ? '↓ 입금' : '↑ 출금'}
+                          </span>
+                          <span style={{ flex: 1, color: '#344054', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {e.merchant || ''}
+                          </span>
+                          <span style={{
+                            fontSize: '10px', color: '#fff', background: '#89CFF0',
+                            padding: '1px 6px', borderRadius: '8px', whiteSpace: 'nowrap',
+                          }}>{getUserName(e.userId)}</span>
+                          <span style={{ fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap',
+                            color: e.entryType === 'INCOME' ? '#2e7d32' : '#e65100',
+                          }}>
+                            {e.entryType === 'INCOME' ? '+' : '-'}{formatAmountShort(e.amount)}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      sortedUsages.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '24px', color: '#9aa0a6', fontSize: '12px' }}>사용 내역이 없습니다</div>
+                      ) : sortedUsages.map(e => (
+                        <div key={e.id} style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          padding: '10px 16px', borderBottom: '1px solid #f8f9fa',
+                        }}>
+                          <span style={{ color: '#9aa0a6', fontSize: '11px', whiteSpace: 'nowrap', minWidth: '30px' }}>{e.entryDate.slice(5)}</span>
+                          <span style={{
+                            padding: '2px 7px', borderRadius: '8px', fontSize: '10px', fontWeight: 700,
+                            background: '#fce4ec', color: '#c62828', whiteSpace: 'nowrap',
+                          }}>
+                            {e.category}
+                          </span>
+                          <span style={{ flex: 1, color: '#344054', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {e.merchant || e.memo || '-'}
+                          </span>
+                          <span style={{
+                            fontSize: '10px', color: '#fff', background: '#89CFF0',
+                            padding: '1px 6px', borderRadius: '8px', whiteSpace: 'nowrap',
+                          }}>{getUserName(e.userId)}</span>
+                          <span style={{ fontWeight: 700, fontSize: '13px', color: '#E06060', whiteSpace: 'nowrap' }}>
+                            -{formatAmountShort(e.amount)}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
