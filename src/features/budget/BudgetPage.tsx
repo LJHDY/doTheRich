@@ -6185,50 +6185,104 @@ const ScreeningReportView: React.FC = () => {
   };
 
   /** 마크다운 → JSX (기존 AIReportView 패턴과 동일) */
+  // 인라인 bold 파싱 (**text**)
+  const renderInlineS = (text: string) =>
+    text.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
+      p.startsWith('**') && p.endsWith('**')
+        ? <strong key={j}>{p.slice(2, -2)}</strong>
+        : <span key={j}>{p}</span>
+    );
+
   const renderContent = (text: string) => {
     const lines = text.split('\n');
-    return lines.map((line, i) => {
+    const result: React.ReactNode[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // 마크다운 테이블 블록 감지 — 연속된 | 로 시작하는 행을 하나의 <table>로 묶음
+      if (line.trimStart().startsWith('|')) {
+        const tableLines: string[] = [];
+        while (i < lines.length && lines[i].trimStart().startsWith('|')) {
+          tableLines.push(lines[i]);
+          i++;
+        }
+        // 구분자 행(|:---|) 제외, 헤더/데이터 행만 추출
+        const nonSep = tableLines.filter(l => !/^\s*\|[\s:|-]+\|\s*$/.test(l));
+        if (nonSep.length === 0) continue;
+
+        // 셀 파싱: "| a | b | c |" → ["a","b","c"]
+        const parseCells = (l: string) =>
+          l.split('|').slice(1, -1).map(c => c.trim());
+
+        const [headerRow, ...dataRows] = nonSep;
+        const headers = parseCells(headerRow);
+
+        result.push(
+          <div key={`tbl-${i}`} style={{ overflowX: 'auto', margin: '10px 0 14px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ background: '#e8f4fd' }}>
+                  {headers.map((h, hi) => (
+                    <th key={hi} style={{
+                      padding: '7px 10px', textAlign: 'left', fontWeight: 700,
+                      color: '#1a3a5c', borderBottom: '2px solid #89CFF0',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {renderInlineS(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dataRows.map((row, ri) => (
+                  <tr key={ri} style={{ background: ri % 2 === 0 ? '#fff' : '#f7fbff' }}>
+                    {parseCells(row).map((cell, ci) => (
+                      <td key={ci} style={{
+                        padding: '6px 10px', color: '#344054',
+                        borderBottom: '1px solid #e8ecf0',
+                        verticalAlign: 'top',
+                      }}>
+                        {renderInlineS(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
+      }
+
       if (line.startsWith('## ')) {
-        return (
+        result.push(
           <h2 key={i} style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', margin: '18px 0 8px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>
             {line.slice(3)}
           </h2>
         );
-      }
-      if (line.startsWith('### ')) {
-        return <h3 key={i} style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: '12px 0 5px' }}>{line.slice(4)}</h3>;
-      }
-      if (line.startsWith('| ') || line.startsWith('|:') || line.startsWith('|-')) {
-        // 마크다운 테이블 행 — 간단히 일반 텍스트로 처리
-        return <p key={i} style={{ fontSize: '12px', color: '#444', margin: '2px 0', fontFamily: 'monospace' }}>{line}</p>;
-      }
-      if (line.startsWith('- ') || line.startsWith('* ')) {
-        const parts = line.slice(2).split(/(\*\*[^*]+\*\*)/g);
-        return (
+      } else if (line.startsWith('### ')) {
+        result.push(<h3 key={i} style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: '12px 0 5px' }}>{line.slice(4)}</h3>);
+      } else if (line.startsWith('- ') || line.startsWith('* ')) {
+        result.push(
           <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
             <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
-            <span>
-              {parts.map((p, j) =>
-                p.startsWith('**') && p.endsWith('**')
-                  ? <strong key={j}>{p.slice(2, -2)}</strong>
-                  : p
-              )}
-            </span>
+            <span>{renderInlineS(line.slice(2))}</span>
           </div>
         );
+      } else if (line.trim() === '') {
+        result.push(<div key={i} style={{ height: '6px' }} />);
+      } else {
+        result.push(
+          <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.6' }}>
+            {renderInlineS(line)}
+          </p>
+        );
       }
-      if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
-      const parts = line.split(/(\*\*[^*]+\*\*)/g);
-      return (
-        <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.6' }}>
-          {parts.map((p, j) =>
-            p.startsWith('**') && p.endsWith('**')
-              ? <strong key={j}>{p.slice(2, -2)}</strong>
-              : p
-          )}
-        </p>
-      );
-    });
+      i++;
+    }
+    return result;
   };
 
   const selected = reports.find(r => r.id === selectedId) ?? null;
