@@ -42,6 +42,8 @@ import {
   InvestmentMemo,
   InvestmentMemoImage,
   WorkoutLog,
+  ScreeningReport,
+  ScreeningTopPick,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1698,6 +1700,68 @@ export const upsertDaySchedule = async (
   blocks: DayScheduleBlock[],
 ): Promise<void> => {
   await api.put('/api/day-schedules', { user_id: userId, schedule_date: scheduleDate, blocks });
+};
+
+// ─── DART 재무 스크리닝 ────────────────────────────────────────────────────
+
+/** 백엔드 응답(snake_case)을 ScreeningTopPick(camelCase)으로 변환 */
+const _parseTopPicks = (raw: string | null): ScreeningTopPick[] => {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return arr.map((item: Record<string, unknown>) => ({
+      stockCode: String(item.stock_code ?? item.stockCode ?? ''),
+      corpCode: String(item.corp_code ?? item.corpCode ?? ''),
+      corpName: String(item.corp_name ?? item.corpName ?? ''),
+      market: (item.market as 'KOSPI' | 'KOSDAQ') ?? 'KOSPI',
+      roe: item.roe != null ? Number(item.roe) : null,
+      opMargin: item.op_margin != null ? Number(item.op_margin) : null,
+      debtRatio: item.debt_ratio != null ? Number(item.debt_ratio) : null,
+      revenueGrowth: item.revenue_growth != null ? Number(item.revenue_growth) : null,
+      pbr: item.pbr != null ? Number(item.pbr) : null,
+      marketCap: item.market_cap != null ? Number(item.market_cap) : null,
+      currentPrice: item.current_price != null ? Number(item.current_price) : null,
+      score: Number(item.score ?? 0),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+/** 백엔드 응답을 ScreeningReport(camelCase)로 변환 */
+const _toScreeningReport = (item: Record<string, unknown>): ScreeningReport => ({
+  id: Number(item.id),
+  reportDate: String(item.reportDate ?? ''),
+  bsnYear: item.bsnYear != null ? String(item.bsnYear) : null,
+  universeCount: item.universeCount != null ? Number(item.universeCount) : null,
+  screenedCount: item.screenedCount != null ? Number(item.screenedCount) : null,
+  topPicks: _parseTopPicks(item.topPicks as string | null),
+  content: item.content != null ? String(item.content) : null,
+  createdAt: String(item.createdAt ?? ''),
+  updatedAt: String(item.updatedAt ?? ''),
+});
+
+/** DART 스크리닝 리포트 목록 조회 (최신순) */
+export const getScreeningReports = async (): Promise<ScreeningReport[]> => {
+  const { data } = await api.get<Record<string, unknown>[]>('/api/screening/reports');
+  return data.map(_toScreeningReport);
+};
+
+/** 최신 DART 스크리닝 리포트 1건 조회 */
+export const getLatestScreeningReport = async (): Promise<ScreeningReport | null> => {
+  try {
+    const { data } = await api.get<Record<string, unknown>>('/api/screening/reports/latest');
+    return _toScreeningReport(data);
+  } catch {
+    return null;
+  }
+};
+
+/** DART 스크리닝 리포트 즉시 생성 요청 (202 Accepted) */
+export const generateScreeningReport = async (reportDate?: string): Promise<void> => {
+  await api.post('/api/screening/reports/generate', null, {
+    params: reportDate ? { report_date: reportDate } : {},
+  });
 };
 
 export default api;

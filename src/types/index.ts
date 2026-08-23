@@ -918,3 +918,34 @@ export const formatAmountCompact = (amount: number): string => {
   }
   return `${Math.round(amount / 10_000).toLocaleString()}만`;
 };
+
+// ─── DART 재무 스크리닝 ─────────────────────────────────────────────────────
+
+/** DART 스크리닝 통과 개별 종목 재무 데이터 */
+export interface ScreeningTopPick {
+  stockCode: string;
+  corpCode: string;
+  corpName: string;
+  market: 'KOSPI' | 'KOSDAQ';
+  roe: number | null;            // ROE (%)
+  opMargin: number | null;       // 영업이익률 (%)
+  debtRatio: number | null;      // 부채비율 (%)
+  revenueGrowth: number | null;  // 매출성장률 (%)
+  pbr: number | null;            // PBR (배)
+  marketCap: number | null;      // 시총 (억원)
+  currentPrice?: number | null;  // 현재가 (원)
+  score: number;                 // 종합 스코어 (0~100)
+}
+
+/** DART 우량주 스크리닝 리포트 1건 */
+export interface ScreeningReport {
+  id: number;
+  reportDate: string;            // YYYY-MM-DD
+  bsnYear: string | null;        // 기준 사업연도
+  universeCount: number | null;  // 분석 대상 종목 수
+  screenedCount: number | null;  // 1차 필터 통과 종목 수
+  topPicks: ScreeningTopPick[];  // JSON 파싱된 TOP 40 종목
+  content: string | null;        // Gemini 마크다운 분석
+  createdAt: string;
+  updatedAt: string;
+}

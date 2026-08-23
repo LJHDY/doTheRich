@@ -57,8 +57,10 @@ import {
   generateMarketReport,
   generateKrCloseReport,
   deleteMarketReport,
+  getScreeningReports,
+  generateScreeningReport,
 } from '../../services/api';
-import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, ScreeningReport, ScreeningTopPick, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 import WorkoutTab from './WorkoutTab';
 
@@ -5862,8 +5864,8 @@ const FixedExpenseModal: React.FC<{
 
 const AIReportView: React.FC = () => {
   const isMobile = useIsMobile();
-  // 서브탭: AI 재무분석 / 시장 리포트
-  const [aiSubTab, setAiSubTab] = useState<'financial' | 'market'>('financial');
+  // 서브탭: AI 재무분석 / 시장 리포트 / 우량주 스크리닝
+  const [aiSubTab, setAiSubTab] = useState<'financial' | 'market' | 'screening'>('financial');
 
   const [reports, setReports] = useState<FinancialReportType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -5982,7 +5984,7 @@ const AIReportView: React.FC = () => {
 
         {/* ── 서브탭 */}
         <div style={{ display: 'flex', border: '1px solid #dadce0', borderRadius: '10px', overflow: 'hidden', marginBottom: '18px', alignSelf: 'flex-start', width: 'fit-content' }}>
-          {([['financial', '🤖 AI 재무분석'], ['market', '📈 시장 리포트']] as const).map(([tab, label]) => (
+          {([['financial', '🤖 AI 재무분석'], ['market', '📈 시장 리포트'], ['screening', '📋 우량주 스크리닝']] as const).map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setAiSubTab(tab)}
@@ -5998,6 +6000,9 @@ const AIReportView: React.FC = () => {
 
         {/* ── 시장 리포트 탭 */}
         {aiSubTab === 'market' && <MarketReportView />}
+
+        {/* ── 우량주 스크리닝 탭 */}
+        {aiSubTab === 'screening' && <ScreeningReportView />}
 
         {/* ── AI 재무분석 탭 */}
         {aiSubTab === 'financial' && <>
@@ -6087,6 +6092,372 @@ const AIReportView: React.FC = () => {
         </> /* aiSubTab === 'financial' */}
 
       </div>
+    </div>
+  );
+};
+
+// ─── DART 우량주 스크리닝 리포트 뷰 ─────────────────────────────────────────
+
+/** 수치 색상 — 값이 높을수록 초록(green), 낮을수록 빨강(red), null이면 회색 */
+const _numColor = (val: number | null, invert = false): string => {
+  if (val === null) return '#9aa0a6';
+  if (invert) {
+    // 부채비율: 낮을수록 초록
+    if (val > 200) return '#e53935';
+    if (val > 100) return '#f57c00';
+    return '#388e3c';
+  }
+  // ROE / 영업이익률 / 매출성장률: 높을수록 초록
+  if (val < 0) return '#e53935';
+  if (val >= 15) return '#388e3c';
+  if (val >= 5) return '#1565c0';
+  return '#5f6368';
+};
+
+/** 숫자 포맷 — null이면 '—', 소수점 1자리, 부호 포함 옵션 */
+const _fmtNum = (val: number | null, showSign = false, decimals = 1): string => {
+  if (val === null) return '—';
+  const sign = showSign && val > 0 ? '+' : '';
+  return `${sign}${val.toFixed(decimals)}`;
+};
+
+/** 시총 포맷 — 조원 이상이면 "X.Xt", 억원이면 "X,XXX억" */
+const _fmtMC = (val: number | null): string => {
+  if (val === null) return '—';
+  if (val >= 10_000) return `${(val / 10_000).toFixed(1)}조`;
+  return `${val.toLocaleString()}억`;
+};
+
+const ScreeningReportView: React.FC = () => {
+  const isMobile = useIsMobile();
+  // 리포트 목록·선택 상태
+  const [reports, setReports] = useState<ScreeningReport[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [toast, setToast] = useState('');
+  // 상위 40개 테이블 — 기본 TOP 10만 표시, 전체 펼치기 토글
+  const [showAll, setShowAll] = useState(false);
+
+  /** 리포트 목록 로드 */
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await getScreeningReports();
+      setReports(data);
+      if (data.length > 0 && selectedId === null) setSelectedId(data[0].id);
+    } catch {
+      // 오류 무시 (빈 목록 유지)
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** 즉시 생성 → 5초 폴링으로 완료 감지 */
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setToast('스크리닝 요청 중…');
+    try {
+      await generateScreeningReport();
+      setToast('DART 데이터 수집 중입니다. 완료 시 자동 업데이트됩니다. (최대 5분)');
+      const prevTopId = reports.length > 0 ? reports[0].id : null;
+      let tries = 0;
+      const poll = setInterval(async () => {
+        tries++;
+        const data = await getScreeningReports();
+        const isNew = data.length > 0 && data[0].id !== prevTopId;
+        if (isNew || tries >= 60) {
+          clearInterval(poll);
+          setReports(data);
+          if (data.length > 0) setSelectedId(data[0].id);
+          setGenerating(false);
+          setToast(isNew ? '✅ 스크리닝 완료!' : '⚠️ 시간이 초과되었습니다. 잠시 후 새로고침해주세요.');
+          setTimeout(() => setToast(''), 5000);
+        }
+      }, 5000);
+    } catch {
+      setGenerating(false);
+      setToast('❌ 요청에 실패했습니다.');
+      setTimeout(() => setToast(''), 3000);
+    }
+  };
+
+  /** 마크다운 → JSX (기존 AIReportView 패턴과 동일) */
+  const renderContent = (text: string) => {
+    const lines = text.split('\n');
+    return lines.map((line, i) => {
+      if (line.startsWith('## ')) {
+        return (
+          <h2 key={i} style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', margin: '18px 0 8px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>
+            {line.slice(3)}
+          </h2>
+        );
+      }
+      if (line.startsWith('### ')) {
+        return <h3 key={i} style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: '12px 0 5px' }}>{line.slice(4)}</h3>;
+      }
+      if (line.startsWith('| ') || line.startsWith('|:') || line.startsWith('|-')) {
+        // 마크다운 테이블 행 — 간단히 일반 텍스트로 처리
+        return <p key={i} style={{ fontSize: '12px', color: '#444', margin: '2px 0', fontFamily: 'monospace' }}>{line}</p>;
+      }
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        const parts = line.slice(2).split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
+            <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
+            <span>
+              {parts.map((p, j) =>
+                p.startsWith('**') && p.endsWith('**')
+                  ? <strong key={j}>{p.slice(2, -2)}</strong>
+                  : p
+              )}
+            </span>
+          </div>
+        );
+      }
+      if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      return (
+        <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.6' }}>
+          {parts.map((p, j) =>
+            p.startsWith('**') && p.endsWith('**')
+              ? <strong key={j}>{p.slice(2, -2)}</strong>
+              : p
+          )}
+        </p>
+      );
+    });
+  };
+
+  const selected = reports.find(r => r.id === selectedId) ?? null;
+
+  // 날짜 포맷 — "2025-08-24" → "2025년 8월 24일"
+  const fmtDate = (d: string) => {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
+  // 표시할 종목 목록 (showAll 여부에 따라 TOP10 또는 TOP40)
+  const visiblePicks: ScreeningTopPick[] = selected
+    ? (showAll ? selected.topPicks : selected.topPicks.slice(0, 10))
+    : [];
+
+  // 테이블 셀 공통 스타일
+  const thStyle: React.CSSProperties = {
+    padding: '6px 8px', fontSize: '11px', fontWeight: 600,
+    color: '#5f6368', background: '#f0f4f8',
+    borderBottom: '1px solid #e0e4e8', whiteSpace: 'nowrap', textAlign: 'center',
+  };
+  const tdStyle: React.CSSProperties = {
+    padding: '6px 8px', fontSize: '12px',
+    borderBottom: '1px solid #f0f4f8', textAlign: 'right',
+  };
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto' }}>
+      {/* ── 상단 컨트롤 바 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        {/* 리포트 날짜 선택 */}
+        <select
+          value={selectedId ?? ''}
+          onChange={e => setSelectedId(Number(e.target.value))}
+          style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #dadce0', background: '#fff', minWidth: '200px' }}
+        >
+          {reports.length === 0 && <option value="">리포트 없음</option>}
+          {reports.map(r => (
+            <option key={r.id} value={r.id}>
+              {fmtDate(r.reportDate)} ({r.bsnYear ?? '?'}년 기준)
+            </option>
+          ))}
+        </select>
+
+        {/* 즉시 생성 버튼 */}
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          style={{
+            padding: '6px 14px', fontSize: '13px', borderRadius: '6px',
+            border: 'none', cursor: generating ? 'not-allowed' : 'pointer',
+            background: generating ? '#b0bec5' : '#89CFF0', color: '#fff', fontWeight: 600,
+          }}
+        >
+          {generating ? '⏳ 생성 중…' : '✨ 즉시 생성'}
+        </button>
+
+        {/* 새로고침 버튼 */}
+        <button
+          onClick={load}
+          style={{ padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid #dadce0', background: '#fff', cursor: 'pointer' }}
+        >
+          🔄
+        </button>
+      </div>
+
+      {/* 토스트 메시지 */}
+      {toast && (
+        <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: '8px', padding: '10px 16px', fontSize: '13px', color: '#2e7d32', marginBottom: '12px' }}>
+          {toast}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ color: '#9aa0a6', fontSize: '14px', textAlign: 'center', padding: '40px' }}>로딩 중…</div>
+      ) : !selected ? (
+        /* 리포트 없을 때 안내 */
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9aa0a6' }}>
+          <div style={{ fontSize: '40px', marginBottom: '12px' }}>📋</div>
+          <div style={{ fontSize: '15px', fontWeight: 600, color: '#5f6368', marginBottom: '8px' }}>스크리닝 리포트가 없습니다</div>
+          <div style={{ fontSize: '13px' }}>매주 토요일 오전 7시(KST)에 자동 생성되거나,<br />"즉시 생성" 버튼으로 수동 생성할 수 있습니다.</div>
+          <div style={{ fontSize: '12px', color: '#b0bec5', marginTop: '8px' }}>DART API 키(Railway 환경변수 DART_API_KEY)가 필요합니다.</div>
+        </div>
+      ) : (
+        <div>
+          {/* ── 메타 정보 카드 */}
+          <div style={{
+            background: 'linear-gradient(135deg, #e8f5fd 0%, #f0f8ff 100%)',
+            borderRadius: '10px', padding: '14px 18px', marginBottom: '16px',
+            border: '1px solid #c9e6f5',
+          }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '8px' }}>
+              📊 스크리닝 개요 — {fmtDate(selected.reportDate)}
+            </div>
+            <div style={{ display: 'flex', gap: isMobile ? '12px' : '24px', flexWrap: 'wrap' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#5f6368' }}>기준 사업연도</div>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#1565c0' }}>{selected.bsnYear ?? '?'}년</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#5f6368' }}>분석 대상</div>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#344054' }}>{selected.universeCount?.toLocaleString() ?? '—'}개</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#5f6368' }}>1차 필터 통과</div>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#2e7d32' }}>{selected.screenedCount?.toLocaleString() ?? '—'}개</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#5f6368' }}>최종 분석</div>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#c8882a' }}>{selected.topPicks.length}개</div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── 우량주 테이블 */}
+          {selected.topPicks.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '8px' }}>
+                🏆 우량주 TOP {showAll ? selected.topPicks.length : 10}
+                {!showAll && selected.topPicks.length > 10 && (
+                  <span style={{ fontSize: '12px', color: '#9aa0a6', fontWeight: 400, marginLeft: '8px' }}>
+                    (상위 10개 표시 중)
+                  </span>
+                )}
+              </div>
+              <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #e0e4e8' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '640px' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...thStyle, textAlign: 'center' }}>순위</th>
+                      <th style={{ ...thStyle, textAlign: 'left' }}>종목명 (코드)</th>
+                      <th style={thStyle}>시장</th>
+                      <th style={thStyle}>시총(억)</th>
+                      <th style={thStyle}>ROE(%)</th>
+                      <th style={thStyle}>영업이익률(%)</th>
+                      <th style={thStyle}>부채비율(%)</th>
+                      <th style={thStyle}>매출성장률(%)</th>
+                      <th style={thStyle}>PBR</th>
+                      <th style={thStyle}>스코어</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visiblePicks.map((pick, idx) => (
+                      <tr key={pick.stockCode} style={{ background: idx % 2 === 0 ? '#fff' : '#fafbfc' }}>
+                        {/* 순위 */}
+                        <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: idx < 3 ? '#c8882a' : '#5f6368' }}>
+                          {idx + 1}
+                        </td>
+                        {/* 종목명 */}
+                        <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 600, color: '#1a3a5c' }}>
+                          {pick.corpName}
+                          <span style={{ fontSize: '11px', color: '#9aa0a6', marginLeft: '4px' }}>({pick.stockCode})</span>
+                        </td>
+                        {/* 시장 */}
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <span style={{
+                            fontSize: '10px', padding: '2px 6px', borderRadius: '4px',
+                            background: pick.market === 'KOSPI' ? '#e3f2fd' : '#f3e5f5',
+                            color: pick.market === 'KOSPI' ? '#1565c0' : '#6a1b9a',
+                            fontWeight: 600,
+                          }}>
+                            {pick.market}
+                          </span>
+                        </td>
+                        {/* 시총 */}
+                        <td style={tdStyle}>{_fmtMC(pick.marketCap)}</td>
+                        {/* ROE */}
+                        <td style={{ ...tdStyle, color: _numColor(pick.roe) }}>
+                          {_fmtNum(pick.roe, true)}
+                        </td>
+                        {/* 영업이익률 */}
+                        <td style={{ ...tdStyle, color: _numColor(pick.opMargin) }}>
+                          {_fmtNum(pick.opMargin, true)}
+                        </td>
+                        {/* 부채비율 — 낮을수록 좋음(invert) */}
+                        <td style={{ ...tdStyle, color: _numColor(pick.debtRatio, true) }}>
+                          {_fmtNum(pick.debtRatio, false, 0)}
+                        </td>
+                        {/* 매출성장률 */}
+                        <td style={{ ...tdStyle, color: _numColor(pick.revenueGrowth) }}>
+                          {_fmtNum(pick.revenueGrowth, true)}
+                        </td>
+                        {/* PBR */}
+                        <td style={tdStyle}>
+                          {pick.pbr !== null ? pick.pbr.toFixed(2) : '—'}
+                        </td>
+                        {/* 스코어 */}
+                        <td style={{ ...tdStyle, fontWeight: 700, color: '#1a3a5c' }}>
+                          {pick.score.toFixed(1)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 전체 펼치기/접기 버튼 */}
+              {selected.topPicks.length > 10 && (
+                <button
+                  onClick={() => setShowAll(v => !v)}
+                  style={{
+                    marginTop: '8px', padding: '6px 16px', fontSize: '12px',
+                    borderRadius: '6px', border: '1px solid #dadce0', background: '#fff',
+                    cursor: 'pointer', color: '#5f6368',
+                  }}
+                >
+                  {showAll ? '▲ 접기' : `▼ 전체 ${selected.topPicks.length}개 보기`}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── Gemini 분석 마크다운 */}
+          {selected.content && (
+            <div style={{ background: '#fff', borderRadius: '10px', padding: '16px 20px', border: '1px solid #e0e4e8' }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '12px' }}>
+                🤖 Gemini 분석
+              </div>
+              {renderContent(selected.content)}
+            </div>
+          )}
+
+          {/* 안내 문구 */}
+          <div style={{ marginTop: '16px', padding: '10px 14px', background: '#fff8e1', borderRadius: '8px', border: '1px solid #ffe082', fontSize: '12px', color: '#795548' }}>
+            ⚠️ 본 스크리닝은 DART 사업보고서 재무 데이터 기반 정량 분석입니다. 투자 판단의 참고 자료로만 활용하세요.
+            실제 투자 전 IR, 공시, 뉴스 등 비재무적 요소를 반드시 추가 검토하세요.
+          </div>
+        </div>
+      )}
     </div>
   );
 };
