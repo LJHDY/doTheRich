@@ -375,16 +375,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     // 통장 필터 — account(중분류) 또는 accountMain(대분류) 일치
     // accountMainFilter: 해당 pm의 accountMain값도 같이 매칭 (accountMain-only 수입 항목 포함)
     if (accountFilter === '__UNASSIGNED__') {
-      // 미분류: 내 결제수단(통장·카드) 어느 것도 해당 안 되는 항목
-      const myNames = new Set([
-        ...paymentMethods.map(p => p.name),
-        ...paymentMethods.filter(p => p.accountMain).map(p => p.accountMain!),
+      // 미분류: accountMap 키(e.account || e.accountMain)가 등록된 통장 이름에 없는 항목
+      // cardName은 체크하지 않음 — 통장 미지정 카드 지출도 미분류로 표시해야 함
+      // (accountMap과 동일한 key 로직을 써야 카드 합산 금액과 일치)
+      const bankAccounts = paymentMethods.filter(p => p.type === '통장');
+      const bankNames = new Set([
+        ...bankAccounts.map(p => p.name),
+        ...bankAccounts.filter(p => p.accountMain).map(p => p.accountMain!),
       ]);
-      base = base.filter(e =>
-        !myNames.has(e.account ?? '') &&
-        !myNames.has(e.accountMain ?? '') &&
-        !myNames.has(e.cardName ?? '')
-      );
+      base = base.filter(e => {
+        const key = e.account || e.accountMain || '미분류';
+        return !bankNames.has(key);
+      });
     } else if (accountFilter) {
       const pm = paymentMethods.find(p => p.name === accountFilter);
       base = base.filter(e =>
