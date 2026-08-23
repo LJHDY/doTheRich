@@ -2822,6 +2822,7 @@ const MarketReportView: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [generatingKr, setGeneratingKr] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [activeType, setActiveType] = useState<'global' | 'kr_close' | 'premarket'>('global');
   const [toast, setToast] = useState('');
   const [vixTipOpen, setVixTipOpen] = useState(false);
   // 상승 종목 테이블 접기/펼치기 (기본 접힘)
@@ -2835,7 +2836,10 @@ const MarketReportView: React.FC = () => {
     try {
       const data = await getMarketReports();
       setReports(data);
-      if (data.length > 0 && selectedId === null) setSelectedId(data[0].id);
+      // 최초 로드 시 현재 탭 기준 가장 최신 리포트 선택
+      const firstOfType = data.find(r => r.reportType === activeType);
+      if (firstOfType) setSelectedId(firstOfType.id);
+      else if (data.length > 0 && selectedId === null) setSelectedId(data[0].id);
     } catch (e: any) {
       // 네트워크 오류나 파싱 오류 시 에러 메시지 표시 (빈 목록으로 오인하지 않도록)
       setLoadError(e?.message || '데이터를 불러오는 중 오류가 발생했습니다.');
@@ -2845,6 +2849,13 @@ const MarketReportView: React.FC = () => {
   };
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 탭 전환 시 해당 타입의 가장 최신 리포트 자동 선택
+  const switchType = (type: 'global' | 'kr_close' | 'premarket') => {
+    setActiveType(type);
+    const first = reports.find(r => r.reportType === type);
+    if (first) setSelectedId(first.id);
+  };
 
   // 생성 요청 → 5초 폴링으로 완료 감지
   // 신규: id 변경 / 재생성(upsert): updatedAt 변경 둘 다 감지
@@ -2867,7 +2878,11 @@ const MarketReportView: React.FC = () => {
         if (isNew || tries >= 36) {
           clearInterval(poll);
           setReports(data);
-          if (data.length > 0) setSelectedId(data[0].id);
+          // 글로벌 탭으로 전환 후 해당 리포트 선택
+          setActiveType('global');
+          const first = data.find(r => r.reportType === 'global');
+          if (first) setSelectedId(first.id);
+          else if (data.length > 0) setSelectedId(data[0].id);
           setGenerating(false);
           setToast(isNew ? '✅ 분석 완료!' : '⚠️ 시간 초과. 잠시 후 새로고침해주세요.');
           setTimeout(() => setToast(''), 4000);
@@ -2895,7 +2910,11 @@ const MarketReportView: React.FC = () => {
         if (isNew || tries >= 36) {
           clearInterval(poll);
           setReports(data);
-          if (data.length > 0) setSelectedId(data[0].id);
+          // 국내장마감 탭으로 전환 후 해당 리포트 선택
+          setActiveType('kr_close');
+          const first = data.find(r => r.reportType === 'kr_close');
+          if (first) setSelectedId(first.id);
+          else if (data.length > 0) setSelectedId(data[0].id);
           setGeneratingKr(false);
           setToast(isNew ? '✅ 국내장마감 분석 완료!' : '⚠️ 시간 초과. 잠시 후 새로고침해주세요.');
           setTimeout(() => setToast(''), 4000);
@@ -2992,6 +3011,8 @@ const MarketReportView: React.FC = () => {
   };
 
   const selected = reports.find(r => r.id === selectedId);
+  // 현재 탭의 리포트만 필터링
+  const filteredReports = reports.filter(r => r.reportType === activeType);
 
   const formatKST = (iso: string | null) => {
     if (!iso) return '';
@@ -3002,56 +3023,94 @@ const MarketReportView: React.FC = () => {
   const changeColor = (v: number | null) => v == null ? '#9aa0a6' : v > 0 ? '#2e7d32' : v < 0 ? '#c62828' : '#9aa0a6';
   const changeSign = (v: number | null) => v == null ? '' : v > 0 ? '+' : '';
 
+  const TYPE_TABS: { key: 'global' | 'kr_close' | 'premarket'; label: string; desc: string }[] = [
+    { key: 'global',     label: '🌏 글로벌',      desc: '오전 7시 자동' },
+    { key: 'kr_close',  label: '🇰🇷 국내장마감',  desc: '오후 4시 자동' },
+    { key: 'premarket', label: '🌙 프리마켓',     desc: '자동 생성만' },
+  ];
+
   return (
     <div style={{ maxWidth: '780px', margin: '0 auto' }}>
 
+      {/* 타입 탭 */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+        {TYPE_TABS.map(tab => {
+          const isActive = activeType === tab.key;
+          const cnt = reports.filter(r => r.reportType === tab.key).length;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => switchType(tab.key)}
+              style={{
+                padding: '7px 16px', fontSize: '13px', fontWeight: isActive ? 700 : 400,
+                border: isActive ? '2px solid #89CFF0' : '2px solid #e0e0e0',
+                borderRadius: '20px', cursor: 'pointer',
+                background: isActive ? '#e8f7ff' : '#fff',
+                color: isActive ? '#1a3a5c' : '#7a8fa6',
+                display: 'flex', alignItems: 'center', gap: '6px',
+              }}
+            >
+              {tab.label}
+              {cnt > 0 && (
+                <span style={{ fontSize: '11px', background: isActive ? '#89CFF0' : '#e0e0e0', color: isActive ? '#fff' : '#666', borderRadius: '10px', padding: '1px 6px' }}>{cnt}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* 컨트롤 바 */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        {reports.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매일 오전 7시(글로벌) / 오후 4시(국내장마감) 자동 생성</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <select
-                value={selectedId ?? ''}
-                onChange={e => setSelectedId(Number(e.target.value))}
-                style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '280px' }}
-              >
-                {reports.map(r => (
-                  <option key={r.id} value={r.id}>
-                    {r.reportType === 'kr_close' ? '🇰🇷' : r.reportType === 'premarket' ? '🌙' : '🌏'} {r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleDelete}
-                title="선택 리포트 삭제"
-                style={{ padding: '5px 9px', fontSize: '13px', border: '1px solid #f5c6c6', borderRadius: '8px', background: '#fff5f5', color: '#c0392b', cursor: 'pointer', lineHeight: 1 }}
-              >×</button>
-            </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {filteredReports.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <select
+              value={selectedId ?? ''}
+              onChange={e => setSelectedId(Number(e.target.value))}
+              style={{ padding: '5px 10px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', color: '#344054', maxWidth: '260px' }}
+            >
+              {filteredReports.map(r => (
+                <option key={r.id} value={r.id}>
+                  {r.reportDate} · {formatKST(r.updatedAt ?? r.createdAt)}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleDelete}
+              title="선택 리포트 삭제"
+              style={{ padding: '5px 9px', fontSize: '13px', border: '1px solid #f5c6c6', borderRadius: '8px', background: '#fff5f5', color: '#c0392b', cursor: 'pointer', lineHeight: 1 }}
+            >×</button>
           </div>
         )}
-        <button
-          onClick={handleGenerate}
-          disabled={generating || generatingKr}
-          style={{
-            padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
-            borderRadius: '8px', cursor: (generating || generatingKr) ? 'default' : 'pointer',
-            background: generating ? '#b0c4de' : '#89CFF0', color: '#fff',
-          }}
-        >
-          {generating ? '생성 중…' : '🌏 글로벌 생성'}
-        </button>
-        <button
-          onClick={handleGenerateKrClose}
-          disabled={generating || generatingKr}
-          style={{
-            padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
-            borderRadius: '8px', cursor: (generating || generatingKr) ? 'default' : 'pointer',
-            background: generatingKr ? '#b0c4de' : '#e06060', color: '#fff',
-          }}
-        >
-          {generatingKr ? '생성 중…' : '🇰🇷 장마감 생성'}
-        </button>
+        {/* 탭별 생성 버튼 */}
+        {activeType === 'global' && (
+          <button
+            onClick={handleGenerate}
+            disabled={generating || generatingKr}
+            style={{
+              padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
+              borderRadius: '8px', cursor: (generating || generatingKr) ? 'default' : 'pointer',
+              background: generating ? '#b0c4de' : '#89CFF0', color: '#fff',
+            }}
+          >
+            {generating ? '생성 중…' : '✨ 생성'}
+          </button>
+        )}
+        {activeType === 'kr_close' && (
+          <button
+            onClick={handleGenerateKrClose}
+            disabled={generating || generatingKr}
+            style={{
+              padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
+              borderRadius: '8px', cursor: (generating || generatingKr) ? 'default' : 'pointer',
+              background: generatingKr ? '#b0c4de' : '#e06060', color: '#fff',
+            }}
+          >
+            {generatingKr ? '생성 중…' : '✨ 생성'}
+          </button>
+        )}
+        {activeType === 'premarket' && (
+          <span style={{ fontSize: '11px', color: '#9aa0a6' }}>새벽 자동 생성 전용 (수동 생성 불가)</span>
+        )}
         <button onClick={load} style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>↺</button>
       </div>
 
@@ -3072,11 +3131,13 @@ const MarketReportView: React.FC = () => {
               <div style={{ marginTop: '8px', fontSize: '12px', color: '#9aa0a6' }}>{loadError}</div>
               <button onClick={load} style={{ marginTop: '16px', padding: '8px 20px', background: '#89CFF0', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>다시 시도</button>
             </div>
-          ) : reports.length === 0 ? (
+          ) : filteredReports.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
               <div style={{ fontSize: '40px', marginBottom: '16px' }}>📊</div>
-              <div>아직 시장 리포트가 없어요.</div>
-              <div style={{ marginTop: '8px', fontSize: '12px' }}><strong>✨ 즉시 생성</strong> 버튼으로 첫 번째 리포트를 만들어보세요.</div>
+              <div>이 탭의 리포트가 없어요.</div>
+              {activeType !== 'premarket' && (
+                <div style={{ marginTop: '8px', fontSize: '12px' }}><strong>✨ 생성</strong> 버튼으로 첫 번째 리포트를 만들어보세요.</div>
+              )}
             </div>
           ) : selected ? (
             <div>
@@ -4261,6 +4322,7 @@ const AssetView: React.FC = () => {
 
   // ── 세부 항목별 그래프 상태 ───────────────────────────────────────────
   const [detailChartAsset, setDetailChartAsset] = useState<string>('주식');
+  const [detailChartUser, setDetailChartUser] = useState<string>('all'); // 'all' | userId
   const [allDetails, setAllDetails] = useState<Map<string, AssetSnapshotDetail[]>>(new Map());
   const [detailsLoading, setDetailsLoading] = useState(false);
 
@@ -4319,39 +4381,48 @@ const AssetView: React.FC = () => {
     });
   }, [cellMap, dates, exchangeRate, chartExcludeKeys]);
 
-  // 세부 항목별 차트 데이터 — "유저명 · 계좌명" 키로 계좌별 라인 생성
+  // 세부 항목별 차트 데이터 — "유저명 · 계좌명" or "계좌명" 키로 계좌별 라인 생성
   const DETAIL_COLORS = ['#1565c0', '#E06060', '#4CAF50', '#FF9800', '#9C27B0', '#00BCD4', '#795548', '#607D8B', '#E91E63', '#009688'];
   const chartDataByDetail = useMemo(() => {
     if (allDetails.size === 0) return { data: [] as Record<string, any>[], seriesKeys: [] as string[] };
     const isDollar = ASSET_COLUMNS.find(c => c.key === detailChartAsset)?.isDollar ?? false;
+    const singleUser = detailChartUser !== 'all'; // 특정 유저 선택 시 접두사 생략
 
     // 날짜 오름차순으로 순회해 계좌 키 순서 확정
     const keyOrder: string[] = [];
     const seen = new Set<string>();
     for (const date of [...dates].reverse()) {
       const rows = allDetails.get(date) ?? [];
-      rows.filter(r => r.assetType === detailChartAsset).forEach(r => {
-        const uName = BUDGET_USERS.find(u => u.id === r.userId)?.name ?? r.userId;
-        const key = r.accountName ? `${uName} · ${r.accountName}` : uName;
-        if (!seen.has(key)) { seen.add(key); keyOrder.push(key); }
-      });
+      rows
+        .filter(r => r.assetType === detailChartAsset && (singleUser ? r.userId === detailChartUser : true))
+        .forEach(r => {
+          const uName = BUDGET_USERS.find(u => u.id === r.userId)?.name ?? r.userId;
+          const key = singleUser
+            ? (r.accountName || uName)
+            : (r.accountName ? `${uName} · ${r.accountName}` : uName);
+          if (!seen.has(key)) { seen.add(key); keyOrder.push(key); }
+        });
     }
 
     const data = [...dates].reverse().map(date => {
       const rows = allDetails.get(date) ?? [];
       const point: Record<string, any> = { label: date.slice(5), fullDate: date };
       keyOrder.forEach(k => { point[k] = 0; });
-      rows.filter(r => r.assetType === detailChartAsset).forEach(r => {
-        const uName = BUDGET_USERS.find(u => u.id === r.userId)?.name ?? r.userId;
-        const key = r.accountName ? `${uName} · ${r.accountName}` : uName;
-        const amount = isDollar ? Math.round(r.amount * exchangeRate) : r.amount;
-        point[key] = (point[key] ?? 0) + amount;
-      });
+      rows
+        .filter(r => r.assetType === detailChartAsset && (singleUser ? r.userId === detailChartUser : true))
+        .forEach(r => {
+          const uName = BUDGET_USERS.find(u => u.id === r.userId)?.name ?? r.userId;
+          const key = singleUser
+            ? (r.accountName || uName)
+            : (r.accountName ? `${uName} · ${r.accountName}` : uName);
+          const amount = isDollar ? Math.round(r.amount * exchangeRate) : r.amount;
+          point[key] = (point[key] ?? 0) + amount;
+        });
       return point;
     });
 
     return { data, seriesKeys: keyOrder };
-  }, [allDetails, detailChartAsset, dates, exchangeRate]);
+  }, [allDetails, detailChartAsset, detailChartUser, dates, exchangeRate]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6' }}>불러오는 중…</div>;
 
@@ -4822,8 +4893,8 @@ const AssetView: React.FC = () => {
                   cursor: 'pointer',
                 }}>{chartShowSplit ? '합산만 보기' : '개인별 보기'}</button>
               )}
-              {/* 세부 항목별: 자산 유형 선택 */}
-              {chartMode === 'DETAIL' && (
+              {/* 세부 항목별: 자산 유형 선택 + 유저 필터 */}
+              {chartMode === 'DETAIL' && (<>
                 <select
                   value={detailChartAsset}
                   onChange={e => setDetailChartAsset(e.target.value)}
@@ -4831,7 +4902,23 @@ const AssetView: React.FC = () => {
                 >
                   {ASSET_COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                 </select>
-              )}
+                {/* 유저 필터 */}
+                {([['all', '전체'] as const, ...BUDGET_USERS.map(u => [u.id, u.name] as const)]).map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => setDetailChartUser(id)}
+                    style={{
+                      padding: '5px 12px', fontSize: '12px',
+                      borderRadius: '20px',
+                      border: `1px solid ${detailChartUser === id ? '#1565c0' : '#dadce0'}`,
+                      background: detailChartUser === id ? '#e8f0fe' : '#fff',
+                      color: detailChartUser === id ? '#1565c0' : '#5f6368',
+                      fontWeight: detailChartUser === id ? 700 : 400,
+                      cursor: 'pointer',
+                    }}
+                  >{label}</button>
+                ))}
+              </>)}
             </div>
 
             {/* 자산 항목 제외 토글 칩 (세부 항목별 모드에서는 숨김) */}
