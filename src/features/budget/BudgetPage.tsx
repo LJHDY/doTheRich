@@ -1296,9 +1296,12 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             {!loading && (() => {
               const myAccountNames = new Set(paymentMethods.map(p => p.name));
               const otherUserName = BUDGET_USERS.find(u => u.id !== userId)?.name;
+              const cardNameSet = new Set(paymentMethods.filter(p => p.type === '카드').map(p => p.name));
+              const bankNameSet = new Set(paymentMethods.filter(p => p.type === '통장').map(p => p.name));
               return filtered.map(entry => (
                 <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete}
-                  myAccountNames={myAccountNames} otherUserName={otherUserName} />
+                  myAccountNames={myAccountNames} otherUserName={otherUserName}
+                  cardNameSet={cardNameSet} bankNameSet={bankNameSet} />
               ));
             })()}
           </div>
@@ -2132,6 +2135,8 @@ const CalendarView: React.FC<{
               <EntryRow key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete}
                 myAccountNames={new Set(paymentMethods.map(p => p.name))}
                 otherUserName={BUDGET_USERS.find(u => u.id !== userId)?.name}
+                cardNameSet={new Set(paymentMethods.filter(p => p.type === '카드').map(p => p.name))}
+                bankNameSet={new Set(paymentMethods.filter(p => p.type === '통장').map(p => p.name))}
               />
             ))
           )}
@@ -2147,7 +2152,9 @@ const EntryRow: React.FC<{
   onDelete: (e: BudgetEntry) => void;
   myAccountNames?: Set<string>; // 내 결제수단 이름 Set — 미포함 시 상대방 결제수단으로 표시
   otherUserName?: string;       // 상대방 이름 (예: '주해')
-}> = ({ entry, onEdit, onDelete, myAccountNames, otherUserName }) => {
+  cardNameSet?: Set<string>;    // 카드명 Set — accountMain이 카드명이면 카드 배지로 표시
+  bankNameSet?: Set<string>;    // 통장명 Set — accountMain이 통장명이면 통장 배지로 표시
+}> = ({ entry, onEdit, onDelete, myAccountNames, otherUserName, cardNameSet, bankNameSet }) => {
   const isIncome = entry.entryType === 'INCOME';
   const dateStr = entry.entryDate.slice(5); // "08-12"
 
@@ -2182,7 +2189,25 @@ const EntryRow: React.FC<{
         {(entry.merchant || entry.accountMain || entry.account || entry.cardName || entry.memo) && (
           <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '2px' }}>
             {entry.merchant && <span style={{ color: '#5f6368', fontWeight: 600 }}>{entry.merchant}</span>}
-            {entry.accountMain && <span>{entry.merchant ? ' · ' : ''}{entry.accountMain}</span>}
+            {entry.accountMain && (
+              cardNameSet?.has(entry.accountMain) ? (
+                <span style={{
+                  marginLeft: entry.merchant ? '4px' : undefined,
+                  fontSize: '10px', background: '#fff3e0',
+                  color: '#E65100', border: '1px solid #FFB74D',
+                  borderRadius: '4px', padding: '1px 5px',
+                }}>💳 {entry.accountMain}</span>
+              ) : bankNameSet?.has(entry.accountMain) ? (
+                <span style={{
+                  marginLeft: entry.merchant ? '4px' : undefined,
+                  fontSize: '10px', background: '#e3f2fd',
+                  color: '#1565c0', border: '1px solid #90CAF9',
+                  borderRadius: '4px', padding: '1px 5px',
+                }}>🏦 {entry.accountMain}</span>
+              ) : (
+                <span>{entry.merchant ? ' · ' : ''}{entry.accountMain}</span>
+              )
+            )}
             {entry.account && (
               <>
                 <span> › {entry.account}</span>
