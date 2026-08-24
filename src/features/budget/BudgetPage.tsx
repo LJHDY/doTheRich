@@ -2818,6 +2818,67 @@ const TICKER_GROUPS = [
   { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'],       accent: '#c0404a' },
 ];
 
+// ── 미국 주가상위 100 접기/펼치기 테이블 ─────────────────────────────────────
+const UsaTopStocksTable: React.FC<{
+  stocks: Array<{ticker:string;name:string;nameEn:string;exchange:string;close:number|null;changePct:number;changePrice:number|null;tradeVolume:number;marketCap:number|null;sector:string}>;
+}> = ({ stocks }) => {
+  const [open, setOpen] = useState(false);
+
+  const cc = (v: number) => v > 0 ? '#1e7e34' : v < 0 ? '#c0392b' : '#555';
+  const sign = (v: number) => v > 0 ? '+' : '';
+  const fmtMktCap = (v: number | null) => {
+    if (!v) return '-';
+    const b = v / 1_000_000_000;
+    return b >= 1000 ? `$${(b / 1000).toFixed(1)}T` : `$${b.toFixed(1)}B`;
+  };
+
+  return (
+    <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e0f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: '20px', overflow: 'hidden' }}>
+      {/* 헤더 — 클릭으로 펼치기/접기 */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', cursor: 'pointer', userSelect: 'none', borderBottom: open ? '1px solid #e0f0ff' : 'none' }}
+      >
+        <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c' }}>🇺🇸 미국 주가상위 {stocks.length}개 (priceTop)</span>
+        <span style={{ fontSize: '13px', color: '#89CFF0', fontWeight: 700 }}>{open ? '▲ 접기' : '▼ 펼치기'}</span>
+      </div>
+
+      {open && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <thead>
+              <tr style={{ background: '#f0f8fd', position: 'sticky', top: 0 }}>
+                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>#</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>티커</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>종목명</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>섹터</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>현재가</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>등락률</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>시가총액</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>거래량</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stocks.map((s, idx) => (
+                <tr key={s.ticker} style={{ borderTop: '1px solid #f0f4f8', background: idx % 2 === 0 ? '#fff' : '#fafcff' }}>
+                  <td style={{ padding: '7px 10px', color: '#9aa0a6' }}>{idx + 1}</td>
+                  <td style={{ padding: '7px 10px', fontWeight: 700, color: '#1a3a5c' }}>{s.ticker}</td>
+                  <td style={{ padding: '7px 10px', color: '#344054', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name || s.nameEn}</td>
+                  <td style={{ padding: '7px 10px', color: '#7a8fa6', whiteSpace: 'nowrap' }}>{s.sector || '-'}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: '#1a3a5c' }}>{s.close != null ? `$${s.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: cc(s.changePct) }}>{sign(s.changePct)}{s.changePct.toFixed(2)}%</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: '#344054' }}>{fmtMktCap(s.marketCap)}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: '#7a8fa6' }}>{s.tradeVolume > 0 ? s.tradeVolume.toLocaleString() : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const MarketReportView: React.FC = () => {
   const isMobile = useIsMobile();
   const [reports, setReports] = useState<MarketReport[]>([]);
@@ -3575,6 +3636,14 @@ const MarketReportView: React.FC = () => {
                     )}
                   </div>
                 );
+              })()}
+
+              {/* 미국 주가상위 100 테이블 (글로벌 리포트 전용) */}
+              {selected.reportType === 'global' && (() => {
+                const usaStocks: Array<{ticker:string;name:string;nameEn:string;exchange:string;close:number|null;changePct:number;changePrice:number|null;tradeVolume:number;marketCap:number|null;sector:string}> =
+                  (selected.marketData as any).usa_top_stocks || [];
+                if (usaStocks.length === 0) return null;
+                return <UsaTopStocksTable stocks={usaStocks} />;
               })()}
 
               {/* Gemini 분석 본문 */}
