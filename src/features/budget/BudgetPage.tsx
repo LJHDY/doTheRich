@@ -2879,6 +2879,61 @@ const UsaTopStocksTable: React.FC<{
   );
 };
 
+// ── 미국 업종 섹터 접기/펼치기 테이블 ──────────────────────────────────────────
+const UsaSectorsTable: React.FC<{
+  sectors: Array<{ranking:number;code:string;name:string;changeRate:number;risingCount:number;fallingCount:number;unchangedCount:number;totalMarketCap:number|null;topStockCode:string;topStockName:string;topStockRate:number|null}>;
+}> = ({ sectors }) => {
+  const [open, setOpen] = useState(false);
+  const cc = (v: number) => v > 0 ? '#1e7e34' : v < 0 ? '#c0392b' : '#555';
+  const sign = (v: number) => v > 0 ? '+' : '';
+
+  return (
+    <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e0f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: '20px', overflow: 'hidden' }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', cursor: 'pointer', userSelect: 'none', borderBottom: open ? '1px solid #e0f0ff' : 'none' }}
+      >
+        <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c' }}>🏭 미국 업종 섹터 {sectors.length}개 (일간 등락률 순)</span>
+        <span style={{ fontSize: '13px', color: '#89CFF0', fontWeight: 700 }}>{open ? '▲ 접기' : '▼ 펼치기'}</span>
+      </div>
+      {open && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <thead>
+              <tr style={{ background: '#f0f8fd' }}>
+                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>#</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>섹터명</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>등락률</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>상승</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>하락</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>보합</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>대표종목</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>대표등락</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sectors.map((s, idx) => (
+                <tr key={s.code} style={{ borderTop: '1px solid #f0f4f8', background: idx % 2 === 0 ? '#fff' : '#fafcff' }}>
+                  <td style={{ padding: '7px 10px', color: '#9aa0a6' }}>{s.ranking}</td>
+                  <td style={{ padding: '7px 10px', color: '#344054', whiteSpace: 'nowrap' }}>{s.name}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: cc(s.changeRate) }}>{sign(s.changeRate)}{s.changeRate.toFixed(2)}%</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: '#1e7e34' }}>{s.risingCount}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: '#c0392b' }}>{s.fallingCount}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: '#9aa0a6' }}>{s.unchangedCount}</td>
+                  <td style={{ padding: '7px 10px', color: '#1a3a5c', whiteSpace: 'nowrap' }}>{s.topStockName ? `${s.topStockCode} ${s.topStockName}` : '-'}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: s.topStockRate != null ? cc(s.topStockRate) : '#9aa0a6' }}>
+                    {s.topStockRate != null ? `${sign(s.topStockRate)}${s.topStockRate.toFixed(2)}%` : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const MarketReportView: React.FC = () => {
   const isMobile = useIsMobile();
   const [reports, setReports] = useState<MarketReport[]>([]);
@@ -3638,12 +3693,18 @@ const MarketReportView: React.FC = () => {
                 );
               })()}
 
-              {/* 미국 주가상위 100 테이블 (글로벌 리포트 전용) */}
+              {/* 미국 주가상위 100 + 섹터 테이블 (글로벌 리포트 전용) */}
               {selected.reportType === 'global' && (() => {
                 const usaStocks: Array<{ticker:string;name:string;nameEn:string;exchange:string;close:number|null;changePct:number;changePrice:number|null;tradeVolume:number;marketCap:number|null;sector:string}> =
                   (selected.marketData as any).usa_top_stocks || [];
-                if (usaStocks.length === 0) return null;
-                return <UsaTopStocksTable stocks={usaStocks} />;
+                const usaSectors: Array<{ranking:number;code:string;name:string;changeRate:number;risingCount:number;fallingCount:number;unchangedCount:number;totalMarketCap:number|null;topStockCode:string;topStockName:string;topStockRate:number|null}> =
+                  (selected.marketData as any).usa_sectors || [];
+                return (
+                  <>
+                    {usaStocks.length > 0 && <UsaTopStocksTable stocks={usaStocks} />}
+                    {usaSectors.length > 0 && <UsaSectorsTable sectors={usaSectors} />}
+                  </>
+                );
               })()}
 
               {/* Gemini 분석 본문 */}
