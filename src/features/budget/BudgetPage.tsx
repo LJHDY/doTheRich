@@ -364,7 +364,20 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   // ─── 필터링된 항목 ───────────────────────────────────────────
   const filtered = useMemo(() => {
     const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+
+    // 카드 결산 기간이 설정된 카드 필터 활성 시 → 전달 항목 중 결산 시작일 이후 것도 합산
     let base = entries;
+    if (cardFilter) {
+      const pm = paymentMethods.find(p => p.name === cardFilter && p.type === '카드');
+      if (pm?.billingStartDay && pm?.billingEndDay && prevMonthEntries.length > 0) {
+        const { from } = getCardBillingPeriod(pm.billingStartDay, pm.billingEndDay, yearMonth);
+        const prevInPeriod = prevMonthEntries.filter(e => e.entryDate >= from);
+        // 중복 방지: 현재 월 항목과 ID가 겹치지 않는 것만 추가
+        const currentIds = new Set(entries.map(e => e.id));
+        const toAdd = prevInPeriod.filter(e => !currentIds.has(e.id));
+        if (toAdd.length > 0) base = [...toAdd, ...entries];
+      }
+    }
     if (filter === 'TRANSFER') {
       base = base.filter(e => isXfer(e));
     } else {
