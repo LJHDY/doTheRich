@@ -3028,7 +3028,7 @@ const MarketReportView: React.FC = () => {
   const TYPE_TABS: { key: 'global' | 'kr_close' | 'premarket'; label: string; desc: string }[] = [
     { key: 'global',     label: '🌏 글로벌',      desc: '오전 7시 자동' },
     { key: 'kr_close',  label: '🇰🇷 국내장마감',  desc: '오후 4시 자동' },
-    { key: 'premarket', label: '🌙 프리마켓',     desc: '자동 생성만' },
+    { key: 'premarket', label: '🌙 프리마켓',     desc: '오후 9시 자동' },
   ];
 
   return (
