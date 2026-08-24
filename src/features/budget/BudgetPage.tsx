@@ -5994,16 +5994,17 @@ const AIReportView: React.FC = () => {
       <div style={{ maxWidth: '780px', margin: '0 auto' }}>
 
         {/* ── 서브탭 */}
-        <div style={{ display: 'flex', border: '1px solid #dadce0', borderRadius: '10px', overflow: 'hidden', marginBottom: '18px', alignSelf: 'flex-start', width: 'fit-content' }}>
+        <div style={{ display: 'flex', border: '1px solid #dadce0', borderRadius: '10px', overflowX: 'auto', marginBottom: '18px', flexShrink: 0 }}>
           {([['financial', '🤖 AI 재무분석'], ['market', '📈 시장 리포트'], ['screening', '📋 우량주 스크리닝'], ['integrated', '🔗 통합 투자 의견']] as const).map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setAiSubTab(tab)}
               style={{
-                padding: '8px 20px', border: 'none', cursor: 'pointer',
+                padding: '8px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
                 fontSize: '13px', fontWeight: aiSubTab === tab ? 700 : 400,
                 background: aiSubTab === tab ? '#89CFF0' : '#fff',
                 color: aiSubTab === tab ? '#fff' : '#5f6368',
+                flexShrink: 0,
               }}
             >{label}</button>
           ))}
