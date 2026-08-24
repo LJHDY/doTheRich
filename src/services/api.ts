@@ -1741,6 +1741,8 @@ const _parseTopPicks = (raw: string | null): ScreeningTopPick[] => {
         debtRatio: item.debt_ratio != null ? Number(item.debt_ratio) : null,
         revenueGrowth: item.revenue_growth != null ? Number(item.revenue_growth) : null,
         pbr: item.pbr != null ? Number(item.pbr) : null,
+        per: item.per != null ? Number(item.per) : null,
+        cashRatio: item.cash_ratio != null ? Number(item.cash_ratio) : null,
         marketCap: item.market_cap != null ? Number(item.market_cap) : null,
         currentPrice: item.current_price != null ? Number(item.current_price) : null,
         score: Number(item.score ?? 0),
