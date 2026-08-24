@@ -59,8 +59,10 @@ import {
   deleteMarketReport,
   getScreeningReports,
   generateScreeningReport,
+  getIntegratedReports,
+  generateIntegratedReport,
 } from '../../services/api';
-import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, ScreeningReport, ScreeningTopPick, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, IntegratedReport, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, ScreeningReport, ScreeningTopPick, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 import WorkoutTab from './WorkoutTab';
 
@@ -3018,7 +3020,10 @@ const MarketReportView: React.FC = () => {
 
   const formatKST = (iso: string | null) => {
     if (!iso) return '';
-    return new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    // DB가 KST naive datetime 반환 (timezone suffix 없음) → 브라우저가 UTC로 해석해 +9h 이중 적용되는 버그 방지
+    // suffix 없을 때만 +09:00 붙여 KST로 명시
+    const s = /Z|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + '+09:00';
+    return new Date(s).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   // change_pct 양수=초록, 음수=빨강, 0=회색
@@ -5869,8 +5874,8 @@ const FixedExpenseModal: React.FC<{
 
 const AIReportView: React.FC = () => {
   const isMobile = useIsMobile();
-  // 서브탭: AI 재무분석 / 시장 리포트 / 우량주 스크리닝
-  const [aiSubTab, setAiSubTab] = useState<'financial' | 'market' | 'screening'>('financial');
+  // 서브탭: AI 재무분석 / 시장 리포트 / 우량주 스크리닝 / 통합 투자 의견
+  const [aiSubTab, setAiSubTab] = useState<'financial' | 'market' | 'screening' | 'integrated'>('financial');
 
   const [reports, setReports] = useState<FinancialReportType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -5967,10 +5972,11 @@ const AIReportView: React.FC = () => {
 
   const formatMonth = (ym: string) => `${ym.slice(0, 4)}년 ${Number(ym.slice(4))}월`;
 
-  // ISO 문자열(UTC, 'Z' 포함) → 한국 시간 표시
+  // DB가 KST naive datetime 반환 → suffix 없을 때 +09:00 명시해 이중 변환 방지
   const formatKST = (iso: string | null) => {
     if (!iso) return '';
-    return new Date(iso).toLocaleString('ko-KR', {
+    const s = /Z|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + '+09:00';
+    return new Date(s).toLocaleString('ko-KR', {
       timeZone: 'Asia/Seoul',
       month: 'short',
       day: 'numeric',
@@ -5989,7 +5995,7 @@ const AIReportView: React.FC = () => {
 
         {/* ── 서브탭 */}
         <div style={{ display: 'flex', border: '1px solid #dadce0', borderRadius: '10px', overflow: 'hidden', marginBottom: '18px', alignSelf: 'flex-start', width: 'fit-content' }}>
-          {([['financial', '🤖 AI 재무분석'], ['market', '📈 시장 리포트'], ['screening', '📋 우량주 스크리닝']] as const).map(([tab, label]) => (
+          {([['financial', '🤖 AI 재무분석'], ['market', '📈 시장 리포트'], ['screening', '📋 우량주 스크리닝'], ['integrated', '🔗 통합 투자 의견']] as const).map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setAiSubTab(tab)}
@@ -6008,6 +6014,9 @@ const AIReportView: React.FC = () => {
 
         {/* ── 우량주 스크리닝 탭 */}
         {aiSubTab === 'screening' && <ScreeningReportView />}
+
+        {/* ── 통합 투자 의견 탭 */}
+        {aiSubTab === 'integrated' && <IntegratedReportView />}
 
         {/* ── AI 재무분석 탭 */}
         {aiSubTab === 'financial' && <>
@@ -6131,6 +6140,172 @@ const _fmtMC = (val: number | null): string => {
   if (val === null) return '—';
   if (val >= 10_000) return `${(val / 10_000).toFixed(1)}조`;
   return `${val.toLocaleString()}억`;
+};
+
+// ─── 통합 투자 의견 뷰 ────────────────────────────────────────────────────────
+const IntegratedReportView: React.FC = () => {
+  const [reports, setReports] = useState<IntegratedReport[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [toast, setToast] = useState('');
+
+  const load = async () => {
+    try {
+      const data = await getIntegratedReports();
+      setReports(data);
+      if (data.length > 0 && selectedId === null) setSelectedId(data[0].id);
+    } catch {
+      setToast('리포트 로드 실패');
+    }
+  };
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setToast('Gemini가 분석 중입니다…');
+    try {
+      await generateIntegratedReport();
+      const prevTopId = reports.length > 0 ? reports[0].id : null;
+      let tries = 0;
+      const poll = setInterval(async () => {
+        tries++;
+        const data = await getIntegratedReports();
+        const isNew = data.length > 0 && data[0].id !== prevTopId;
+        if (isNew || tries >= 36) {
+          clearInterval(poll);
+          setReports(data);
+          if (data.length > 0) setSelectedId(data[0].id);
+          setGenerating(false);
+          setToast(isNew ? '✅ 분석 완료!' : '⚠️ 시간 초과. 잠시 후 새로고침하세요.');
+          setTimeout(() => setToast(''), 4000);
+        }
+      }, 5000);
+    } catch {
+      setGenerating(false);
+      setToast('❌ 생성 실패. 시장 리포트와 스크리닝 리포트가 먼저 생성되어 있어야 합니다.');
+      setTimeout(() => setToast(''), 5000);
+    }
+  };
+
+  const selected = reports.find(r => r.id === selectedId) ?? null;
+
+  // 날짜 포맷 헬퍼
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return '';
+    const s = /Z|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + '+09:00';
+    return new Date(s).toLocaleString('ko-KR', {
+      timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  // 마크다운 → JSX (bold, 헤더, 리스트)
+  const renderContent = (content: string) => {
+    const lines = content.split('\n');
+    return lines.map((line, i) => {
+      if (line.startsWith('## ')) {
+        return (
+          <div key={i} style={{
+            fontSize: '15px', fontWeight: 700, color: '#1a3a5c',
+            marginTop: '22px', marginBottom: '6px',
+            borderLeft: '4px solid #89CFF0', paddingLeft: '10px',
+          }}>
+            {line.replace(/^##\s*/, '')}
+          </div>
+        );
+      }
+      if (line.startsWith('# ')) {
+        return (
+          <div key={i} style={{ fontSize: '17px', fontWeight: 800, color: '#1a3a5c', marginTop: '8px', marginBottom: '10px' }}>
+            {line.replace(/^#\s*/, '')}
+          </div>
+        );
+      }
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        const text = line.replace(/^[-*]\s*/, '');
+        return (
+          <div key={i} style={{ display: 'flex', gap: '6px', marginBottom: '3px', paddingLeft: '4px' }}>
+            <span style={{ color: '#89CFF0', fontWeight: 700, flexShrink: 0 }}>•</span>
+            <span style={{ fontSize: '13px', color: '#3c4043', lineHeight: 1.6 }}
+              dangerouslySetInnerHTML={{ __html: text.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') }} />
+          </div>
+        );
+      }
+      if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
+      return (
+        <div key={i} style={{ fontSize: '13px', color: '#3c4043', lineHeight: 1.7, marginBottom: '2px' }}
+          dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') }} />
+      );
+    });
+  };
+
+  return (
+    <div style={{ flex: 1 }}>
+      {/* 컨트롤 바 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {reports.length > 0 && (
+          <select
+            value={selectedId ?? ''}
+            onChange={e => setSelectedId(Number(e.target.value))}
+            style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #dadce0' }}
+          >
+            {reports.map(r => (
+              <option key={r.id} value={r.id}>
+                {r.reportDate} · {fmtDate(r.updatedAt ?? r.createdAt)}
+              </option>
+            ))}
+          </select>
+        )}
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          style={{
+            padding: '7px 16px', fontSize: '13px', fontWeight: 600, borderRadius: '8px',
+            border: 'none', cursor: generating ? 'not-allowed' : 'pointer',
+            background: generating ? '#ccc' : '#E06060', color: '#fff',
+          }}
+        >
+          {generating ? '⏳ 분석 중…' : '✨ 통합 분석 생성'}
+        </button>
+        <button
+          onClick={load}
+          style={{ padding: '7px 10px', fontSize: '13px', borderRadius: '8px', border: '1px solid #dadce0', background: '#fff', cursor: 'pointer' }}
+        >↺</button>
+      </div>
+
+      {/* 안내 */}
+      {reports.length === 0 && !generating && (
+        <div style={{ padding: '32px', textAlign: 'center', color: '#9aa0a6', fontSize: '14px' }}>
+          <div style={{ fontSize: '32px', marginBottom: '8px' }}>🔗</div>
+          <div>시장 리포트 + 우량주 스크리닝 데이터를 결합한 통합 투자 의견입니다.</div>
+          <div style={{ marginTop: '4px', fontSize: '12px', color: '#bbb' }}>
+            먼저 시장 리포트(국내장마감)와 스크리닝 리포트(ALL)가 생성되어 있어야 합니다.
+          </div>
+        </div>
+      )}
+
+      {/* 토스트 */}
+      {toast && (
+        <div style={{
+          padding: '10px 16px', borderRadius: '8px', marginBottom: '12px',
+          background: '#f0f8fd', border: '1px solid #89CFF0', fontSize: '13px', color: '#1a3a5c',
+        }}>{toast}</div>
+      )}
+
+      {/* 리포트 본문 */}
+      {selected?.content && (
+        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e0e4e8', padding: '20px 24px' }}>
+          {/* 메타 정보 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px', paddingBottom: '12px', borderBottom: '1px solid #f0f4f8' }}>
+            <span style={{ fontSize: '18px', fontWeight: 800, color: '#1a3a5c' }}>🔗 통합 투자 의견</span>
+            <span style={{ fontSize: '12px', color: '#9aa0a6' }}>{selected.reportDate}</span>
+            <span style={{ fontSize: '11px', color: '#bbb' }}>{fmtDate(selected.updatedAt ?? selected.createdAt)} 업데이트</span>
+          </div>
+          <div>{renderContent(selected.content)}</div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const ScreeningReportView: React.FC = () => {

@@ -1794,4 +1794,28 @@ export const generateScreeningReport = async (reportDate?: string, marketType?: 
   });
 };
 
+// ── 통합 투자 의견 리포트 ─────────────────────────────────────────────────────
+import { IntegratedReport } from '../types';
+
+const _toIntegratedReport = (item: Record<string, unknown>): IntegratedReport => ({
+  id: item.id as number,
+  reportDate: item.reportDate as string,
+  marketReportId: (item.marketReportId as number) ?? null,
+  screeningReportId: (item.screeningReportId as number) ?? null,
+  content: (item.content as string) ?? null,
+  createdAt: item.createdAt as string,
+  updatedAt: item.updatedAt as string,
+});
+
+export const getIntegratedReports = async (): Promise<IntegratedReport[]> => {
+  const { data } = await api.get<Record<string, unknown>[]>('/api/integrated-reports');
+  return data.map(_toIntegratedReport);
+};
+
+export const generateIntegratedReport = async (reportDate?: string): Promise<void> => {
+  await api.post('/api/integrated-reports/generate', null, {
+    params: reportDate ? { report_date: reportDate } : {},
+  });
+};
+
 export default api;

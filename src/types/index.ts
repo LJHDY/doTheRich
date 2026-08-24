@@ -966,3 +966,14 @@ export interface ScreeningReport {
   createdAt: string;
   updatedAt: string;
 }
+
+// 시장 리포트 × 스크리닝 통합 투자 의견 리포트
+export interface IntegratedReport {
+  id: number;
+  reportDate: string;              // YYYY-MM-DD
+  marketReportId: number | null;   // 참조한 시장 리포트 ID
+  screeningReportId: number | null; // 참조한 스크리닝 리포트 ID
+  content: string | null;          // Gemini 마크다운 분석
+  createdAt: string;
+  updatedAt: string;
+}
