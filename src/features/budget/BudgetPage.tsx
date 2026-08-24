@@ -104,7 +104,9 @@ const getCardBillingPeriod = (billingStartDay: number, billingEndDay: number, ye
   const toDate = billingEndDay >= billingStartDay
     ? new Date(year, month - 2, billingEndDay)   // 전달 종료 (예: 1일~31일 같은 달)
     : new Date(year, month - 1, billingEndDay);  // 이번달 종료 (예: 24일~23일)
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  // toISOString은 UTC 변환으로 KST에서 하루 밀림 → 로컬 날짜 직접 포맷
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const label = `${fromDate.getMonth() + 1}/${billingStartDay}~${toDate.getMonth() + 1}/${billingEndDay}`;
   return { from: fmt(fromDate), to: fmt(toDate), label };
 };
