@@ -3052,10 +3052,19 @@ const MarketReportView: React.FC = () => {
                 display: 'flex', alignItems: 'center', gap: '6px',
               }}
             >
-              {tab.label}
-              {cnt > 0 && (
-                <span style={{ fontSize: '11px', background: isActive ? '#89CFF0' : '#e0e0e0', color: isActive ? '#fff' : '#666', borderRadius: '10px', padding: '1px 6px' }}>{cnt}</span>
-              )}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {tab.label}
+                  {cnt > 0 && (
+                    <span style={{ fontSize: '11px', background: isActive ? '#89CFF0' : '#e0e0e0', color: isActive ? '#fff' : '#666', borderRadius: '10px', padding: '1px 6px' }}>{cnt}</span>
+                  )}
+                </div>
+                {(() => {
+                  const latest = reports.filter(r => r.reportType === tab.key).sort((a, b) => (b.updatedAt ?? b.createdAt ?? '').localeCompare(a.updatedAt ?? a.createdAt ?? ''))[0];
+                  const t = latest?.updatedAt ?? latest?.createdAt;
+                  return t ? <div style={{ fontSize: '10px', color: isActive ? '#4a90d9' : '#b0bec5', fontWeight: 400 }}>{formatKST(t)}</div> : null;
+                })()}
+              </div>
             </button>
           );
         })}
@@ -6313,6 +6322,10 @@ const ScreeningReportView: React.FC = () => {
     return dt.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
+  // KST 시간 포맷 — ISO → "8월 24일 오전 07:00"
+  const fmtKST = (iso: string) =>
+    new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
   // 표시할 종목 목록 — 기본 TOP 30 표시 (분기 실적 포함), 전체 펼치기 시 TOP 40
   const DEFAULT_TOP = 30;
   const visiblePicks: ScreeningTopPick[] = selected
@@ -6376,10 +6389,18 @@ const ScreeningReportView: React.FC = () => {
               cursor: 'pointer',
             }}
           >
-            {mkt === 'ALL' ? '전체' : mkt}
-            <span style={{ fontSize: '10px', marginLeft: '4px', color: '#9aa0a6' }}>
-              ({reports.filter(r => r.marketType === mkt).length})
-            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+              <div>
+                {mkt === 'ALL' ? '전체' : mkt}
+                <span style={{ fontSize: '10px', marginLeft: '4px', color: '#9aa0a6' }}>
+                  ({reports.filter(r => r.marketType === mkt).length})
+                </span>
+              </div>
+              {(() => {
+                const latest = reports.filter(r => r.marketType === mkt).sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt))[0];
+                return latest ? <div style={{ fontSize: '10px', color: activeMarket === mkt ? '#4a90d9' : '#b0bec5', fontWeight: 400 }}>{fmtKST(latest.updatedAt ?? latest.createdAt)}</div> : null;
+              })()}
+            </div>
           </button>
         ))}
       </div>
@@ -6395,7 +6416,7 @@ const ScreeningReportView: React.FC = () => {
           {filteredReports.length === 0 && <option value="">리포트 없음</option>}
           {filteredReports.map(r => (
             <option key={r.id} value={r.id}>
-              {fmtDate(r.reportDate)} ({r.bsnYear ?? '?'}년 기준)
+              {fmtDate(r.reportDate)} ({r.bsnYear ?? '?'}년 기준) · {fmtKST(r.updatedAt ?? r.createdAt)}
             </option>
           ))}
         </select>
