@@ -44,6 +44,7 @@ import {
   WorkoutLog,
   ScreeningReport,
   ScreeningTopPick,
+  IntegratedReport,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1795,8 +1796,6 @@ export const generateScreeningReport = async (reportDate?: string, marketType?: 
 };
 
 // ── 통합 투자 의견 리포트 ─────────────────────────────────────────────────────
-import { IntegratedReport } from '../types';
-
 const _toIntegratedReport = (item: Record<string, unknown>): IntegratedReport => ({
   id: item.id as number,
   reportDate: item.reportDate as string,
