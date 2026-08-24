@@ -423,7 +423,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       );
     }
     return base;
-  }, [entries, filter, categoryFilters, accountFilter, cardFilter, paymentMethods]);
+  }, [entries, filter, categoryFilters, accountFilter, cardFilter, paymentMethods, prevMonthEntries, yearMonth]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
   const resetInstallment = () => { setIsInstallment(false); setInstallmentMonths(2); setIsInterestFree(false); };
