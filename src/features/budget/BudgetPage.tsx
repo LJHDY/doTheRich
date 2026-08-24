@@ -2208,16 +2208,31 @@ const EntryRow: React.FC<{
                 <span>{entry.merchant ? ' · ' : ''}{entry.accountMain}</span>
               )
             )}
-            {entry.account && (
-              <>
+            {entry.account && (() => {
+              const isCard = cardNameSet?.has(entry.account);
+              const isBank = bankNameSet?.has(entry.account);
+              const badge = isCard ? (
+                <span style={{ fontSize: '10px', background: '#fff3e0', color: '#E65100', border: '1px solid #FFB74D', borderRadius: '4px', padding: '1px 5px' }}>
+                  💳 {entry.account}
+                </span>
+              ) : isBank ? (
+                <span style={{ fontSize: '10px', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90CAF9', borderRadius: '4px', padding: '1px 5px' }}>
+                  🏦 {entry.account}
+                </span>
+              ) : (
                 <span> › {entry.account}</span>
-                {myAccountNames && !myAccountNames.has(entry.account) && otherUserName && (
-                  <span style={{ marginLeft: '4px', fontSize: '10px', background: '#f0f0f0', color: '#344054', border: '1px solid #d0d0d0', borderRadius: '4px', padding: '1px 5px' }}>
-                    {otherUserName}
-                  </span>
-                )}
-              </>
-            )}
+              );
+              return (
+                <>
+                  {(isCard || isBank) ? <span style={{ marginLeft: '4px' }}>{badge}</span> : badge}
+                  {myAccountNames && !myAccountNames.has(entry.account) && otherUserName && (
+                    <span style={{ marginLeft: '4px', fontSize: '10px', background: '#f0f0f0', color: '#344054', border: '1px solid #d0d0d0', borderRadius: '4px', padding: '1px 5px' }}>
+                      {otherUserName}
+                    </span>
+                  )}
+                </>
+              );
+            })()}
             {entry.cardName && (
               <>
                 <span style={{
