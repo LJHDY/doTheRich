@@ -6170,7 +6170,7 @@ const AIReportView: React.FC = () => {
           {/* 리포트 선택 — 요청 건별로 표시 */}
           {reports.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매월 25일 오전 9시 자동 생성</span>
+              <span style={{ fontSize: '10px', color: '#9aa0a6' }}>매월 25일 오전 8시 자동 생성</span>
               <select
                 value={selectedId ?? ''}
                 onChange={e => setSelectedId(Number(e.target.value))}
@@ -6227,7 +6227,7 @@ const AIReportView: React.FC = () => {
             <div style={{ fontSize: '40px', marginBottom: '16px' }}>🤖</div>
             <div>아직 분석 리포트가 없어요.</div>
             <div style={{ marginTop: '8px', fontSize: '12px' }}>위의 <strong>✨ 지금 분석</strong> 버튼을 눌러 첫 번째 리포트를 생성해보세요!</div>
-            <div style={{ marginTop: '6px', fontSize: '12px' }}>매달 25일 오전 9시에 자동으로 생성됩니다.</div>
+            <div style={{ marginTop: '6px', fontSize: '12px' }}>매달 25일 오전 8시에 자동으로 생성됩니다.</div>
           </div>
         ) : selected ? (
           <div style={{ background: '#fff', borderRadius: '12px', padding: isMobile ? '16px' : '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #e0f0ff' }}>
