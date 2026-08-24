@@ -5801,13 +5801,21 @@ const FixedExpenseModal: React.FC<{
             <div style={{ borderBottom: '1px solid #e8ecf0', flexShrink: 0 }}>
               {/* 결제수단별 합계 */}
               <div style={{ padding: '6px 20px', display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
-                {entries.map(([method, total]) => (
-                  <span key={method} style={{ fontSize: '11px', color: '#344054' }}>
-                    <span style={{ color: '#7B1FA2', fontWeight: 600 }}>{method}</span>
-                    {' '}
-                    <span style={{ fontWeight: 700 }}>{formatAmountKorean(total)}</span>
-                  </span>
-                ))}
+                {entries.map(([method, total]) => {
+                  const isCard = paymentMethods.some(p => p.type === '카드' && p.name === method);
+                  const isBank = paymentMethods.some(p => p.type === '통장' && p.name === method);
+                  const methodBadge = isCard
+                    ? <span style={{ fontSize: '10px', background: '#fff3e0', color: '#E65100', border: '1px solid #FFB74D', borderRadius: '4px', padding: '1px 5px', marginRight: '3px' }}>💳 {method}</span>
+                    : isBank
+                    ? <span style={{ fontSize: '10px', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90CAF9', borderRadius: '4px', padding: '1px 5px', marginRight: '3px' }}>🏦 {method}</span>
+                    : <span style={{ color: '#7B1FA2', fontWeight: 600, marginRight: '3px' }}>{method}</span>;
+                  return (
+                    <span key={method} style={{ fontSize: '11px', color: '#344054', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                      {methodBadge}
+                      <span style={{ fontWeight: 700 }}>{formatAmountKorean(total)}</span>
+                    </span>
+                  );
+                })}
               </div>
               {/* 총 합산 */}
               <div style={{ padding: '4px 20px 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -5977,7 +5985,21 @@ const FixedExpenseModal: React.FC<{
                             {formatAmountShort(fe.amount)}원
                           </span>
                         )}
-                        {fe.account && <span style={{ color: '#9aa0a6' }}>· {fe.account}</span>}
+                        {fe.account && (() => {
+                          const isCard = paymentMethods.some(p => p.type === '카드' && p.name === fe.account);
+                          const isBank = paymentMethods.some(p => p.type === '통장' && p.name === fe.account);
+                          if (isCard) return (
+                            <span style={{ fontSize: '10px', background: '#fff3e0', color: '#E65100', border: '1px solid #FFB74D', borderRadius: '4px', padding: '1px 5px' }}>
+                              💳 {fe.account}
+                            </span>
+                          );
+                          if (isBank) return (
+                            <span style={{ fontSize: '10px', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90CAF9', borderRadius: '4px', padding: '1px 5px' }}>
+                              🏦 {fe.account}
+                            </span>
+                          );
+                          return <span style={{ color: '#9aa0a6' }}>· {fe.account}</span>;
+                        })()}
                         {fe.category && fe.category !== '미분류' && <span style={{ color: '#CE93D8' }}>#{fe.category}</span>}
                       </div>
                     </div>
