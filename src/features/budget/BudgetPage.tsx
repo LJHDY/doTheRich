@@ -6239,7 +6239,7 @@ const ScreeningReportView: React.FC = () => {
 
         // 셀 파싱: "| a | b | c |" → ["a","b","c"]
         const parseCells = (l: string) =>
-          l.split('|').slice(1, -1).map(c => c.trim());
+          l.split('|').slice(1, -1).map(c => c.trim().replace(/<br\s*\/?>/gi, ' '));
 
         const [headerRow, ...dataRows] = nonSep;
         const headers = parseCells(headerRow);
@@ -6359,6 +6359,20 @@ const ScreeningReportView: React.FC = () => {
     color: '#5f6368', background: '#f0f4f8',
     borderBottom: '1px solid #e0e4e8', whiteSpace: 'nowrap', textAlign: 'center',
   };
+  const ThWithTip = ({ label, tip }: { label: string; tip: string }) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+      {label}
+      <span
+        title={tip}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: '13px', height: '13px', borderRadius: '50%',
+          background: '#c8d6e5', color: '#fff', fontSize: '9px', fontWeight: 700,
+          cursor: 'help', flexShrink: 0, lineHeight: 1,
+        }}
+      >?</span>
+    </span>
+  );
   const tdStyle: React.CSSProperties = {
     padding: '6px 8px', fontSize: '12px',
     borderBottom: '1px solid #f0f4f8', textAlign: 'right',
@@ -6502,13 +6516,12 @@ const ScreeningReportView: React.FC = () => {
                       <th style={{ ...thStyle, textAlign: 'left' }}>종목명 (코드)</th>
                       <th style={thStyle}>시장</th>
                       <th style={thStyle}>시총(억)</th>
-                      <th style={thStyle}>ROE(%)</th>
+                      <th style={thStyle}><ThWithTip label="ROE(%)" tip="자기자본이익률 — 자본 대비 순이익 효율. 높을수록 자본을 잘 굴리는 기업" /></th>
                       <th style={thStyle}>영업이익률(%)</th>
                       <th style={thStyle}>부채비율(%)</th>
                       <th style={thStyle}>매출성장률(%)</th>
-                      <th style={thStyle}>PBR</th>
-                      <th style={thStyle}>PER</th>
-                      <th style={thStyle}>현금비중(%)</th>
+                      <th style={thStyle}><ThWithTip label="PBR" tip="주가순자산비율 — 주가 ÷ 주당순자산. 낮을수록 장부가 대비 저평가" /></th>
+                      <th style={thStyle}><ThWithTip label="PER" tip="주가수익비율 — 시가총액 ÷ 순이익. 낮을수록 이익 대비 저평가 (업종 평균과 비교 필요)" /></th>
                       <th style={thStyle}>스코어</th>
                       <th style={thStyle}>분기실적</th>
                     </tr>
@@ -6567,10 +6580,6 @@ const ScreeningReportView: React.FC = () => {
                             {/* PER */}
                             <td style={tdStyle}>
                               {pick.per != null ? pick.per.toFixed(1) : '—'}
-                            </td>
-                            {/* 현금 보유 비중 */}
-                            <td style={{ ...tdStyle, color: pick.cashRatio != null && pick.cashRatio >= 20 ? '#2e7d32' : 'inherit' }}>
-                              {pick.cashRatio != null ? `${pick.cashRatio.toFixed(1)}%` : '—'}
                             </td>
                             {/* 스코어 */}
                             <td style={{ ...tdStyle, fontWeight: 700, color: '#1a3a5c' }}>

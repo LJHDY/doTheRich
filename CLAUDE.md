@@ -1017,3 +1017,4 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
 - [ ] 시세 그래프 기간 필터 (3개월 / 6개월 / 1년)
 - [ ] 지도 마커 클러스터링
 - [ ] 반응형 레이아웃 (모바일)
+- [ ] 우량주 스크리닝 현금비중(`cashRatio`) 표시 — DART `fnlttMultiAcnt` API가 "현금및현금성자산" 계정을 일부 종목에만 반환하는 한계 있음. 다른 API(개별 재무제표 조회 등) 또는 계정명 확장 매칭으로 개선 필요
