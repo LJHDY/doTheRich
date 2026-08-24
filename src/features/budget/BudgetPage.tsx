@@ -6507,6 +6507,8 @@ const ScreeningReportView: React.FC = () => {
                       <th style={thStyle}>부채비율(%)</th>
                       <th style={thStyle}>매출성장률(%)</th>
                       <th style={thStyle}>PBR</th>
+                      <th style={thStyle}>PER</th>
+                      <th style={thStyle}>현금비중(%)</th>
                       <th style={thStyle}>스코어</th>
                       <th style={thStyle}>분기실적</th>
                     </tr>
@@ -6560,7 +6562,15 @@ const ScreeningReportView: React.FC = () => {
                             </td>
                             {/* PBR */}
                             <td style={tdStyle}>
-                              {pick.pbr !== null ? pick.pbr.toFixed(2) : '—'}
+                              {pick.pbr != null ? pick.pbr.toFixed(2) : '—'}
+                            </td>
+                            {/* PER */}
+                            <td style={tdStyle}>
+                              {pick.per != null ? pick.per.toFixed(1) : '—'}
+                            </td>
+                            {/* 현금 보유 비중 */}
+                            <td style={{ ...tdStyle, color: pick.cashRatio != null && pick.cashRatio >= 20 ? '#2e7d32' : 'inherit' }}>
+                              {pick.cashRatio != null ? `${pick.cashRatio.toFixed(1)}%` : '—'}
                             </td>
                             {/* 스코어 */}
                             <td style={{ ...tdStyle, fontWeight: 700, color: '#1a3a5c' }}>

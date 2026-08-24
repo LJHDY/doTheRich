@@ -942,6 +942,8 @@ export interface ScreeningTopPick {
   debtRatio: number | null;      // 부채비율 (%)
   revenueGrowth: number | null;  // 매출성장률 (%)
   pbr: number | null;            // PBR (배)
+  per: number | null;            // PER (배) — yfinance market_cap / DART 순이익
+  cashRatio: number | null;      // 현금 보유 비중 (%) — 현금및현금성자산 / 자산총계
   marketCap: number | null;      // 시총 (억원)
   currentPrice?: number | null;  // 현재가 (원)
   score: number;                 // 종합 스코어 (0~100)
