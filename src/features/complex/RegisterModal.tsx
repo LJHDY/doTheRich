@@ -717,6 +717,37 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
     }
   };
 
+  // DB 학교 "+ 추가" — 도보 시간 자동 계산 후 입력 행에 추가
+  const [addingDbSchoolId, setAddingDbSchoolId] = useState<string | null>(null);
+  const handleAddDbSchool = async (s: NearbySchool) => {
+    setAddingDbSchoolId(s.id);
+    const schoolType: 'ELEMENTARY' | 'MIDDLE' = s.schoolType === '초등학교' ? 'ELEMENTARY' : 'MIDDLE';
+    let walkingMinutes = '';
+    try {
+      const { data: dir } = await api.get<{ minutes: number }>('/api/directions/walking', {
+        params: { startLat: initialData.latitude, startLng: initialData.longitude, goalLat: s.latitude, goalLng: s.longitude },
+      });
+      walkingMinutes = String(dir.minutes);
+    } catch {
+      // 도보 API 실패 시 Haversine 거리 기반 추정 (평균 도보 속도 4km/h, 직선거리 × 1.3 계수)
+      walkingMinutes = String(Math.max(1, Math.round(s.distanceKm * 1.3 / 4 * 60)));
+    }
+    setSchoolInfos(prev => [...prev, {
+      schoolName: s.schoolName,
+      schoolAddress: s.address || '',
+      schoolType,
+      walkingMinutes,
+      achievementScore: s.achievementScore != null ? String(s.achievementScore) : '',
+      totalStudents: s.totalStudents != null ? String(s.totalStudents) : '',
+      latitude: s.latitude,
+      longitude: s.longitude,
+      fetching: false,
+      searchResults: [],
+      showDropdown: false,
+    }]);
+    setAddingDbSchoolId(null);
+  };
+
   // ── 주변 인프라 ───────────────────────────────────────────────────
   const addInfra = () => setInfraInfos(prev => [...prev, {
     infraType: 'DEPARTMENT_STORE', infraName: '', infraAddress: '',
@@ -1473,26 +1504,41 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
               <div style={{ fontSize: '11px', fontWeight: 600, color: '#80868b', marginBottom: '6px' }}>
                 반경 1km 학교 DB {loadingDbSchools ? '(조회 중...)' : `(${dbSchools.length}개)`}
               </div>
-              {dbSchools.map(s => (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0', borderBottom: '1px solid #f5f5f5', fontSize: '12px' }}>
-                  <span style={{
-                    fontSize: '10px', fontWeight: 700, color: '#fff', padding: '1px 5px', borderRadius: '6px',
-                    backgroundColor: s.schoolType === '초등학교' ? '#7DC8A0' : '#89CFF0', flexShrink: 0,
-                  }}>
-                    {s.schoolType === '초등학교' ? '초등' : '중학'}
-                  </span>
-                  <span style={{ flex: 1, color: '#202124' }}>{s.schoolName}</span>
-                  <span style={{ color: '#80868b', flexShrink: 0 }}>
-                    {s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)}m` : `${s.distanceKm.toFixed(1)}km`}
-                  </span>
-                  {s.achievementScore != null && (
-                    <span style={{ color: '#5f6368', flexShrink: 0 }}>성취 {s.achievementScore}%</span>
-                  )}
-                  {s.totalStudents != null && (
-                    <span style={{ color: '#9e9e9e', flexShrink: 0 }}>{s.totalStudents.toLocaleString()}명</span>
-                  )}
-                </div>
-              ))}
+              {dbSchools.map(s => {
+                const alreadyAdded = schoolInfos.some(r => r.schoolName === s.schoolName);
+                const isAdding = addingDbSchoolId === s.id;
+                return (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 0', borderBottom: '1px solid #f5f5f5', fontSize: '12px' }}>
+                    <span style={{
+                      fontSize: '10px', fontWeight: 700, color: '#fff', padding: '1px 5px', borderRadius: '6px',
+                      backgroundColor: s.schoolType === '초등학교' ? '#7DC8A0' : '#89CFF0', flexShrink: 0,
+                    }}>
+                      {s.schoolType === '초등학교' ? '초등' : '중학'}
+                    </span>
+                    <span style={{ flex: 1, color: '#202124' }}>{s.schoolName}</span>
+                    <span style={{ color: '#80868b', flexShrink: 0 }}>
+                      {s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)}m` : `${s.distanceKm.toFixed(1)}km`}
+                    </span>
+                    {s.achievementScore != null && (
+                      <span style={{ color: '#5f6368', flexShrink: 0 }}>성취 {s.achievementScore}%</span>
+                    )}
+                    {s.totalStudents != null && (
+                      <span style={{ color: '#9e9e9e', flexShrink: 0 }}>{s.totalStudents.toLocaleString()}명</span>
+                    )}
+                    <button
+                      onClick={() => handleAddDbSchool(s)}
+                      disabled={alreadyAdded || isAdding}
+                      style={{
+                        flexShrink: 0, fontSize: '11px', padding: '2px 7px', borderRadius: '5px', cursor: alreadyAdded ? 'default' : 'pointer',
+                        border: '1px solid #dadce0', backgroundColor: alreadyAdded ? '#f0f0f0' : '#fff',
+                        color: alreadyAdded ? '#9e9e9e' : '#4BAAD4', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {isAdding ? '...' : alreadyAdded ? '추가됨' : '+ 추가'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
