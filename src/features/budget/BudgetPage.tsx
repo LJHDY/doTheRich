@@ -1258,11 +1258,12 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                           const USER_LABELS: Record<string, string> = { ldy: '동영', juhae: '주해' };
                           const USER_COLORS: Record<string, string> = { ldy: '#1565c0', juhae: '#AD1457' };
                           const isXferE = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
-                          const byUser: Record<string, { income: number; expense: number }> = {};
+                          const byUser: Record<string, { xferIn: number; xferOut: number; expense: number }> = {};
                           sharedPopup.entries.forEach(e => {
-                            if (!byUser[e.userId]) byUser[e.userId] = { income: 0, expense: 0 };
-                            if (e.entryType === 'INCOME') byUser[e.userId].income += e.amount;
-                            else if (!isXferE(e)) byUser[e.userId].expense += e.amount;
+                            if (!byUser[e.userId]) byUser[e.userId] = { xferIn: 0, xferOut: 0, expense: 0 };
+                            if (isXferE(e) && e.entryType === 'INCOME') byUser[e.userId].xferIn += e.amount;
+                            else if (isXferE(e) && e.entryType === 'EXPENSE') byUser[e.userId].xferOut += e.amount;
+                            else if (!isXferE(e) && e.entryType === 'EXPENSE') byUser[e.userId].expense += e.amount;
                           });
                           return (
                             <>
@@ -1275,14 +1276,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                                     borderRadius: '8px', padding: '8px 12px', fontSize: '11px',
                                   }}>
                                     <div style={{ fontWeight: 700, color: USER_COLORS[uid] ?? '#344054', marginBottom: '4px' }}>{USER_LABELS[uid] ?? uid}</div>
-                                    {s.income > 0 && <div><span style={{ color: '#9aa0a6' }}>수입 </span><span style={{ color: '#4CAF50', fontWeight: 600 }}>{formatAmountShort(s.income)}</span></div>}
-                                    {s.expense > 0 && <div><span style={{ color: '#9aa0a6' }}>지출 </span><span style={{ color: '#E06060', fontWeight: 600 }}>{formatAmountShort(s.expense)}</span></div>}
+                                    {s.xferIn > 0 && <div><span style={{ color: '#9aa0a6' }}>이체입금 </span><span style={{ color: '#2e7d32', fontWeight: 600 }}>+{formatAmountShort(s.xferIn)}</span></div>}
+                                    {s.xferOut > 0 && <div><span style={{ color: '#9aa0a6' }}>이체출금 </span><span style={{ color: '#e65100', fontWeight: 600 }}>-{formatAmountShort(s.xferOut)}</span></div>}
+                                    {s.expense > 0 && <div><span style={{ color: '#9aa0a6' }}>지출 </span><span style={{ color: '#E06060', fontWeight: 600 }}>-{formatAmountShort(s.expense)}</span></div>}
                                   </div>
                                 ))}
                               </div>
-                              {/* 전체 내역 목록 */}
+                              {/* 전체 내역 목록 — 이체 포함 날짜 내림차순 */}
                               <div style={{ overflowY: 'auto', flex: 1, borderTop: '1px solid #f0f4f8' }}>
-                                {sharedPopup.entries.map(e => {
+                                {[...sharedPopup.entries]
+                                  .sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.id - a.id)
+                                  .map(e => {
+                                  const isXfer = isXferE(e);
                                   const isIncome = e.entryType === 'INCOME';
                                   const uid = e.userId;
                                   const userColor = USER_COLORS[uid] ?? '#344054';
@@ -1291,14 +1296,22 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                                     <div key={e.id} style={{
                                       display: 'flex', alignItems: 'center', gap: '8px',
                                       padding: '8px 4px', borderBottom: '1px solid #f5f5f5', fontSize: '12px',
+                                      background: isXfer ? (isIncome ? '#f0fff4' : '#fff8f0') : '#fff',
                                     }}>
                                       <span style={{ color: '#9aa0a6', fontSize: '11px', minWidth: '38px', flexShrink: 0 }}>{e.entryDate.slice(5)}</span>
                                       <span style={{
                                         fontSize: '9px', padding: '1px 5px', borderRadius: '8px', fontWeight: 700,
                                         background: `${userColor}18`, color: userColor, flexShrink: 0,
                                       }}>{userLabel}</span>
+                                      {isXfer && (
+                                        <span style={{
+                                          fontSize: '9px', padding: '1px 5px', borderRadius: '8px', fontWeight: 700,
+                                          background: isIncome ? '#e8f5e9' : '#fff3e0',
+                                          color: isIncome ? '#2e7d32' : '#e65100', flexShrink: 0,
+                                        }}>{isIncome ? '↓ 이체입금' : '↑ 이체출금'}</span>
+                                      )}
                                       <span style={{ flex: 1, color: '#344054', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {e.category}{e.merchant ? ` · ${e.merchant}` : ''}
+                                        {isXfer ? (e.merchant || '이체') : `${e.category}${e.merchant ? ` · ${e.merchant}` : ''}`}
                                       </span>
                                       <span style={{ fontWeight: 700, color: isIncome ? '#4CAF50' : '#E06060', flexShrink: 0 }}>
                                         {isIncome ? '+' : '-'}{formatAmountShort(e.amount)}
