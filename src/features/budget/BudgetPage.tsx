@@ -213,6 +213,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   );
   const [yearMonth, setYearMonth] = useState<string>(toYearMonth(new Date()));
   const [entries, setEntries] = useState<BudgetEntry[]>([]);
+  const [otherUserEntries, setOtherUserEntries] = useState<BudgetEntry[]>([]); // 상대방 항목 — 공용 통장 카드 합산용
   const [prevMonthEntries, setPrevMonthEntries] = useState<BudgetEntry[]>([]); // 카드 청구 기간 계산용 전달 항목
   const [nextMonthBoundary, setNextMonthBoundary] = useState<BudgetEntry[]>([]); // 다음달 yearMonth지만 이번달 날짜(day>=25)인 항목 — 목록 표시용
   const [calViewMode, setCalViewMode] = useState<'cycle' | 'calendar'>('cycle'); // '25일 사이클' vs '캘린더 월' 보기
@@ -356,10 +357,16 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getBudgetEntries(userId, yearMonth);
+      const otherUserId = BUDGET_USERS.find(u => u.id !== userId)?.id ?? '';
+      const [data, otherData] = await Promise.all([
+        getBudgetEntries(userId, yearMonth),
+        otherUserId ? getBudgetEntries(otherUserId, yearMonth) : Promise.resolve([]),
+      ]);
       setEntries(data);
+      setOtherUserEntries(otherData);
     } catch {
       setEntries([]);
+      setOtherUserEntries([]);
     } finally {
       setLoading(false);
     }
@@ -1157,20 +1164,33 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   );
                 };
 
+                // 공용 통장용 — 상대방 entries를 account/accountMain 키로 집계
+                const otherAccountMap: Record<string, { income: number; expense: number }> = {};
+                otherUserEntries.forEach(e => {
+                  const key = e.account || e.accountMain || '미분류';
+                  if (!otherAccountMap[key]) otherAccountMap[key] = { income: 0, expense: 0 };
+                  if (e.entryType === 'INCOME') otherAccountMap[key].income += e.amount;
+                  else otherAccountMap[key].expense += e.amount;
+                });
+
                 // 등록된 통장 카드 — pm.name(중분류) + pm.accountMain(대분류) 두 키 모두 합산
+                // 공용 통장(isShared)은 상대방 항목도 합산
                 const cards = bankAccounts.map(pm => {
                   const accName = pm.name;
                   const opening = openingBalances[accName] ?? 0;
                   const byName = summary.accountMap[accName] ?? { income: 0, expense: 0 };
-                  // accountMain이 pm.name과 다를 때: accountMain 키로 저장된 수입/지출도 합산
-                  // (수입 항목에 통장 미지정 → accountMain만 저장된 경우 대응)
                   const byMain = pm.accountMain && pm.accountMain !== accName
                     ? (summary.accountMap[pm.accountMain] ?? { income: 0, expense: 0 })
                     : { income: 0, expense: 0 };
+                  // 공용 통장이면 상대방 contributions 추가
+                  const otherByName = pm.isShared ? (otherAccountMap[accName] ?? { income: 0, expense: 0 }) : { income: 0, expense: 0 };
+                  const otherByMain = pm.isShared && pm.accountMain && pm.accountMain !== accName
+                    ? (otherAccountMap[pm.accountMain] ?? { income: 0, expense: 0 })
+                    : { income: 0, expense: 0 };
                   return (
                     <AccountCard key={accName} accName={accName} opening={opening}
-                      income={byName.income + byMain.income}
-                      expense={byName.expense + byMain.expense}
+                      income={byName.income + byMain.income + otherByName.income + otherByMain.income}
+                      expense={byName.expense + byMain.expense + otherByName.expense + otherByMain.expense}
                       isSharedAccount={pm.isShared} />
                   );
                 });
