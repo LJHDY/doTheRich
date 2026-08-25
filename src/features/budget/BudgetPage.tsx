@@ -4079,7 +4079,7 @@ const MarketReportView: React.FC = () => {
 
               {/* 투자자별 순매수 동향 — kr_close 리포트 전용 */}
               {selected.reportType === 'kr_close' && selected.krInvestorFlow && selected.krInvestorFlow.length > 0 && (() => {
-                const flow: KrInvestorDayFlow[] = selected.krInvestorFlow;
+                const flow: KrInvestorDayFlow[] = [...selected.krInvestorFlow].reverse();
                 // 표시할 투자자 컬럼 순서 (백엔드 key 기준)
                 const COLS: { key: string; label: string }[] = [
                   { key: 'individual',    label: '개인' },
