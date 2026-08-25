@@ -928,27 +928,43 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         </div>
 
         {/* ── 잔액 카드: 카드 제외 잔액 (실제 통장) vs 카드 포함 잔액 (실질) */}
-        <div style={{ padding: '8px 20px 0', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ padding: '8px 20px 0', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           {/* 카드 지출 제외 잔액 — 실제 통장 현금 잔액 */}
-          <div style={{
-            background: '#fff', border: `1px solid ${summary.balanceExCard >= 0 ? '#1565c030' : '#E0606030'}`,
-            borderRadius: '10px', padding: '8px 14px', display: 'flex', gap: '10px', alignItems: 'center',
-          }}>
-            <span style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>통장 잔액</span>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: summary.balanceExCard >= 0 ? '#1565c0' : '#E06060' }}>
-              {summary.balanceExCard < 0 ? '-' : ''}{formatAmountShort(Math.abs(summary.balanceExCard))}
-            </span>
-          </div>
+          {(() => {
+            const color = summary.balanceExCard >= 0 ? '#1565c0' : '#E06060';
+            return (
+              <div style={{
+                flex: 1, minWidth: '120px',
+                background: '#fff', border: `1px solid ${color}40`,
+                borderRadius: '12px', padding: '14px 16px',
+                boxShadow: `0 2px 8px ${color}20`,
+              }}>
+                <div style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, marginBottom: '6px' }}>통장 잔액</div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color }}>
+                  {summary.balanceExCard < 0 ? '-' : ''}{formatAmountShort(Math.abs(summary.balanceExCard))}
+                </div>
+                <div style={{ fontSize: '10px', color: '#9aa0a6', marginTop: '3px' }}>수입 - 통장지출 - 투자</div>
+              </div>
+            );
+          })()}
           {/* 카드 지출 포함 잔액 — 카드빚 포함 실질 잔액 */}
-          <div style={{
-            background: '#fff', border: `1px solid ${summary.balanceIncCard >= 0 ? '#2e7d3230' : '#E0606030'}`,
-            borderRadius: '10px', padding: '8px 14px', display: 'flex', gap: '10px', alignItems: 'center',
-          }}>
-            <span style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>실질 잔액</span>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: summary.balanceIncCard >= 0 ? '#2e7d32' : '#E06060' }}>
-              {summary.balanceIncCard < 0 ? '-' : ''}{formatAmountShort(Math.abs(summary.balanceIncCard))}
-            </span>
-          </div>
+          {(() => {
+            const color = summary.balanceIncCard >= 0 ? '#2e7d32' : '#E06060';
+            return (
+              <div style={{
+                flex: 1, minWidth: '120px',
+                background: '#fff', border: `1px solid ${color}40`,
+                borderRadius: '12px', padding: '14px 16px',
+                boxShadow: `0 2px 8px ${color}20`,
+              }}>
+                <div style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, marginBottom: '6px' }}>실질 잔액</div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color }}>
+                  {summary.balanceIncCard < 0 ? '-' : ''}{formatAmountShort(Math.abs(summary.balanceIncCard))}
+                </div>
+                <div style={{ fontSize: '10px', color: '#9aa0a6', marginTop: '3px' }}>수입 - 통장지출 - 카드지출 - 투자</div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── 고정/변동/투자 소요약 */}
