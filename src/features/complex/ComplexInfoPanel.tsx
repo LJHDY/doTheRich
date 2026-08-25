@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, calcChecklistScore } from '../../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute } from '../../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool } from '../../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -433,6 +433,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [savingNewHazards, setSavingNewHazards] = useState(false);
   const [loadingHazardSuggestions, setLoadingHazardSuggestions] = useState(false);
   const [loadingInfraSuggestions, setLoadingInfraSuggestions] = useState(false);
+  // 전국 학교 DB — 단지 선택 시 2km 반경 학교 자동 조회
+  const [dbSchools, setDbSchools] = useState<NearbySchool[]>([]);
+  const [loadingDbSchools, setLoadingDbSchools] = useState(false);
   // 체크리스트 모달 상태
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [checklistRatedCount, setChecklistRatedCount] = useState(0);
@@ -504,7 +507,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     }
   }, [priceHistories, selectedRefTab, editingRefPrice]);
 
-  // 단지 변경 시 좌표가 저장된 학교·인프라를 오버레이 마커로 지도에 전달
+  // 단지 변경 시 좌표가 저장된 학교·인프라·유해시설 + DB 학교를 오버레이 마커로 지도에 전달
   useEffect(() => {
     if (!onOverlayMarkersChange) return;
     const markers: OverlayMarker[] = [];
@@ -522,6 +525,18 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         });
       }
     });
+    // 전국 학교 DB에서 조회한 근처 학교도 오버레이 마커로 추가 (이미 등록된 학교와 별개)
+    dbSchools.forEach(s => {
+      markers.push({
+        id: `db-school-${s.id}`,
+        name: s.schoolName,
+        lat: s.latitude,
+        lng: s.longitude,
+        markerType: 'school',
+        subType: s.schoolType === '초등학교' ? 'ELEMENTARY' : 'MIDDLE',
+        achievementScore: s.achievementScore ?? undefined,
+      });
+    });
     (complex?.infraInfos ?? []).forEach(inf => {
       if (inf.latitude != null && inf.longitude != null) {
         markers.push({ id: `infra-${inf.id}`, name: inf.infraName, lat: inf.latitude, lng: inf.longitude, markerType: 'infra', subType: inf.infraType });
@@ -533,7 +548,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       }
     });
     onOverlayMarkersChange(markers);
-  }, [complex, onOverlayMarkersChange]);
+  }, [complex, dbSchools, onOverlayMarkersChange]);
 
   // 선택 단지가 바뀌면 이전 데이터·상태를 초기화하고 새로 조회
   useEffect(() => {
@@ -598,6 +613,17 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       }).catch(() => {});
     }
   }, [complex, loadPriceHistories, onRadiusToggle]);
+
+  // 단지 변경 시 DB에서 2km 반경 학교 자동 조회 (전국 학교 DB 활용)
+  useEffect(() => {
+    if (!complex) { setDbSchools([]); return; }
+    setDbSchools([]);
+    setLoadingDbSchools(true);
+    getNearbySchools(complex.latitude, complex.longitude)
+      .then(setDbSchools)
+      .catch(() => setDbSchools([]))
+      .finally(() => setLoadingDbSchools(false));
+  }, [complex?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 즐겨찾기 토글 — 낙관적 업데이트 후 API 실패 시 롤백
   const handleToggleFavorite = async () => {
@@ -3047,6 +3073,30 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   style={{ width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingNewSchools ? '#9e9e9e' : '#89CFF0', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
                   {savingNewSchools ? '저장 중...' : `${newSchoolRows.length}건 저장`}
                 </button>
+              </div>
+            )}
+
+            {/* 전국 학교 DB — 2km 반경 자동 조회 결과 (읽기 전용) */}
+            {(loadingDbSchools || dbSchools.length > 0) && (
+              <div style={{ marginTop: '10px', borderTop: '1px dashed #e0e0e0', paddingTop: '8px' }}>
+                <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '6px', fontWeight: 600 }}>
+                  반경 2km 학교 DB {loadingDbSchools ? '(조회 중...)' : `(${dbSchools.length}개)`}
+                </div>
+                {dbSchools.map(s => (
+                  <div key={s.id} style={{ padding: '5px 0', borderBottom: '1px solid #f5f5f5', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Tag
+                      label={s.schoolType === '초등학교' ? '초등' : '중학'}
+                      color={s.schoolType === '초등학교' ? '#7DC8A0' : '#89CFF0'}
+                    />
+                    <span style={{ fontSize: '12px', color: '#202124', flex: 1 }}>{s.schoolName}</span>
+                    <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>
+                      {s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)}m` : `${s.distanceKm.toFixed(1)}km`}
+                    </span>
+                    {s.achievementScore != null && (
+                      <span style={{ fontSize: '10px', color: '#5f6368', flexShrink: 0 }}>성취 {s.achievementScore}%</span>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
         </div>

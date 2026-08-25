@@ -1844,4 +1844,29 @@ export const generateIntegratedReport = async (reportDate?: string): Promise<voi
   });
 };
 
+// ─── 전국 학교 DB ────────────────────────────────────────────────
+
+export interface NearbySchool {
+  id: string;
+  schoolName: string;
+  schoolType: string;      // '초등학교' | '중학교'
+  address: string;
+  latitude: number;
+  longitude: number;
+  distanceKm: number;
+  studentsPerClass: number | null;
+  achievementScore: number | null;
+}
+
+export const getNearbySchools = async (
+  lat: number,
+  lng: number,
+  radiusKm: number = 2.0,
+): Promise<NearbySchool[]> => {
+  const { data } = await api.get('/api/schools/nearby', {
+    params: { lat, lng, radius_km: radiusKm },
+  });
+  return data as NearbySchool[];
+};
+
 export default api;
