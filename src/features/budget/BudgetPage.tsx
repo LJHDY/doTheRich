@@ -126,14 +126,20 @@ const toSettledYearMonth = (dateStr: string): string => {
 const getCardBillingPeriod = (billingStartDay: number, billingEndDay: number, yearMonth: string) => {
   const year = Number(yearMonth.slice(0, 4));
   const month = Number(yearMonth.slice(4)); // 1-indexed
-  const fromDate = new Date(year, month - 2, billingStartDay); // 전달 시작일
-  // 종료일이 시작일 이상이면 전달 기준, 미만이면 이번달 기준
-  const toDate = billingEndDay >= billingStartDay
-    ? new Date(year, month - 2, billingEndDay)   // 전달 종료 (예: 1일~31일 같은 달)
-    : new Date(year, month - 1, billingEndDay);  // 이번달 종료 (예: 24일~23일)
-  // toISOString은 UTC 변환으로 KST에서 하루 밀림 → 로컬 날짜 직접 포맷
   const fmt = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  let fromDate: Date;
+  let toDate: Date;
+  if (billingEndDay < billingStartDay) {
+    // 전달~이번달 경계 결산 (예: 24일 시작 → 23일 종료)
+    fromDate = new Date(year, month - 2, billingStartDay);
+    toDate   = new Date(year, month - 1, billingEndDay);
+  } else {
+    // 당월 결산 (예: 1일~31일)
+    fromDate = new Date(year, month - 1, billingStartDay);
+    toDate   = new Date(year, month - 1, billingEndDay);
+  }
   const label = `${fromDate.getMonth() + 1}/${billingStartDay}~${toDate.getMonth() + 1}/${billingEndDay}`;
   return { from: fmt(fromDate), to: fmt(toDate), label };
 };
@@ -1255,11 +1261,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             if (pm.billingStartDay && pm.billingEndDay) {
               const { from, to, label } = getCardBillingPeriod(pm.billingStartDay, pm.billingEndDay, yearMonth);
               period = label;
-              // 전달 항목 중 from 이후 + 이번달 항목 중 to 이하를 합산
-              pool = [
-                ...prevMonthEntries.filter(e => e.entryDate >= from),
-                ...entries.filter(e => e.entryDate <= to),
-              ].filter(e => e.entryType === 'EXPENSE' && !isXfer(e) && !e.isCardPayment);
+              const isSameMonth = pm.billingEndDay >= pm.billingStartDay;
+              if (isSameMonth) {
+                // 당월 결산 (1~31 등): 이번달 entries만 날짜 범위 필터
+                pool = entries.filter(e => e.entryDate >= from && e.entryDate <= to);
+              } else {
+                // 전달~이번달 경계 결산 (24~23 등): 전달 후반 + 이번달 전반
+                pool = [
+                  ...prevMonthEntries.filter(e => e.entryDate >= from),
+                  ...entries.filter(e => e.entryDate <= to),
+                ];
+              }
+              pool = pool.filter(e => e.entryType === 'EXPENSE' && !isXfer(e) && !e.isCardPayment);
             } else {
               pool = entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e) && !e.isCardPayment);
             }
