@@ -1031,7 +1031,15 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         {/* ── 통장 잔액 현황 */}
         {(() => {
           // 등록된 통장(type='통장') 기준으로 잔액 표시
-          const bankAccounts = paymentMethods.filter(p => p.type === '통장');
+          // 공용 통장 중복 제거: 같은 이름이면 내 것 우선, 없으면 상대방 공용 PM 사용
+          const bankAccounts = (() => {
+            const seen = new Map<string, PaymentMethod>();
+            paymentMethods.filter(p => p.type === '통장' && p.userId === userId).forEach(p => seen.set(p.name, p));
+            paymentMethods.filter(p => p.type === '통장' && p.userId !== userId && p.isShared).forEach(p => {
+              if (!seen.has(p.name)) seen.set(p.name, p);
+            });
+            return Array.from(seen.values());
+          })();
           if (bankAccounts.length === 0) return null;
 
           const prevMonth = (() => {
@@ -2972,8 +2980,10 @@ const PaymentMethodPanel: React.FC<{
     } catch { alert('삭제에 실패했습니다'); }
   };
 
-  const banks = paymentMethods.filter(p => p.type === '통장');
-  const cards = paymentMethods.filter(p => p.type === '카드');
+  // 내 결제수단만 관리 대상 (상대방 공용 통장은 읽기 전용으로 별도 표시)
+  const banks = paymentMethods.filter(p => p.type === '통장' && p.userId === userId);
+  const cards = paymentMethods.filter(p => p.type === '카드' && p.userId === userId);
+  const partnerShared = paymentMethods.filter(p => p.userId !== userId && p.isShared);
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto 24px' }}>
@@ -3082,6 +3092,31 @@ const PaymentMethodPanel: React.FC<{
       {paymentMethods.length === 0 && !formOpen && (
         <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '10px 0' }}>
           등록된 결제수단이 없습니다. + 추가 버튼으로 통장/카드를 등록하세요.
+        </div>
+      )}
+
+      {/* 상대방 공용 통장 — 읽기 전용 표시 */}
+      {partnerShared.length > 0 && (
+        <div style={{ marginBottom: '10px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#2e7d32', marginBottom: '4px' }}>공용 통장 (상대방 등록)</div>
+          {partnerShared.map(pm => (
+            <div key={pm.id} style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '7px 10px', background: '#f6fdf6',
+              border: '1px solid #a8d8a8', borderRadius: '8px', marginBottom: '4px',
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '13px', color: '#2e7d32', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  {pm.name}
+                  <span style={{ fontSize: '9px', background: '#4CAF50', color: '#fff', padding: '1px 5px', borderRadius: '8px', fontWeight: 700 }}>공용</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '1px' }}>
+                  {pm.accountMain && <span style={{ marginRight: '8px' }}>{pm.accountMain}</span>}
+                  <span>{pm.userId === 'ldy' ? '동영' : '주해'} 등록</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
