@@ -1193,6 +1193,7 @@ const toPaymentMethod = (d: any): PaymentMethod => ({
   billingDay: d.billing_day ?? undefined,
   billingStartDay: d.billing_start_day ?? undefined,
   billingEndDay: d.billing_end_day ?? undefined,
+  isShared: d.is_shared ?? false,
   isActive: d.is_active,
 });
 
@@ -1205,6 +1206,7 @@ export const createPaymentMethod = async (payload: {
   userId: string; name: string; type: string;
   accountMain?: string; accountNumber?: string; cardAlias?: string;
   billingDay?: number; billingStartDay?: number; billingEndDay?: number;
+  isShared?: boolean;
 }): Promise<PaymentMethod> => {
   const { data } = await api.post('/api/budget/payment-methods', {
     user_id: payload.userId,
@@ -1216,6 +1218,7 @@ export const createPaymentMethod = async (payload: {
     billing_day: payload.billingDay ?? null,
     billing_start_day: payload.billingStartDay ?? null,
     billing_end_day: payload.billingEndDay ?? null,
+    is_shared: payload.isShared ?? false,
   });
   return toPaymentMethod(data);
 };
@@ -1224,6 +1227,7 @@ export const updatePaymentMethod = async (id: number, payload: {
   name?: string; type?: string;
   accountMain?: string; accountNumber?: string; cardAlias?: string;
   billingDay?: number; billingStartDay?: number; billingEndDay?: number;
+  isShared?: boolean;
 }): Promise<PaymentMethod> => {
   const { data } = await api.patch(`/api/budget/payment-methods/${id}`, {
     name: payload.name,
@@ -1234,8 +1238,19 @@ export const updatePaymentMethod = async (id: number, payload: {
     billing_day: payload.billingDay,
     billing_start_day: payload.billingStartDay,
     billing_end_day: payload.billingEndDay,
+    is_shared: payload.isShared,
   });
   return toPaymentMethod(data);
+};
+
+export const getSharedAccountEntries = async (
+  accountName: string,
+  yearMonth: string,
+): Promise<BudgetEntry[]> => {
+  const { data } = await api.get('/api/budget/shared-account-entries', {
+    params: { account_name: accountName, year_month: yearMonth },
+  });
+  return data.map(toEntry);
 };
 
 export const deletePaymentMethod = async (id: number): Promise<void> => {

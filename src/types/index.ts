@@ -663,6 +663,7 @@ export interface PaymentMethod {
   billingDay?: number;       // 카드 결제일 (1-31)
   billingStartDay?: number;  // 카드 결산 시작일 (1-31)
   billingEndDay?: number;    // 카드 결산 종료일 (1-31)
+  isShared: boolean;         // 공용 통장 여부 (동영·주해 공동 관리)
   isActive: boolean;
 }
 

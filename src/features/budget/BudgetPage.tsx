@@ -43,6 +43,7 @@ import {
   createPaymentMethod,
   updatePaymentMethod,
   deletePaymentMethod,
+  getSharedAccountEntries,
   getAccountBalances,
   upsertAccountBalance,
   carryOverAccountBalances,
@@ -224,6 +225,12 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
   const [showSumTooltip, setShowSumTooltip] = useState(false);
+  // 공용 통장 클릭 시 양쪽 유저 내역을 보여주는 팝업 상태
+  const [sharedPopup, setSharedPopup] = useState<{
+    accName: string;
+    loading: boolean;
+    entries: BudgetEntry[];
+  } | null>(null);
   const isMobile = useIsMobile();
 
   // ─── 카테고리 — 공통코드 DB에서 로드, 없으면 상수로 자동 seed ───
@@ -1061,31 +1068,43 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               </div>
               {(() => {
                 // 계좌 카드 공통 렌더러
-                const AccountCard = ({ accName, opening, income, expense, dimmed = false }: {
-                  accName: string; opening: number; income: number; expense: number; dimmed?: boolean;
+                const AccountCard = ({ accName, opening, income, expense, dimmed = false, isSharedAccount = false }: {
+                  accName: string; opening: number; income: number; expense: number;
+                  dimmed?: boolean; isSharedAccount?: boolean;
                 }) => {
                   const closing = opening + income - expense;
                   const isEditing = editingOpeningAccount === accName;
-                  // 통장 카드 클릭 시 해당 통장으로 내역 필터링 (dimmed 카드는 비활성, 카드 필터는 해제)
-                  const isSelected = !dimmed && accountFilter === accName;
+                  // 공용 통장: 클릭 시 양쪽 내역 팝업 / 일반 통장: 내역 필터링
+                  const isSelected = !dimmed && !isSharedAccount && accountFilter === accName;
                   const handleCardClick = () => {
                     if (dimmed) return;
-                    setCardFilter(null);
-                    setAccountFilter(prev => prev === accName ? null : accName);
+                    if (isSharedAccount) {
+                      setSharedPopup({ accName, loading: true, entries: [] });
+                      getSharedAccountEntries(accName, yearMonth)
+                        .then(es => setSharedPopup(p => p ? { ...p, loading: false, entries: es } : null))
+                        .catch(() => setSharedPopup(p => p ? { ...p, loading: false } : null));
+                    } else {
+                      setCardFilter(null);
+                      setAccountFilter(prev => prev === accName ? null : accName);
+                    }
                   };
                   return (
                     <div
                       onClick={handleCardClick}
                       style={{
                         background: isSelected ? '#e8f4fd' : (dimmed ? '#fafafa' : '#fff'),
-                        border: `1px solid ${isSelected ? '#89CFF0' : (dimmed ? '#e0e0e0' : '#e8ecf0')}`,
+                        border: `1px solid ${isSelected ? '#89CFF0' : isSharedAccount ? '#a8d8a8' : (dimmed ? '#e0e0e0' : '#e8ecf0')}`,
                         borderRadius: '10px', padding: '10px 14px', minWidth: '160px', fontSize: '12px',
                         cursor: dimmed ? 'default' : 'pointer',
-                        boxShadow: isSelected ? '0 0 0 2px #89CFF080' : 'none',
+                        boxShadow: isSelected ? '0 0 0 2px #89CFF080' : isSharedAccount ? '0 0 0 1px #a8d8a840' : 'none',
                         transition: 'all 0.15s',
+                        position: 'relative',
                       }}
                     >
-                      <div style={{ fontWeight: 700, color: dimmed ? '#9aa0a6' : '#1a3a5c', marginBottom: '6px' }}>{accName}</div>
+                      <div style={{ fontWeight: 700, color: dimmed ? '#9aa0a6' : '#1a3a5c', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        {isSharedAccount && <span style={{ fontSize: '9px', background: '#4CAF50', color: '#fff', padding: '1px 5px', borderRadius: '8px', fontWeight: 700, flexShrink: 0 }}>공용</span>}
+                        {accName}
+                      </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#5f6368' }}>
                         {!dimmed && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1124,6 +1143,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                           <span style={{ minWidth: '52px', display: 'inline-block' }}>잔액</span>
                           <span style={{ fontWeight: 700, color: closing >= 0 ? '#1565c0' : '#E06060', fontSize: '13px' }}>{formatAmountShort(closing)}</span>
                         </div>
+                        {isSharedAccount && <div style={{ fontSize: '10px', color: '#9aa0a6', marginTop: '2px' }}>클릭 → 동영·주해 전체 내역</div>}
                       </div>
                     </div>
                   );
@@ -1142,7 +1162,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   return (
                     <AccountCard key={accName} accName={accName} opening={opening}
                       income={byName.income + byMain.income}
-                      expense={byName.expense + byMain.expense} />
+                      expense={byName.expense + byMain.expense}
+                      isSharedAccount={pm.isShared} />
                   );
                 });
 
@@ -1191,6 +1212,99 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 const totalBalance = totalOpening + totalIncome - totalExpense;
 
                 return (
+                  <>
+                  {/* 공용 통장 팝업 — 동영·주해 합산 내역 */}
+                  {sharedPopup && (
+                    <div
+                      onClick={() => setSharedPopup(null)}
+                      style={{
+                        position: 'fixed', inset: 0, background: '#00000040', zIndex: 3000,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      <div
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                          background: '#fff', borderRadius: '14px', padding: '20px',
+                          width: '92%', maxWidth: '520px', maxHeight: '80vh',
+                          display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px #00000030',
+                        }}
+                      >
+                        {/* 팝업 헤더 */}
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+                          <span style={{ fontSize: '9px', background: '#4CAF50', color: '#fff', padding: '2px 7px', borderRadius: '8px', fontWeight: 700, marginRight: '8px' }}>공용</span>
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', flex: 1 }}>{sharedPopup.accName}</span>
+                          <span style={{ fontSize: '11px', color: '#9aa0a6', marginRight: '12px' }}>{yearMonth.slice(0,4)}.{yearMonth.slice(4)}</span>
+                          <button
+                            onClick={() => setSharedPopup(null)}
+                            style={{ fontSize: '16px', color: '#9aa0a6', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+                          >×</button>
+                        </div>
+
+                        {sharedPopup.loading ? (
+                          <div style={{ textAlign: 'center', color: '#9aa0a6', padding: '30px 0', fontSize: '13px' }}>불러오는 중…</div>
+                        ) : sharedPopup.entries.length === 0 ? (
+                          <div style={{ textAlign: 'center', color: '#9aa0a6', padding: '30px 0', fontSize: '13px' }}>이 통장의 거래 내역이 없습니다.</div>
+                        ) : (() => {
+                          // 유저별 소계
+                          const USER_LABELS: Record<string, string> = { ldy: '동영', juhae: '주해' };
+                          const USER_COLORS: Record<string, string> = { ldy: '#1565c0', juhae: '#AD1457' };
+                          const isXferE = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+                          const byUser: Record<string, { income: number; expense: number }> = {};
+                          sharedPopup.entries.forEach(e => {
+                            if (!byUser[e.userId]) byUser[e.userId] = { income: 0, expense: 0 };
+                            if (e.entryType === 'INCOME') byUser[e.userId].income += e.amount;
+                            else if (!isXferE(e)) byUser[e.userId].expense += e.amount;
+                          });
+                          return (
+                            <>
+                              {/* 유저별 소계 */}
+                              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                                {Object.entries(byUser).map(([uid, s]) => (
+                                  <div key={uid} style={{
+                                    flex: 1, minWidth: '120px', background: '#f8fafc',
+                                    border: `1px solid ${USER_COLORS[uid] ?? '#ccc'}30`,
+                                    borderRadius: '8px', padding: '8px 12px', fontSize: '11px',
+                                  }}>
+                                    <div style={{ fontWeight: 700, color: USER_COLORS[uid] ?? '#344054', marginBottom: '4px' }}>{USER_LABELS[uid] ?? uid}</div>
+                                    {s.income > 0 && <div><span style={{ color: '#9aa0a6' }}>수입 </span><span style={{ color: '#4CAF50', fontWeight: 600 }}>{formatAmountShort(s.income)}</span></div>}
+                                    {s.expense > 0 && <div><span style={{ color: '#9aa0a6' }}>지출 </span><span style={{ color: '#E06060', fontWeight: 600 }}>{formatAmountShort(s.expense)}</span></div>}
+                                  </div>
+                                ))}
+                              </div>
+                              {/* 전체 내역 목록 */}
+                              <div style={{ overflowY: 'auto', flex: 1, borderTop: '1px solid #f0f4f8' }}>
+                                {sharedPopup.entries.map(e => {
+                                  const isIncome = e.entryType === 'INCOME';
+                                  const uid = e.userId;
+                                  const userColor = USER_COLORS[uid] ?? '#344054';
+                                  const userLabel = USER_LABELS[uid] ?? uid;
+                                  return (
+                                    <div key={e.id} style={{
+                                      display: 'flex', alignItems: 'center', gap: '8px',
+                                      padding: '8px 4px', borderBottom: '1px solid #f5f5f5', fontSize: '12px',
+                                    }}>
+                                      <span style={{ color: '#9aa0a6', fontSize: '11px', minWidth: '38px', flexShrink: 0 }}>{e.entryDate.slice(5)}</span>
+                                      <span style={{
+                                        fontSize: '9px', padding: '1px 5px', borderRadius: '8px', fontWeight: 700,
+                                        background: `${userColor}18`, color: userColor, flexShrink: 0,
+                                      }}>{userLabel}</span>
+                                      <span style={{ flex: 1, color: '#344054', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {e.category}{e.merchant ? ` · ${e.merchant}` : ''}
+                                      </span>
+                                      <span style={{ fontWeight: 700, color: isIncome ? '#4CAF50' : '#E06060', flexShrink: 0 }}>
+                                        {isIncome ? '+' : '-'}{formatAmountShort(e.amount)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'flex-start' }}>
                     {cards}
                     {unassignedCard}
@@ -1244,6 +1358,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                       )}
                     </div>
                   </div>
+                  </>
                 );
               })()}
             </div>
@@ -2771,6 +2886,7 @@ type PmForm = {
   // 통장 전용
   accountMain: string;
   accountNumber: string;
+  isShared: boolean;           // 공용 통장 여부
   // 카드 전용
   cardAlias: string;
   billingDayStr: string;       // 결제일
@@ -2779,8 +2895,8 @@ type PmForm = {
 };
 
 const emptyPmForm = (): PmForm => ({
-  name: '', type: '통장', accountMain: '', accountNumber: '', cardAlias: '',
-  billingDayStr: '', billingStartDayStr: '', billingEndDayStr: '',
+  name: '', type: '통장', accountMain: '', accountNumber: '', isShared: false,
+  cardAlias: '', billingDayStr: '', billingStartDayStr: '', billingEndDayStr: '',
 });
 
 const PaymentMethodPanel: React.FC<{
@@ -2812,6 +2928,7 @@ const PaymentMethodPanel: React.FC<{
       type: pm.type,
       accountMain: pm.accountMain ?? '',
       accountNumber: pm.accountNumber ?? '',
+      isShared: pm.isShared,
       cardAlias: pm.cardAlias ?? '',
       billingDayStr: pm.billingDay ? String(pm.billingDay) : '',
       billingStartDayStr: pm.billingStartDay ? String(pm.billingStartDay) : '',
@@ -2829,6 +2946,7 @@ const PaymentMethodPanel: React.FC<{
         type: form.type,
         accountMain: form.type === '통장' ? (form.accountMain || undefined) : undefined,
         accountNumber: form.type === '통장' ? (form.accountNumber.trim() || undefined) : undefined,
+        isShared: form.type === '통장' ? form.isShared : false,
         cardAlias: form.type === '카드' ? (form.cardAlias.trim() || undefined) : undefined,
         billingDay: form.type === '카드' && form.billingDayStr ? Number(form.billingDayStr) : undefined,
         billingStartDay: form.type === '카드' && form.billingStartDayStr ? Number(form.billingStartDayStr) : undefined,
@@ -2907,6 +3025,17 @@ const PaymentMethodPanel: React.FC<{
                 <input value={form.accountNumber} onChange={e => setForm(f => ({ ...f, accountNumber: e.target.value }))}
                   placeholder="예: 110-123-456789" style={inputSt} />
               </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: form.isShared ? '#2e7d32' : '#5f6368' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.isShared}
+                    onChange={e => setForm(f => ({ ...f, isShared: e.target.checked }))}
+                    style={{ width: '14px', height: '14px', accentColor: '#4CAF50', cursor: 'pointer' }}
+                  />
+                  공용 통장 — 동영·주해 모두에게 표시, 잔액 카드 클릭 시 양쪽 내역 조회 가능
+                </label>
+              </div>
             </>)}
 
             {/* 카드 전용 */}
@@ -2968,7 +3097,12 @@ const PaymentMethodPanel: React.FC<{
                 border: '1px solid #e8ecf0', borderRadius: '8px', marginBottom: '4px',
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '13px', color: '#344054', fontWeight: 600 }}>{pm.name}</div>
+                  <div style={{ fontSize: '13px', color: '#344054', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    {pm.name}
+                    {pm.isShared && (
+                      <span style={{ fontSize: '9px', background: '#4CAF50', color: '#fff', padding: '1px 5px', borderRadius: '8px', fontWeight: 700, flexShrink: 0 }}>공용</span>
+                    )}
+                  </div>
                   <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '1px' }}>
                     {pm.type === '통장' && pm.accountMain && <span style={{ marginRight: '8px' }}>{pm.accountMain}</span>}
                     {pm.type === '통장' && pm.accountNumber && <span>{pm.accountNumber}</span>}
