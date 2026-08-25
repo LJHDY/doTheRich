@@ -212,6 +212,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem('budget_tab') as Tab) || 'ENTRIES');
   useEffect(() => { sessionStorage.setItem('budget_tab', tab); }, [tab]);
   const [showUserSelect, setShowUserSelect] = useState(false);
+  const [showSumTooltip, setShowSumTooltip] = useState(false);
   const isMobile = useIsMobile();
 
   // ─── 카테고리 — 공통코드 DB에서 로드, 없으면 상수로 자동 seed ───
@@ -1183,19 +1184,53 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                     {cards}
                     {unassignedCard}
                     {/* 합계 — 요약 잔액과 일치해야 함 */}
-                    <div style={{
-                      background: '#f0f8fd', border: '1px solid #89CFF0', borderRadius: '10px',
-                      padding: '10px 14px', minWidth: '160px', fontSize: '12px',
-                    }}>
-                      <div style={{ fontWeight: 700, color: '#1a3a5c', marginBottom: '6px' }}>합계</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#5f6368' }}>
-                        {totalIncome > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>+ 수입</span><span style={{ color: '#4CAF50', fontWeight: 600 }}>{formatAmountShort(totalIncome)}</span></div>}
-                        {totalExpense > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>- 지출</span><span style={{ color: '#E06060', fontWeight: 600 }}>{formatAmountShort(totalExpense)}</span></div>}
-                        <div style={{ borderTop: '1px solid #89CFF0', marginTop: '4px', paddingTop: '4px' }}>
-                          <span style={{ minWidth: '52px', display: 'inline-block' }}>잔액</span>
-                          <span style={{ fontWeight: 700, color: totalBalance >= 0 ? '#1565c0' : '#E06060', fontSize: '13px' }}>{totalBalance < 0 ? '-' : ''}{formatAmountShort(Math.abs(totalBalance))}</span>
+                    <div style={{ position: 'relative' }}>
+                      <div
+                        onClick={() => setShowSumTooltip(v => !v)}
+                        style={{
+                          background: '#f0f8fd', border: '1px solid #89CFF0', borderRadius: '10px',
+                          padding: '10px 14px', minWidth: '160px', fontSize: '12px', cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, color: '#1a3a5c', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          합계 <span style={{ fontSize: '10px', color: '#89CFF0' }}>ⓘ</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#5f6368' }}>
+                          {totalIncome > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>+ 수입</span><span style={{ color: '#4CAF50', fontWeight: 600 }}>{formatAmountShort(totalIncome)}</span></div>}
+                          {totalExpense > 0 && <div><span style={{ minWidth: '52px', display: 'inline-block' }}>- 지출</span><span style={{ color: '#E06060', fontWeight: 600 }}>{formatAmountShort(totalExpense)}</span></div>}
+                          <div style={{ borderTop: '1px solid #89CFF0', marginTop: '4px', paddingTop: '4px' }}>
+                            <span style={{ minWidth: '52px', display: 'inline-block' }}>잔액</span>
+                            <span style={{ fontWeight: 700, color: totalBalance >= 0 ? '#1565c0' : '#E06060', fontSize: '13px' }}>{totalBalance < 0 ? '-' : ''}{formatAmountShort(Math.abs(totalBalance))}</span>
+                          </div>
                         </div>
                       </div>
+                      {showSumTooltip && (
+                        <div
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200,
+                            background: '#fff', border: '1px solid #89CFF0', borderRadius: '10px',
+                            padding: '12px 14px', minWidth: '240px', fontSize: '11px',
+                            boxShadow: '0 4px 16px #00000018', color: '#344054', lineHeight: 1.7,
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, color: '#1a3a5c', marginBottom: '8px', fontSize: '12px' }}>합계 계산 방식</div>
+                          <div style={{ color: '#666', marginBottom: '6px' }}>이체 항목 제외 후 집계</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <div><span style={{ color: '#4CAF50', fontWeight: 600 }}>+ 수입</span> — 이체 제외 INCOME 합산</div>
+                            <div><span style={{ color: '#E06060', fontWeight: 600 }}>- 지출</span> — 이체 제외 EXPENSE 합산</div>
+                            <div style={{ paddingLeft: '8px', color: '#888', fontSize: '10px' }}>= 통장직접지출 + 카드납부 + 카드구매</div>
+                            <div style={{ marginTop: '4px' }}><span style={{ fontWeight: 600 }}>잔액</span> = 이월잔액합계 + 수입 − 지출</div>
+                          </div>
+                          <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px dashed #e0e0e0', color: '#999', fontSize: '10px' }}>
+                            ※ 개별 통장 카드는 이체 포함 집계이므로<br />합계와 지출 숫자가 다를 수 있음
+                          </div>
+                          <button
+                            onClick={() => setShowSumTooltip(false)}
+                            style={{ marginTop: '8px', fontSize: '10px', padding: '2px 8px', border: '1px solid #ddd', borderRadius: '6px', background: '#f5f5f5', cursor: 'pointer', color: '#666' }}
+                          >닫기</button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
