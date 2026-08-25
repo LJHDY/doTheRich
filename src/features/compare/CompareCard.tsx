@@ -162,7 +162,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
         s.schoolType === '중학교' ? s.distanceKm <= 1.0 : s.distanceKm <= 0.5
       )))
       .catch(() => setDbSchools([]));
-  }, [complex.id]);
+  }, [complex.id, complex.latitude, complex.longitude]);
 
   // 전체 히스토리에서 areaType별 최신 item 수집 — 평형별 별도 등록이어도 모두 포함
   const latestItemPerAreaType = (() => {
