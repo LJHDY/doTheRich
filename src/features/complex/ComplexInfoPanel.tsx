@@ -619,7 +619,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     if (!complex) { setDbSchools([]); return; }
     setDbSchools([]);
     setLoadingDbSchools(true);
-    getNearbySchools(complex.latitude, complex.longitude)
+    getNearbySchools(complex.latitude, complex.longitude, 1.0)
       .then(setDbSchools)
       .catch(() => setDbSchools([]))
       .finally(() => setLoadingDbSchools(false));
@@ -3080,7 +3080,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             {(loadingDbSchools || dbSchools.length > 0) && (
               <div style={{ marginTop: '10px', borderTop: '1px dashed #e0e0e0', paddingTop: '8px' }}>
                 <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '6px', fontWeight: 600 }}>
-                  반경 2km 학교 DB {loadingDbSchools ? '(조회 중...)' : `(${dbSchools.length}개)`}
+                  반경 1km 학교 DB {loadingDbSchools ? '(조회 중...)' : `(${dbSchools.length}개)`}
                 </div>
                 {dbSchools.map(s => (
                   <div key={s.id} style={{ padding: '5px 0', borderBottom: '1px solid #f5f5f5', display: 'flex', alignItems: 'center', gap: '6px' }}>

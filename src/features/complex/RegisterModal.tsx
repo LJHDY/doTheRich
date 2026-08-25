@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api, { getChecklistTemplates, upsertChecklistResult, searchNearby, getTransitRoutes, TransitRoute } from '../../services/api';
+import api, { getChecklistTemplates, upsertChecklistResult, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool } from '../../services/api';
 import { uploadComplexPhotos } from '../../services/api';
 import { compressImages } from '../../shared/imageUtils';
 import { ApartmentComplex, ChecklistTemplate } from '../../types';
@@ -478,6 +478,8 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
 
   // 인프라 자동탐지 — 카카오 로컬 API로 2km 반경 마트·대학병원·백화점 조회
   const [infraAutoLoading, setInfraAutoLoading] = useState(false);
+  const [dbSchools, setDbSchools] = useState<NearbySchool[]>([]);
+  const [loadingDbSchools, setLoadingDbSchools] = useState(false);
   useEffect(() => {
     if (!initialData.latitude || !initialData.longitude) return;
     const lat = initialData.latitude;
@@ -515,6 +517,17 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
         });
       }
     }).finally(() => setInfraAutoLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 단지 좌표 기준 1km 반경 DB 학교 자동 조회
+  useEffect(() => {
+    if (!initialData.latitude || !initialData.longitude) return;
+    setLoadingDbSchools(true);
+    getNearbySchools(initialData.latitude, initialData.longitude, 1.0)
+      .then(setDbSchools)
+      .catch(() => setDbSchools([]))
+      .finally(() => setLoadingDbSchools(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1451,8 +1464,37 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
           <button onClick={addSchool} style={{
             border: '1px dashed #dadce0', background: 'none', cursor: 'pointer',
             borderRadius: '6px', padding: '7px 14px', fontSize: '12px',
-            color: '#4BAAD4', marginBottom: '20px',
+            color: '#4BAAD4', marginBottom: '12px',
           }}>+ 학교 추가</button>
+
+          {/* 반경 1km DB 학교 목록 (읽기 전용) */}
+          {(loadingDbSchools || dbSchools.length > 0) && (
+            <div style={{ marginBottom: '20px', border: '1px dashed #e0e0e0', borderRadius: '8px', padding: '10px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#80868b', marginBottom: '6px' }}>
+                반경 1km 학교 DB {loadingDbSchools ? '(조회 중...)' : `(${dbSchools.length}개)`}
+              </div>
+              {dbSchools.map(s => (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0', borderBottom: '1px solid #f5f5f5', fontSize: '12px' }}>
+                  <span style={{
+                    fontSize: '10px', fontWeight: 700, color: '#fff', padding: '1px 5px', borderRadius: '6px',
+                    backgroundColor: s.schoolType === '초등학교' ? '#7DC8A0' : '#89CFF0', flexShrink: 0,
+                  }}>
+                    {s.schoolType === '초등학교' ? '초등' : '중학'}
+                  </span>
+                  <span style={{ flex: 1, color: '#202124' }}>{s.schoolName}</span>
+                  <span style={{ color: '#80868b', flexShrink: 0 }}>
+                    {s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)}m` : `${s.distanceKm.toFixed(1)}km`}
+                  </span>
+                  {s.achievementScore != null && (
+                    <span style={{ color: '#5f6368', flexShrink: 0 }}>성취 {s.achievementScore}%</span>
+                  )}
+                  {s.totalStudents != null && (
+                    <span style={{ color: '#9e9e9e', flexShrink: 0 }}>{s.totalStudents.toLocaleString()}명</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 주변 인프라 */}
           <div style={{ ...sectionTitle, display: 'flex', alignItems: 'center', gap: '8px' }}>
