@@ -1505,7 +1505,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
                 반경 1km 학교 DB {loadingDbSchools ? '(조회 중...)' : `(${dbSchools.length}개)`}
               </div>
               {dbSchools.map(s => {
-                const alreadyAdded = schoolInfos.some(r => r.schoolName === s.schoolName);
+                const REGION_PREFIXES = ['서울', '경기', '인천', '부산', '대구', '대전', '광주', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
+                const normalizeSchoolName = (name: string) => { for (const p of REGION_PREFIXES) { if (name.startsWith(p)) return name.slice(p.length); } return name; };
+                const alreadyAdded = schoolInfos.some(r => r.schoolName === s.schoolName || normalizeSchoolName(r.schoolName) === normalizeSchoolName(s.schoolName));
                 const isAdding = addingDbSchoolId === s.id;
                 return (
                   <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 0', borderBottom: '1px solid #f5f5f5', fontSize: '12px' }}>

@@ -3108,6 +3108,17 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
             {/* 전국 학교 DB — 2km 반경 자동 조회 결과 (읽기 전용) */}
             {(loadingDbSchools || dbSchools.length > 0) && (() => {
+              // 지역명 접두사 제거 후 비교 — "서울선유초등학교" = "선유초등학교"
+              const REGION_PREFIXES = ['서울', '경기', '인천', '부산', '대구', '대전', '광주', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
+              const normalizeSchoolName = (name: string) => {
+                for (const p of REGION_PREFIXES) {
+                  if (name.startsWith(p)) return name.slice(p.length);
+                }
+                return name;
+              };
+              const isSameSchool = (a: string, b: string) =>
+                a === b || normalizeSchoolName(a) === normalizeSchoolName(b);
+
               // 초등학교는 가까운 3개만, 중학교는 전체 표시 (이미 거리 오름차순 정렬됨)
               const filtered = [
                 ...dbSchools.filter(s => s.schoolType === '초등학교').slice(0, 3),
@@ -3115,7 +3126,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               ];
               // 전부 이미 추가된 상태면 섹션 자체를 숨김
               const allAdded = filtered.length > 0 && filtered.every(s =>
-                (complex.schoolInfos ?? []).some(r => r.schoolName === s.schoolName)
+                (complex.schoolInfos ?? []).some(r => isSameSchool(r.schoolName ?? '', s.schoolName))
               );
               if (!loadingDbSchools && allAdded) return null;
               return (
@@ -3124,7 +3135,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     반경 1km 학교 DB {loadingDbSchools ? '(조회 중...)' : `(${filtered.length}개)`}
                   </div>
                   {filtered.map(s => {
-                    const alreadyAdded = (complex.schoolInfos ?? []).some(r => r.schoolName === s.schoolName);
+                    const alreadyAdded = (complex.schoolInfos ?? []).some(r => isSameSchool(r.schoolName ?? '', s.schoolName));
                     const isAdding = addingDbSchoolId === s.id;
                     return (
                       <div key={s.id} style={{ padding: '5px 0', borderBottom: '1px solid #f5f5f5', display: 'flex', alignItems: 'center', gap: '6px' }}>
