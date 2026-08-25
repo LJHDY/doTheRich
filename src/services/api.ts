@@ -1857,6 +1857,10 @@ export interface NearbySchool {
   studentsPerClass: number | null;
   achievementScore: number | null;
   totalStudents: number | null;
+  eliteHighRate: number | null;      // 특목고 진학률 (%)
+  eliteHighCount: number | null;     // 특목고 진학 총수
+  scienceHighCount: number | null;   // 과학고 진학수
+  intlHighCount: number | null;      // 외고·국제고 진학수
 }
 
 export const getNearbySchools = async (

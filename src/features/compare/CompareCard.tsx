@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, ChartDataRow, ChartSeries, SchoolInfo, InfraInfo, formatPrice, toUkUnit, calcCommuteGrade } from '../../types';
-import { getPriceHistories } from '../../services/api';
+import { getPriceHistories, getNearbySchools, NearbySchool } from '../../services/api';
 import PriceChart from '../complex/PriceChart';
 import CommuteGradeBadge from '../complex/CommuteGradeBadge';
 import ChecklistSection from '../checklist/ChecklistSection';
@@ -127,6 +127,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
   const [priceHistories, setPriceHistories] = useState<PriceHistory[]>([]);
   const [chartData, setChartData] = useState<{ rows: ChartDataRow[]; series: ChartSeries[] }>({ rows: [], series: [] });
   const [loading, setLoading] = useState(false);
+  const [dbSchools, setDbSchools] = useState<NearbySchool[]>([]);
   // 참고가 탭 — 선택된 areaType (빈 문자열이면 전체)
   const [selectedRefTab, setSelectedRefTab] = useState<string>('');
   // 시세 차트 평형 필터
@@ -152,6 +153,16 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
   useEffect(() => {
     loadHistories();
   }, [loadHistories]);
+
+  // 반경 내 학교 DB 로드 — studentsPerClass 조회용
+  useEffect(() => {
+    if (!complex.latitude || !complex.longitude) return;
+    getNearbySchools(complex.latitude, complex.longitude, 1.0)
+      .then(schools => setDbSchools(schools.filter(s =>
+        s.schoolType === '중학교' ? s.distanceKm <= 1.0 : s.distanceKm <= 0.5
+      )))
+      .catch(() => setDbSchools([]));
+  }, [complex.id]);
 
   // 전체 히스토리에서 areaType별 최신 item 수집 — 평형별 별도 등록이어도 모두 포함
   const latestItemPerAreaType = (() => {
@@ -534,16 +545,24 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                     <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>도보 {s.walkingMinutes}분</span>
                   )}
                 </div>
-                {(s.achievementScore != null || s.totalStudents != null) && (
-                  <div style={{ display: 'flex', gap: '10px', paddingLeft: '2px' }}>
-                    {s.achievementScore != null && (
-                      <span style={{ fontSize: '10px', color: '#5f6368' }}>학업성취도 {s.achievementScore}%</span>
-                    )}
-                    {s.totalStudents != null && (
-                      <span style={{ fontSize: '10px', color: '#5f6368' }}>전교생 {s.totalStudents.toLocaleString()}명</span>
-                    )}
-                  </div>
-                )}
+                {(s.achievementScore != null || s.totalStudents != null) && (() => {
+                  const REGION_PREFIXES = ['서울', '경기', '인천', '부산', '대구', '대전', '광주', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
+                  const norm = (n: string) => { for (const p of REGION_PREFIXES) { if (n.startsWith(p)) return n.slice(p.length); } return n; };
+                  const matched = dbSchools.find(d => d.schoolName === s.schoolName || norm(d.schoolName) === norm(s.schoolName ?? ''));
+                  return (
+                    <div style={{ display: 'flex', gap: '10px', paddingLeft: '2px', flexWrap: 'wrap' }}>
+                      {s.achievementScore != null && (
+                        <span style={{ fontSize: '10px', color: '#5f6368' }}>학업성취도 {s.achievementScore}%</span>
+                      )}
+                      {s.totalStudents != null && (
+                        <span style={{ fontSize: '10px', color: '#5f6368' }}>전교생 {s.totalStudents.toLocaleString()}명</span>
+                      )}
+                      {matched?.studentsPerClass != null && (
+                        <span style={{ fontSize: '10px', color: '#5f6368' }}>학급당 {matched.studentsPerClass}명</span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>

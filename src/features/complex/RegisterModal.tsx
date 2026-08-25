@@ -1529,6 +1529,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
                     {s.totalStudents != null && (
                       <span style={{ color: '#9e9e9e', flexShrink: 0 }}>{s.totalStudents.toLocaleString()}명</span>
                     )}
+                    {s.studentsPerClass != null && (
+                      <span style={{ color: '#9e9e9e', flexShrink: 0 }}>학급당 {s.studentsPerClass}명</span>
+                    )}
                     <button
                       onClick={() => handleAddDbSchool(s)}
                       disabled={alreadyAdded || isAdding}
