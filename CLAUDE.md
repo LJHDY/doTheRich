@@ -844,14 +844,21 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
 - [x] 가계부 기능 (`BudgetPage`, `UserSelectModal`)
   - 헤더 "💰 가계부" 버튼 → 전체화면 오버레이 (z-index 9000)
   - localStorage `budget_user_id`로 세션 유저 저장, 👤 버튼 클릭 시 `UserSelectModal`로 재선택 가능
-  - **내역 탭**: 총 수입/지출/잔액 카드, 고정비/변동비/투자 소요약, 통장별 현황, 필터(전체/수입/지출/고정비/투자/이체), 항목 목록
+  - **내역 탭**: 총 수입/통장지출/카드지출/투자 카드 + 잔액 2종(통장·실질) + 고정/변동/투자 소요약, 통장별 현황, 필터(전체/수입/지출/고정비/투자/이체), 항목 목록
     - 지출 등록 시 `accountMain`(통장/카드) 미선택이면 저장 불가 (alert 표시)
     - 전체 탭 콘텐츠를 단일 스크롤 컨테이너로 감싸 (내부 리스트 별도 스크롤 제거)
     - **이체(이체 필터)**: `isXfer = e.isTransfer || e.category === '이체'` 헬퍼로 판정 — `is_transfer` DB 컬럼 마이그레이션 이전 항목도 `category='이체'`로 fallback 처리
-    - **요약 계산 규칙**: 이체는 수입·지출 모두에서 제외 / 투자(`isInvestment=true`)는 지출에서 분리해 별도 집계
-    - **잔액 공식**: `잔액 = 총수입 - 총지출 - 투자` (이체·투자 모두 수입/지출에서 제외 후 투자 별도 차감)
-    - **통장 잔액 합계 카드**: 이체 제외 수입/지출로 표시 (개별 통장 카드는 이체 포함 유지 — 계좌 간 이동 반영)
-    - `accountMap`: 개별 통장 잔액용, 이체 포함 / 합계 카드는 `entries`에서 `!isXfer` 직접 필터해 별도 계산
+    - **25일 사이클 정산** (`toSettledYearMonth`): day >= 25 → 다음달 yearMonth, day < 25 → 같은달 yearMonth
+      - `SETTLE_DAY = 25`, `fmtLocalDate(d)` KST 날짜 포맷 (toISOString UTC 변환 방지)
+      - handleSave / handleTransferSave / 할부 loop 모두 적용
+      - 백엔드: 서버 시작 시 기존 항목 year_month 일괄 보정 (idempotent UPDATE, day>=25 필터)
+    - **보기 모드 토글** (`calViewMode`): `'25일 사이클'` (기본) vs `'캘린더 월'` — 헤더 월 이동 버튼 옆
+    - **nextMonthBoundary**: 다음달 yearMonth지만 이번달 날짜(day>=25)인 항목 별도 로드 → 25일 사이클 모드에서 합산 표시
+    - **요약 3분류** (B/C/P): 통장직접지출 + 카드납부 = 통장지출(totalBank), 카드구매 = cardSpendExp
+    - **잔액 2종**: 통장 잔액 = 수입 - totalBank - 투자 / 실질 잔액 = 수입 - B - C - 투자
+    - **카드 결제 납부** (`isCardPayment=true`): totalBank에 포함, 카드 구매 항목에 "납부완료" 초록 배지 (`paidCardNames` useMemo)
+    - `is_card_payment` 백엔드 컬럼 + `api.ts` `toEntry` 변환 포함
+    - `accountMap`: 항상 25일 사이클 entries 기준, 카드 구매는 cardName 키로 분류
   - **통장 관리 탭**: `ACCOUNT_GROUPS` 상수 기반 읽기 전용 참고 테이블 (통장명/예산/항목/은행카드/합계)
   - **자산 탭 (스냅샷 기반)**: 현황/이력/그래프 서브탭
     - **현황**: 날짜 선택 + 이전 날짜 복사, 스프레드시트 테이블 (동영|주해|합산), 셀 클릭 편집 (콤마 구분 합산), 달러 현금 USD 입력 + 환율 자동 환산
@@ -966,6 +973,15 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
   - vehicles[] per step = 동일 구간 대체 수단 목록 → `vehicles[0]`만 취해 대표 노선명으로 사용
   - RegisterModal·ComplexInfoPanel 두 곳 모두 동일 방식 적용
 - [x] 가계부 지출 등록 시 통장/카드 필수 (`accountMain` 미선택 시 저장 불가, alert 표시)
+- [x] 가계부 25일 사이클 정산 전면 개편
+  - `toSettledYearMonth(dateStr)`: day>=25 → 다음달 yearMonth, day<25 → 같은달 yearMonth
+  - `SETTLE_DAY=25`, `fmtLocalDate(d)` KST 날짜 포맷 — handleSave/handleTransferSave/할부 loop 적용
+  - `nextMonthBoundary` 상태: 다음달 yearMonth지만 이번달 날짜(day>=25)인 항목 별도 로드
+  - `calViewMode` 토글 (`'cycle'|'calendar'`): 헤더 월 이동 버튼 옆 토글 버튼
+  - 요약 카드 B/C/P 3분류: 통장지출(B+P) / 카드지출(C) / 투자 — 잔액 2종(통장·실질)
+  - `paidCardNames` useMemo: 납부완료 카드명 Set → 카드 구매 항목에 초록 "납부완료" 배지
+  - `isCardPayment` 필드: `BudgetEntry` 타입, `api.ts` toEntry 변환, createBudgetEntry/updateBudgetEntry 파라미터
+  - 백엔드 main.py: 서버 시작 시 day>=25 기존 항목의 year_month 다음달로 일괄 보정 (idempotent UPDATE)
 - [x] 연락처 기능 (`src/features/contacts/ContactsModal.tsx`)
   - 부동산/대출상담사 탭별 CRUD (이름·회사·전화·지역·메모)
   - 전화번호 클릭 시 바로 전화 연결 (tel: 링크)

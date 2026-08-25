@@ -92,6 +92,32 @@ const toYearMonth = (d: Date) =>
 const displayYearMonth = (ym: string) =>
   `${ym.slice(0, 4)}년 ${Number(ym.slice(4))}월`;
 
+// ── 25일 사이클 정산 로직 ─────────────────────────────────────────
+/** 정산 기준일: 매달 25일 */
+const SETTLE_DAY = 25;
+
+/** KST 로컬 날짜 포맷 (toISOString은 UTC 변환으로 KST 하루 밀림 방지) */
+const fmtLocalDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * entry_date를 25일 사이클 기준 yearMonth로 변환
+ *   day >= 25 → 다음달 yearMonth (예: 8/26 → "202509")
+ *   day <  25 → 같은달  yearMonth (예: 9/03 → "202509")
+ * "202509" budget = Aug 25 ~ Sep 24 사이의 항목
+ */
+const toSettledYearMonth = (dateStr: string): string => {
+  const day   = Number(dateStr.slice(8, 10));
+  const year  = Number(dateStr.slice(0, 4));
+  const month = Number(dateStr.slice(5, 7)); // 1-indexed
+  if (day >= SETTLE_DAY) {
+    // JS Date: month는 0-indexed → month(1-indexed) = 다음달(0-indexed)
+    const next = new Date(year, month, 1);
+    return `${next.getFullYear()}${String(next.getMonth() + 1).padStart(2, '0')}`;
+  }
+  return `${year}${String(month).padStart(2, '0')}`;
+};
+
 /** 카드 결산 기간 계산 — 시작일/종료일 모두 직접 설정
  * 예: startDay=24, endDay=23, yearMonth='202608' → { from:'2026-07-24', to:'2026-08-23', label:'7/24~8/23' }
  * 종료일이 시작일보다 크면 같은 달, 작으면 다음달 기준
@@ -175,6 +201,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [yearMonth, setYearMonth] = useState<string>(toYearMonth(new Date()));
   const [entries, setEntries] = useState<BudgetEntry[]>([]);
   const [prevMonthEntries, setPrevMonthEntries] = useState<BudgetEntry[]>([]); // 카드 청구 기간 계산용 전달 항목
+  const [nextMonthBoundary, setNextMonthBoundary] = useState<BudgetEntry[]>([]); // 다음달 yearMonth지만 이번달 날짜(day>=25)인 항목 — 목록 표시용
+  const [calViewMode, setCalViewMode] = useState<'cycle' | 'calendar'>('cycle'); // '25일 사이클' vs '캘린더 월' 보기
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [categoryFilters, setCategoryFilters] = useState<Set<string>>(new Set());
@@ -331,6 +359,23 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       .catch(() => setPrevMonthEntries([]));
   }, [userId, yearMonth, paymentMethods]);
 
+  // ─── nextMonthBoundary 로드 — 다음달 yearMonth 중 이번달 날짜(day>=25) 항목 조회
+  // 25일 사이클에서 예를 들어 "202509" 화면일 때 8/25~8/31 항목은 DB에 yearMonth='202509'로 저장되지만
+  // 캘린더 월 기준 화면에서 8월 항목도 함께 보여줘야 하므로 미리 로드
+  useEffect(() => {
+    const year  = Number(yearMonth.slice(0, 4));
+    const month = Number(yearMonth.slice(4));
+    const nextYm = toYearMonth(new Date(year, month, 1)); // 다음달 yearMonth (month는 0-indexed이므로 month = 현재달)
+    const calYear  = yearMonth.slice(0, 4);
+    const calMonth = yearMonth.slice(4).padStart(2, '0');
+    getBudgetEntries(userId, nextYm)
+      .then(data => {
+        // 이번달 달력 날짜(day>=25)인 항목만 boundary로 포함
+        setNextMonthBoundary(data.filter(e => e.entryDate.startsWith(`${calYear}-${calMonth}-`)));
+      })
+      .catch(() => setNextMonthBoundary([]));
+  }, [userId, yearMonth]);
+
   // ─── 월 이동 ─────────────────────────────────────────────────
   const moveMonth = (delta: number) => {
     const y = Number(yearMonth.slice(0, 4));
@@ -339,45 +384,102 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     setYearMonth(toYearMonth(d));
   };
 
-  // ─── 요약 계산 ───────────────────────────────────────────────
+  // ─── 요약 계산 — 25일 사이클 기준 ─────────────────────────────
   const summary = useMemo(() => {
-    // isTransfer 플래그 또는 category='이체' 두 조건 모두 이체로 판정
-    // (is_transfer DB 컬럼 마이그레이션 이전에 생성된 항목도 대응)
-    const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+    // 이체 판정: isTransfer 플래그 또는 category='이체' (마이그레이션 이전 항목 대응)
+    const isXfer    = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+    // 카드 납부: 통장에서 카드값 갚는 출금 (totalExpense 집계에서 제외 — 카드 구매 시 이미 집계됨)
+    const isCardPay = (e: BudgetEntry) => !!e.isCardPayment;
+    // 카드 구매: cardName 있음 + 납부처리 아님 + 투자 아님
+    const isCardSpend = (e: BudgetEntry) => !!e.cardName && !isCardPay(e) && !e.isInvestment;
 
-    const totalIncome = entries.filter(e => e.entryType === 'INCOME' && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
-    const totalInvest = entries.filter(e => e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
-    const totalExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
-    const fixedExpense = entries.filter(e => e.entryType === 'EXPENSE' && e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
-    const varExpense = entries.filter(e => e.entryType === 'EXPENSE' && !e.isFixed && !e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+    // calViewMode에 따라 집계 대상 결정
+    const calYear  = yearMonth.slice(0, 4);
+    const calMonth = yearMonth.slice(4).padStart(2, '0');
+    const prefix   = `${calYear}-${calMonth}-`;
+    const base = calViewMode === 'calendar'
+      ? (() => {
+          // 캘린더 월 모드: entries + nextMonthBoundary 중 이번달 날짜(prefix) 항목만, 중복 제거
+          const all  = [...entries, ...nextMonthBoundary];
+          const ids  = new Set<number>();
+          return all.filter(e => e.entryDate.startsWith(prefix) && !ids.has(e.id) && ids.add(e.id));
+        })()
+      : entries; // 25일 사이클 모드: yearMonth=M 항목만 (boundary는 다음달 budget이므로 제외)
 
-    // 통장별 잔액 계산용 — 이체 포함, account(중분류) 우선 / 없으면 accountMain(대분류)으로 분류
+    const totalIncome  = base.filter(e => e.entryType === 'INCOME' && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+    const totalInvest  = base.filter(e => e.isInvestment && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+
+    // B = 통장 직접 지출 (cardName 없는 지출, 이체/투자/카드납부 제외)
+    const bankDirectExp = base.filter(e =>
+      e.entryType === 'EXPENSE' && !isXfer(e) && !e.isInvestment && !e.cardName && !isCardPay(e)
+    ).reduce((s, e) => s + e.amount, 0);
+    // P = 카드 납부 (isCardPayment=true — 통장에서 카드값 갚는 출금)
+    const cardPayExp  = base.filter(e => isCardPay(e) && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+    // C = 카드 구매 지출 (납부 처리 항목 제외)
+    const cardSpendExp = base.filter(e => isCardSpend(e) && !isXfer(e)).reduce((s, e) => s + e.amount, 0);
+
+    // 통장 지출 = B + P (실제 통장에서 나간 돈)
+    const totalBank = bankDirectExp + cardPayExp;
+    // 카드 지출 제외 잔액 = 수입 - 통장지출 - 투자 (실제 통장 현금 잔액)
+    const balanceExCard  = totalIncome - totalBank - totalInvest;
+    // 카드 지출 포함 잔액 = 수입 - B - C - 투자 (카드빚 포함 실질 잔액)
+    const balanceIncCard = totalIncome - bankDirectExp - cardSpendExp - totalInvest;
+
+    // 고정비/변동비 (통장 직접 지출 기준, 카드 납부 제외)
+    const fixedExpense = base.filter(e =>
+      e.entryType === 'EXPENSE' && e.isFixed && !isXfer(e) && !e.isInvestment && !e.cardName && !isCardPay(e)
+    ).reduce((s, e) => s + e.amount, 0);
+    const varExpense = base.filter(e =>
+      e.entryType === 'EXPENSE' && !e.isFixed && !isXfer(e) && !e.isInvestment && !e.cardName && !isCardPay(e)
+    ).reduce((s, e) => s + e.amount, 0);
+
+    // 통장별 잔액 — 항상 25일 사이클 entries 기준 (calViewMode 무관)
+    // 카드 구매는 cardName 키로 별도 집계 (통장 잔액에 즉시 미반영)
     const accountMap: Record<string, { income: number; expense: number }> = {};
     entries.forEach(e => {
-      const key = e.account || e.accountMain || '미분류';
+      let key: string;
+      if (isCardPay(e))    key = e.account || e.accountMain || '미분류'; // 납부 → 통장 출금
+      else if (isCardSpend(e)) key = e.cardName!;                        // 카드 구매 → 카드명 키
+      else                 key = e.account || e.accountMain || '미분류';
       if (!accountMap[key]) accountMap[key] = { income: 0, expense: 0 };
       if (e.entryType === 'INCOME') accountMap[key].income += e.amount;
       else accountMap[key].expense += e.amount;
     });
 
-    return { totalIncome, totalExpense, fixedExpense, varExpense, totalInvest, accountMap };
-  }, [entries]);
+    return { totalIncome, totalBank, cardSpendExp, cardPayExp, totalInvest, balanceExCard, balanceIncCard, fixedExpense, varExpense, accountMap };
+  }, [entries, nextMonthBoundary, calViewMode, yearMonth]);
 
   // ─── 필터링된 항목 ───────────────────────────────────────────
   const filtered = useMemo(() => {
     const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
 
+    // ─ 목록 표시 기준: calViewMode에 따라 원본 pool 결정 ─────────
+    const calYear2  = yearMonth.slice(0, 4);
+    const calMonth2 = yearMonth.slice(4).padStart(2, '0');
+    const prefix2   = `${calYear2}-${calMonth2}-`;
+    let base: BudgetEntry[];
+    if (calViewMode === 'calendar') {
+      // 캘린더 월 모드: entries + nextMonthBoundary 중 이번달 날짜 항목만, 중복 제거
+      const all  = [...entries, ...nextMonthBoundary];
+      const ids  = new Set<number>();
+      base = all.filter(e => e.entryDate.startsWith(prefix2) && !ids.has(e.id) && ids.add(e.id));
+    } else {
+      // 25일 사이클 모드: entries + nextMonthBoundary(이번달 날짜인 것) 합산
+      // nextMonthBoundary는 다음달 yearMonth지만 이번달 날짜(day>=25)인 항목
+      const cycleIds = new Set(entries.map(e => e.id));
+      base = [...entries, ...nextMonthBoundary.filter(e => !cycleIds.has(e.id))];
+    }
+
     // 카드 결산 기간이 설정된 카드 필터 활성 시 → 전달 항목 중 결산 시작일 이후 것도 합산
-    let base = entries;
     if (cardFilter) {
       const pm = paymentMethods.find(p => p.name === cardFilter && p.type === '카드');
       if (pm?.billingStartDay && pm?.billingEndDay && prevMonthEntries.length > 0) {
         const { from } = getCardBillingPeriod(pm.billingStartDay, pm.billingEndDay, yearMonth);
         const prevInPeriod = prevMonthEntries.filter(e => e.entryDate >= from);
-        // 중복 방지: 현재 월 항목과 ID가 겹치지 않는 것만 추가
-        const currentIds = new Set(entries.map(e => e.id));
+        // 중복 방지: 현재 pool의 ID와 겹치지 않는 것만 추가
+        const currentIds = new Set(base.map(e => e.id));
         const toAdd = prevInPeriod.filter(e => !currentIds.has(e.id));
-        if (toAdd.length > 0) base = [...toAdd, ...entries];
+        if (toAdd.length > 0) base = [...toAdd, ...base];
       }
     }
     if (filter === 'TRANSFER') {
@@ -425,7 +527,15 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       );
     }
     return base;
-  }, [entries, filter, categoryFilters, accountFilter, cardFilter, paymentMethods, prevMonthEntries, yearMonth]);
+  }, [entries, nextMonthBoundary, calViewMode, filter, categoryFilters, accountFilter, cardFilter, paymentMethods, prevMonthEntries, yearMonth]);
+
+  // ─── 납부된 카드명 Set — 카드 구매 항목 목록에 납부완료 배지 표시용 ─
+  const paidCardNames = useMemo(() => {
+    const all = [...entries, ...nextMonthBoundary];
+    return new Set(
+      all.filter(e => e.isCardPayment).map(e => e.cardName).filter((n): n is string => !!n)
+    );
+  }, [entries, nextMonthBoundary]);
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
   const resetInstallment = () => { setIsInstallment(false); setInstallmentMonths(2); setIsInterestFree(false); };
@@ -439,6 +549,25 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     setFormOpen(true);
   };
   const closeForm = () => { setFormOpen(false); setEditingId(null); setIsTransfer(false); setTransferFrom(''); setTransferTo(''); resetInstallment(); };
+
+  /**
+   * 저장된 항목을 표시 목록에 추가 — yearMonth 기준으로 entries 또는 nextMonthBoundary에 분기
+   * 25일 사이클에서 day>=25인 항목은 다음달 yearMonth로 저장되지만
+   * 이번달 날짜(calMonth prefix 일치)이면 nextMonthBoundary에 포함해 현재 화면에 표시
+   */
+  const addToDisplay = (e: BudgetEntry) => {
+    if (e.yearMonth === yearMonth) {
+      setEntries(prev => [e, ...prev]);
+    } else {
+      // 다음달 yearMonth지만 이번달 달력 날짜(day>=25) → nextMonthBoundary에 추가
+      const calY = yearMonth.slice(0, 4);
+      const calM = yearMonth.slice(4).padStart(2, '0');
+      if (e.entryDate.startsWith(`${calY}-${calM}-`)) {
+        setNextMonthBoundary(prev => [e, ...prev]);
+      }
+      // 다른달 날짜인 경우는 현재 화면에 미표시 (별도 월로 이동 후 확인)
+    }
+  };
 
   // 이체 저장 — from 통장에서 출금(EXPENSE) + to 통장에 입금(INCOME) 두 항목 생성
   const handleTransferSave = async () => {
@@ -454,7 +583,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       return;
     }
     const entryDate = form.entryDate ?? today();
-    const resolvedYearMonth = entryDate.replace(/-/g, '').slice(0, 6);
+    // 25일 사이클 기준 yearMonth 결정 (day>=25 → 다음달)
+    const resolvedYearMonth = toSettledYearMonth(entryDate);
     const label = `이체: ${transferFrom} → ${transferTo}`;
     const base = { userId, yearMonth: resolvedYearMonth, entryDate, isFixed: false, isInvestment: false, isTransfer: true, memo: form.memo || undefined };
     try {
@@ -462,6 +592,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       const exp = await createBudgetEntry({ ...base, entryType: 'EXPENSE', category: '이체', account: transferFrom, amount, merchant: label });
       const inc = await createBudgetEntry({ ...base, entryType: 'INCOME',  category: '이체', account: transferTo,   amount, merchant: label, transferPairId: exp.id });
       const updatedExp = await updateBudgetEntry(exp.id, { transferPairId: inc.id });
+      // 이체는 이체 상대 통장 간 이동 — cross-month boundary 표시 생략
       if (resolvedYearMonth === yearMonth) setEntries(prev => [updatedExp, inc, ...prev]);
       closeForm();
     } catch { alert('이체 저장에 실패했습니다'); }
@@ -484,8 +615,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     // 투자 항목의 카테고리는 투자 유형 값으로 자동 설정
     const resolvedCategory = isInvest ? (form.investmentType || '투자') : (form.category ?? '');
     const entryDate = form.entryDate ?? today();
-    // yearMonth는 입력한 날짜 기준으로 파생 (현재 탭 월과 무관하게 저장)
-    const resolvedYearMonth = entryDate.replace(/-/g, '').slice(0, 6);
+    // yearMonth는 25일 사이클 기준 파생 (day>=25 → 다음달, 현재 탭 월과 무관하게 저장)
+    const resolvedYearMonth = toSettledYearMonth(entryDate);
     const basePayload = {
       userId,
       yearMonth: resolvedYearMonth,
@@ -532,8 +663,9 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           const d = billingDay
             ? new Date(baseDate.getFullYear(), targetMonth, billingDay)
             : new Date(baseDate.getFullYear(), targetMonth, baseDate.getDate());
-          const monthEntryDate = d.toISOString().slice(0, 10);
-          const monthYearMonth = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+          // KST 로컬 날짜 포맷 (toISOString UTC 변환 방지) + 25일 사이클 yearMonth 적용
+          const monthEntryDate = fmtLocalDate(d);
+          const monthYearMonth = toSettledYearMonth(monthEntryDate);
           const monthAmount = perMonth + (i === 0 ? remainder : 0);
           // 할부 정보는 DB 컬럼으로 관리 (메모 오염 없음)
           const payload = {
@@ -568,11 +700,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           createBudgetEntry({ ...basePayload, userId, amount: halfAmount }),
           createBudgetEntry({ ...basePayload, userId: otherUserId, amount: halfAmount }),
         ]);
-        if (created1.yearMonth === yearMonth) setEntries(prev => [created1, ...prev]);
+        addToDisplay(created1);
       } else {
         // 일반 단건 저장
         const created = await createBudgetEntry({ ...basePayload, amount });
-        if (created.yearMonth === yearMonth) setEntries(prev => [created, ...prev]);
+        addToDisplay(created);
       }
       closeForm();
     } catch { alert('저장에 실패했습니다'); }
@@ -668,6 +800,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   {displayYearMonth(yearMonth)}
                 </span>
                 <button onClick={() => moveMonth(1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>▶</button>
+                {/* 25일 사이클 vs 캘린더 월 보기 토글 — 내역 탭에서만 */}
+                {tab === 'ENTRIES' && (
+                  <button
+                    onClick={() => setCalViewMode(v => v === 'cycle' ? 'calendar' : 'cycle')}
+                    style={{
+                      fontSize: '11px', padding: '3px 7px', borderRadius: '12px', cursor: 'pointer',
+                      background: calViewMode === 'calendar' ? '#89CFF0' : '#f0f4f8',
+                      color: calViewMode === 'calendar' ? '#fff' : '#5c6e8a',
+                      border: '1px solid #c8d8e4', fontWeight: 600, whiteSpace: 'nowrap',
+                    }}
+                  >{calViewMode === 'cycle' ? '25일 사이클' : '캘린더 월'}</button>
+                )}
                 {tab === 'ENTRIES' && <button onClick={openAdd} style={btnStyle('#89CFF0', '#fff')}>+ 추가</button>}
               </div>
             )}
@@ -695,6 +839,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 {displayYearMonth(yearMonth)}
               </span>
               <button onClick={() => moveMonth(1)} style={btnStyle('#f0f8fd', '#1a3a5c')}>▶</button>
+              {/* 25일 사이클 vs 캘린더 월 보기 토글 — 내역 탭에서만 */}
+              {tab === 'ENTRIES' && (
+                <button
+                  onClick={() => setCalViewMode(v => v === 'cycle' ? 'calendar' : 'cycle')}
+                  style={{
+                    fontSize: '11px', padding: '3px 8px', borderRadius: '12px', cursor: 'pointer',
+                    background: calViewMode === 'calendar' ? '#89CFF0' : '#f0f4f8',
+                    color: calViewMode === 'calendar' ? '#fff' : '#5c6e8a',
+                    border: '1px solid #c8d8e4', fontWeight: 600,
+                  }}
+                >{calViewMode === 'cycle' ? '25일 사이클' : '캘린더 월'}</button>
+              )}
               {tab === 'ENTRIES' && <button onClick={openAdd} style={btnStyle('#89CFF0', '#fff')}>+ 추가</button>}
             </>}
           </div>
@@ -704,14 +860,36 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       {/* ══ 내역 탭 ══════════════════════════════════════════ */}
       {tab === 'ENTRIES' && (
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {/* ── 요약 카드 */}
+        {/* ── 요약 카드 Row1: 수입 / 통장지출 / 카드지출 / 투자 */}
         <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <SummaryCard label="총 수입" amount={summary.totalIncome} color="#4CAF50" sign="+" />
-          <SummaryCard label="총 지출" amount={summary.totalExpense} color="#E06060" sign="-" />
+          <SummaryCard label="통장 지출" amount={summary.totalBank} color="#E06060" sign="-" />
+          <SummaryCard label="카드 지출" amount={summary.cardSpendExp} color="#FF9800" sign="-" />
           <SummaryCard label="투자" amount={summary.totalInvest} color="#2196F3" sign="" />
-          <SummaryCard label="잔액" amount={summary.totalIncome - summary.totalExpense - summary.totalInvest}
-            color={summary.totalIncome >= summary.totalExpense + summary.totalInvest ? '#1565c0' : '#E06060'}
-            sign={summary.totalIncome - summary.totalExpense - summary.totalInvest < 0 ? '-' : ''} />
+        </div>
+
+        {/* ── 잔액 카드: 카드 제외 잔액 (실제 통장) vs 카드 포함 잔액 (실질) */}
+        <div style={{ padding: '8px 20px 0', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {/* 카드 지출 제외 잔액 — 실제 통장 현금 잔액 */}
+          <div style={{
+            background: '#fff', border: `1px solid ${summary.balanceExCard >= 0 ? '#1565c030' : '#E0606030'}`,
+            borderRadius: '10px', padding: '8px 14px', display: 'flex', gap: '10px', alignItems: 'center',
+          }}>
+            <span style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>통장 잔액</span>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: summary.balanceExCard >= 0 ? '#1565c0' : '#E06060' }}>
+              {summary.balanceExCard < 0 ? '-' : ''}{formatAmountShort(Math.abs(summary.balanceExCard))}
+            </span>
+          </div>
+          {/* 카드 지출 포함 잔액 — 카드빚 포함 실질 잔액 */}
+          <div style={{
+            background: '#fff', border: `1px solid ${summary.balanceIncCard >= 0 ? '#2e7d3230' : '#E0606030'}`,
+            borderRadius: '10px', padding: '8px 14px', display: 'flex', gap: '10px', alignItems: 'center',
+          }}>
+            <span style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>실질 잔액</span>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: summary.balanceIncCard >= 0 ? '#2e7d32' : '#E06060' }}>
+              {summary.balanceIncCard < 0 ? '-' : ''}{formatAmountShort(Math.abs(summary.balanceIncCard))}
+            </span>
+          </div>
         </div>
 
         {/* ── 고정/변동/투자 소요약 */}
@@ -1316,7 +1494,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               return filtered.map(entry => (
                 <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete}
                   myAccountNames={myAccountNames} otherUserName={otherUserName}
-                  cardNameSet={cardNameSet} bankNameSet={bankNameSet} />
+                  cardNameSet={cardNameSet} bankNameSet={bankNameSet}
+                  paidCardNames={paidCardNames} />
               ));
             })()}
           </div>
@@ -2169,7 +2348,8 @@ const EntryRow: React.FC<{
   otherUserName?: string;       // 상대방 이름 (예: '주해')
   cardNameSet?: Set<string>;    // 카드명 Set — accountMain이 카드명이면 카드 배지로 표시
   bankNameSet?: Set<string>;    // 통장명 Set — accountMain이 통장명이면 통장 배지로 표시
-}> = ({ entry, onEdit, onDelete, myAccountNames, otherUserName, cardNameSet, bankNameSet }) => {
+  paidCardNames?: Set<string>;  // 납부 완료된 카드명 Set — 카드 구매 항목에 납부완료 배지 표시
+}> = ({ entry, onEdit, onDelete, myAccountNames, otherUserName, cardNameSet, bankNameSet, paidCardNames }) => {
   const isIncome = entry.entryType === 'INCOME';
   const dateStr = entry.entryDate.slice(5); // "08-12"
 
@@ -2199,6 +2379,13 @@ const EntryRow: React.FC<{
           )}
           {entry.isTransfer && (
             <span style={{ fontSize: '10px', background: '#E3F2FD', color: '#1565c0', borderRadius: '4px', padding: '1px 5px' }}>이체</span>
+          )}
+          {/* 카드 구매 항목에 납부완료 배지 — isCardPayment=true인 납부 항목이 있으면 초록 배지 */}
+          {entry.cardName && !entry.isCardPayment && paidCardNames?.has(entry.cardName) && (
+            <span style={{ fontSize: '10px', background: '#E8F5E9', color: '#2e7d32', border: '1px solid #A5D6A7', borderRadius: '4px', padding: '1px 5px' }}>납부완료</span>
+          )}
+          {entry.isCardPayment && (
+            <span style={{ fontSize: '10px', background: '#F3E5F5', color: '#7B1FA2', borderRadius: '4px', padding: '1px 5px' }}>카드납부</span>
           )}
         </div>
         {(entry.merchant || entry.accountMain || entry.account || entry.cardName || entry.memo) && (

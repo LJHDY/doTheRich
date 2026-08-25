@@ -740,6 +740,7 @@ const toEntry = (d: any): BudgetEntry => ({
   isInvestment: d.is_investment ?? false,
   investmentType: d.investment_type,
   isTransfer: d.is_transfer ?? false,
+  isCardPayment: d.is_card_payment ?? false,
   transferPairId: d.transfer_pair_id ?? undefined,
   merchant: d.merchant,
   installmentMonths: d.installment_months ?? undefined,
@@ -771,6 +772,7 @@ export const createBudgetEntry = async (payload: Omit<BudgetEntry, 'id' | 'creat
     is_investment: payload.isInvestment,
     investment_type: payload.investmentType ?? null,
     is_transfer: payload.isTransfer ?? false,
+    is_card_payment: payload.isCardPayment ?? false,
     transfer_pair_id: payload.transferPairId ?? null,
     merchant: payload.merchant ?? null,
     installment_months: payload.installmentMonths ?? null,
@@ -796,6 +798,7 @@ export const updateBudgetEntry = async (id: number, payload: Partial<Omit<Budget
   if (payload.isInvestment !== undefined) body.is_investment = payload.isInvestment;
   if (payload.investmentType !== undefined) body.investment_type = payload.investmentType;
   if (payload.isTransfer !== undefined) body.is_transfer = payload.isTransfer;
+  if (payload.isCardPayment !== undefined) body.is_card_payment = payload.isCardPayment;
   if (payload.transferPairId !== undefined) body.transfer_pair_id = payload.transferPairId;
   if (payload.merchant !== undefined) body.merchant = payload.merchant;
   if (payload.installmentMonths !== undefined) body.installment_months = payload.installmentMonths;
