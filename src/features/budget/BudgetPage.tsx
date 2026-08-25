@@ -527,12 +527,14 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         (pm?.accountMain && (e.account === pm.accountMain || e.accountMain === pm.accountMain))
       );
     }
-    // 카드 필터 — cardName 일치 또는 레거시(이전에 카드를 account 필드에 저장한 항목)도 포함
+    // 카드 필터 — cardName 일치, 카드납부(isCardPayment) 항목은 제외 (통장 차감만 하므로 카드 지출 아님)
     if (cardFilter) {
       const cardNames = new Set(paymentMethods.filter(p => p.type === '카드').map(p => p.name));
       base = base.filter(e =>
-        e.cardName === cardFilter ||
-        (!e.cardName && e.account === cardFilter && cardNames.has(cardFilter))
+        !e.isCardPayment && (
+          e.cardName === cardFilter ||
+          (!e.cardName && e.account === cardFilter && cardNames.has(cardFilter))
+        )
       );
     }
     return base;
@@ -720,8 +722,10 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         const updated = await updateBudgetEntry(editingId, { ...basePayload, amount });
         if (updated.yearMonth !== yearMonth) {
           setEntries(prev => prev.filter(e => e.id !== editingId));
+          setNextMonthBoundary(prev => prev.filter(e => e.id !== editingId));
         } else {
           setEntries(prev => prev.map(e => e.id === editingId ? updated : e));
+          setNextMonthBoundary(prev => prev.map(e => e.id === editingId ? updated : e));
         }
       } else if (isInstallment && form.entryType === 'EXPENSE' && form.cardName) {
         // ── 할부 분할 저장 ──────────────────────────────────────────
@@ -805,6 +809,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         await Promise.all(toDelete.map(id => deleteBudgetEntry(id)));
         const deletedIds = new Set(toDelete);
         setEntries(prev => prev.filter(e => !deletedIds.has(e.id)));
+        setNextMonthBoundary(prev => prev.filter(e => !deletedIds.has(e.id)));
       } catch { alert('삭제에 실패했습니다'); }
       return;
     }
@@ -817,12 +822,13 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       );
       try {
         if (choice) {
-          // 전체 삭제: group_id 기준
           await deleteBudgetEntriesByGroup(entry.installmentGroupId);
           setEntries(prev => prev.filter(e => e.installmentGroupId !== entry.installmentGroupId));
+          setNextMonthBoundary(prev => prev.filter(e => e.installmentGroupId !== entry.installmentGroupId));
         } else {
           await deleteBudgetEntry(entry.id);
           setEntries(prev => prev.filter(e => e.id !== entry.id));
+          setNextMonthBoundary(prev => prev.filter(e => e.id !== entry.id));
         }
       } catch { alert('삭제에 실패했습니다'); }
       return;
@@ -831,6 +837,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     try {
       await deleteBudgetEntry(entry.id);
       setEntries(prev => prev.filter(e => e.id !== entry.id));
+      setNextMonthBoundary(prev => prev.filter(e => e.id !== entry.id));
     } catch { alert('삭제에 실패했습니다'); }
   };
 
@@ -1229,9 +1236,9 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               pool = [
                 ...prevMonthEntries.filter(e => e.entryDate >= from),
                 ...entries.filter(e => e.entryDate <= to),
-              ].filter(e => e.entryType === 'EXPENSE' && !isXfer(e));
+              ].filter(e => e.entryType === 'EXPENSE' && !isXfer(e) && !e.isCardPayment);
             } else {
-              pool = entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e));
+              pool = entries.filter(e => e.entryType === 'EXPENSE' && !isXfer(e) && !e.isCardPayment);
             }
             const spent = pool.reduce((s, e) => {
               if (e.cardName === pm.name) return s + e.amount;
