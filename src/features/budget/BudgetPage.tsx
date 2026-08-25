@@ -128,19 +128,24 @@ const getCardBillingPeriod = (billingStartDay: number, billingEndDay: number, ye
   const month = Number(yearMonth.slice(4)); // 1-indexed
   const fmt = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // 해당 월의 실제 마지막 날짜로 clamp (31일 설정 시 30일짜리 월에서 다음달로 넘어가는 버그 방지)
+  const clamp = (targetYear: number, targetMonth1: number, day: number) => {
+    const lastDay = new Date(targetYear, targetMonth1, 0).getDate();
+    return Math.min(day, lastDay);
+  };
 
   let fromDate: Date;
   let toDate: Date;
   if (billingEndDay < billingStartDay) {
     // 전달~이번달 경계 결산 (예: 24일 시작 → 23일 종료)
-    fromDate = new Date(year, month - 2, billingStartDay);
-    toDate   = new Date(year, month - 1, billingEndDay);
+    fromDate = new Date(year, month - 2, clamp(year, month - 1, billingStartDay));
+    toDate   = new Date(year, month - 1, clamp(year, month,     billingEndDay));
   } else {
     // 당월 결산 (예: 1일~31일)
-    fromDate = new Date(year, month - 1, billingStartDay);
-    toDate   = new Date(year, month - 1, billingEndDay);
+    fromDate = new Date(year, month - 1, clamp(year, month, billingStartDay));
+    toDate   = new Date(year, month - 1, clamp(year, month, billingEndDay));
   }
-  const label = `${fromDate.getMonth() + 1}/${billingStartDay}~${toDate.getMonth() + 1}/${billingEndDay}`;
+  const label = `${fromDate.getMonth() + 1}/${fromDate.getDate()}~${toDate.getMonth() + 1}/${toDate.getDate()}`;
   return { from: fmt(fromDate), to: fmt(toDate), label };
 };
 
