@@ -153,7 +153,7 @@ const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
   memo: '',
 });
 
-type Filter = 'ALL' | 'INCOME' | 'EXPENSE' | 'FIXED' | 'INVEST' | 'TRANSFER';
+type Filter = 'ALL' | 'INCOME' | 'EXPENSE' | 'FIXED' | 'INVEST' | 'TRANSFER' | 'BANK_EXP' | 'CARD_SPEND';
 type Tab = 'ENTRIES' | 'ACCOUNTS' | 'ASSETS' | 'OVERVIEW' | 'WORKOUT' | 'AI'; // 가계부 내역 / 통장 관리 / 자산 관리 / 통합 보기 / 운동 / AI 분석
 
 // 파이차트 범례 항목 — 모듈 레벨 정의로 IIFE 내 재마운트 방지
@@ -489,6 +489,12 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       else if (filter === 'EXPENSE') base = base.filter(e => e.entryType === 'EXPENSE');
       else if (filter === 'FIXED') base = base.filter(e => e.entryType === 'EXPENSE' && e.isFixed);
       else if (filter === 'INVEST') base = base.filter(e => e.isInvestment);
+      else if (filter === 'BANK_EXP') base = base.filter(e =>
+        e.entryType === 'EXPENSE' && !e.isInvestment && (e.isCardPayment || !e.cardName)
+      );
+      else if (filter === 'CARD_SPEND') base = base.filter(e =>
+        e.entryType === 'EXPENSE' && !!e.cardName && !e.isCardPayment && !e.isInvestment
+      );
     }
     if (categoryFilters.size > 0) base = base.filter(e => categoryFilters.has(e.category));
     // 통장 필터 — account(중분류) 또는 accountMain(대분류) 일치
@@ -908,8 +914,16 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         {/* ── 요약 카드 Row1: 수입 / 통장지출 / 카드지출 / 투자 */}
         <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <SummaryCard label="총 수입" amount={summary.totalIncome} color="#4CAF50" sign="+" />
-          <SummaryCard label="통장 지출" amount={summary.totalBank} color="#E06060" sign="-" />
-          <SummaryCard label="카드 지출" amount={summary.cardSpendExp} color="#FF9800" sign="-" />
+          <SummaryCard
+            label="통장 지출" amount={summary.totalBank} color="#E06060" sign="-"
+            isActive={filter === 'BANK_EXP'}
+            onClick={() => setFilter(f => f === 'BANK_EXP' ? 'ALL' : 'BANK_EXP')}
+          />
+          <SummaryCard
+            label="카드 지출" amount={summary.cardSpendExp} color="#FF9800" sign="-"
+            isActive={filter === 'CARD_SPEND'}
+            onClick={() => setFilter(f => f === 'CARD_SPEND' ? 'ALL' : 'CARD_SPEND')}
+          />
           <SummaryCard label="투자" amount={summary.totalInvest} color="#2196F3" sign="" />
         </div>
 
@@ -2124,18 +2138,26 @@ const MerchantStatsSection: React.FC<{ rows: MerchantRow[] }> = ({ rows }) => {
   );
 };
 
-const SummaryCard: React.FC<{ label: string; amount: number; color: string; sign: string; subText?: string }> = ({ label, amount, color, sign, subText }) => (
-  <div style={{
-    flex: 1, background: '#fff', borderRadius: '12px',
-    padding: '14px 16px', border: `1px solid ${color}30`,
-    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-  }}>
+const SummaryCard: React.FC<{ label: string; amount: number; color: string; sign: string; subText?: string; onClick?: () => void; isActive?: boolean }> = ({ label, amount, color, sign, subText, onClick, isActive }) => (
+  <div
+    onClick={onClick}
+    style={{
+      flex: 1, background: isActive ? `${color}15` : '#fff', borderRadius: '12px',
+      padding: '14px 16px', border: `1px solid ${isActive ? color : color + '30'}`,
+      boxShadow: isActive ? `0 2px 8px ${color}40` : '0 1px 4px rgba(0,0,0,0.06)',
+      cursor: onClick ? 'pointer' : 'default',
+      transition: 'all 0.15s',
+    }}
+  >
     <div style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 600, marginBottom: '6px' }}>{label}</div>
     <div style={{ fontSize: '16px', fontWeight: 700, color }}>
       {sign}{formatAmountShort(Math.abs(amount))}
     </div>
     {subText && (
       <div style={{ fontSize: '10px', color: '#E06060', marginTop: '3px', fontWeight: 500 }}>{subText}</div>
+    )}
+    {isActive && (
+      <div style={{ fontSize: '9px', color, marginTop: '2px', fontWeight: 500 }}>▼ 목록 필터 중</div>
     )}
   </div>
 );
