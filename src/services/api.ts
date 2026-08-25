@@ -1856,6 +1856,7 @@ export interface NearbySchool {
   distanceKm: number;
   studentsPerClass: number | null;
   achievementScore: number | null;
+  totalStudents: number | null;
 }
 
 export const getNearbySchools = async (

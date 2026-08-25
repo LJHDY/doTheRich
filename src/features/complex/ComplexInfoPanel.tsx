@@ -3095,6 +3095,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     {s.achievementScore != null && (
                       <span style={{ fontSize: '10px', color: '#5f6368', flexShrink: 0 }}>성취 {s.achievementScore}%</span>
                     )}
+                    {s.totalStudents != null && (
+                      <span style={{ fontSize: '10px', color: '#9e9e9e', flexShrink: 0 }}>{s.totalStudents.toLocaleString()}명</span>
+                    )}
                   </div>
                 ))}
               </div>
