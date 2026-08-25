@@ -3113,6 +3113,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                 ...dbSchools.filter(s => s.schoolType === '초등학교').slice(0, 3),
                 ...dbSchools.filter(s => s.schoolType === '중학교'),
               ];
+              // 전부 이미 추가된 상태면 섹션 자체를 숨김
+              const allAdded = filtered.length > 0 && filtered.every(s =>
+                (complex.schoolInfos ?? []).some(r => r.schoolName === s.schoolName)
+              );
+              if (!loadingDbSchools && allAdded) return null;
               return (
                 <div style={{ marginTop: '10px', borderTop: '1px dashed #e0e0e0', paddingTop: '8px' }}>
                   <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '6px', fontWeight: 600 }}>
