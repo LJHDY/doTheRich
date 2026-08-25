@@ -201,6 +201,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   const [yearMonth, setYearMonth] = useState<string>(toYearMonth(new Date()));
   const [entries, setEntries] = useState<BudgetEntry[]>([]);
   const [prevMonthEntries, setPrevMonthEntries] = useState<BudgetEntry[]>([]); // 카드 청구 기간 계산용 전달 항목
+  const [prevPrevMonthEntries, setPrevPrevMonthEntries] = useState<BudgetEntry[]>([]); // 전전달 항목 — 결산기간이 두 달에 걸칠 때 사용
   const [nextMonthBoundary, setNextMonthBoundary] = useState<BudgetEntry[]>([]); // 다음달 yearMonth지만 이번달 날짜(day>=25)인 항목 — 목록 표시용
   const [calViewMode, setCalViewMode] = useState<'cycle' | 'calendar'>('cycle'); // '25일 사이클' vs '캘린더 월' 보기
   const [loading, setLoading] = useState(false);
@@ -347,14 +348,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   useEffect(() => { load(); }, [load]);
 
-  // ─── 전달 항목 로드 — 카드 청구 기간 계산 + 전달 미납 카드 표시에 공통 사용
+  // ─── 전달 + 전전달 항목 로드 — 카드 결산 기간이 두 달에 걸칠 때 정확한 계산을 위해
   useEffect(() => {
     const year = Number(yearMonth.slice(0, 4));
     const month = Number(yearMonth.slice(4));
-    const prevYm = toYearMonth(new Date(year, month - 2, 1));
+    const prevYm     = toYearMonth(new Date(year, month - 2, 1));
+    const prevPrevYm = toYearMonth(new Date(year, month - 3, 1));
     getBudgetEntries(userId, prevYm)
       .then(setPrevMonthEntries)
       .catch(() => setPrevMonthEntries([]));
+    getBudgetEntries(userId, prevPrevYm)
+      .then(setPrevPrevMonthEntries)
+      .catch(() => setPrevPrevMonthEntries([]));
   }, [userId, yearMonth]);
 
   // ─── nextMonthBoundary 로드 — 다음달 yearMonth 중 이번달 날짜(day>=25) 항목 조회
@@ -541,20 +546,45 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
     );
   }, [entries, nextMonthBoundary]);
 
-  // ─── 전달 미납 카드 — 전달 카드 지출 중 이번달 납부 처리가 없는 카드 ─
+  // ─── 전달 미납 카드 — 전달 카드 결산 기간 지출 중 이번달 납부 처리가 없는 카드 ─
+  // 결산기간(billingStartDay~billingEndDay)이 설정된 카드는 날짜 기준으로 집계
+  // 결산기간 없는 카드는 전달 yearMonth 기준으로 집계 (기존 방식)
   const unpaidPrevCards = useMemo(() => {
     const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+    const isCardExp = (e: BudgetEntry) =>
+      e.entryType === 'EXPENSE' && !isXfer(e) && !e.isInvestment && !e.isCardPayment && !!e.cardName;
+
+    // 전달 yearMonth 기준 — getCardBillingPeriod(prevYm)로 결산 기간 계산
+    const year  = Number(yearMonth.slice(0, 4));
+    const month = Number(yearMonth.slice(4));
+    const prevYm = toYearMonth(new Date(year, month - 2, 1));
+
+    const cardPMs = paymentMethods.filter(p => p.type === '카드' && p.isActive);
+
     const map: Record<string, number> = {};
-    for (const e of prevMonthEntries) {
-      if (e.entryType !== 'EXPENSE') continue;
-      if (isXfer(e) || e.isInvestment || e.isCardPayment || !e.cardName) continue;
-      map[e.cardName] = (map[e.cardName] ?? 0) + e.amount;
+    for (const pm of cardPMs) {
+      if (pm.billingStartDay && pm.billingEndDay) {
+        // 결산 기간 날짜 기준 (카드별 지출 섹션과 동일 로직 — prevYm 기준)
+        const { from, to } = getCardBillingPeriod(pm.billingStartDay, pm.billingEndDay, prevYm);
+        const pool = [
+          ...prevPrevMonthEntries.filter(e => e.entryDate >= from),
+          ...prevMonthEntries.filter(e => e.entryDate <= to),
+        ].filter(isCardExp);
+        const spent = pool.filter(e => e.cardName === pm.name).reduce((s, e) => s + e.amount, 0);
+        if (spent > 0) map[pm.name] = spent;
+      } else {
+        // 결산기간 미설정 — 전달 yearMonth 기준
+        for (const e of prevMonthEntries) {
+          if (!isCardExp(e) || e.cardName !== pm.name) continue;
+          map[e.cardName!] = (map[e.cardName!] ?? 0) + e.amount;
+        }
+      }
     }
     // 이번달에 납부 완료된 카드는 제외
     return Object.entries(map)
       .filter(([name]) => !paidCardNames.has(name))
       .map(([name, amount]) => ({ name, amount }));
-  }, [prevMonthEntries, paidCardNames]);
+  }, [prevMonthEntries, prevPrevMonthEntries, paidCardNames, paymentMethods, yearMonth]);
 
   // 카드 납부 처리 팝업 상태
   const [cardPayForm, setCardPayForm] = useState<{
