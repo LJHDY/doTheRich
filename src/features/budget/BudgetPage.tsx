@@ -347,17 +347,15 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   useEffect(() => { load(); }, [load]);
 
-  // ─── 카드 청구 기간용 전달 항목 로드 — billingDay 있는 카드가 1개라도 있을 때만 실행
+  // ─── 전달 항목 로드 — 카드 청구 기간 계산 + 전달 미납 카드 표시에 공통 사용
   useEffect(() => {
-    const hasBillingCards = paymentMethods.some(p => p.type === '카드' && p.billingStartDay && p.billingEndDay);
-    if (!hasBillingCards) { setPrevMonthEntries([]); return; }
     const year = Number(yearMonth.slice(0, 4));
     const month = Number(yearMonth.slice(4));
-    const prevYm = toYearMonth(new Date(year, month - 2, 1)); // 전달 yearMonth
+    const prevYm = toYearMonth(new Date(year, month - 2, 1));
     getBudgetEntries(userId, prevYm)
       .then(setPrevMonthEntries)
       .catch(() => setPrevMonthEntries([]));
-  }, [userId, yearMonth, paymentMethods]);
+  }, [userId, yearMonth]);
 
   // ─── nextMonthBoundary 로드 — 다음달 yearMonth 중 이번달 날짜(day>=25) 항목 조회
   // 25일 사이클에서 예를 들어 "202509" 화면일 때 8/25~8/31 항목은 DB에 yearMonth='202509'로 저장되지만
@@ -536,6 +534,53 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       all.filter(e => e.isCardPayment).map(e => e.cardName).filter((n): n is string => !!n)
     );
   }, [entries, nextMonthBoundary]);
+
+  // ─── 전달 미납 카드 — 전달 카드 지출 중 이번달 납부 처리가 없는 카드 ─
+  const unpaidPrevCards = useMemo(() => {
+    const isXfer = (e: BudgetEntry) => e.isTransfer || e.category === '이체';
+    const map: Record<string, number> = {};
+    for (const e of prevMonthEntries) {
+      if (e.entryType !== 'EXPENSE') continue;
+      if (isXfer(e) || e.isInvestment || e.isCardPayment || !e.cardName) continue;
+      map[e.cardName] = (map[e.cardName] ?? 0) + e.amount;
+    }
+    // 이번달에 납부 완료된 카드는 제외
+    return Object.entries(map)
+      .filter(([name]) => !paidCardNames.has(name))
+      .map(([name, amount]) => ({ name, amount }));
+  }, [prevMonthEntries, paidCardNames]);
+
+  // 카드 납부 처리 팝업 상태
+  const [cardPayForm, setCardPayForm] = useState<{
+    cardName: string; amount: number; date: string; account: string; accountMain: string;
+  } | null>(null);
+
+  // 카드 납부 처리 — isCardPayment=true 항목 생성
+  const handleCardPayment = async () => {
+    if (!cardPayForm) return;
+    const { cardName, amount, date, account, accountMain } = cardPayForm;
+    if (!account && !accountMain) { alert('납부 통장을 선택해주세요'); return; }
+    const resolvedYearMonth = toSettledYearMonth(date);
+    try {
+      const entry = await createBudgetEntry({
+        userId,
+        yearMonth: resolvedYearMonth,
+        entryDate: date,
+        entryType: 'EXPENSE',
+        category: '카드납부',
+        cardName,
+        accountMain: accountMain || undefined,
+        account: account || undefined,
+        amount,
+        isFixed: false,
+        isInvestment: false,
+        isCardPayment: true,
+        merchant: `${cardName} 납부`,
+      });
+      addToDisplay(entry);
+      setCardPayForm(null);
+    } catch { alert('납부 처리에 실패했습니다'); }
+  };
 
   // ─── 폼 핸들러 ───────────────────────────────────────────────
   const resetInstallment = () => { setIsInstallment(false); setInstallmentMonths(2); setIsInterestFree(false); };
@@ -1198,6 +1243,47 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                   >
                     <div style={{ fontWeight: 700, color: '#9aa0a6', marginBottom: '4px' }}>{name}</div>
                     <div style={{ color: '#E06060', fontWeight: 700, fontSize: '13px' }}>-{formatAmountShort(spent)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── 전달 미납 카드 — 전달 카드 지출 중 이번달 납부 처리 안 된 카드 */}
+        {unpaidPrevCards.length > 0 && (() => {
+          const year = Number(yearMonth.slice(0, 4));
+          const month = Number(yearMonth.slice(4));
+          const prevYm = toYearMonth(new Date(year, month - 2, 1));
+          return (
+            <div style={{ padding: '8px 20px 0' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#c62828', marginBottom: '6px' }}>
+                ⚠️ 전달 미납 카드
+                <span style={{ fontSize: '10px', color: '#9aa0a6', fontWeight: 400, marginLeft: '6px' }}>
+                  {displayYearMonth(prevYm)} 청구분 미납
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {unpaidPrevCards.map(({ name, amount }) => (
+                  <div
+                    key={name}
+                    style={{
+                      background: '#fff5f5', border: '1px solid #f5c6cb',
+                      borderRadius: '10px', padding: '10px 14px', minWidth: '140px', fontSize: '12px',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: '#c62828', marginBottom: '2px' }}>{name}</div>
+                    <div style={{ color: '#E06060', fontWeight: 700, fontSize: '13px', marginBottom: '8px' }}>
+                      -{formatAmountShort(amount)}
+                    </div>
+                    <button
+                      onClick={() => setCardPayForm({ cardName: name, amount, date: today(), account: '', accountMain: '' })}
+                      style={{
+                        fontSize: '11px', padding: '4px 10px', borderRadius: '6px',
+                        border: '1px solid #E06060', background: '#fff', color: '#E06060',
+                        cursor: 'pointer', fontWeight: 600, width: '100%',
+                      }}
+                    >💳 납부 처리</button>
                   </div>
                 ))}
               </div>
@@ -1874,6 +1960,60 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               <button onClick={handleSave} style={{ ...btnStyle('#89CFF0', '#fff'), flex: 2, padding: '12px', fontWeight: 700 }}>저장</button>
             </div>
             </>)}
+          </div>
+        </div>
+      )}
+
+      {/* ── 카드 납부 처리 팝업 */}
+      {cardPayForm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '16px', padding: '24px',
+            width: Math.min(320, window.innerWidth - 32), boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', marginBottom: '4px' }}>💳 카드 납부 처리</div>
+            <div style={{ fontSize: '13px', color: '#E06060', fontWeight: 700, marginBottom: '16px' }}>
+              {cardPayForm.cardName} · -{formatAmountShort(cardPayForm.amount)}
+            </div>
+            {/* 납부일 */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600, display: 'block', marginBottom: '4px' }}>납부일</label>
+              <input
+                type="date" value={cardPayForm.date}
+                onChange={e => setCardPayForm(f => f ? { ...f, date: e.target.value } : null)}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #dadce0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }}
+              />
+            </div>
+            {/* 납부 통장 선택 */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600, display: 'block', marginBottom: '4px' }}>납부 통장</label>
+              <select
+                value={cardPayForm.account}
+                onChange={e => {
+                  const pm = paymentMethods.find(p => p.name === e.target.value && p.type === '통장');
+                  setCardPayForm(f => f ? { ...f, account: e.target.value, accountMain: pm?.accountMain ?? '' } : null);
+                }}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #dadce0', borderRadius: '8px', fontSize: '13px' }}
+              >
+                <option value="">통장 선택</option>
+                {paymentMethods.filter(p => p.type === '통장').map(p => (
+                  <option key={p.id} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setCardPayForm(null)}
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #dadce0', background: '#f0f4f8', cursor: 'pointer', fontSize: '13px' }}
+              >취소</button>
+              <button
+                onClick={handleCardPayment}
+                style={{ flex: 2, padding: '10px', borderRadius: '8px', border: 'none', background: '#E06060', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}
+              >납부 완료 처리</button>
+            </div>
           </div>
         </div>
       )}
