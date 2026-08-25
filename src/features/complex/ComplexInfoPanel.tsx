@@ -620,8 +620,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     if (!complex) { setDbSchools([]); return; }
     setDbSchools([]);
     setLoadingDbSchools(true);
+    // 1km로 조회 후 클라이언트에서 초등 500m / 중학 1km 필터 적용
     getNearbySchools(complex.latitude, complex.longitude, 1.0)
-      .then(setDbSchools)
+      .then(schools => setDbSchools(schools.filter(s =>
+        s.schoolType === '중학교' ? s.distanceKm <= 1.0 : s.distanceKm <= 0.5
+      )))
       .catch(() => setDbSchools([]))
       .finally(() => setLoadingDbSchools(false));
   }, [complex?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -3119,7 +3122,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               const isSameSchool = (a: string, b: string) =>
                 a === b || normalizeSchoolName(a) === normalizeSchoolName(b);
 
-              // 초등학교는 가까운 3개만, 중학교는 전체 표시 (이미 거리 오름차순 정렬됨)
+              // 초등학교(500m 이내) 가까운 3개 + 중학교(1km 이내) 전체 (이미 거리 오름차순)
               const filtered = [
                 ...dbSchools.filter(s => s.schoolType === '초등학교').slice(0, 3),
                 ...dbSchools.filter(s => s.schoolType === '중학교'),

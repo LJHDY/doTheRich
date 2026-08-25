@@ -525,7 +525,9 @@ const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMob
     if (!initialData.latitude || !initialData.longitude) return;
     setLoadingDbSchools(true);
     getNearbySchools(initialData.latitude, initialData.longitude, 1.0)
-      .then(setDbSchools)
+      .then(schools => setDbSchools(schools.filter(s =>
+        s.schoolType === '중학교' ? s.distanceKm <= 1.0 : s.distanceKm <= 0.5
+      )))
       .catch(() => setDbSchools([]))
       .finally(() => setLoadingDbSchools(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
