@@ -751,6 +751,15 @@ const toEntry = (d: any): BudgetEntry => ({
   createdAt: d.created_at,
 });
 
+export const getCardSpendingByDate = async (
+  userId: string, cardName: string, dateFrom: string, dateTo: string
+): Promise<number> => {
+  const { data } = await api.get('/api/budget/card-spending', {
+    params: { user_id: userId, card_name: cardName, date_from: dateFrom, date_to: dateTo },
+  });
+  return data.amount;
+};
+
 export const getBudgetEntries = async (userId: string, yearMonth: string): Promise<BudgetEntry[]> => {
   const { data } = await api.get('/api/budget/entries', { params: { user_id: userId, year_month: yearMonth } });
   return data.map(toEntry);
