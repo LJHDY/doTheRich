@@ -66,6 +66,7 @@ import {
   getTickerHistory,
   TickerHistoryPoint,
   analyzeCompany,
+  getCompanyAnalysisReports,
   CompanyAnalysisResult,
 } from '../../services/api';
 import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, IntegratedReport, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, ScreeningReport, ScreeningTopPick, formatAmount, formatAmountShort } from '../../types';
@@ -7949,8 +7950,13 @@ const CompanyAnalysisView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CompanyAnalysisResult | null>(null);
   const [error, setError] = useState('');
-  // 이전 분석 이력 (세션 내 in-memory)
-  const [history, setHistory] = useState<Array<{ label: string; result: CompanyAnalysisResult }>>([]);
+  // DB에서 불러온 이전 분석 이력
+  const [savedReports, setSavedReports] = useState<CompanyAnalysisResult[]>([]);
+
+  // 마운트 시 저장된 분석 목록 로드
+  useEffect(() => {
+    getCompanyAnalysisReports().then(setSavedReports).catch(() => {});
+  }, []);
 
   const handleAnalyze = async () => {
     const trimmed = query.trim();
@@ -7961,11 +7967,10 @@ const CompanyAnalysisView: React.FC = () => {
     try {
       const res = await analyzeCompany(trimmed);
       setResult(res);
-      setHistory(prev => {
-        const label = res.companyName + (res.ticker ? ` (${res.ticker})` : '');
-        // 동일 기업 중복 제거 후 최신 맨 앞에 추가
-        const filtered = prev.filter(h => h.label !== label);
-        return [{ label, result: res }, ...filtered].slice(0, 10);
+      // 저장 목록 갱신 (upsert 결과 반영)
+      setSavedReports(prev => {
+        const filtered = prev.filter(r => r.companyName !== res.companyName);
+        return [res, ...filtered];
       });
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -8055,24 +8060,28 @@ const CompanyAnalysisView: React.FC = () => {
         </button>
       </div>
 
-      {/* ── 이전 분석 이력 탭 */}
-      {history.length > 0 && (
+      {/* ── 저장된 분석 이력 탭 (DB 기반) */}
+      {savedReports.length > 0 && (
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
-          {history.map((h, i) => (
-            <button
-              key={i}
-              onClick={() => setResult(h.result)}
-              style={{
-                padding: '4px 10px', borderRadius: '20px', fontSize: '12px',
-                border: '1px solid #89CFF0',
-                background: result?.companyName === h.result.companyName ? '#89CFF0' : '#fff',
-                color: result?.companyName === h.result.companyName ? '#fff' : '#1a3a5c',
-                cursor: 'pointer',
-              }}
-            >
-              {h.label}
-            </button>
-          ))}
+          {savedReports.map((r, i) => {
+            const isActive = result?.companyName === r.companyName;
+            const label = r.companyName + (r.ticker ? ` (${r.ticker})` : '');
+            return (
+              <button
+                key={i}
+                onClick={() => setResult(r)}
+                style={{
+                  padding: '4px 10px', borderRadius: '20px', fontSize: '12px',
+                  border: '1px solid #89CFF0',
+                  background: isActive ? '#89CFF0' : '#fff',
+                  color: isActive ? '#fff' : '#1a3a5c',
+                  cursor: 'pointer',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       )}
 

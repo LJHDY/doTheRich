@@ -1916,4 +1916,9 @@ export const analyzeCompany = async (company: string): Promise<CompanyAnalysisRe
   return data;
 };
 
+export const getCompanyAnalysisReports = async (): Promise<CompanyAnalysisResult[]> => {
+  const { data } = await api.get<CompanyAnalysisResult[]>('/api/company-analysis');
+  return data;
+};
+
 export default api;
