@@ -565,6 +565,11 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
         )
       );
     }
+    // entry_date DESC, id DESC 정렬 — nextMonthBoundary를 append하면 순서가 뒤섞이므로 항상 재정렬
+    base.sort((a, b) => {
+      if (b.entryDate !== a.entryDate) return b.entryDate < a.entryDate ? -1 : 1;
+      return b.id - a.id;
+    });
     return base;
   }, [entries, nextMonthBoundary, calViewMode, filter, categoryFilters, accountFilter, cardFilter, paymentMethods, prevMonthEntries, yearMonth]);
 
