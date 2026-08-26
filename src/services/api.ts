@@ -1863,6 +1863,24 @@ export interface NearbySchool {
   intlHighCount: number | null;      // 외고·국제고 진학수
 }
 
+export interface TickerHistoryPoint {
+  date: string;        // YYYY-MM-DD
+  close: number;
+  change: number | null;
+  changePct: number | null;
+  label: string;
+}
+
+export const getTickerHistory = async (
+  ticker: string,
+  reportType?: 'global' | 'kr_close',
+): Promise<TickerHistoryPoint[]> => {
+  const { data } = await api.get('/api/market-reports/ticker-history', {
+    params: { ticker, ...(reportType ? { report_type: reportType } : {}) },
+  });
+  return data as TickerHistoryPoint[];
+};
+
 export const getNearbySchools = async (
   lat: number,
   lng: number,

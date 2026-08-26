@@ -63,6 +63,8 @@ import {
   generateScreeningReport,
   getIntegratedReports,
   generateIntegratedReport,
+  getTickerHistory,
+  TickerHistoryPoint,
 } from '../../services/api';
 import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, IntegratedReport, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, ScreeningReport, ScreeningTopPick, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
@@ -3505,6 +3507,144 @@ const CommonCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
+// ─── 티커 이력 차트 모달 ────────────────────────────────────────
+const TickerHistoryModal: React.FC<{
+  ticker: string;
+  label: string;
+  isRate: boolean;
+  onClose: () => void;
+}> = ({ ticker, label, isRate, onClose }) => {
+  const [data, setData] = useState<TickerHistoryPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // reportType 미지정 → 전체 리포트(global + kr_close) 통합 이력
+  useEffect(() => {
+    getTickerHistory(ticker)
+      .then(rows => setData(rows))
+      .catch(() => setData([]))
+      .finally(() => setLoading(false));
+  }, [ticker]);
+
+  const cc = (v: number | null) => v == null ? '#9aa0a6' : v > 0 ? '#2e7d32' : v < 0 ? '#c62828' : '#9aa0a6';
+
+  // X축 날짜: MM/DD 형식
+  const fmtDate = (d: string) => d.slice(5).replace('-', '/');
+
+  // Y축 포맷: 기준금리/채권은 % 단위, 나머지는 콤마 구분
+  const fmtY = (v: number) =>
+    isRate ? `${v.toFixed(2)}%` : v.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+
+  const latest = data[data.length - 1];
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 10500,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#fff', borderRadius: '16px',
+          padding: '24px', width: 'min(680px, 95vw)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+        }}
+      >
+        {/* 헤더 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c' }}>{label}</div>
+            {latest && (
+              <div style={{ fontSize: '13px', color: '#5f6368', marginTop: '2px' }}>
+                <span style={{ fontWeight: 700, color: '#1a3a5c' }}>
+                  {latest.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
+                  {isRate ? '%' : ''}
+                </span>
+                {latest.changePct != null && (
+                  <span style={{ marginLeft: '8px', color: cc(latest.changePct), fontWeight: 600 }}>
+                    {latest.changePct > 0 ? '+' : ''}{latest.changePct.toFixed(2)}%
+                  </span>
+                )}
+                <span style={{ marginLeft: '8px', color: '#9aa0a6', fontSize: '11px' }}>
+                  최근 {data.length}개 데이터
+                </span>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6', lineHeight: 1 }}
+          >×</button>
+        </div>
+
+        {/* 차트 */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>불러오는 중...</div>
+        ) : data.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#9aa0a6' }}>데이터 없음</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={data} margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={fmtDate}
+                tick={{ fontSize: 10, fill: '#9aa0a6' }}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tickFormatter={fmtY}
+                tick={{ fontSize: 10, fill: '#9aa0a6' }}
+                width={isRate ? 48 : 72}
+                domain={['auto', 'auto']}
+              />
+              <Tooltip
+                formatter={(value: number) => [fmtY(value), label]}
+                labelFormatter={fmtDate}
+                contentStyle={{ fontSize: '12px', borderRadius: '8px' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="close"
+                stroke="#89CFF0"
+                strokeWidth={2}
+                dot={data.length <= 30}
+                activeDot={{ r: 4 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* 변동률 미니 바 차트 (데이터 충분할 때) */}
+        {!loading && data.length > 1 && (
+          <>
+            <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '16px', marginBottom: '6px' }}>일별 변동률 (%)</div>
+            <ResponsiveContainer width="100%" height={60}>
+              <BarChart data={data} margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
+                <XAxis dataKey="date" hide />
+                <Tooltip
+                  formatter={(v: number) => [`${v > 0 ? '+' : ''}${v?.toFixed(2)}%`, '변동률']}
+                  labelFormatter={fmtDate}
+                  contentStyle={{ fontSize: '11px', borderRadius: '6px' }}
+                />
+                <ReferenceLine y={0} stroke="#ddd" />
+                <Bar dataKey="changePct" radius={[2, 2, 0, 0]}>
+                  {data.map((entry, i) => (
+                    <Cell key={i} fill={cc(entry.changePct)} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── 시장 리포트 뷰 (AIReportView 내 서브탭으로 표시) ──────────
 
 // 티커 그룹 정의 (화면 표시용) — accent: 섹션 헤더 및 카드 왼쪽 테두리 색상
@@ -3658,6 +3798,8 @@ const MarketReportView: React.FC = () => {
   const [gainersOpen, setGainersOpen] = useState<Record<string, boolean>>({});
   // 투자자 순매수 동향 뷰 토글 (table | chart)
   const [investorFlowView, setInvestorFlowView] = useState<'table' | 'chart'>('table');
+  // 티커 이력 차트 — 선택된 티커 키 (null=닫힘), 전체 리포트 기준
+  const [chartTicker, setChartTicker] = useState<{ key: string; label: string; isRate: boolean } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -3864,6 +4006,16 @@ const MarketReportView: React.FC = () => {
   return (
     <div style={{ maxWidth: '780px', margin: '0 auto' }}>
 
+      {/* 티커 이력 차트 모달 */}
+      {chartTicker && (
+        <TickerHistoryModal
+          ticker={chartTicker.key}
+          label={chartTicker.label}
+          isRate={chartTicker.isRate}
+          onClose={() => setChartTicker(null)}
+        />
+      )}
+
       {/* 타입 탭 */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
         {TYPE_TABS.map(tab => {
@@ -4008,7 +4160,12 @@ const MarketReportView: React.FC = () => {
                       // rate_ 접두사: 기준금리 — close에 % 단위, 변화량은 pp로 표시
                       const isRate = key.startsWith('rate_');
                       return (
-                        <div key={key} style={cardStyle(group.accent)}>
+                        <div
+                          key={key}
+                          style={{ ...cardStyle(group.accent), cursor: 'pointer', transition: 'box-shadow 0.15s' }}
+                          onClick={() => setChartTicker({ key, label: data.label, isRate })}
+                          title="클릭하면 이력 그래프를 볼 수 있어요"
+                        >
                           <div style={{ fontSize: '11px', color: '#7a8fa6', marginBottom: '2px' }}>{data.label}</div>
                           <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
                             {data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}{isRate ? '%' : ''}
@@ -4029,7 +4186,10 @@ const MarketReportView: React.FC = () => {
                               </>
                             )}
                           </div>
-                          <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px' }}>{data.date}</div>
+                          <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{data.date}</span>
+                            <span style={{ color: '#c8d8e8' }}>📈</span>
+                          </div>
                         </div>
                       );
                     };
@@ -4055,7 +4215,11 @@ const MarketReportView: React.FC = () => {
                               {selected.marketData.vix?.close != null && (() => {
                                 const vix = selected.marketData.vix!;
                                 return (
-                                  <div style={{ position: 'relative', ...cardStyle(FEAR_ACCENT) }}>
+                                  <div
+                                    style={{ position: 'relative', ...cardStyle(FEAR_ACCENT), cursor: 'pointer' }}
+                                    onClick={() => setChartTicker({ key: 'vix', label: vix.label || 'VIX', isRate: false })}
+                                    title="클릭하면 이력 그래프를 볼 수 있어요"
+                                  >
                                     {/* ⓘ 버튼: 탭/클릭으로 팝오버 토글 (모바일 hover 미지원 대응) */}
                                     <div style={{ position: 'absolute', top: '6px', right: '8px' }}>
                                       <div
