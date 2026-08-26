@@ -390,18 +390,26 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
   }, [userId, yearMonth]);
 
   // ─── nextMonthBoundary 로드 — 다음달 yearMonth 중 이번달 날짜(day>=25) 항목 조회
-  // 25일 사이클에서 예를 들어 "202509" 화면일 때 8/25~8/31 항목은 DB에 yearMonth='202509'로 저장되지만
-  // 캘린더 월 기준 화면에서 8월 항목도 함께 보여줘야 하므로 미리 로드
+  // 25일 사이클에서 예를 들어 "202508" 화면일 때 8/25~8/31 항목은 DB에 yearMonth='202509'로 저장되지만
+  // 이번달 달력 날짜에도 표시("다음달 정산" 배지)해야 하므로 미리 로드 — 내/상대방 모두 포함
   useEffect(() => {
     const year  = Number(yearMonth.slice(0, 4));
     const month = Number(yearMonth.slice(4));
     const nextYm = toYearMonth(new Date(year, month, 1)); // 다음달 yearMonth (month는 0-indexed이므로 month = 현재달)
     const calYear  = yearMonth.slice(0, 4);
     const calMonth = yearMonth.slice(4).padStart(2, '0');
-    getBudgetEntries(userId, nextYm)
-      .then(data => {
-        // 이번달 달력 날짜(day>=25)인 항목만 boundary로 포함
-        setNextMonthBoundary(data.filter(e => e.entryDate.startsWith(`${calYear}-${calMonth}-`)));
+    const prefix   = `${calYear}-${calMonth}-`;
+    const otherUserId = BUDGET_USERS.find(u => u.id !== userId)?.id ?? '';
+    Promise.all([
+      getBudgetEntries(userId, nextYm),
+      otherUserId ? getBudgetEntries(otherUserId, nextYm) : Promise.resolve([]),
+    ])
+      .then(([mine, other]) => {
+        // 이번달 달력 날짜(day>=25)인 항목만 포함, 두 유저 합산 후 중복 ID 제거
+        const seen = new Set<number>();
+        const merged = [...mine, ...other]
+          .filter(e => e.entryDate.startsWith(prefix) && !seen.has(e.id) && seen.add(e.id));
+        setNextMonthBoundary(merged);
       })
       .catch(() => setNextMonthBoundary([]));
   }, [userId, yearMonth]);
@@ -574,6 +582,13 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       all.filter(e => e.isCardPayment).map(e => e.cardName).filter((n): n is string => !!n)
     );
   }, [entries, nextMonthBoundary]);
+
+  // ─── 다음달 정산 항목 ID Set — 이번달 달력 날짜지만 다음달 yearMonth에 속하는 항목
+  // EntryRow에서 "다음달 정산" 배지 표시에 사용
+  const boundaryEntryIds = useMemo(
+    () => new Set(nextMonthBoundary.map(e => e.id)),
+    [nextMonthBoundary],
+  );
 
   // ─── 전달 미납 카드 — 전달 카드 결산 기간 지출 중 이번달 납부 처리가 없는 카드 ─
   // 결산기간(billingStartDay~billingEndDay)이 설정된 카드는 날짜 기준으로 집계
@@ -1850,7 +1865,8 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
                 <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete}
                   myAccountNames={myAccountNames} otherUserName={otherUserName}
                   cardNameSet={cardNameSet} bankNameSet={bankNameSet}
-                  paidCardNames={paidCardNames} />
+                  paidCardNames={paidCardNames}
+                  isBoundary={boundaryEntryIds.has(entry.id)} />
               ));
             })()}
           </div>
@@ -2766,7 +2782,8 @@ const EntryRow: React.FC<{
   cardNameSet?: Set<string>;    // 카드명 Set — accountMain이 카드명이면 카드 배지로 표시
   bankNameSet?: Set<string>;    // 통장명 Set — accountMain이 통장명이면 통장 배지로 표시
   paidCardNames?: Set<string>;  // 납부 완료된 카드명 Set — 카드 구매 항목에 납부완료 배지 표시
-}> = ({ entry, onEdit, onDelete, myAccountNames, otherUserName, cardNameSet, bankNameSet, paidCardNames }) => {
+  isBoundary?: boolean;         // 이번달 달력 날짜지만 다음달 정산에 속하는 항목 (day >= 25)
+}> = ({ entry, onEdit, onDelete, myAccountNames, otherUserName, cardNameSet, bankNameSet, paidCardNames, isBoundary }) => {
   const isIncome = entry.entryType === 'INCOME';
   const dateStr = entry.entryDate.slice(5); // "08-12"
 
@@ -2803,6 +2820,10 @@ const EntryRow: React.FC<{
           )}
           {entry.isCardPayment && (
             <span style={{ fontSize: '10px', background: '#F3E5F5', color: '#7B1FA2', borderRadius: '4px', padding: '1px 5px' }}>카드납부</span>
+          )}
+          {/* 이번달 날짜지만 다음달 정산으로 분류되는 항목 (25일 이후) */}
+          {isBoundary && (
+            <span style={{ fontSize: '10px', background: '#FFF8E1', color: '#F57F17', border: '1px solid #FFE082', borderRadius: '4px', padding: '1px 5px' }}>다음달 정산</span>
           )}
         </div>
         {(entry.merchant || entry.accountMain || entry.account || entry.cardName || entry.memo) && (
