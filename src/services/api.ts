@@ -1892,4 +1892,27 @@ export const getNearbySchools = async (
   return data as NearbySchool[];
 };
 
+// ─── 기업 투자 분석 ───────────────────────────────────────────────────────────
+
+export interface CompanyAnalysisResult {
+  companyName: string;
+  ticker: string | null;
+  market: string;         // 'KR' | 'US'
+  exchange: string | null;
+  sector: string | null;
+  price: number | null;
+  currency: string;       // 'KRW' | 'USD'
+  marketCap: number | null;
+  pbr: number | null;
+  per: number | null;
+  roe: number | null;
+  fromCache: boolean;
+  content: string;        // Gemini 마크다운 분석
+}
+
+export const analyzeCompany = async (company: string): Promise<CompanyAnalysisResult> => {
+  const { data } = await api.post<CompanyAnalysisResult>('/api/company-analysis', { company });
+  return data;
+};
+
 export default api;
