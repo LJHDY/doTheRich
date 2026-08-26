@@ -8154,6 +8154,7 @@ const CompanyAnalysisView: React.FC = () => {
                 { label: '시가총액', value: fmtCap(result.marketCap, result.market) },
                 { label: 'PBR', value: result.pbr != null ? `${fmtNum(result.pbr)}배` : '-' },
                 { label: 'PER', value: result.per != null ? `${fmtNum(result.per)}배` : '-' },
+                { label: 'EPS', value: result.eps != null ? `${result.market === 'KR' ? '₩' : '$'}${fmtNum(result.eps, result.market === 'KR' ? 0 : 2)}` : '-' },
                 { label: 'ROE', value: result.roe != null ? `${fmtNum(result.roe)}%` : '-' },
                 { label: '거래소', value: result.exchange || '-' },
                 { label: '섹터', value: result.sector || '-' },

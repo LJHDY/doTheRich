@@ -1920,6 +1920,7 @@ export interface CompanyAnalysisResult {
   marketCap: number | null;
   pbr: number | null;
   per: number | null;
+  eps: number | null;
   roe: number | null;
   fromCache: boolean;
   content: string;        // Gemini 마크다운 분석
