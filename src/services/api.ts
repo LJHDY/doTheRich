@@ -621,9 +621,16 @@ export const getPropertyVisits = async (complexId: number): Promise<PropertyVisi
 };
 
 /** 매물 임장 기록 추가 — POST /api/complexes/:id/property-visits */
+type PropertyVisitReq = {
+  visitDate?: string; agentName?: string; officePhone?: string; mobilePhone?: string;
+  dong?: string; hosu?: string; areaType?: string; price?: number;
+  orientation?: string; roomCount?: number; bathroomCount?: number;
+  moveInCondition?: string; repairStatus?: string; memo?: string;
+};
+
 export const createPropertyVisit = async (
   complexId: number,
-  req: { visitDate?: string; agentName?: string; officePhone?: string; mobilePhone?: string; dong?: string; hosu?: string; areaType?: string; price?: number; memo?: string }
+  req: PropertyVisitReq,
 ): Promise<PropertyVisit> => {
   const { data } = await api.post<PropertyVisit>(`/api/complexes/${complexId}/property-visits`, req);
   return data;
@@ -633,7 +640,7 @@ export const createPropertyVisit = async (
 export const updatePropertyVisit = async (
   complexId: number,
   visitId: number,
-  req: { visitDate?: string; agentName?: string; officePhone?: string; mobilePhone?: string; dong?: string; hosu?: string; areaType?: string; price?: number; memo?: string }
+  req: PropertyVisitReq,
 ): Promise<PropertyVisit> => {
   const { data } = await api.patch<PropertyVisit>(`/api/complexes/${complexId}/property-visits/${visitId}`, req);
   return data;

@@ -402,14 +402,19 @@ export interface PropertyVisitResultItem {
 export interface PropertyVisit {
   id: number;
   complexId: number;
-  visitDate?: string;     // "2024-01-15"
-  agentName?: string;     // 부동산 이름
-  officePhone?: string;   // 부동산 연락처
-  mobilePhone?: string;   // 휴대전화 연락처
+  visitDate?: string;
+  agentName?: string;
+  officePhone?: string;
+  mobilePhone?: string;
   dong?: string;
   hosu?: string;
-  areaType?: string;      // 평형 (예: "전용 59")
-  price?: number;         // 제안 금액 (원 단위)
+  areaType?: string;
+  price?: number;
+  orientation?: string;      // 향 (남향/동향/서향 등)
+  roomCount?: number;        // 방 수
+  bathroomCount?: number;    // 화장실 수
+  moveInCondition?: string;  // 입주조건
+  repairStatus?: string;     // 수리상태
   memo?: string;
   createdAt: string;
   results: PropertyVisitResultItem[];

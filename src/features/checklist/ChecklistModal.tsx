@@ -51,11 +51,17 @@ const displayArea  = (v?: string) => v ? (v.startsWith('전용') ? v : '전용 '
 
 interface VisitFormState {
   visitDate: string; agentName: string; officePhone: string; mobilePhone: string;
-  dong: string; hosu: string; areaType: string; price: string; memo: string;
+  dong: string; hosu: string; areaType: string; price: string;
+  orientation: string; roomCount: string; bathroomCount: string;
+  moveInCondition: string; repairStatus: string;
+  memo: string;
 }
 const EMPTY_FORM: VisitFormState = {
   visitDate: '', agentName: '', officePhone: '', mobilePhone: '',
-  dong: '', hosu: '', areaType: '', price: '', memo: '',
+  dong: '', hosu: '', areaType: '', price: '',
+  orientation: '', roomCount: '', bathroomCount: '',
+  moveInCondition: '', repairStatus: '',
+  memo: '',
 };
 
 const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) => {
@@ -264,6 +270,11 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
       officePhone: v.officePhone || '', mobilePhone: v.mobilePhone || '',
       dong: v.dong || '', hosu: v.hosu || '', areaType: v.areaType || '',
       price: v.price ? String(Math.round(v.price / 10000)) : '',
+      orientation: v.orientation || '',
+      roomCount: v.roomCount != null ? String(v.roomCount) : '',
+      bathroomCount: v.bathroomCount != null ? String(v.bathroomCount) : '',
+      moveInCondition: v.moveInCondition || '',
+      repairStatus: v.repairStatus || '',
       memo: v.memo || '',
     });
     setEditingVisitId(v.id);
@@ -280,6 +291,11 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
         dong: form.dong || undefined, hosu: form.hosu || undefined,
         areaType: form.areaType || undefined,
         price: form.price ? Number(form.price) * 10000 : undefined,
+        orientation: form.orientation || undefined,
+        roomCount: form.roomCount ? Number(form.roomCount) : undefined,
+        bathroomCount: form.bathroomCount ? Number(form.bathroomCount) : undefined,
+        moveInCondition: form.moveInCondition || undefined,
+        repairStatus: form.repairStatus || undefined,
         memo: form.memo || undefined,
       };
       if (editingVisitId) {
@@ -522,6 +538,71 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                     </div>
                   ))}
                 </div>
+                {/* 구분선 — 추가 매물 정보 */}
+                <hr style={{ border: 'none', borderTop: '1px solid #e8eaed', margin: '4px 0 8px' }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  {/* 향 — select */}
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>향</div>
+                    <select
+                      value={form.orientation}
+                      onChange={e => setForm(prev => ({ ...prev, orientation: e.target.value }))}
+                      style={{ width: '100%', fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
+                    >
+                      <option value="">선택 안 함</option>
+                      {['남향', '남동향', '남서향', '동향', '서향', '북향', '북동향', '북서향'].map(o => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* 수리상태 — select */}
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>수리상태</div>
+                    <select
+                      value={form.repairStatus}
+                      onChange={e => setForm(prev => ({ ...prev, repairStatus: e.target.value }))}
+                      style={{ width: '100%', fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
+                    >
+                      <option value="">선택 안 함</option>
+                      {['원상태', '부분수리', '올수리', '풀옵션'].map(o => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* 방 수 */}
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>방 수</div>
+                    <input
+                      type="number" min="0" max="20"
+                      value={form.roomCount}
+                      onChange={e => setForm(prev => ({ ...prev, roomCount: e.target.value }))}
+                      placeholder="예: 3"
+                      style={{ width: '100%', fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  {/* 화장실 수 */}
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>화장실 수</div>
+                    <input
+                      type="number" min="0" max="10"
+                      value={form.bathroomCount}
+                      onChange={e => setForm(prev => ({ ...prev, bathroomCount: e.target.value }))}
+                      placeholder="예: 2"
+                      style={{ width: '100%', fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  {/* 입주조건 — 전체 너비 */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>입주조건</div>
+                    <input
+                      type="text"
+                      value={form.moveInCondition}
+                      onChange={e => setForm(prev => ({ ...prev, moveInCondition: e.target.value }))}
+                      placeholder="예: 즉시입주, 협의, 2025-03 이후"
+                      style={{ width: '100%', fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
                 {/* 구분선 — 부동산/매물 정보와 메모 경계 */}
                 <hr style={{ border: 'none', borderTop: '1px solid #e8eaed', margin: '4px 0 10px' }} />
                 <div style={{ marginBottom: '10px' }}>
@@ -655,6 +736,36 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                           <div style={{ display: 'flex', gap: '10px', marginTop: '2px' }}>
                             {visit.officePhone && <span style={{ fontSize: '11px', color: '#5f6368' }}>📞 {visit.officePhone}</span>}
                             {visit.mobilePhone && <span style={{ fontSize: '11px', color: '#5f6368' }}>📱 {visit.mobilePhone}</span>}
+                          </div>
+                        )}
+                        {/* 향/방수/화장실수/수리상태/입주조건 배지 */}
+                        {(visit.orientation || visit.roomCount != null || visit.bathroomCount != null || visit.repairStatus || visit.moveInCondition) && (
+                          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '4px' }}>
+                            {visit.orientation && (
+                              <span style={{ fontSize: '10px', padding: '1px 6px', background: '#FFF3CD', color: '#856404', borderRadius: '4px', fontWeight: 600 }}>
+                                {visit.orientation}
+                              </span>
+                            )}
+                            {visit.roomCount != null && (
+                              <span style={{ fontSize: '10px', padding: '1px 6px', background: '#f0f0f0', color: '#5f6368', borderRadius: '4px' }}>
+                                방 {visit.roomCount}개
+                              </span>
+                            )}
+                            {visit.bathroomCount != null && (
+                              <span style={{ fontSize: '10px', padding: '1px 6px', background: '#f0f0f0', color: '#5f6368', borderRadius: '4px' }}>
+                                화장실 {visit.bathroomCount}개
+                              </span>
+                            )}
+                            {visit.repairStatus && (
+                              <span style={{ fontSize: '10px', padding: '1px 6px', background: '#E8F5E9', color: '#2E7D32', borderRadius: '4px', fontWeight: 600 }}>
+                                {visit.repairStatus}
+                              </span>
+                            )}
+                            {visit.moveInCondition && (
+                              <span style={{ fontSize: '10px', padding: '1px 6px', background: '#EDE7F6', color: '#512DA8', borderRadius: '4px' }}>
+                                {visit.moveInCondition}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
