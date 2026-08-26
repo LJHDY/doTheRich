@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useLayoutEffect } from 'react';
 
 /**
  * 메모 textarea에 번호 목록 자동 서식 적용
@@ -18,7 +18,7 @@ export function useNumberedTextarea(
   // (Mac Chrome/Safari: IME Enter → compositionend → 비조합 keydown 순서로 이중 발화)
   const skipNextEnterRef = useRef(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = 'auto';

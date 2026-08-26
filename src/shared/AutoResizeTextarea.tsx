@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 
 type Props = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
@@ -6,7 +6,7 @@ type Props = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 const AutoResizeTextarea: React.FC<Props> = ({ onChange, style, ...props }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = 'auto';
