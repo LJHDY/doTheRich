@@ -391,25 +391,18 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
   // ─── nextMonthBoundary 로드 — 다음달 yearMonth 중 이번달 날짜(day>=25) 항목 조회
   // 25일 사이클에서 예를 들어 "202508" 화면일 때 8/25~8/31 항목은 DB에 yearMonth='202509'로 저장되지만
-  // 이번달 달력 날짜에도 표시("다음달 정산" 배지)해야 하므로 미리 로드 — 내/상대방 모두 포함
+  // 이번달 달력 날짜에도 표시("다음달 정산" 배지)해야 하므로 미리 로드 — 현재 유저만 포함
+  // (상대방 항목은 filtered/summary/paidCardNames 오염을 막기 위해 별도 상태로 관리)
   useEffect(() => {
     const year  = Number(yearMonth.slice(0, 4));
     const month = Number(yearMonth.slice(4));
     const nextYm = toYearMonth(new Date(year, month, 1)); // 다음달 yearMonth (month는 0-indexed이므로 month = 현재달)
     const calYear  = yearMonth.slice(0, 4);
     const calMonth = yearMonth.slice(4).padStart(2, '0');
-    const prefix   = `${calYear}-${calMonth}-`;
-    const otherUserId = BUDGET_USERS.find(u => u.id !== userId)?.id ?? '';
-    Promise.all([
-      getBudgetEntries(userId, nextYm),
-      otherUserId ? getBudgetEntries(otherUserId, nextYm) : Promise.resolve([]),
-    ])
-      .then(([mine, other]) => {
-        // 이번달 달력 날짜(day>=25)인 항목만 포함, 두 유저 합산 후 중복 ID 제거
-        const seen = new Set<number>();
-        const merged = [...mine, ...other]
-          .filter(e => e.entryDate.startsWith(prefix) && !seen.has(e.id) && seen.add(e.id));
-        setNextMonthBoundary(merged);
+    getBudgetEntries(userId, nextYm)
+      .then(data => {
+        // 이번달 달력 날짜(day>=25)인 항목만 boundary로 포함
+        setNextMonthBoundary(data.filter(e => e.entryDate.startsWith(`${calYear}-${calMonth}-`)));
       })
       .catch(() => setNextMonthBoundary([]));
   }, [userId, yearMonth]);
