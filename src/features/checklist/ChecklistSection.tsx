@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChecklistTemplate, ChecklistResultItem } from '../../types';
 import {
   getChecklistTemplates, createChecklistTemplate,
@@ -46,7 +46,7 @@ const CheckItemRow: React.FC<CheckItemRowProps> = ({
   }, [item.templateId, item.memo]); // eslint-disable-line
 
   // 메모 textarea 자동 높이
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = memoRef.current;
     if (!el) return;
     el.style.height = 'auto';

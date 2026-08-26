@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PriceHistoryRequest } from '../../types';
 
 interface PriceInputFormProps {
@@ -141,7 +141,7 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
   const [recordDate, setRecordDate] = useState<string>(today);
   const [memo, setMemo] = useState<string>('');
   const memoRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = memoRef.current;
     if (!el) return;
     el.style.height = 'auto';

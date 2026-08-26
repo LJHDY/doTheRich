@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, Comparison, ComparisonPhoto } from '../../types';
 import {
   getComparisons, createComparison, updateComparison, deleteComparison,
@@ -118,7 +118,7 @@ const LocalPhotoCard: React.FC<{
 // value가 바뀔 때마다 scrollHeight에 맞게 높이 자동 조절
 const useAutoResize = (value: string) => {
   const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = 'auto';
