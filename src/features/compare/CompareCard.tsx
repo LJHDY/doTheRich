@@ -556,6 +556,9 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                       {s.achievementScore != null && (
                         <span style={{ fontSize: '10px', color: '#5f6368' }}>학업성취도 {s.achievementScore}%</span>
                       )}
+                      {matched?.studentsPerClass != null && (
+                        <span style={{ fontSize: '10px', color: '#5f6368' }}>학급당 {matched.studentsPerClass}명</span>
+                      )}
                       {s.schoolType === 'MIDDLE' && matched?.eliteHighRate != null && (
                         <span style={{ fontSize: '10px', color: '#e06060' }}>
                           특목고 {matched.eliteHighRate}%
@@ -566,9 +569,6 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                       )}
                       {s.totalStudents != null && (
                         <span style={{ fontSize: '10px', color: '#5f6368' }}>전교생 {s.totalStudents.toLocaleString()}명</span>
-                      )}
-                      {matched?.studentsPerClass != null && (
-                        <span style={{ fontSize: '10px', color: '#5f6368' }}>학급당 {matched.studentsPerClass}명</span>
                       )}
                     </div>
                   );

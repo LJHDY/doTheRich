@@ -3061,6 +3061,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                           {s.achievementScore != null && (
                             <span style={{ fontSize: '11px', color: '#5f6368' }}>학업성취도 {s.achievementScore}%</span>
                           )}
+                          {matched?.studentsPerClass != null && (
+                            <span style={{ fontSize: '11px', color: '#5f6368' }}>학급당 {matched.studentsPerClass}명</span>
+                          )}
                           {s.schoolType === 'MIDDLE' && matched?.eliteHighRate != null && (
                             <span style={{ fontSize: '11px', color: '#e06060' }}>
                               특목고 {matched.eliteHighRate}%
@@ -3071,9 +3074,6 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                           )}
                           {s.totalStudents != null && (
                             <span style={{ fontSize: '11px', color: '#5f6368' }}>전교생 {s.totalStudents.toLocaleString()}명</span>
-                          )}
-                          {matched?.studentsPerClass != null && (
-                            <span style={{ fontSize: '11px', color: '#5f6368' }}>학급당 {matched.studentsPerClass}명</span>
                           )}
                         </div>
                       );
@@ -3230,6 +3230,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                           {s.achievementScore != null && (
                             <span style={{ fontSize: '10px', color: '#5f6368' }}>성취 {s.achievementScore}%</span>
                           )}
+                          {s.studentsPerClass != null && (
+                            <span style={{ fontSize: '10px', color: '#9e9e9e' }}>학급당 {s.studentsPerClass}명</span>
+                          )}
                           {s.schoolType === '중학교' && s.eliteHighRate != null && (
                             <span style={{ fontSize: '10px', color: '#e06060' }}>
                               특목고 {s.eliteHighRate}%
@@ -3240,9 +3243,6 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                           )}
                           {s.totalStudents != null && (
                             <span style={{ fontSize: '10px', color: '#9e9e9e' }}>{s.totalStudents.toLocaleString()}명</span>
-                          )}
-                          {s.studentsPerClass != null && (
-                            <span style={{ fontSize: '10px', color: '#9e9e9e' }}>학급당 {s.studentsPerClass}명</span>
                           )}
                         </div>
                       </div>
