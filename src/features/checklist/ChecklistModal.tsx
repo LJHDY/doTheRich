@@ -58,14 +58,14 @@ interface VisitFormState {
   visitDate: string; agentName: string; officePhone: string; mobilePhone: string;
   dong: string; hosu: string; areaType: string; price: string;
   orientation: string; roomCount: string; bathroomCount: string;
-  moveInCondition: string; repairStatus: string; dislikeFactors: string[];
+  moveInCondition: string; repairStatus: string; repairPeriod: string; dislikeFactors: string[];
   memo: string;
 }
 const EMPTY_FORM: VisitFormState = {
   visitDate: '', agentName: '', officePhone: '', mobilePhone: '',
   dong: '', hosu: '', areaType: '', price: '',
   orientation: '', roomCount: '', bathroomCount: '',
-  moveInCondition: '', repairStatus: '', dislikeFactors: [],
+  moveInCondition: '', repairStatus: '', repairPeriod: '', dislikeFactors: [],
   memo: '',
 };
 
@@ -280,6 +280,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
       bathroomCount: v.bathroomCount != null ? String(v.bathroomCount) : '',
       moveInCondition: v.moveInCondition || '',
       repairStatus: v.repairStatus || '',
+      repairPeriod: v.repairPeriod || '',
       dislikeFactors: v.dislikeFactors ? v.dislikeFactors.split(',').filter(Boolean) : [],
       memo: v.memo || '',
     });
@@ -302,6 +303,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
         bathroomCount: form.bathroomCount ? Number(form.bathroomCount) : undefined,
         moveInCondition: form.moveInCondition || undefined,
         repairStatus: form.repairStatus || undefined,
+        repairPeriod: form.repairPeriod || undefined,
         dislikeFactors: form.dislikeFactors.length > 0 ? form.dislikeFactors.join(',') : undefined,
         memo: form.memo || undefined,
       };
@@ -562,19 +564,31 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                       ))}
                     </select>
                   </div>
-                  {/* 수리상태 — select */}
-                  <div>
-                    <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>수리상태</div>
-                    <select
-                      value={form.repairStatus}
-                      onChange={e => setForm(prev => ({ ...prev, repairStatus: e.target.value }))}
-                      style={{ width: '100%', fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
-                    >
-                      <option value="">선택 안 함</option>
-                      {['원상태', '부분수리', '올수리', '풀옵션'].map(o => (
-                        <option key={o} value={o}>{o}</option>
-                      ))}
-                    </select>
+                  {/* 수리상태 + 수리시기 — 한 칸을 반씩 나눠 표시 */}
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>수리상태</div>
+                      <select
+                        value={form.repairStatus}
+                        onChange={e => setForm(prev => ({ ...prev, repairStatus: e.target.value }))}
+                        style={{ width: '100%', fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
+                      >
+                        <option value="">선택 안 함</option>
+                        {['원상태', '부분수리', '올수리', '풀옵션'].map(o => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '3px' }}>수리시기</div>
+                      <input
+                        type="text"
+                        value={form.repairPeriod}
+                        onChange={e => setForm(prev => ({ ...prev, repairPeriod: e.target.value }))}
+                        placeholder="예: 2년 전, 입주 전 예정"
+                        style={{ width: '100%', fontSize: '12px', padding: '5px 8px', border: '1px solid #dadce0', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }}
+                      />
+                    </div>
                   </div>
                   {/* 방 수 */}
                   <div>
@@ -775,7 +789,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                             {visit.mobilePhone && <span style={{ fontSize: '11px', color: '#5f6368' }}>📱 {visit.mobilePhone}</span>}
                           </div>
                         )}
-                        {/* 향/방수/화장실수/수리상태/입주조건/비선호요소 배지 */}
+                        {/* 향/방수/화장실수/수리상태(수리시기)/입주조건/비선호요소 배지 */}
                         {(visit.orientation || visit.roomCount != null || visit.bathroomCount != null || visit.repairStatus || visit.moveInCondition || visit.dislikeFactors) && (
                           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '4px' }}>
                             {visit.orientation && (
@@ -795,7 +809,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                             )}
                             {visit.repairStatus && (
                               <span style={{ fontSize: '10px', padding: '1px 6px', background: '#E8F5E9', color: '#2E7D32', borderRadius: '4px', fontWeight: 600 }}>
-                                {visit.repairStatus}
+                                {visit.repairStatus}{visit.repairPeriod ? `(${visit.repairPeriod})` : ''}
                               </span>
                             )}
                             {visit.moveInCondition && (

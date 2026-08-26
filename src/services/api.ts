@@ -625,7 +625,7 @@ type PropertyVisitReq = {
   visitDate?: string; agentName?: string; officePhone?: string; mobilePhone?: string;
   dong?: string; hosu?: string; areaType?: string; price?: number;
   orientation?: string; roomCount?: number; bathroomCount?: number;
-  moveInCondition?: string; repairStatus?: string; dislikeFactors?: string; memo?: string;
+  moveInCondition?: string; repairStatus?: string; repairPeriod?: string; dislikeFactors?: string; memo?: string;
 };
 
 export const createPropertyVisit = async (
