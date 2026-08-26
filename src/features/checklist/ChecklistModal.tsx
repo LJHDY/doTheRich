@@ -51,7 +51,7 @@ const displayArea  = (v?: string) => v ? (v.startsWith('전용') ? v : '전용 '
 
 const DISLIKE_OPTIONS = [
   '노후 빌라 밀집', '언덕·경사지', '지상철 소음', '고압선', '혐오시설 인접',
-  '도로 소음', '공사 중', '일조 불량', '채광 불량',
+  '도로 소음', '공사 중', '일조 불량', '채광 불량', '지하철역 도보 10분↑',
 ];
 
 interface VisitFormState {
