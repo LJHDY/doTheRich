@@ -1,4 +1,5 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
+import AutoResizeTextarea from '../../shared/AutoResizeTextarea';
 import { PriceHistoryRequest } from '../../types';
 
 interface PriceInputFormProps {
@@ -140,13 +141,6 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
 
   const [recordDate, setRecordDate] = useState<string>(today);
   const [memo, setMemo] = useState<string>('');
-  const memoRef = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    const el = memoRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [memo]);
   const [updateSheet, setUpdateSheet] = useState<boolean>(true);
 
   const [loading, setLoading] = useState<boolean>(false);
@@ -384,12 +378,11 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
         {/* 메모 */}
         <div style={{ marginBottom: '10px' }}>
           <label style={labelStyle}>메모</label>
-          <textarea
-            ref={memoRef}
+          <AutoResizeTextarea
             placeholder="추가 메모를 입력하세요"
             value={memo}
             onChange={e => setMemo(e.target.value)}
-            style={{ ...inputStyle, resize: 'none', overflow: 'hidden', fontFamily: 'inherit' }}
+            style={{ ...inputStyle, fontFamily: 'inherit' }}
           />
         </div>
 
