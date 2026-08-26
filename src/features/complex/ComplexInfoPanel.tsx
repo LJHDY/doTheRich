@@ -3050,15 +3050,24 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#E06060', padding: '0 2px', flexShrink: 0 }}
                         title="삭제">🗑</button>
                     </div>
-                    {(s.achievementScore != null || s.totalStudents != null) && (() => {
-                      // dbSchools에서 학급당 학생수 조회 (이름 정규화 매칭)
+                    {(() => {
                       const REGION_PREFIXES = ['서울', '경기', '인천', '부산', '대구', '대전', '광주', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
                       const normalize = (n: string) => { for (const p of REGION_PREFIXES) { if (n.startsWith(p)) return n.slice(p.length); } return n; };
                       const matched = dbSchools.find(d => d.schoolName === s.schoolName || normalize(d.schoolName) === normalize(s.schoolName ?? ''));
+                      const hasExtra = s.achievementScore != null || s.totalStudents != null || matched != null;
+                      if (!hasExtra) return null;
                       return (
                         <div style={{ display: 'flex', gap: '10px', paddingLeft: '2px', flexWrap: 'wrap' }}>
                           {s.achievementScore != null && (
                             <span style={{ fontSize: '11px', color: '#5f6368' }}>학업성취도 {s.achievementScore}%</span>
+                          )}
+                          {s.schoolType === 'MIDDLE' && matched?.eliteHighRate != null && (
+                            <span style={{ fontSize: '11px', color: '#e06060' }}>
+                              특목고 {matched.eliteHighRate}%
+                              {(matched.scienceHighCount != null || matched.intlHighCount != null) && (
+                                <span style={{ color: '#b0b8c1' }}> (과{matched.scienceHighCount ?? 0}/외{matched.intlHighCount ?? 0}명)</span>
+                              )}
+                            </span>
                           )}
                           {s.totalStudents != null && (
                             <span style={{ fontSize: '11px', color: '#5f6368' }}>전교생 {s.totalStudents.toLocaleString()}명</span>
@@ -3189,48 +3198,53 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                     const alreadyAdded = (complex.schoolInfos ?? []).some(r => isSameSchool(r.schoolName ?? '', s.schoolName));
                     const isAdding = addingDbSchoolId === s.id;
                     return (
-                      <div key={s.id} style={{ padding: '5px 0', borderBottom: '1px solid #f5f5f5', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Tag
-                          label={s.schoolType === '초등학교' ? '초등' : '중학'}
-                          color={s.schoolType === '초등학교' ? '#7DC8A0' : '#89CFF0'}
-                        />
-                        <span style={{ fontSize: '12px', color: '#202124', flex: 1 }}>{s.schoolName}</span>
-                        <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>
-                          {s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)}m` : `${s.distanceKm.toFixed(1)}km`}
-                        </span>
-                        {s.achievementScore != null && (
-                          <span style={{ fontSize: '10px', color: '#5f6368', flexShrink: 0 }}>성취 {s.achievementScore}%</span>
-                        )}
-                        {/* 중학교만 특목고 진학률 표시 */}
-                        {s.schoolType === '중학교' && s.eliteHighRate != null && (
-                          <span style={{ fontSize: '10px', color: '#e06060', flexShrink: 0 }}>
-                            특목고 {s.eliteHighRate}%
-                            {(s.scienceHighCount != null || s.intlHighCount != null) && (
-                              <span style={{ color: '#b0b8c1' }}>
-                                &nbsp;(과{s.scienceHighCount ?? 0}/외{s.intlHighCount ?? 0})
-                              </span>
-                            )}
+                      <div key={s.id} style={{ padding: '5px 0', borderBottom: '1px solid #f5f5f5' }}>
+                        {/* 1행: 유형 배지 + 학교명 + 버튼 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                          <Tag
+                            label={s.schoolType === '초등학교' ? '초등' : '중학'}
+                            color={s.schoolType === '초등학교' ? '#7DC8A0' : '#89CFF0'}
+                          />
+                          <span style={{ fontSize: '12px', color: '#202124', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {s.schoolName}
                           </span>
-                        )}
-                        {s.totalStudents != null && (
-                          <span style={{ fontSize: '10px', color: '#9e9e9e', flexShrink: 0 }}>{s.totalStudents.toLocaleString()}명</span>
-                        )}
-                        {s.studentsPerClass != null && (
-                          <span style={{ fontSize: '10px', color: '#9e9e9e', flexShrink: 0 }}>학급당 {s.studentsPerClass}명</span>
-                        )}
-                        <button
-                          onClick={() => handleAddDbSchool(s)}
-                          disabled={alreadyAdded || isAdding}
-                          style={{
-                            flexShrink: 0, fontSize: '10px', padding: '2px 6px', borderRadius: '5px',
-                            cursor: alreadyAdded ? 'default' : 'pointer',
-                            border: '1px solid #dadce0',
-                            backgroundColor: alreadyAdded ? '#f0f0f0' : '#fff',
-                            color: alreadyAdded ? '#9e9e9e' : '#4BAAD4', whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {isAdding ? '...' : alreadyAdded ? '추가됨' : '+ 추가'}
-                        </button>
+                          <button
+                            onClick={() => handleAddDbSchool(s)}
+                            disabled={alreadyAdded || isAdding}
+                            style={{
+                              flexShrink: 0, fontSize: '10px', padding: '2px 6px', borderRadius: '5px',
+                              cursor: alreadyAdded ? 'default' : 'pointer',
+                              border: '1px solid #dadce0',
+                              backgroundColor: alreadyAdded ? '#f0f0f0' : '#fff',
+                              color: alreadyAdded ? '#9e9e9e' : '#4BAAD4', whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {isAdding ? '...' : alreadyAdded ? '추가됨' : '+ 추가'}
+                          </button>
+                        </div>
+                        {/* 2행: 거리 + 성취도 + 특목고 진학률 + 학생수 */}
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px', paddingLeft: '2px' }}>
+                          <span style={{ fontSize: '10px', color: '#80868b' }}>
+                            {s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)}m` : `${s.distanceKm.toFixed(1)}km`}
+                          </span>
+                          {s.achievementScore != null && (
+                            <span style={{ fontSize: '10px', color: '#5f6368' }}>성취 {s.achievementScore}%</span>
+                          )}
+                          {s.schoolType === '중학교' && s.eliteHighRate != null && (
+                            <span style={{ fontSize: '10px', color: '#e06060' }}>
+                              특목고 {s.eliteHighRate}%
+                              {(s.scienceHighCount != null || s.intlHighCount != null) && (
+                                <span style={{ color: '#b0b8c1' }}> (과{s.scienceHighCount ?? 0}/외{s.intlHighCount ?? 0}명)</span>
+                              )}
+                            </span>
+                          )}
+                          {s.totalStudents != null && (
+                            <span style={{ fontSize: '10px', color: '#9e9e9e' }}>{s.totalStudents.toLocaleString()}명</span>
+                          )}
+                          {s.studentsPerClass != null && (
+                            <span style={{ fontSize: '10px', color: '#9e9e9e' }}>학급당 {s.studentsPerClass}명</span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
