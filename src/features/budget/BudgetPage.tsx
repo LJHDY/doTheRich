@@ -8041,11 +8041,12 @@ const CompanyAnalysisView: React.FC = () => {
   const fmtNum = (v: number | null, digits = 1) =>
     v == null ? '-' : v.toLocaleString('ko-KR', { maximumFractionDigits: digits });
 
-  const fmtCap = (cap: number | null, currency: string) => {
+  // market='KR'이면 원화 표시, 아니면 달러 표시
+  const fmtCap = (cap: number | null, market: string) => {
     if (cap == null) return '-';
-    if (currency === 'KRW') {
+    if (market === 'KR') {
       const uk = cap / 1e8;
-      return uk >= 1 ? `${uk.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}억원` : `${(cap / 1e6).toFixed(0)}백만원`;
+      return uk >= 1 ? `₩${uk.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}억` : `₩${(cap / 1e6).toFixed(0)}백만`;
     }
     const b = cap / 1e9;
     return b >= 1 ? `$${b.toFixed(1)}B` : `$${(cap / 1e6).toFixed(0)}M`;
@@ -8148,15 +8149,15 @@ const CompanyAnalysisView: React.FC = () => {
 
             {/* 주요 지표 그리드 */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '8px' }}>
-              {[
-                { label: '현재가', value: result.price != null ? `${result.currency === 'KRW' ? '' : '$'}${fmtNum(result.price, 0)}${result.currency === 'KRW' ? '원' : ''}` : '-' },
-                { label: '시가총액', value: fmtCap(result.marketCap, result.currency) },
-                { label: 'PBR', value: result.pbr != null ? `${fmtNum(result.pbr)}배` : '-' },
+              {([
+                { label: '현재가', value: result.price != null ? `${result.market === 'KR' ? '₩' : '$'}${fmtNum(result.price, 0)}` : '-' },
+                { label: '시가총액', value: fmtCap(result.marketCap, result.market) },
+                result.pbr != null ? { label: 'PBR', value: `${fmtNum(result.pbr)}배` } : null,
                 { label: 'PER', value: result.per != null ? `${fmtNum(result.per)}배` : '-' },
                 { label: 'ROE', value: result.roe != null ? `${fmtNum(result.roe)}%` : '-' },
                 { label: '거래소', value: result.exchange || '-' },
                 { label: '섹터', value: result.sector || '-' },
-              ].map(({ label, value }) => (
+              ].filter(Boolean) as { label: string; value: string }[]).map(({ label, value }) => (
                 <div key={label} style={{ background: '#f8fafc', borderRadius: '6px', padding: '8px 10px' }}>
                   <div style={{ fontSize: '10px', color: '#9aa0a6', marginBottom: '3px' }}>{label}</div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#344054' }}>{value}</div>
