@@ -1911,7 +1911,8 @@ export interface CompanyAnalysisResult {
 }
 
 export const analyzeCompany = async (company: string): Promise<CompanyAnalysisResult> => {
-  const { data } = await api.post<CompanyAnalysisResult>('/api/company-analysis', { company });
+  // DART + yfinance + Gemini 합산 60초 허용 (기본 10초 timeout 우회)
+  const { data } = await api.post<CompanyAnalysisResult>('/api/company-analysis', { company }, { timeout: 90_000 });
   return data;
 };
 
