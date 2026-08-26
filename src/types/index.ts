@@ -181,6 +181,7 @@ export interface ApartmentComplex {
   businesses?: number;  // 지역 사업체수
   tenYearChangeRate?: number; // 최신 시세 기록의 10년 등락률 (%) — 백엔드 집계값
   isFavorite?: boolean; // 즐겨찾기 여부
+  naverComplexNumber?: string; // 네이버 부동산 단지번호 (시세 감시용)
   slopeType?: string;         // 경사도: FLAT/GENTLE/MODERATE/STEEP
   buildingStructure?: string; // 아파트구조: STAIRCASE/CORRIDOR/MIXED
   floorAreaRatio?: number;    // 용적률 (%)

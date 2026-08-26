@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, calcChecklistScore } from '../../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool } from '../../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool, updateNaverComplexNumber, getComplexPriceSnapshots, ComplexPriceSnapshot } from '../../services/api';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -367,6 +367,15 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   // 즐겨찾기 로컬 상태 — 낙관적 업데이트(즉시 UI 반영) 후 API 실패 시 롤백
   const [isFavorite, setIsFavorite] = useState(false);
 
+  // 네이버 단지번호 인라인 편집 상태
+  const [editingNaverNo, setEditingNaverNo] = useState(false);
+  const [naverNoInput, setNaverNoInput] = useState('');
+  const [naverNoSaving, setNaverNoSaving] = useState(false);
+
+  // 시세 스냅샷 — 즐겨찾기 단지에 수집된 네이버 호가 이력
+  const [priceSnapshots, setPriceSnapshots] = useState<ComplexPriceSnapshot[]>([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+
   // 차트 평형 필터 — '' = 전체, '전용 59' 등 선택 시 해당 타입의 매매/전세 세트만 표시
   const [selectedAreaType, setSelectedAreaType] = useState('');
 
@@ -591,6 +600,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       setDeletedSubwayIds([]);
       setEditingCommute(false);
       setCommuteRows([]);
+      setEditingNaverNo(false);
+      setNaverNoInput(complex.naverComplexNumber ?? '');
       loadPriceHistories(complex.id);
       // 체크리스트 요약 로드 — 체크된 항목 수 / 전체 항목 수 파악
       setChecklistOpen(false);
@@ -628,6 +639,34 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       .catch(() => setDbSchools([]))
       .finally(() => setLoadingDbSchools(false));
   }, [complex?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 즐겨찾기 단지 & naverComplexNumber 있으면 시세 스냅샷 로드
+  useEffect(() => {
+    if (!complex?.id || !complex.naverComplexNumber) {
+      setPriceSnapshots([]);
+      return;
+    }
+    setSnapshotsLoading(true);
+    getComplexPriceSnapshots(complex.id, 10)
+      .then(snaps => setPriceSnapshots(snaps))
+      .catch(() => setPriceSnapshots([]))
+      .finally(() => setSnapshotsLoading(false));
+  }, [complex?.id, complex?.naverComplexNumber]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 네이버 단지번호 저장
+  const handleSaveNaverNo = async () => {
+    if (!complex) return;
+    setNaverNoSaving(true);
+    try {
+      await updateNaverComplexNumber(complex.id, naverNoInput.trim());
+      onComplexUpdate?.({ ...complex, naverComplexNumber: naverNoInput.trim() || undefined });
+      setEditingNaverNo(false);
+    } catch {
+      alert('저장에 실패했습니다.');
+    } finally {
+      setNaverNoSaving(false);
+    }
+  };
 
   // 즐겨찾기 토글 — 낙관적 업데이트 후 API 실패 시 롤백
   const handleToggleFavorite = async () => {
@@ -3985,6 +4024,130 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             })()}
           </div>
         )}
+
+        {/* 네이버 호가 감시 — 단지번호 등록 + 스냅샷 이력 */}
+        <div style={{ marginBottom: '16px', borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>네이버 호가 감시</h3>
+            {!editingNaverNo && (
+              <button
+                onClick={() => { setEditingNaverNo(true); setNaverNoInput(complex.naverComplexNumber ?? ''); }}
+                style={{ fontSize: '11px', padding: '2px 8px', border: '1px solid #4BAAD4', borderRadius: '4px', background: '#fff', color: '#4BAAD4', cursor: 'pointer' }}
+              >
+                {complex.naverComplexNumber ? '수정' : '등록'}
+              </button>
+            )}
+          </div>
+          {editingNaverNo ? (
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={naverNoInput}
+                onChange={e => setNaverNoInput(e.target.value)}
+                placeholder="네이버 단지번호 (예: 3030)"
+                onKeyDown={e => e.key === 'Enter' && handleSaveNaverNo()}
+                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}
+              />
+              <button
+                onClick={handleSaveNaverNo}
+                disabled={naverNoSaving}
+                style={{ padding: '6px 10px', background: '#4BAAD4', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
+              >
+                저장
+              </button>
+              <button
+                onClick={() => setEditingNaverNo(false)}
+                style={{ padding: '6px 10px', background: '#f5f5f5', color: '#555', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
+              >
+                취소
+              </button>
+            </div>
+          ) : complex.naverComplexNumber ? (
+            <div style={{ fontSize: '12px', color: '#5f6368', marginBottom: '8px' }}>
+              단지번호: <b>{complex.naverComplexNumber}</b> · 2시간 주기 자동 수집 (09~19시 KST)
+            </div>
+          ) : (
+            <div style={{ fontSize: '12px', color: '#9aa0a6' }}>
+              네이버 부동산 단지번호를 등록하면 호가를 2시간마다 자동으로 수집합니다.
+            </div>
+          )}
+
+          {/* 스냅샷 이력 */}
+          {snapshotsLoading && (
+            <div style={{ fontSize: '12px', color: '#9aa0a6', padding: '4px 0' }}>이력 로드 중...</div>
+          )}
+          {!snapshotsLoading && priceSnapshots.length > 0 && (
+            <div style={{ marginTop: '8px' }}>
+              <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '6px' }}>최근 수집 이력 (최저호가 기준)</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '1px solid #e8eaed' }}>
+                      <th style={{ padding: '4px 6px', textAlign: 'left', color: '#5f6368', fontWeight: 600 }}>수집시각</th>
+                      <th style={{ padding: '4px 6px', textAlign: 'right', color: '#5f6368', fontWeight: 600 }}>매물수</th>
+                      <th style={{ padding: '4px 6px', textAlign: 'right', color: '#5f6368', fontWeight: 600 }}>최저호가</th>
+                      <th style={{ padding: '4px 6px', textAlign: 'right', color: '#5f6368', fontWeight: 600 }}>평균호가</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {priceSnapshots.map((snap, idx) => {
+                      const prev = priceSnapshots[idx + 1];
+                      const minDiff = prev && snap.minPrice != null && prev.minPrice != null
+                        ? snap.minPrice - prev.minPrice : null;
+                      return (
+                        <tr key={snap.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                          <td style={{ padding: '4px 6px', color: '#5f6368' }}>
+                            {new Date(snap.collectedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}
+                          </td>
+                          <td style={{ padding: '4px 6px', textAlign: 'right' }}>{snap.totalCount}</td>
+                          <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, color: '#202124' }}>
+                            {snap.minPrice != null ? `${toUkUnit(snap.minPrice)}억` : '-'}
+                            {minDiff != null && minDiff !== 0 && (
+                              <span style={{ marginLeft: '4px', fontSize: '10px', color: minDiff > 0 ? '#E06060' : '#4BAAD4' }}>
+                                {minDiff > 0 ? '▲' : '▼'}{toUkUnit(Math.abs(minDiff))}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '4px 6px', textAlign: 'right', color: '#5f6368' }}>
+                            {snap.avgPrice != null ? `${toUkUnit(snap.avgPrice)}억` : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {/* 평형별 최신 스냅샷 상세 */}
+              {priceSnapshots[0] && Object.keys(priceSnapshots[0].priceByArea).length > 0 && (
+                <details style={{ marginTop: '10px' }}>
+                  <summary style={{ fontSize: '11px', color: '#9aa0a6', cursor: 'pointer' }}>
+                    최신 평형별 상세 ({new Date(priceSnapshots[0].collectedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })})
+                  </summary>
+                  <div style={{ marginTop: '6px' }}>
+                    {Object.entries(priceSnapshots[0].priceByArea)
+                      .sort(([a], [b]) => (parseFloat(a) || 999) - (parseFloat(b) || 999))
+                      .map(([area, info]) => (
+                        <div key={area} style={{ marginBottom: '6px', backgroundColor: '#f8f9fa', borderRadius: '4px', padding: '6px 8px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: '#344054', marginBottom: '4px' }}>
+                            {area}㎡ · {info.count}건 · 최저 {toUkUnit(info.min)}억 · 평균 {toUkUnit(info.avg)}억
+                          </div>
+                          {(info as any).items && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                              {((info as any).items as Array<{ price: number; floor: number | null }>).map((it, i) => (
+                                <span key={i} style={{ fontSize: '10px', padding: '1px 5px', background: '#e8f4fd', borderRadius: '3px', color: '#1a73e8' }}>
+                                  {it.floor != null ? `${it.floor}층 ` : ''}{toUkUnit(it.price)}억
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* 시세 입력 폼 */}
         {showInputForm ? (

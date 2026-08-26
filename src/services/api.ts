@@ -1929,4 +1929,43 @@ export const getCompanyAnalysisReports = async (): Promise<CompanyAnalysisResult
   return data;
 };
 
+// ─── 단지 시세 스냅샷 (즐겨찾기 실시간 감시) ──────────────────────────────────
+
+export interface ComplexPriceSnapshot {
+  id: number;
+  watchId: number;
+  collectedAt: string;
+  tradeType: string;
+  totalCount: number;
+  minPrice: number | null;
+  avgPrice: number | null;
+  priceByArea: Record<string, { min: number; avg: number; count: number }>;
+}
+
+export const updateNaverComplexNumber = async (
+  complexId: number,
+  naverComplexNumber: string,
+): Promise<void> => {
+  await api.patch(`/api/complexes/${complexId}/naver-complex-number`, { naverComplexNumber });
+};
+
+export const getComplexPriceSnapshots = async (
+  complexId: number,
+  limit: number = 10,
+): Promise<ComplexPriceSnapshot[]> => {
+  const { data } = await api.get(`/api/complexes/${complexId}/price-snapshots`, {
+    params: { limit },
+  });
+  return (data as any[]).map(r => ({
+    id: r.id,
+    watchId: r.watchId,
+    collectedAt: r.collectedAt,
+    tradeType: r.tradeType,
+    totalCount: r.totalCount,
+    minPrice: r.minPrice,
+    avgPrice: r.avgPrice,
+    priceByArea: r.priceByArea ?? {},
+  }));
+};
+
 export default api;
