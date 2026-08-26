@@ -545,14 +545,24 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                     <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>도보 {s.walkingMinutes}분</span>
                   )}
                 </div>
-                {(s.achievementScore != null || s.totalStudents != null) && (() => {
+                {(() => {
                   const REGION_PREFIXES = ['서울', '경기', '인천', '부산', '대구', '대전', '광주', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
                   const norm = (n: string) => { for (const p of REGION_PREFIXES) { if (n.startsWith(p)) return n.slice(p.length); } return n; };
                   const matched = dbSchools.find(d => d.schoolName === s.schoolName || norm(d.schoolName) === norm(s.schoolName ?? ''));
+                  const hasExtra = s.achievementScore != null || s.totalStudents != null || matched != null;
+                  if (!hasExtra) return null;
                   return (
-                    <div style={{ display: 'flex', gap: '10px', paddingLeft: '2px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '8px', paddingLeft: '2px', flexWrap: 'wrap' }}>
                       {s.achievementScore != null && (
                         <span style={{ fontSize: '10px', color: '#5f6368' }}>학업성취도 {s.achievementScore}%</span>
+                      )}
+                      {s.schoolType === 'MIDDLE' && matched?.eliteHighRate != null && (
+                        <span style={{ fontSize: '10px', color: '#e06060' }}>
+                          특목고 {matched.eliteHighRate}%
+                          {(matched.scienceHighCount != null || matched.intlHighCount != null) && (
+                            <span style={{ color: '#b0b8c1' }}> (과{matched.scienceHighCount ?? 0}/외{matched.intlHighCount ?? 0}명)</span>
+                          )}
+                        </span>
                       )}
                       {s.totalStudents != null && (
                         <span style={{ fontSize: '10px', color: '#5f6368' }}>전교생 {s.totalStudents.toLocaleString()}명</span>
