@@ -8152,12 +8152,12 @@ const CompanyAnalysisView: React.FC = () => {
               {([
                 { label: '현재가', value: result.price != null ? `${result.market === 'KR' ? '₩' : '$'}${fmtNum(result.price, 0)}` : '-' },
                 { label: '시가총액', value: fmtCap(result.marketCap, result.market) },
-                result.pbr != null ? { label: 'PBR', value: `${fmtNum(result.pbr)}배` } : null,
+                { label: 'PBR', value: result.pbr != null ? `${fmtNum(result.pbr)}배` : '-' },
                 { label: 'PER', value: result.per != null ? `${fmtNum(result.per)}배` : '-' },
                 { label: 'ROE', value: result.roe != null ? `${fmtNum(result.roe)}%` : '-' },
                 { label: '거래소', value: result.exchange || '-' },
                 { label: '섹터', value: result.sector || '-' },
-              ].filter(Boolean) as { label: string; value: string }[]).map(({ label, value }) => (
+              ] as { label: string; value: string }[]).map(({ label, value }) => (
                 <div key={label} style={{ background: '#f8fafc', borderRadius: '6px', padding: '8px 10px' }}>
                   <div style={{ fontSize: '10px', color: '#9aa0a6', marginBottom: '3px' }}>{label}</div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#344054' }}>{value}</div>
