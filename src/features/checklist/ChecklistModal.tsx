@@ -49,18 +49,23 @@ const displayDong  = (v?: string) => v ? (v.endsWith('동') ? v : v + '동') : '
 const displayHosu  = (v?: string) => v ? (v.endsWith('호') || v.endsWith('호수') ? v : v + '호') : '';
 const displayArea  = (v?: string) => v ? (v.startsWith('전용') ? v : '전용 ' + v) : '';
 
+const DISLIKE_OPTIONS = [
+  '노후 빌라 밀집', '언덕·경사지', '지상철 소음', '고압선', '혐오시설 인접',
+  '도로 소음', '공사 중', '일조 불량', '채광 불량',
+];
+
 interface VisitFormState {
   visitDate: string; agentName: string; officePhone: string; mobilePhone: string;
   dong: string; hosu: string; areaType: string; price: string;
   orientation: string; roomCount: string; bathroomCount: string;
-  moveInCondition: string; repairStatus: string;
+  moveInCondition: string; repairStatus: string; dislikeFactors: string[];
   memo: string;
 }
 const EMPTY_FORM: VisitFormState = {
   visitDate: '', agentName: '', officePhone: '', mobilePhone: '',
   dong: '', hosu: '', areaType: '', price: '',
   orientation: '', roomCount: '', bathroomCount: '',
-  moveInCondition: '', repairStatus: '',
+  moveInCondition: '', repairStatus: '', dislikeFactors: [],
   memo: '',
 };
 
@@ -275,6 +280,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
       bathroomCount: v.bathroomCount != null ? String(v.bathroomCount) : '',
       moveInCondition: v.moveInCondition || '',
       repairStatus: v.repairStatus || '',
+      dislikeFactors: v.dislikeFactors ? v.dislikeFactors.split(',').filter(Boolean) : [],
       memo: v.memo || '',
     });
     setEditingVisitId(v.id);
@@ -296,6 +302,7 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
         bathroomCount: form.bathroomCount ? Number(form.bathroomCount) : undefined,
         moveInCondition: form.moveInCondition || undefined,
         repairStatus: form.repairStatus || undefined,
+        dislikeFactors: form.dislikeFactors.length > 0 ? form.dislikeFactors.join(',') : undefined,
         memo: form.memo || undefined,
       };
       if (editingVisitId) {
@@ -603,6 +610,36 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                     />
                   </div>
                 </div>
+                {/* 비선호 요소 멀티 체크박스 */}
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ fontSize: '11px', color: '#5f6368', marginBottom: '5px' }}>비선호 요소 (해당 항목 선택)</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {DISLIKE_OPTIONS.map(opt => {
+                      const checked = form.dislikeFactors.includes(opt);
+                      return (
+                        <label key={opt} style={{
+                          display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer',
+                          fontSize: '11px', padding: '3px 8px', borderRadius: '4px',
+                          background: checked ? '#FFE0E0' : '#f5f5f5',
+                          color: checked ? '#C62828' : '#5f6368',
+                          border: `1px solid ${checked ? '#EF9A9A' : '#e0e0e0'}`,
+                          userSelect: 'none',
+                        }}>
+                          <input type="checkbox" checked={checked}
+                            onChange={() => setForm(prev => ({
+                              ...prev,
+                              dislikeFactors: checked
+                                ? prev.dislikeFactors.filter(f => f !== opt)
+                                : [...prev.dislikeFactors, opt],
+                            }))}
+                            style={{ display: 'none' }}
+                          />
+                          {opt}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
                 {/* 구분선 — 부동산/매물 정보와 메모 경계 */}
                 <hr style={{ border: 'none', borderTop: '1px solid #e8eaed', margin: '4px 0 10px' }} />
                 <div style={{ marginBottom: '10px' }}>
@@ -738,8 +775,8 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                             {visit.mobilePhone && <span style={{ fontSize: '11px', color: '#5f6368' }}>📱 {visit.mobilePhone}</span>}
                           </div>
                         )}
-                        {/* 향/방수/화장실수/수리상태/입주조건 배지 */}
-                        {(visit.orientation || visit.roomCount != null || visit.bathroomCount != null || visit.repairStatus || visit.moveInCondition) && (
+                        {/* 향/방수/화장실수/수리상태/입주조건/비선호요소 배지 */}
+                        {(visit.orientation || visit.roomCount != null || visit.bathroomCount != null || visit.repairStatus || visit.moveInCondition || visit.dislikeFactors) && (
                           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '4px' }}>
                             {visit.orientation && (
                               <span style={{ fontSize: '10px', padding: '1px 6px', background: '#FFF3CD', color: '#856404', borderRadius: '4px', fontWeight: 600 }}>
@@ -766,6 +803,11 @@ const ChecklistModal: React.FC<Props> = ({ complexId, complexName, onClose }) =>
                                 {visit.moveInCondition}
                               </span>
                             )}
+                            {visit.dislikeFactors && visit.dislikeFactors.split(',').filter(Boolean).map(f => (
+                              <span key={f} style={{ fontSize: '10px', padding: '1px 6px', background: '#FFE0E0', color: '#C62828', borderRadius: '4px', border: '1px solid #EF9A9A' }}>
+                                {f}
+                              </span>
+                            ))}
                           </div>
                         )}
                       </div>

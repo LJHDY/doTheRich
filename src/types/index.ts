@@ -415,6 +415,7 @@ export interface PropertyVisit {
   bathroomCount?: number;    // 화장실 수
   moveInCondition?: string;  // 입주조건
   repairStatus?: string;     // 수리상태
+  dislikeFactors?: string;   // 비선호 요소 (콤마 구분)
   memo?: string;
   createdAt: string;
   results: PropertyVisitResultItem[];
