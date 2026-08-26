@@ -1374,18 +1374,26 @@ export const getMarketReports = async (): Promise<MarketReport[]> => {
       id: r.id,
       reportDate: r.reportDate,
       reportType: (r.reportType || 'global') as 'global' | 'kr_close',
-      marketData: Object.fromEntries(
-        Object.entries(raw)
-          .filter(([k, v]) => !EXCLUDED_KEYS.has(k) && v !== null && typeof v === 'object' && !Array.isArray(v))
-          .map(([k, v]: [string, any]) => [k, {
-            label: v.label,
-            close: v.close,
-            prevClose: v.prev_close,
-            change: v.change,
-            changePct: v.change_pct,
-            date: v.date,
-          }])
-      ),
+      marketData: {
+        // ticker형 객체는 camelCase 변환
+        ...Object.fromEntries(
+          Object.entries(raw)
+            .filter(([k, v]) => !EXCLUDED_KEYS.has(k) && v !== null && typeof v === 'object' && !Array.isArray(v))
+            .map(([k, v]: [string, any]) => [k, {
+              label: v.label,
+              close: v.close,
+              prevClose: v.prev_close,
+              change: v.change,
+              changePct: v.change_pct,
+              date: v.date,
+            }])
+        ),
+        // 배열 값(usa_top_stocks, usa_sectors_daily/weekly 등)은 그대로 통과
+        ...Object.fromEntries(
+          Object.entries(raw)
+            .filter(([k, v]) => !EXCLUDED_KEYS.has(k) && Array.isArray(v))
+        ),
+      },
       fearGreed: fg ? {
         score: fg.score,
         rating: fg.rating,
