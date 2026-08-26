@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CommonCode, Schedule } from '../../types';
 import { createDday, createSchedule, deleteSchedule, getCommonCodes, updateSchedule } from '../../services/api';
+import AutoResizeTextarea from '../../shared/AutoResizeTextarea';
 import { BUDGET_USER_STORAGE_KEY, BUDGET_USERS } from '../budget/budgetConstants';
 
 interface Props {
@@ -302,12 +303,11 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved,
           </div>
 
           {/* 설명 */}
-          <textarea
+          <AutoResizeTextarea
             placeholder="설명 (선택)"
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            rows={2}
-            style={{ ...INPUT_STYLE, resize: 'vertical', fontFamily: 'inherit' }}
+            style={{ ...INPUT_STYLE, fontFamily: 'inherit' }}
           />
 
           {/* 네이버 캘린더 연동 여부 */}

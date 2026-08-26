@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ConsultationLog, Contact } from '../../types';
+import AutoResizeTextarea from '../../shared/AutoResizeTextarea';
 import {
   createConsultationLog, createContact, deleteConsultationAudio,
   deleteConsultationLog, deleteContact, getConsultationLogs,
@@ -196,9 +197,9 @@ export default function ContactsModal({ onClose }: Props) {
             </div>
             <div style={{ marginTop: '8px' }}>
               <label style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>메모</label>
-              <textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))}
-                placeholder="특이사항, 장단점 등" rows={2}
-                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+              <AutoResizeTextarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))}
+                placeholder="특이사항, 장단점 등"
+                style={{ ...inputStyle, fontFamily: 'inherit' }} />
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '10px', justifyContent: 'flex-end' }}>
               <button onClick={closeForm} style={{ padding: '7px 16px', fontSize: '13px', border: '1px solid #dadce0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>취소</button>
@@ -443,9 +444,9 @@ function ConsultationSection({ contactId, col }: LogSectionProps) {
           </div>
           <div>
             <label style={{ fontSize: '10px', color: '#5f6368', fontWeight: 600 }}>내용</label>
-            <textarea value={logForm.content} onChange={e => setLogForm(f => ({ ...f, content: e.target.value }))}
-              placeholder="상담 내용을 자유롭게 기록하세요" rows={3}
-              style={{ ...logInputStyle, resize: 'vertical', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
+            <AutoResizeTextarea value={logForm.content} onChange={e => setLogForm(f => ({ ...f, content: e.target.value }))}
+              placeholder="상담 내용을 자유롭게 기록하세요"
+              style={{ ...logInputStyle, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
           </div>
           {/* 녹음 첨부 — 폼 안에서 바로 선택 가능 */}
           <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
