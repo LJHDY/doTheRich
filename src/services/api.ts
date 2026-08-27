@@ -1447,6 +1447,11 @@ export const generateMarketReport = async (reportDate?: string): Promise<void> =
   await api.post('/api/market-reports/generate', null, { params });
 };
 
+export const generatePremarketReport = async (reportDate?: string): Promise<void> => {
+  const params = reportDate ? { report_date: reportDate } : {};
+  await api.post('/api/market-reports/generate/premarket', null, { params });
+};
+
 /** 시장 리포트 삭제 (204) */
 export const deleteMarketReport = async (reportId: number): Promise<void> => {
   await api.delete(`/api/market-reports/${reportId}`);

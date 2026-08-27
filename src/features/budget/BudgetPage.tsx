@@ -58,6 +58,7 @@ import {
   getMarketReports,
   generateMarketReport,
   generateKrCloseReport,
+  generatePremarketReport,
   deleteMarketReport,
   getScreeningReports,
   generateScreeningReport,
@@ -3813,6 +3814,7 @@ const MarketReportView: React.FC = () => {
   const [loadError, setLoadError] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generatingKr, setGeneratingKr] = useState(false);
+  const [generatingPremarket, setGeneratingPremarket] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [activeType, setActiveType] = useState<'global' | 'kr_close' | 'premarket'>('global');
   const [toast, setToast] = useState('');
@@ -3916,6 +3918,37 @@ const MarketReportView: React.FC = () => {
       }, 5000);
     } catch {
       setGeneratingKr(false);
+      setToast('❌ 요청에 실패했습니다.');
+      setTimeout(() => setToast(''), 3000);
+    }
+  };
+
+  const handleGeneratePremarket = async () => {
+    setGeneratingPremarket(true);
+    setToast('프리마켓 분석 요청 중…');
+    try {
+      await generatePremarketReport();
+      setToast('프리마켓 데이터를 수집하고 분석 중입니다. 잠시 후 업데이트됩니다.');
+      const prevTopId = reports.length > 0 ? reports[0].id : null;
+      let tries = 0;
+      const poll = setInterval(async () => {
+        tries++;
+        const data = await getMarketReports();
+        const isNew = data.length > 0 && data[0].id !== prevTopId;
+        if (isNew || tries >= 36) {
+          clearInterval(poll);
+          setReports(data);
+          setActiveType('premarket');
+          const first = data.find(r => r.reportType === 'premarket');
+          if (first) setSelectedId(first.id);
+          else if (data.length > 0) setSelectedId(data[0].id);
+          setGeneratingPremarket(false);
+          setToast(isNew ? '✅ 프리마켓 분석 완료!' : '⚠️ 시간 초과. 잠시 후 새로고침해주세요.');
+          setTimeout(() => setToast(''), 4000);
+        }
+      }, 5000);
+    } catch {
+      setGeneratingPremarket(false);
       setToast('❌ 요청에 실패했습니다.');
       setTimeout(() => setToast(''), 3000);
     }
@@ -4110,10 +4143,10 @@ const MarketReportView: React.FC = () => {
         {activeType === 'kr_close' && (
           <button
             onClick={handleGenerateKrClose}
-            disabled={generating || generatingKr}
+            disabled={generating || generatingKr || generatingPremarket}
             style={{
               padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
-              borderRadius: '8px', cursor: (generating || generatingKr) ? 'default' : 'pointer',
+              borderRadius: '8px', cursor: (generating || generatingKr || generatingPremarket) ? 'default' : 'pointer',
               background: generatingKr ? '#b0c4de' : '#e06060', color: '#fff',
             }}
           >
@@ -4121,7 +4154,17 @@ const MarketReportView: React.FC = () => {
           </button>
         )}
         {activeType === 'premarket' && (
-          <span style={{ fontSize: '11px', color: '#9aa0a6' }}>새벽 자동 생성 전용 (수동 생성 불가)</span>
+          <button
+            onClick={handleGeneratePremarket}
+            disabled={generating || generatingKr || generatingPremarket}
+            style={{
+              padding: '6px 16px', fontSize: '13px', fontWeight: 600, border: 'none',
+              borderRadius: '8px', cursor: (generating || generatingKr || generatingPremarket) ? 'default' : 'pointer',
+              background: generatingPremarket ? '#b0c4de' : '#6a1b9a', color: '#fff',
+            }}
+          >
+            {generatingPremarket ? '생성 중…' : '✨ 생성'}
+          </button>
         )}
         <button onClick={load} style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '8px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}>↺</button>
       </div>
@@ -4147,9 +4190,7 @@ const MarketReportView: React.FC = () => {
             <div style={{ textAlign: 'center', padding: '60px', color: '#9aa0a6', fontSize: '14px' }}>
               <div style={{ fontSize: '40px', marginBottom: '16px' }}>📊</div>
               <div>이 탭의 리포트가 없어요.</div>
-              {activeType !== 'premarket' && (
-                <div style={{ marginTop: '8px', fontSize: '12px' }}><strong>✨ 생성</strong> 버튼으로 첫 번째 리포트를 만들어보세요.</div>
-              )}
+              <div style={{ marginTop: '8px', fontSize: '12px' }}><strong>✨ 생성</strong> 버튼으로 첫 번째 리포트를 만들어보세요.</div>
             </div>
           ) : selected ? (
             <div>
