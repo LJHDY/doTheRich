@@ -69,7 +69,7 @@ import {
   getCompanyAnalysisReports,
   CompanyAnalysisResult,
 } from '../../services/api';
-import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, IntegratedReport, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, ScreeningReport, ScreeningTopPick, formatAmount, formatAmountShort } from '../../types';
+import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, IntegratedReport, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, ScreeningRankItem, ScreeningReport, ScreeningTopPick, formatAmount, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 import WorkoutTab from './WorkoutTab';
 
@@ -7463,6 +7463,103 @@ const IntegratedReportView: React.FC = () => {
   );
 };
 
+type RankSectionProps = {
+  title: string;
+  subtitle: string;
+  items: ScreeningRankItem[];
+  metricLabel: string;
+  metricKey: keyof ScreeningRankItem;
+  metricUnit: string;
+  color: string;
+};
+
+const RankingTable: React.FC<RankSectionProps> = ({ title, subtitle, items, metricLabel, metricKey, metricUnit, color }) => {
+  const [open, setOpen] = useState(false);
+  if (items.length === 0) return null;
+
+  const fmtPct = (v: number | null | undefined) =>
+    v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}${metricUnit}` : '-';
+
+  return (
+    <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #e0e4e8', overflow: 'hidden' }}>
+      {/* 헤더 — 클릭으로 펼치기/접기 */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '12px 16px', cursor: 'pointer',
+          background: open ? '#f8faff' : '#fff',
+          borderBottom: open ? '1px solid #e0e4e8' : 'none',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>{title}</div>
+          <div style={{ fontSize: '11px', color: '#7a8fa6', marginTop: '2px' }}>{subtitle}</div>
+        </div>
+        <span style={{ fontSize: '12px', color: '#7a8fa6' }}>{open ? '▲' : '▼'}</span>
+      </div>
+
+      {open && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <thead>
+              <tr style={{ background: '#f8faff', borderBottom: '1px solid #e0e4e8' }}>
+                <th style={{ padding: '6px 10px', textAlign: 'center', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>#</th>
+                <th style={{ padding: '6px 10px', textAlign: 'left', color: '#7a8fa6', fontWeight: 600 }}>종목</th>
+                <th style={{ padding: '6px 10px', textAlign: 'center', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>시장</th>
+                <th style={{ padding: '6px 10px', textAlign: 'right', color: color, fontWeight: 700, whiteSpace: 'nowrap' }}>{metricLabel}</th>
+                <th style={{ padding: '6px 10px', textAlign: 'right', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>부채비율</th>
+                <th style={{ padding: '6px 10px', textAlign: 'right', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>ROE</th>
+                <th style={{ padding: '6px 10px', textAlign: 'right', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>영업이익률</th>
+                <th style={{ padding: '6px 10px', textAlign: 'right', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>시총(억)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, idx) => {
+                const metricVal = item[metricKey] as number | null | undefined;
+                const isLowDebt = metricKey === 'debtRatio';
+                const metricColor = isLowDebt
+                  ? (metricVal != null && metricVal <= 50 ? '#2e7d32' : metricVal != null && metricVal <= 100 ? '#1565c0' : '#7a8fa6')
+                  : (metricVal != null && metricVal > 0 ? color : '#e53935');
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid #f0f2f5', background: idx % 2 === 0 ? '#fff' : '#fafbfc' }}>
+                    <td style={{ padding: '6px 10px', textAlign: 'center', color: idx < 3 ? '#f9a825' : '#7a8fa6', fontWeight: idx < 3 ? 700 : 400 }}>
+                      {idx + 1}
+                    </td>
+                    <td style={{ padding: '6px 10px', fontWeight: 600, color: '#1a3a5c', whiteSpace: 'nowrap' }}>{item.corpName}</td>
+                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                      <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '4px',
+                        background: item.market === 'KOSPI' ? '#e3f2fd' : '#e8f5e9',
+                        color: item.market === 'KOSPI' ? '#1565c0' : '#2e7d32', fontWeight: 600 }}>
+                        {item.market}
+                      </span>
+                    </td>
+                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700, color: metricColor }}>
+                      {fmtPct(metricVal)}
+                    </td>
+                    <td style={{ padding: '6px 10px', textAlign: 'right', color: '#344054' }}>
+                      {item.debtRatio != null ? `${item.debtRatio.toFixed(0)}%` : '-'}
+                    </td>
+                    <td style={{ padding: '6px 10px', textAlign: 'right', color: item.roe != null && item.roe > 0 ? '#2e7d32' : '#7a8fa6' }}>
+                      {item.roe != null ? `${item.roe >= 0 ? '+' : ''}${item.roe.toFixed(1)}%` : '-'}
+                    </td>
+                    <td style={{ padding: '6px 10px', textAlign: 'right', color: item.opMargin != null && item.opMargin > 0 ? '#1565c0' : '#7a8fa6' }}>
+                      {item.opMargin != null ? `${item.opMargin.toFixed(1)}%` : '-'}
+                    </td>
+                    <td style={{ padding: '6px 10px', textAlign: 'right', color: '#7a8fa6' }}>
+                      {item.marketCap != null ? item.marketCap.toLocaleString() : '-'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ScreeningReportView: React.FC = () => {
   const isMobile = useIsMobile();
   // 시장 유형 탭 — 생성 시 어떤 market_type을 생성할지 결정하고, 목록도 해당 유형만 표시
@@ -8041,6 +8138,74 @@ const ScreeningReportView: React.FC = () => {
               )}
             </div>
           )}
+
+          {/* ── 추가 랭킹 4종 */}
+          {(() => {
+            const hasAny = (
+              selected.rankAssetGrowth.length > 0 ||
+              selected.rankOpMarginAvg.length > 0 ||
+              selected.rankLowDebt.length > 0 ||
+              selected.rankRevenueGrowth.length > 0
+            );
+            if (!hasAny) return null;
+
+            type RankSection = {
+              title: string;
+              subtitle: string;
+              items: typeof selected.rankAssetGrowth;
+              metricLabel: string;
+              metricKey: keyof typeof selected.rankAssetGrowth[0];
+              metricUnit: string;
+              color: string;
+            };
+
+            const sections: RankSection[] = [
+              {
+                title: '📈 자산 증가율 TOP20',
+                subtitle: '최근 3년간 자산총계 누적 증가율 (전전기→당기)',
+                items: selected.rankAssetGrowth,
+                metricLabel: '자산증가',
+                metricKey: 'assetsGrowth3y',
+                metricUnit: '%',
+                color: '#1565c0',
+              },
+              {
+                title: '💰 영업이익률 TOP20',
+                subtitle: '최근 3년 평균 영업이익률',
+                items: selected.rankOpMarginAvg,
+                metricLabel: '3Y평균',
+                metricKey: 'opMargin3yAvg',
+                metricUnit: '%',
+                color: '#2e7d32',
+              },
+              {
+                title: '🛡 저부채 우량주 (부채비율 120% 이하)',
+                subtitle: '부채비율 낮은 순 — 재무 안전성 최상위',
+                items: selected.rankLowDebt,
+                metricLabel: '부채비율',
+                metricKey: 'debtRatio',
+                metricUnit: '%',
+                color: '#6a1b9a',
+              },
+              {
+                title: '🚀 매출 증가율 TOP20',
+                subtitle: '최근 3년간 매출액 누적 증가율 (전전기→당기)',
+                items: selected.rankRevenueGrowth,
+                metricLabel: '매출증가',
+                metricKey: 'revenueGrowth3y',
+                metricUnit: '%',
+                color: '#e65100',
+              },
+            ];
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {sections.filter(s => s.items.length > 0).map((sec, si) => (
+                  <RankingTable key={si} {...sec} />
+                ))}
+              </div>
+            );
+          })()}
 
           {/* ── Gemini 분석 마크다운 */}
           {selected.content && (

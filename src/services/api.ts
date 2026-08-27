@@ -44,6 +44,7 @@ import {
   WorkoutLog,
   ScreeningReport,
   ScreeningTopPick,
+  ScreeningRankItem,
   IntegratedReport,
 } from '../types';
 
@@ -1748,68 +1749,107 @@ export const upsertDaySchedule = async (
 // ─── DART 재무 스크리닝 ────────────────────────────────────────────────────
 
 /** 백엔드 응답(snake_case)을 ScreeningTopPick(camelCase)으로 변환 */
-const _parseTopPicks = (raw: string | null): ScreeningTopPick[] => {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    return arr.map((item: Record<string, unknown>) => {
-      // quarterly 파싱 (Python에서 camelCase로 저장됨)
-      const qRaw = item.quarterly as Record<string, Record<string, unknown>> | null | undefined;
-      const quarterly = qRaw ? {
-        q1: qRaw.q1 ? {
-          revenue: qRaw.q1.revenue != null ? Number(qRaw.q1.revenue) : null,
-          revenuePrev: qRaw.q1.revenuePrev != null ? Number(qRaw.q1.revenuePrev) : null,
-          opIncome: qRaw.q1.opIncome != null ? Number(qRaw.q1.opIncome) : null,
-          opIncomePrev: qRaw.q1.opIncomePrev != null ? Number(qRaw.q1.opIncomePrev) : null,
-          netIncome: qRaw.q1.netIncome != null ? Number(qRaw.q1.netIncome) : null,
-          netIncomePrev: qRaw.q1.netIncomePrev != null ? Number(qRaw.q1.netIncomePrev) : null,
-        } : undefined,
-        h1: qRaw.h1 ? {
-          revenue: qRaw.h1.revenue != null ? Number(qRaw.h1.revenue) : null,
-          revenuePrev: qRaw.h1.revenuePrev != null ? Number(qRaw.h1.revenuePrev) : null,
-          opIncome: qRaw.h1.opIncome != null ? Number(qRaw.h1.opIncome) : null,
-          opIncomePrev: qRaw.h1.opIncomePrev != null ? Number(qRaw.h1.opIncomePrev) : null,
-          netIncome: qRaw.h1.netIncome != null ? Number(qRaw.h1.netIncome) : null,
-          netIncomePrev: qRaw.h1.netIncomePrev != null ? Number(qRaw.h1.netIncomePrev) : null,
-        } : undefined,
-      } : null;
+const _parseOnePick = (item: Record<string, unknown>): ScreeningTopPick => {
+  const qRaw = item.quarterly as Record<string, Record<string, unknown>> | null | undefined;
+  const quarterly = qRaw ? {
+    q1: qRaw.q1 ? {
+      revenue: qRaw.q1.revenue != null ? Number(qRaw.q1.revenue) : null,
+      revenuePrev: qRaw.q1.revenuePrev != null ? Number(qRaw.q1.revenuePrev) : null,
+      opIncome: qRaw.q1.opIncome != null ? Number(qRaw.q1.opIncome) : null,
+      opIncomePrev: qRaw.q1.opIncomePrev != null ? Number(qRaw.q1.opIncomePrev) : null,
+      netIncome: qRaw.q1.netIncome != null ? Number(qRaw.q1.netIncome) : null,
+      netIncomePrev: qRaw.q1.netIncomePrev != null ? Number(qRaw.q1.netIncomePrev) : null,
+    } : undefined,
+    h1: qRaw.h1 ? {
+      revenue: qRaw.h1.revenue != null ? Number(qRaw.h1.revenue) : null,
+      revenuePrev: qRaw.h1.revenuePrev != null ? Number(qRaw.h1.revenuePrev) : null,
+      opIncome: qRaw.h1.opIncome != null ? Number(qRaw.h1.opIncome) : null,
+      opIncomePrev: qRaw.h1.opIncomePrev != null ? Number(qRaw.h1.opIncomePrev) : null,
+      netIncome: qRaw.h1.netIncome != null ? Number(qRaw.h1.netIncome) : null,
+      netIncomePrev: qRaw.h1.netIncomePrev != null ? Number(qRaw.h1.netIncomePrev) : null,
+    } : undefined,
+  } : null;
 
-      return {
-        stockCode: String(item.stock_code ?? item.stockCode ?? ''),
-        corpCode: String(item.corp_code ?? item.corpCode ?? ''),
-        corpName: String(item.corp_name ?? item.corpName ?? ''),
-        market: (item.market as 'KOSPI' | 'KOSDAQ') ?? 'KOSPI',
-        roe: item.roe != null ? Number(item.roe) : null,
-        opMargin: item.op_margin != null ? Number(item.op_margin) : null,
-        debtRatio: item.debt_ratio != null ? Number(item.debt_ratio) : null,
-        revenueGrowth: item.revenue_growth != null ? Number(item.revenue_growth) : null,
-        pbr: item.pbr != null ? Number(item.pbr) : null,
-        per: item.per != null ? Number(item.per) : null,
-        cashRatio: item.cash_ratio != null ? Number(item.cash_ratio) : null,
-        marketCap: item.market_cap != null ? Number(item.market_cap) : null,
-        currentPrice: item.current_price != null ? Number(item.current_price) : null,
-        score: Number(item.score ?? 0),
-        quarterly,
-      };
-    });
+  return {
+    stockCode: String(item.stock_code ?? item.stockCode ?? ''),
+    corpCode: String(item.corp_code ?? item.corpCode ?? ''),
+    corpName: String(item.corp_name ?? item.corpName ?? ''),
+    market: (item.market as 'KOSPI' | 'KOSDAQ') ?? 'KOSPI',
+    roe: item.roe != null ? Number(item.roe) : null,
+    opMargin: item.op_margin != null ? Number(item.op_margin) : null,
+    debtRatio: item.debt_ratio != null ? Number(item.debt_ratio) : null,
+    revenueGrowth: item.revenue_growth != null ? Number(item.revenue_growth) : null,
+    pbr: item.pbr != null ? Number(item.pbr) : null,
+    per: item.per != null ? Number(item.per) : null,
+    cashRatio: item.cash_ratio != null ? Number(item.cash_ratio) : null,
+    marketCap: item.market_cap != null ? Number(item.market_cap) : null,
+    currentPrice: item.current_price != null ? Number(item.current_price) : null,
+    score: Number(item.score ?? 0),
+    quarterly,
+  };
+};
+
+const _parseRankItem = (item: Record<string, unknown>): ScreeningRankItem => ({
+  stockCode: String(item.stock_code ?? ''),
+  corpName: String(item.corp_name ?? ''),
+  market: (item.market as 'KOSPI' | 'KOSDAQ') ?? 'KOSPI',
+  marketCap: item.market_cap != null ? Number(item.market_cap) : null,
+  debtRatio: item.debt_ratio != null ? Number(item.debt_ratio) : null,
+  roe: item.roe != null ? Number(item.roe) : null,
+  opMargin: item.op_margin != null ? Number(item.op_margin) : null,
+  revenueGrowth: item.revenue_growth != null ? Number(item.revenue_growth) : null,
+  assetsGrowth3y: item.assets_growth_3y != null ? Number(item.assets_growth_3y) : null,
+  opMargin3yAvg: item.op_margin_3y_avg != null ? Number(item.op_margin_3y_avg) : null,
+  revenueGrowth3y: item.revenue_growth_3y != null ? Number(item.revenue_growth_3y) : null,
+});
+
+const _parseScreeningJson = (raw: string | null): {
+  topPicks: ScreeningTopPick[];
+  rankAssetGrowth: ScreeningRankItem[];
+  rankOpMarginAvg: ScreeningRankItem[];
+  rankLowDebt: ScreeningRankItem[];
+  rankRevenueGrowth: ScreeningRankItem[];
+} => {
+  const empty = { topPicks: [], rankAssetGrowth: [], rankOpMarginAvg: [], rankLowDebt: [], rankRevenueGrowth: [] };
+  if (!raw) return empty;
+  try {
+    const parsed = JSON.parse(raw);
+    // 구형 포맷: 배열 그대로 → picks만 있는 것으로 처리
+    const picksArr: unknown[] = Array.isArray(parsed) ? parsed : (parsed.picks ?? []);
+    const rankArr = (key: string): unknown[] => (!Array.isArray(parsed) && Array.isArray(parsed[key])) ? parsed[key] : [];
+
+    return {
+      topPicks: (picksArr as Record<string, unknown>[]).map(_parseOnePick),
+      rankAssetGrowth: (rankArr('rank_asset_growth') as Record<string, unknown>[]).map(_parseRankItem),
+      rankOpMarginAvg: (rankArr('rank_op_margin_avg') as Record<string, unknown>[]).map(_parseRankItem),
+      rankLowDebt: (rankArr('rank_low_debt') as Record<string, unknown>[]).map(_parseRankItem),
+      rankRevenueGrowth: (rankArr('rank_revenue_growth') as Record<string, unknown>[]).map(_parseRankItem),
+    };
   } catch {
-    return [];
+    return empty;
   }
 };
 
 /** 백엔드 응답을 ScreeningReport(camelCase)로 변환 */
-const _toScreeningReport = (item: Record<string, unknown>): ScreeningReport => ({
-  id: Number(item.id),
-  reportDate: String(item.reportDate ?? ''),
-  marketType: (item.marketType as 'ALL' | 'KOSPI' | 'KOSDAQ') ?? 'ALL',
-  bsnYear: item.bsnYear != null ? String(item.bsnYear) : null,
-  universeCount: item.universeCount != null ? Number(item.universeCount) : null,
-  screenedCount: item.screenedCount != null ? Number(item.screenedCount) : null,
-  topPicks: _parseTopPicks(item.topPicks as string | null),
-  content: item.content != null ? String(item.content) : null,
-  createdAt: String(item.createdAt ?? ''),
-  updatedAt: String(item.updatedAt ?? ''),
-});
+const _toScreeningReport = (item: Record<string, unknown>): ScreeningReport => {
+  const parsed = _parseScreeningJson(item.topPicks as string | null);
+  return {
+    id: Number(item.id),
+    reportDate: String(item.reportDate ?? ''),
+    marketType: (item.marketType as 'ALL' | 'KOSPI' | 'KOSDAQ') ?? 'ALL',
+    bsnYear: item.bsnYear != null ? String(item.bsnYear) : null,
+    universeCount: item.universeCount != null ? Number(item.universeCount) : null,
+    screenedCount: item.screenedCount != null ? Number(item.screenedCount) : null,
+    topPicks: parsed.topPicks,
+    rankAssetGrowth: parsed.rankAssetGrowth,
+    rankOpMarginAvg: parsed.rankOpMarginAvg,
+    rankLowDebt: parsed.rankLowDebt,
+    rankRevenueGrowth: parsed.rankRevenueGrowth,
+    content: item.content != null ? String(item.content) : null,
+    createdAt: String(item.createdAt ?? ''),
+    updatedAt: String(item.updatedAt ?? ''),
+  };
+};
 
 /** DART 스크리닝 리포트 목록 조회 (최신순) */
 export const getScreeningReports = async (): Promise<ScreeningReport[]> => {

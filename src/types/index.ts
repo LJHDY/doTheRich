@@ -963,6 +963,21 @@ export interface ScreeningTopPick {
   } | null;
 }
 
+/** 추가 랭킹용 종목 항목 (4종 랭킹 공용) */
+export interface ScreeningRankItem {
+  stockCode: string;
+  corpName: string;
+  market: 'KOSPI' | 'KOSDAQ';
+  marketCap: number | null;
+  debtRatio: number | null;
+  roe: number | null;
+  opMargin: number | null;
+  revenueGrowth: number | null;
+  assetsGrowth3y?: number | null;   // 자산 증가율 TOP20
+  opMargin3yAvg?: number | null;    // 3년 평균 영업이익률 TOP20
+  revenueGrowth3y?: number | null;  // 매출 증가율 TOP20
+}
+
 /** DART 우량주 스크리닝 리포트 1건 */
 export interface ScreeningReport {
   id: number;
@@ -972,6 +987,10 @@ export interface ScreeningReport {
   universeCount: number | null;                // 분석 대상 종목 수
   screenedCount: number | null;                // 1차 필터 통과 종목 수
   topPicks: ScreeningTopPick[];                // JSON 파싱된 TOP 40 종목
+  rankAssetGrowth: ScreeningRankItem[];        // 3년 자산 증가율 TOP20
+  rankOpMarginAvg: ScreeningRankItem[];        // 3년 평균 영업이익률 TOP20
+  rankLowDebt: ScreeningRankItem[];            // 부채비율 120% 이하
+  rankRevenueGrowth: ScreeningRankItem[];      // 3년 매출 증가율 TOP20
   content: string | null;                      // Gemini 마크다운 분석
   createdAt: string;
   updatedAt: string;
