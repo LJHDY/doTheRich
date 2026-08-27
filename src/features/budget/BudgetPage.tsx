@@ -4588,6 +4588,106 @@ const MarketReportView: React.FC = () => {
                 );
               })()}
 
+              {/* 실적 발표 결과 & 내일 예정 (글로벌 리포트 전용) */}
+              {selected.reportType === 'global' && (() => {
+                const earningsCalendar: any[] = (selected.marketData as any).earnings_calendar || [];
+                const earningsResults: any[] = (selected.marketData as any).earnings_results || [];
+
+                // report_date 기준 내일 날짜 계산
+                const reportDate = selected.reportDate; // "YYYY-MM-DD"
+                const tomorrowDate = (() => {
+                  const d = new Date(reportDate + 'T00:00:00');
+                  d.setDate(d.getDate() + 1);
+                  return d.toISOString().split('T')[0];
+                })();
+
+                const todayResults = earningsResults.filter((e: any) => e.date === reportDate);
+                const tomorrowEarnings = earningsCalendar.filter((e: any) => e.date === tomorrowDate);
+
+                if (todayResults.length === 0 && tomorrowEarnings.length === 0) return null;
+
+                return (
+                  <div style={{ marginBottom: '20px' }}>
+                    {/* 오늘 실적 결과 */}
+                    {todayResults.length > 0 && (
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '8px' }}>
+                          📊 오늘 실적 발표
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                          {todayResults.map((e: any, i: number) => {
+                            const surprisePct: number | null = e.eps_surprise_pct;
+                            const isPositive = surprisePct != null && surprisePct > 0;
+                            const isNegative = surprisePct != null && surprisePct < 0;
+                            return (
+                              <div key={i} style={{
+                                background: '#fff', borderRadius: '10px', padding: '10px 14px',
+                                border: `1px solid ${isPositive ? '#a8e6cf' : isNegative ? '#ffc8c8' : '#e0e4e8'}`,
+                                borderLeft: `3px solid ${isPositive ? '#27ae60' : isNegative ? '#e53935' : '#89CFF0'}`,
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.06)', minWidth: '180px',
+                              }}>
+                                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>
+                                  {e.name} <span style={{ fontSize: '11px', color: '#7a8fa6', fontWeight: 400 }}>({e.symbol})</span>
+                                </div>
+                                {e.eps_actual != null && (
+                                  <div style={{ fontSize: '12px', color: '#344054', marginTop: '4px' }}>
+                                    EPS ${Number(e.eps_actual).toFixed(2)}
+                                    {e.eps_estimate != null && (
+                                      <span style={{ color: '#7a8fa6' }}> / 예측 ${Number(e.eps_estimate).toFixed(2)}</span>
+                                    )}
+                                  </div>
+                                )}
+                                {surprisePct != null && (
+                                  <div style={{ fontSize: '12px', fontWeight: 700, color: isPositive ? '#27ae60' : '#e53935', marginTop: '2px' }}>
+                                    {isPositive ? '▲' : '▼'} {Math.abs(surprisePct).toFixed(1)}% 서프라이즈
+                                  </div>
+                                )}
+                                {e.rev_actual != null && (
+                                  <div style={{ fontSize: '11px', color: '#7a8fa6', marginTop: '2px' }}>
+                                    매출 ${(e.rev_actual / 1e9).toFixed(1)}B
+                                    {e.rev_estimate != null && ` / 예측 $${(e.rev_estimate / 1e9).toFixed(1)}B`}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 내일 실적 예정 */}
+                    {tomorrowEarnings.length > 0 && (
+                      <div style={{
+                        background: 'linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%)',
+                        borderRadius: '10px', padding: '12px 16px',
+                        border: '1px solid #ffe082', borderLeft: '3px solid #f9a825',
+                        boxShadow: '0 2px 8px rgba(249,168,37,0.15)',
+                      }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#e65100', marginBottom: '8px' }}>
+                          ⚠️ 내일 실적 발표 예정
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {tomorrowEarnings.map((e: any, i: number) => (
+                            <div key={i} style={{
+                              background: '#fff', borderRadius: '8px', padding: '6px 12px',
+                              border: '1px solid #ffe082', fontSize: '12px',
+                            }}>
+                              <span style={{ fontWeight: 700, color: '#1a3a5c' }}>{e.name}</span>
+                              <span style={{ color: '#7a8fa6', marginLeft: '4px' }}>({e.symbol})</span>
+                              {e.eps_estimate != null && (
+                                <span style={{ color: '#e65100', marginLeft: '6px', fontWeight: 600 }}>
+                                  EPS 예측 ${Number(e.eps_estimate).toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* 미국 주가상위 100 + 섹터 테이블 (글로벌 리포트 전용) */}
               {selected.reportType === 'global' && (() => {
                 const usaStocks: Array<{ticker:string;name:string;nameEn:string;exchange:string;close:number|null;changePct:number;changePrice:number|null;tradeVolume:number;marketCap:number|null;sector:string}> =
