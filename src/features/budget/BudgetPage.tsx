@@ -67,6 +67,7 @@ import {
   TickerHistoryPoint,
   analyzeCompany,
   getCompanyAnalysisReports,
+  deleteCompanyAnalysisReport,
   CompanyAnalysisResult,
 } from '../../services/api';
 import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, IntegratedReport, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, ScreeningRankItem, ScreeningReport, ScreeningTopPick, formatAmount, formatAmountShort } from '../../types';
@@ -6697,8 +6698,8 @@ const FixedExpenseModal: React.FC<{
 
   const handlePay = async (fe: FixedExpense) => {
     if (!payDate) { alert('납부일을 입력해주세요'); return; }
-    // yearMonth는 payDate의 연월이 아닌 현재 탭의 연월 사용
-    const ym = yearMonth;
+    // 25일 사이클 적용: 25일 이후 납부는 다음달 정산으로 기록
+    const ym = toSettledYearMonth(payDate);
     try {
       const entry = await payFixedExpense(fe.id, ym, payDate);
       onPaid(entry);
@@ -8343,6 +8344,14 @@ const CompanyAnalysisView: React.FC = () => {
     getCompanyAnalysisReports().then(setSavedReports).catch(() => {});
   }, []);
 
+  const handleDeleteReport = async (r: CompanyAnalysisResult, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!r.id || !window.confirm(`"${r.companyName}" 분석 리포트를 삭제할까요?`)) return;
+    await deleteCompanyAnalysisReport(r.id).catch(() => {});
+    setSavedReports(prev => prev.filter(p => p.id !== r.id));
+    if (result?.id === r.id) setResult(null);
+  };
+
   const handleAnalyze = async () => {
     const trimmed = query.trim();
     if (!trimmed) return;
@@ -8453,19 +8462,31 @@ const CompanyAnalysisView: React.FC = () => {
             const isActive = result?.companyName === r.companyName;
             const label = r.companyName + (r.ticker ? ` (${r.ticker})` : '');
             return (
-              <button
-                key={i}
-                onClick={() => setResult(r)}
-                style={{
-                  padding: '4px 10px', borderRadius: '20px', fontSize: '12px',
-                  border: '1px solid #89CFF0',
-                  background: isActive ? '#89CFF0' : '#fff',
-                  color: isActive ? '#fff' : '#1a3a5c',
-                  cursor: 'pointer',
-                }}
-              >
-                {label}
-              </button>
+              <div key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0', borderRadius: '20px', border: '1px solid #89CFF0', overflow: 'hidden' }}>
+                <button
+                  onClick={() => setResult(r)}
+                  style={{
+                    padding: '4px 8px 4px 10px', fontSize: '12px', border: 'none',
+                    background: isActive ? '#89CFF0' : '#fff',
+                    color: isActive ? '#fff' : '#1a3a5c',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
+                <button
+                  onClick={e => handleDeleteReport(r, e)}
+                  title="삭제"
+                  style={{
+                    padding: '4px 7px 4px 4px', fontSize: '11px', border: 'none',
+                    background: isActive ? '#89CFF0' : '#fff',
+                    color: isActive ? '#fff' : '#888',
+                    cursor: 'pointer', lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
             );
           })}
         </div>

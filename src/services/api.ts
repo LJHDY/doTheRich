@@ -1950,6 +1950,7 @@ export const getNearbySchools = async (
 // ─── 기업 투자 분석 ───────────────────────────────────────────────────────────
 
 export interface CompanyAnalysisResult {
+  id?: number;            // DB 저장 후 부여되는 PK (신규 분석 직후엔 없을 수 있음)
   companyName: string;
   ticker: string | null;
   market: string;         // 'KR' | 'US'
@@ -1975,6 +1976,10 @@ export const analyzeCompany = async (company: string): Promise<CompanyAnalysisRe
 export const getCompanyAnalysisReports = async (): Promise<CompanyAnalysisResult[]> => {
   const { data } = await api.get<CompanyAnalysisResult[]>('/api/company-analysis');
   return data;
+};
+
+export const deleteCompanyAnalysisReport = async (id: number): Promise<void> => {
+  await api.delete(`/api/company-analysis/${id}`);
 };
 
 // ─── 단지 시세 스냅샷 (즐겨찾기 실시간 감시) ──────────────────────────────────
