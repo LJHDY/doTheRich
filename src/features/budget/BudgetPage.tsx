@@ -4504,7 +4504,8 @@ const MarketReportView: React.FC = () => {
                   { key: 'foreign',    label: '외국인', color: '#f28e2b' },
                   { key: 'institution', label: '기관계', color: '#59a14f' },
                 ];
-                const chartData = flow.map(day => {
+                // 그래프는 시계열 특성상 과거→오늘(asc) 순서 유지
+                const chartData = [...flow].reverse().map(day => {
                   const row: Record<string, string | number> = { date: fmtDate(day.date) };
                   CHART_COLS.forEach(c => {
                     row[c.key] = day.investors[c.key]?.diffHundredMillion ?? 0;
