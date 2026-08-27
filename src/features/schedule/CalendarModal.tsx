@@ -1,17 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CommonCode, Dday, FixedExpenseCalendar, Schedule, Todo } from '../../types';
+import { BudgetEntry, CommonCode, Dday, FixedExpenseCalendar, PaymentMethod, Schedule, Todo } from '../../types';
 import {
   createDday,
   createTodo,
   deleteDday,
   deleteTodo,
   disconnectNaverCalendar,
+  getBudgetEntries,
   getCommonCodes,
   getDdays,
   getDayScheduleDates,
   getFixedExpenseCalendar,
   getNaverCalendarAuthUrl,
   getNaverCalendarStatus,
+  getPaymentMethods,
   getSchedules,
   getTodos,
   getWorkoutCalendar,
@@ -254,6 +256,31 @@ const ddayLabel = (diff: number) => diff === 0 ? 'D-Day' : diff > 0 ? `D-${diff}
 const ddayBadgeColor = (diff: number) =>
   diff === 0 ? '#E06060' : diff > 0 && diff <= 7 ? '#FF9800' : diff > 0 && diff <= 30 ? '#FFD97D' : '#bdbdbd';
 
+// 카드 결산 기간 계산 (billingStartDay ~ billingEndDay 기준)
+function calcCardBillingPeriod(billingStartDay: number, billingEndDay: number, year: number, month: number) {
+  const clamp = (y: number, m1: number, d: number) => Math.min(d, new Date(y, m1, 0).getDate());
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  let fromDate: Date;
+  let toDate: Date;
+  if (billingEndDay < billingStartDay) {
+    // 전달~이번달 경계 결산 (예: 시작 24일, 종료 23일)
+    fromDate = new Date(year, month - 2, clamp(year, month - 1, billingStartDay));
+    toDate   = new Date(year, month - 1, clamp(year, month,     billingEndDay));
+  } else {
+    fromDate = new Date(year, month - 1, clamp(year, month, billingStartDay));
+    toDate   = new Date(year, month - 1, clamp(year, month, billingEndDay));
+  }
+  return { from: fmt(fromDate), to: fmt(toDate) };
+}
+
+// 카드 결제일 💸 달력 항목
+interface CardBillingItem {
+  cardName: string;
+  userId: 'ldy' | 'juhae';
+  amount: number;   // 원 단위
+}
+
 const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
   const isMobile = useIsMobile();
   const now = new Date();
@@ -288,6 +315,8 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
   const [todoInput, setTodoInput]       = useState('');
   const [todoUser, setTodoUser]         = useState<'ldy' | 'juhae' | 'common'>('ldy');
   const [todoEndDate, setTodoEndDate]   = useState('');
+  // 카드 결제일 💸 달력: dateStr → 카드별 사용금액 목록
+  const [cardBillingCalendar, setCardBillingCalendar] = useState<Record<string, CardBillingItem[]>>({});
   const pickerRef       = useRef<HTMLDivElement>(null);
   const fePopupRef      = useRef<HTMLDivElement>(null);
   const dateActionRef   = useRef<HTMLDivElement>(null);
@@ -340,21 +369,65 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
   const load = useCallback(async () => {
     setLoading(true);
     const ym6 = yearMonth.replace('-', ''); // YYYY-MM → YYYYMM
+    // 전달 ym6 (결산 기간이 전달에 시작되는 카드 엔트리 조회용)
+    const [y, m] = [year, month];
+    const prevYm6 = m === 1 ? `${y - 1}12` : `${y}${String(m - 1).padStart(2, '0')}`;
     try {
-      const [sched, feData, todoData, wDates, dsDates] = await Promise.all([
+      const [sched, feData, todoData, wDates, dsDates, pmLdy, pmJuhae, entLdyCur, entJuhaeCur, entLdyPrev, entJuhaePrev] = await Promise.all([
         getSchedules(yearMonth),
         getFixedExpenseCalendar(ym6),
         getTodos(yearMonth),
         getWorkoutCalendar(yearMonth),
         getDayScheduleDates(yearMonth),
+        getPaymentMethods('ldy'),
+        getPaymentMethods('juhae'),
+        getBudgetEntries('ldy', ym6),
+        getBudgetEntries('juhae', ym6),
+        getBudgetEntries('ldy', prevYm6),
+        getBudgetEntries('juhae', prevYm6),
       ]);
       setSchedules(sched);
       setFeCalendar(feData);
       setTodos(todoData);
       setWorkoutCalendar(wDates);
       setScheduledDates(new Set(dsDates));
+
+      // 카드 결제일 💸 달력 계산
+      const allEntries: BudgetEntry[] = [...entLdyCur, ...entJuhaeCur, ...entLdyPrev, ...entJuhaePrev];
+      const daysInCurMonth = new Date(y, m, 0).getDate();
+      const billingCal: Record<string, CardBillingItem[]> = {};
+
+      const padD = (n: number) => String(n).padStart(2, '0');
+      ([['ldy', pmLdy], ['juhae', pmJuhae]] as [string, PaymentMethod[]][]).forEach(([uid, pms]) => {
+        pms
+          .filter(pm => pm.type === '카드' && pm.billingDay != null && pm.isActive)
+          .forEach(pm => {
+            const billingDay = Math.min(pm.billingDay!, daysInCurMonth);
+            const dateStr = `${y}-${padD(m)}-${padD(billingDay)}`;
+
+            let amount = 0;
+            // billingStartDay + billingEndDay 가 모두 있을 때만 금액 계산
+            if (pm.billingStartDay != null && pm.billingEndDay != null) {
+              const { from, to } = calcCardBillingPeriod(pm.billingStartDay, pm.billingEndDay, y, m);
+              amount = allEntries
+                .filter(e =>
+                  e.userId === uid &&
+                  e.cardName === pm.name &&
+                  e.entryType === 'EXPENSE' &&
+                  !e.isCardPayment &&
+                  !(e.isTransfer || e.category === '이체') &&
+                  e.entryDate >= from && e.entryDate <= to
+                )
+                .reduce((sum, e) => sum + e.amount, 0);
+            }
+
+            if (!billingCal[dateStr]) billingCal[dateStr] = [];
+            billingCal[dateStr].push({ cardName: pm.name, userId: uid as 'ldy' | 'juhae', amount });
+          });
+      });
+      setCardBillingCalendar(billingCal);
     } finally { setLoading(false); }
-  }, [yearMonth]);
+  }, [yearMonth, year, month]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1048,6 +1121,24 @@ const CalendarModal: React.FC<Props> = ({ onClose, onDdayChange }) => {
                                 +{singleDay.length - maxChips}개
                               </div>
                             )}
+                            {/* 카드 결제일 💸 배지 */}
+                            {(cardBillingCalendar[dateStr] ?? []).map((item, bi) => {
+                              const man = Math.round(item.amount / 10000);
+                              const amtLabel = man > 0 ? ` ${man.toLocaleString()}만` : '';
+                              const userColor = item.userId === 'ldy' ? '#E07070' : '#89CFF0';
+                              return (
+                                <div key={bi} style={{
+                                  fontSize: isMobile ? '9px' : '10px', lineHeight: '14px',
+                                  background: '#fff8e1', border: `1px solid ${userColor}`,
+                                  color: '#5d4037', borderRadius: '3px',
+                                  padding: isMobile ? '1px 3px' : '1px 4px',
+                                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                  fontWeight: 600,
+                                }}>
+                                  💸{amtLabel}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       );
