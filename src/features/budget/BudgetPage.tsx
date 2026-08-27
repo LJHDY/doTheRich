@@ -7475,10 +7475,46 @@ type RankSectionProps = {
 
 const RankingTable: React.FC<RankSectionProps> = ({ title, subtitle, items, metricLabel, metricKey, metricUnit, color }) => {
   const [open, setOpen] = useState(false);
+  // 정렬 상태 — null이면 기본 순서(내려받은 items 그대로)
+  const [rankSortKey, setRankSortKey] = useState<keyof ScreeningRankItem | null>(null);
+  const [rankSortDir, setRankSortDir] = useState<'asc' | 'desc'>('desc');
+
   if (items.length === 0) return null;
+
+  const handleRankSort = (key: keyof ScreeningRankItem) => {
+    if (rankSortKey === key) {
+      setRankSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setRankSortKey(key);
+      // 부채비율은 낮을수록 좋으므로 첫 클릭 시 오름차순
+      setRankSortDir(key === 'debtRatio' ? 'asc' : 'desc');
+    }
+  };
+
+  const sortedItems = rankSortKey
+    ? [...items].sort((a, b) => {
+        const av = a[rankSortKey] as number | null | undefined;
+        const bv = b[rankSortKey] as number | null | undefined;
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return rankSortDir === 'asc' ? av - bv : bv - av;
+      })
+    : items;
 
   const fmtPct = (v: number | null | undefined) =>
     v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}${metricUnit}` : '-';
+
+  // 정렬 아이콘
+  const sortIcon = (key: keyof ScreeningRankItem) => {
+    if (rankSortKey !== key) return <span style={{ color: '#c0c8d0', marginLeft: '2px', fontSize: '9px' }}>⇅</span>;
+    return <span style={{ color: '#1565c0', marginLeft: '2px', fontSize: '9px' }}>{rankSortDir === 'asc' ? '▲' : '▼'}</span>;
+  };
+
+  const thBase: React.CSSProperties = {
+    padding: '6px 10px', color: '#7a8fa6', fontWeight: 600,
+    whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none',
+  };
 
   return (
     <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #e0e4e8', overflow: 'hidden' }}>
@@ -7507,15 +7543,25 @@ const RankingTable: React.FC<RankSectionProps> = ({ title, subtitle, items, metr
                 <th style={{ padding: '6px 10px', textAlign: 'center', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>#</th>
                 <th style={{ padding: '6px 10px', textAlign: 'left', color: '#7a8fa6', fontWeight: 600 }}>종목</th>
                 <th style={{ padding: '6px 10px', textAlign: 'center', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>시장</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right', color: color, fontWeight: 700, whiteSpace: 'nowrap' }}>{metricLabel}</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>부채비율</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>ROE</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>영업이익률</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right', color: '#7a8fa6', fontWeight: 600, whiteSpace: 'nowrap' }}>시총(억)</th>
+                <th onClick={() => handleRankSort(metricKey)} style={{ ...thBase, textAlign: 'right', color: rankSortKey === metricKey ? '#1565c0' : color, fontWeight: 700 }}>
+                  {metricLabel}{sortIcon(metricKey)}
+                </th>
+                <th onClick={() => handleRankSort('debtRatio')} style={{ ...thBase, textAlign: 'right' }}>
+                  부채비율{sortIcon('debtRatio')}
+                </th>
+                <th onClick={() => handleRankSort('roe')} style={{ ...thBase, textAlign: 'right' }}>
+                  ROE{sortIcon('roe')}
+                </th>
+                <th onClick={() => handleRankSort('opMargin')} style={{ ...thBase, textAlign: 'right' }}>
+                  영업이익률{sortIcon('opMargin')}
+                </th>
+                <th onClick={() => handleRankSort('marketCap')} style={{ ...thBase, textAlign: 'right' }}>
+                  시총(억){sortIcon('marketCap')}
+                </th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item, idx) => {
+              {sortedItems.map((item, idx) => {
                 const metricVal = item[metricKey] as number | null | undefined;
                 const isLowDebt = metricKey === 'debtRatio';
                 const metricColor = isLowDebt
@@ -7574,6 +7620,9 @@ const ScreeningReportView: React.FC = () => {
   const [showAll, setShowAll] = useState(false);
   // 분기 실적 확장 표시 — Set<stockCode>
   const [expandedQuarterly, setExpandedQuarterly] = useState<Set<string>>(new Set());
+  // 주 테이블 정렬 상태 — null이면 종합 스코어 기준(기본)
+  const [mainSortKey, setMainSortKey] = useState<keyof ScreeningTopPick | null>(null);
+  const [mainSortDir, setMainSortDir] = useState<'asc' | 'desc'>('desc');
 
   // 시장 유형별 필터된 리포트 목록
   const filteredReports = reports.filter(r => r.marketType === activeMarket);
@@ -7631,6 +7680,8 @@ const ScreeningReportView: React.FC = () => {
     setActiveMarket(mkt);
     setShowAll(false);
     setExpandedQuarterly(new Set());
+    setMainSortKey(null);  // 정렬 초기화 (종합 스코어 기준으로 복귀)
+    setMainSortDir('desc');
     const filtered = reports.filter(r => r.marketType === mkt);
     if (filtered.length > 0) setSelectedId(filtered[0].id);
     else setSelectedId(null);
@@ -7745,11 +7796,35 @@ const ScreeningReportView: React.FC = () => {
     return dt.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
-  // 표시할 종목 목록 — 기본 TOP 30 표시 (분기 실적 포함), 전체 펼치기 시 TOP 40
+  // 표시할 종목 목록 — 정렬 후 TOP 30/40 슬라이싱
   const DEFAULT_TOP = 30;
-  const visiblePicks: ScreeningTopPick[] = selected
-    ? (showAll ? selected.topPicks : selected.topPicks.slice(0, DEFAULT_TOP))
+
+  const handleMainSort = (key: keyof ScreeningTopPick) => {
+    if (mainSortKey === key) {
+      setMainSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setMainSortKey(key);
+      // 부채비율은 낮을수록 좋으므로 첫 클릭 시 오름차순
+      setMainSortDir(key === 'debtRatio' ? 'asc' : 'desc');
+    }
+  };
+
+  const sortedTopPicks: ScreeningTopPick[] = selected
+    ? (mainSortKey
+        ? [...selected.topPicks].sort((a, b) => {
+            const av = a[mainSortKey] as number | null | undefined;
+            const bv = b[mainSortKey] as number | null | undefined;
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+            return mainSortDir === 'asc' ? av - bv : bv - av;
+          })
+        : selected.topPicks)
     : [];
+
+  const visiblePicks: ScreeningTopPick[] = showAll
+    ? sortedTopPicks
+    : sortedTopPicks.slice(0, DEFAULT_TOP);
 
   // 분기 실적 토글 헬퍼
   const toggleQuarterly = (code: string) => {
@@ -7780,12 +7855,22 @@ const ScreeningReportView: React.FC = () => {
     return `${sign}${pct.toFixed(1)}%`;
   };
 
-  // 테이블 셀 공통 스타일
+  // 테이블 헤더 공통 스타일 (정렬 가능 컬럼)
   const thStyle: React.CSSProperties = {
     padding: '6px 8px', fontSize: '11px', fontWeight: 600,
     color: '#5f6368', background: '#f0f4f8',
     borderBottom: '1px solid #e0e4e8', whiteSpace: 'nowrap', textAlign: 'center',
   };
+  const thSortStyle = (key: keyof ScreeningTopPick): React.CSSProperties => ({
+    ...thStyle,
+    cursor: 'pointer', userSelect: 'none',
+    color: mainSortKey === key ? '#1565c0' : '#5f6368',
+  });
+  // 정렬 아이콘 — 선택된 컬럼은 현재 방향 화살표, 나머지는 회색 ⇅
+  const mainSortIcon = (key: keyof ScreeningTopPick) =>
+    mainSortKey === key
+      ? <span style={{ fontSize: '9px', marginLeft: '2px' }}>{mainSortDir === 'asc' ? '▲' : '▼'}</span>
+      : <span style={{ fontSize: '9px', marginLeft: '2px', color: '#c0c8d0' }}>⇅</span>;
   const ThWithTip = ({ label, tip }: { label: string; tip: string }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
       {label}
@@ -7942,14 +8027,30 @@ const ScreeningReportView: React.FC = () => {
                       <th style={{ ...thStyle, textAlign: 'center' }}>순위</th>
                       <th style={{ ...thStyle, textAlign: 'left' }}>종목명 (코드)</th>
                       <th style={thStyle}>시장</th>
-                      <th style={thStyle}>시총(억)</th>
-                      <th style={thStyle}><ThWithTip label="ROE(%)" tip="자기자본이익률 — 자본 대비 순이익 효율. 높을수록 자본을 잘 굴리는 기업" /></th>
-                      <th style={thStyle}>영업이익률(%)</th>
-                      <th style={thStyle}>부채비율(%)</th>
-                      <th style={thStyle}>매출성장률(%)</th>
-                      <th style={thStyle}><ThWithTip label="PBR" tip="주가순자산비율 — 주가 ÷ 주당순자산. 낮을수록 장부가 대비 저평가" /></th>
-                      <th style={thStyle}><ThWithTip label="PER" tip="주가수익비율 — 시가총액 ÷ 순이익. 낮을수록 이익 대비 저평가 (업종 평균과 비교 필요)" /></th>
-                      <th style={thStyle}>스코어</th>
+                      <th onClick={() => handleMainSort('marketCap')} style={{ ...thSortStyle('marketCap'), textAlign: 'right' }}>
+                        시총(억){mainSortIcon('marketCap')}
+                      </th>
+                      <th onClick={() => handleMainSort('roe')} style={{ ...thSortStyle('roe'), textAlign: 'right' }}>
+                        <ThWithTip label="ROE(%)" tip="자기자본이익률 — 자본 대비 순이익 효율. 높을수록 자본을 잘 굴리는 기업" />{mainSortIcon('roe')}
+                      </th>
+                      <th onClick={() => handleMainSort('opMargin')} style={{ ...thSortStyle('opMargin'), textAlign: 'right' }}>
+                        영업이익률(%){mainSortIcon('opMargin')}
+                      </th>
+                      <th onClick={() => handleMainSort('debtRatio')} style={{ ...thSortStyle('debtRatio'), textAlign: 'right' }}>
+                        부채비율(%){mainSortIcon('debtRatio')}
+                      </th>
+                      <th onClick={() => handleMainSort('revenueGrowth')} style={{ ...thSortStyle('revenueGrowth'), textAlign: 'right' }}>
+                        매출성장률(%){mainSortIcon('revenueGrowth')}
+                      </th>
+                      <th onClick={() => handleMainSort('pbr')} style={{ ...thSortStyle('pbr'), textAlign: 'right' }}>
+                        <ThWithTip label="PBR" tip="주가순자산비율 — 주가 ÷ 주당순자산. 낮을수록 장부가 대비 저평가" />{mainSortIcon('pbr')}
+                      </th>
+                      <th onClick={() => handleMainSort('per')} style={{ ...thSortStyle('per'), textAlign: 'right' }}>
+                        <ThWithTip label="PER" tip="주가수익비율 — 시가총액 ÷ 순이익. 낮을수록 이익 대비 저평가 (업종 평균과 비교 필요)" />{mainSortIcon('per')}
+                      </th>
+                      <th onClick={() => handleMainSort('score')} style={{ ...thSortStyle('score'), textAlign: 'right' }}>
+                        스코어{mainSortIcon('score')}
+                      </th>
                       <th style={thStyle}>분기실적</th>
                     </tr>
                   </thead>
