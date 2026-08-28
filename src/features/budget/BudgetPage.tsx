@@ -3674,12 +3674,13 @@ const TickerHistoryModal: React.FC<{
 // 티커 그룹 정의 (화면 표시용) — accent: 섹션 헤더 및 카드 왼쪽 테두리 색상
 // 기준금리 → 채권 → 증시 순서, vix는 별도 공포/변동성 섹션에서 F&G와 함께 표시
 const TICKER_GROUPS = [
-  { label: '기준금리',      keys: ['rate_us', 'rate_kr', 'rate_jp'],  accent: '#3b7dd8' },
-  { label: '미국 채권',     keys: ['us10y', 'us30y', 'us3m'],         accent: '#2a9d8f' },
-  { label: '미국 증시',     keys: ['sp500', 'nasdaq', 'dow'],          accent: '#40a060' },
-  { label: '원자재',        keys: ['wti', 'gold'],                     accent: '#c8882a' },
-  { label: '환율 / 달러',  keys: ['dxy', 'usdkrw', 'usdjpy'],         accent: '#d4704a' },
-  { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'],       accent: '#c0404a' },
+  { label: '기준금리',      keys: ['rate_us', 'rate_kr', 'rate_jp'],                                                  accent: '#3b7dd8' },
+  { label: '거시지표',      keys: ['macro_cpi_us', 'macro_core_cpi_us', 'macro_cpi_kr', 'macro_unemployment_us', 'macro_ppi_us'], accent: '#7b68ee' },
+  { label: '미국 채권',     keys: ['us10y', 'us30y', 'us3m'],                                                         accent: '#2a9d8f' },
+  { label: '미국 증시',     keys: ['sp500', 'nasdaq', 'dow'],                                                          accent: '#40a060' },
+  { label: '원자재',        keys: ['wti', 'gold'],                                                                     accent: '#c8882a' },
+  { label: '환율 / 달러',  keys: ['dxy', 'usdkrw', 'usdjpy'],                                                         accent: '#d4704a' },
+  { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'],                                                       accent: '#c0404a' },
 ];
 
 // ── 미국 주가상위 100 접기/펼치기 테이블 ─────────────────────────────────────
@@ -4221,25 +4222,42 @@ const MarketReportView: React.FC = () => {
                     });
 
                     const tickerCard = (key: string, data: typeof tickers[0]['data']) => {
-                      // rate_ 접두사: 기준금리 — close에 % 단위, 변화량은 pp로 표시
-                      const isRate = key.startsWith('rate_');
+                      // rate_ : 기준금리 — close에 % 단위, 변화량 pp
+                      // macro_ : 거시지표 (CPI/PPI/실업률) — 월간 FRED 데이터
+                      //   └ macro_unemployment_us : 실업률 → close% + pp 변화 (isRate처럼)
+                      //   └ 그 외 CPI/PPI         : YoY%를 메인 수치, MoM pt 변화 보조
+                      const isRate      = key.startsWith('rate_');
+                      const isMacro     = key.startsWith('macro_');
+                      const isMacroRate = key === 'macro_unemployment_us'; // 실업률은 rate처럼 표시
                       return (
                         <div
                           key={key}
                           style={{ ...cardStyle(group.accent), cursor: 'pointer', transition: 'box-shadow 0.15s' }}
-                          onClick={() => setChartTicker({ key, label: data.label, isRate })}
+                          onClick={() => setChartTicker({ key, label: data.label, isRate: isRate || isMacroRate })}
                           title="클릭하면 이력 그래프를 볼 수 있어요"
                         >
                           <div style={{ fontSize: '11px', color: '#7a8fa6', marginBottom: '2px' }}>{data.label}</div>
                           <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
-                            {data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}{isRate ? '%' : ''}
+                            {(isMacro && !isMacroRate)
+                              /* CPI/PPI: YoY%가 핵심 수치 */
+                              ? <>{data.changePct != null ? `${data.changePct >= 0 ? '+' : ''}${data.changePct.toFixed(1)}` : '-'}<span style={{ fontSize: '11px', fontWeight: 400 }}>% YoY</span></>
+                              /* 기준금리·실업률: close 값 */
+                              : <>{data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}{(isRate || isMacroRate) ? '%' : ''}</>
+                            }
                           </div>
-                          <div style={{ fontSize: '12px', fontWeight: 600, color: changeColor(isRate ? data.change : data.changePct) }}>
-                            {isRate ? (
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: changeColor(isRate || isMacroRate ? data.change : (isMacro ? data.changePct : data.changePct)) }}>
+                            {(isRate || isMacroRate) ? (
+                              /* 기준금리·실업률: pp 변화 */
                               data.change != null
                                 ? <>{changeSign(data.change)}{data.change.toFixed(2)}<span style={{ fontSize: '10px', fontWeight: 400 }}>pp</span></>
                                 : <span style={{ color: '#9aa0a6' }}>-</span>
+                            ) : isMacro ? (
+                              /* CPI/PPI: 보조로 MoM 지수포인트 변화 */
+                              data.change != null
+                                ? <>{changeSign(data.change)}{data.change.toFixed(2)}<span style={{ fontSize: '10px', fontWeight: 400 }}>pt MoM</span></>
+                                : <span style={{ color: '#9aa0a6' }}>-</span>
                             ) : (
+                              /* 일반 시장 지표: 일간 등락률 */
                               <>
                                 {changeSign(data.changePct)}{data.changePct?.toFixed(2) ?? '-'}%
                                 {data.change != null && (
@@ -4250,6 +4268,12 @@ const MarketReportView: React.FC = () => {
                               </>
                             )}
                           </div>
+                          {/* CPI/PPI: 보조 줄에 실제 지수값 표시 */}
+                          {(isMacro && !isMacroRate) && (
+                            <div style={{ fontSize: '10px', color: '#9aa0a6', marginTop: '1px' }}>
+                              지수 {data.close.toFixed(1)}
+                            </div>
+                          )}
                           <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
                             <span>{data.date}</span>
                             <span style={{ color: '#c8d8e8' }}>📈</span>

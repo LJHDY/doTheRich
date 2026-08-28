@@ -922,6 +922,12 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
     - Goldman Sachs 수석 전략가 페르소나 프롬프트 → Gemini `gemini-3.5-flash`
     - 지수 백오프 5회 재시도 (503 오류 대응)
     - 매일 22:00 UTC(07:00 KST) APScheduler 자동 생성
+    - **거시지표 티커 카드 추가**: `TICKER_GROUPS`에 `거시지표` 그룹 추가 (보라색 `#7b68ee`)
+      - `macro_cpi_us` (미국 CPI), `macro_core_cpi_us` (Core CPI), `macro_cpi_kr` (한국 CPI), `macro_unemployment_us` (실업률), `macro_ppi_us` (PPI)
+      - 카드 표시: CPI/PPI는 YoY%를 메인 수치 + MoM pt 변화 보조 / 실업률은 현재값% + pp 변화
+      - 백엔드: `collect_macro_indicators()` (FRED CSV, API 키 불필요) — 글로벌·국내마감·프리마켓 3개 리포트 타입 모두 적용
+      - FRED 시리즈: CPIAUCSL / CPILFESL / PPIACO / UNRATE / KORCPIALLMINMEI
+      - 프롬프트에 거시경제 지표 블록 추가 (YoY%, MoM 변화, 기준월 포함)
 
 - [x] CalendarModal 고정비 납부일 표시
   - `getFixedExpenseCalendar(ym6)` API로 고정비 납부일 로드 (동영=연한빨강, 주해=베이비블루 원)
