@@ -821,8 +821,9 @@ export interface Schedule {
   endDate: string | null;    // "YYYY-MM-DD" 종료일 (null이면 단일일)
   eventTime: string | null;  // "HH:MM"
   category: string | null;
-  repeatType: string | null; // weekly / monthly / yearly
-  naverUid: string | null;   // 네이버 캘린더 iCal UID
+  repeatType: string | null;  // weekly / monthly / yearly
+  repeatDays: string | null;  // 매주 반복 시 요일 — "0,2,4" (0=월…6=일), null이면 시작일 요일 반복
+  naverUid: string | null;    // 네이버 캘린더 iCal UID
   createdAt: string | null;
 }
 

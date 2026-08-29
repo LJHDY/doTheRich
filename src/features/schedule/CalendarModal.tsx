@@ -45,7 +45,16 @@ function isEventActiveOn(s: Schedule, target: string): boolean {
   if (target < s.eventDate) return false;
   switch (s.repeatType) {
     case 'weekly': {
-      const diffMs = new Date(target + 'T00:00:00').getTime() - new Date(s.eventDate + 'T00:00:00').getTime();
+      const tDate = new Date(target + 'T00:00:00');
+      // JS getDay(): 0=일,1=월…6=토 → Python weekday 변환: 0=월…6=일
+      const pyWeekday = (tDate.getDay() + 6) % 7;
+      if (s.repeatDays) {
+        // 특정 요일 지정: "0,2,4" 형식 파싱 후 해당 요일인지 확인
+        const allowed = s.repeatDays.split(',').map(Number);
+        return allowed.includes(pyWeekday);
+      }
+      // repeatDays 미지정: 시작일과 동일 요일마다 반복 (기존 동작)
+      const diffMs = tDate.getTime() - new Date(s.eventDate + 'T00:00:00').getTime();
       return Math.round(diffMs / 86400000) % 7 === 0;
     }
     case 'monthly':

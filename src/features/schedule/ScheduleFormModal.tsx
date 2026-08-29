@@ -53,9 +53,12 @@ const REPEAT_OPTIONS = [
   { value: 'yearly',  label: '매년' },
 ];
 
+// 요일 라벨 (0=월…6=일, Python weekday 기준)
+const WEEKDAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
+
 const emptyForm = (date: string, userId: string) => ({
   userId, title: '', description: '', eventDate: date, endDate: '', eventTime: '',
-  category: '', repeatType: '', pushToNaver: true,
+  category: '', repeatType: '', repeatDays: [] as number[], pushToNaver: true,
 });
 
 const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved, onDdayChange, ddayCount = 0 }) => {
@@ -93,6 +96,7 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved,
       eventTime:   s.eventTime || '',
       category:    s.category || '',
       repeatType:  s.repeatType || '',
+      repeatDays:  s.repeatDays ? s.repeatDays.split(',').map(Number) : [],
       pushToNaver: true,
     });
     titleRef.current?.focus();
@@ -104,6 +108,10 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved,
     try {
       // endDate가 시작일과 같거나 비어있으면 단일일로 처리
       const endDate = form.endDate && form.endDate > form.eventDate ? form.endDate : undefined;
+      // 매주 반복이고 요일이 선택된 경우만 repeatDays 전송 (정렬해서 저장)
+      const repeatDaysStr = (form.repeatType === 'weekly' && form.repeatDays.length > 0)
+        ? [...form.repeatDays].sort((a, b) => a - b).join(',')
+        : undefined;
       const payload = {
         userId:      form.userId,
         title:       form.title.trim(),
@@ -113,6 +121,7 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved,
         eventTime:   form.eventTime || undefined,
         category:    form.category || undefined,
         repeatType:  form.repeatType || undefined,
+        repeatDays:  repeatDaysStr,
         pushToNaver: form.pushToNaver,
       };
       if (editingId) {
@@ -199,6 +208,9 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved,
                     {s.repeatType && (
                       <span style={{ fontSize: '11px', color: '#6a1b9a', background: '#f3e5f5', borderRadius: '4px', padding: '1px 5px' }}>
                         {REPEAT_OPTIONS.find(o => o.value === s.repeatType)?.label ?? s.repeatType}
+                        {s.repeatType === 'weekly' && s.repeatDays
+                          ? ` (${s.repeatDays.split(',').map(d => WEEKDAY_LABELS[Number(d)] ?? '').join('·')})`
+                          : ''}
                       </span>
                     )}
                     <span style={{ fontSize: '13px', fontWeight: 600, color: '#1a3a5c' }}>{s.title}</span>
@@ -301,6 +313,47 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved,
               ))}
             </select>
           </div>
+
+          {/* 매주 반복 선택 시: 요일 선택 버튼 표시 */}
+          {form.repeatType === 'weekly' && (
+            <div>
+              <div style={{ fontSize: '12px', color: '#9aa0a6', marginBottom: '6px', fontWeight: 600 }}>
+                반복 요일 선택 <span style={{ fontWeight: 400, color: '#b0bec5' }}>(미선택 시 시작일 요일 반복)</span>
+              </div>
+              <div style={{ display: 'flex', gap: '5px' }}>
+                {WEEKDAY_LABELS.map((label, idx) => {
+                  const active = form.repeatDays.includes(idx);
+                  const isWeekend = idx >= 5;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setForm(f => ({
+                        ...f,
+                        repeatDays: active
+                          ? f.repeatDays.filter(d => d !== idx)
+                          : [...f.repeatDays, idx],
+                      }))}
+                      style={{
+                        flex: 1,
+                        padding: '6px 0',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        borderRadius: '6px',
+                        border: `1px solid ${active ? '#6a1b9a' : '#dadce0'}`,
+                        background: active ? '#6a1b9a' : '#fff',
+                        color: active ? '#fff' : isWeekend ? '#c62828' : '#344054',
+                        cursor: 'pointer',
+                        transition: 'all 0.12s',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 설명 */}
           <AutoResizeTextarea
