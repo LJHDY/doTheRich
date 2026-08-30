@@ -2056,4 +2056,24 @@ export const collectTradeHistory = async (complexId: number): Promise<void> => {
   await api.post(`/api/complexes/${complexId}/trade-history/collect`);
 };
 
+export interface BatchCollectStatus {
+  running: boolean;
+  total: number;
+  done: number;
+  failed: number;
+  current: string;
+  startedAt: string | null;
+  results: { id: number; name: string; ok: boolean; reason?: string; collectedMonths?: number }[];
+}
+
+export const startCollectAllTradeHistory = async (): Promise<{ status: string; total: number; uncollected: number }> => {
+  const res = await api.post('/api/complexes/trade-history/collect-all');
+  return res.data;
+};
+
+export const getCollectAllStatus = async (): Promise<BatchCollectStatus> => {
+  const res = await api.get('/api/complexes/trade-history/collect-all/status');
+  return res.data;
+};
+
 export default api;

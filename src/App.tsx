@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ApartmentComplex, MapRoute, OverlayMarker, RoutePoint, ActiveFilters, EMPTY_FILTERS, isFiltersActive, PublicComplex } from './types';
-import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon, getPublicComplexGuList, collectPublicComplexes, getPublicComplexes } from './services/api';
+import { getComplexes, getPriceRanges, getRoutes, createRoute, updateRoute, deleteRoute, addComplexesToZone, updateLivingZonePolygon, getPublicComplexGuList, collectPublicComplexes, getPublicComplexes, startCollectAllTradeHistory, getCollectAllStatus, BatchCollectStatus } from './services/api';
 import { pointInPolygon } from './features/map/utils/geo';
 import { HAN_RIVER_PARKS } from './features/complex/constants/hanRiverParks';
 import MapPage from './features/map/MapPage';
@@ -167,6 +167,44 @@ const App: React.FC = () => {
   });
   const [compareMode, setCompareMode] = useState<'normal' | 'evaluation'>('normal');
   const [tradeCompareOpen, setTradeCompareOpen] = useState(false);
+
+  // 일괄 수집 상태
+  const [batchStatus, setBatchStatus] = useState<BatchCollectStatus | null>(null);
+  const [batchPanelOpen, setBatchPanelOpen] = useState(false);
+  const batchPollRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startBatchCollect = useCallback(async () => {
+    try {
+      await startCollectAllTradeHistory();
+      setBatchPanelOpen(true);
+      // 3초마다 폴링
+      if (batchPollRef.current) clearInterval(batchPollRef.current);
+      batchPollRef.current = setInterval(async () => {
+        try {
+          const s = await getCollectAllStatus();
+          setBatchStatus(s);
+          if (!s.running) clearInterval(batchPollRef.current!);
+        } catch { /* ignore */ }
+      }, 3000);
+    } catch { alert('일괄 수집 시작 실패'); }
+  }, []);
+
+  const checkBatchStatus = useCallback(async () => {
+    try {
+      const s = await getCollectAllStatus();
+      setBatchStatus(s);
+      setBatchPanelOpen(true);
+      if (s.running && !batchPollRef.current) {
+        batchPollRef.current = setInterval(async () => {
+          try {
+            const s2 = await getCollectAllStatus();
+            setBatchStatus(s2);
+            if (!s2.running) clearInterval(batchPollRef.current!);
+          } catch { /* ignore */ }
+        }, 3000);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   // 전체 패널 열림 상태 → sessionStorage 동기화 (새로고침 후 복원용)
   useEffect(() => {
@@ -928,6 +966,18 @@ const App: React.FC = () => {
                   color: districtStatsOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >구별 시세</button>
+              {/* 거래이력 일괄 수집 */}
+              <button
+                onClick={() => batchStatus ? setBatchPanelOpen(v => !v) : checkBatchStatus()}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: `1px solid ${batchStatus?.running ? '#43a047' : '#dadce0'}`,
+                  borderRadius: '6px',
+                  backgroundColor: batchStatus?.running ? '#e8f5e9' : '#fff',
+                  color: batchStatus?.running ? '#2e7d32' : '#5f6368',
+                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >{batchStatus?.running ? `수집중 ${batchStatus.done}/${batchStatus.total}` : '거래이력 수집'}</button>
               {/* 공공단지 수집 */}
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 <button
@@ -1430,6 +1480,88 @@ const App: React.FC = () => {
           complexes={compareIds.map(id => complexes.find(c => c.id === id)!).filter(Boolean)}
           onClose={() => setRealEstateAiOpen(false)}
         />
+      )}
+
+      {/* 거래이력 일괄 수집 상태 패널 */}
+      {batchPanelOpen && (
+        <div style={{
+          position: 'fixed', top: `${headerHeight + 8}px`, right: '16px', zIndex: 9500,
+          background: '#fff', borderRadius: '14px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+          border: '1px solid #e0e0e0', width: '340px', maxHeight: '70vh',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          {/* 헤더 */}
+          <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a1a2e' }}>거래이력 일괄 수집</div>
+              {batchStatus && (
+                <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '2px' }}>
+                  {batchStatus.running
+                    ? `진행 중 — ${batchStatus.done + batchStatus.failed}/${batchStatus.total}`
+                    : `완료 — 성공 ${batchStatus.done}건 / 실패 ${batchStatus.failed}건`}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setBatchPanelOpen(false)} style={{ border: 'none', background: '#f0f0f0', borderRadius: '50%', width: '26px', height: '26px', cursor: 'pointer', fontSize: '14px', color: '#5f6368' }}>×</button>
+          </div>
+
+          {/* 진행 바 */}
+          {batchStatus && batchStatus.total > 0 && (
+            <div style={{ padding: '10px 16px 0' }}>
+              <div style={{ height: '6px', borderRadius: '3px', background: '#f0f0f0', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: '3px',
+                  background: batchStatus.running ? '#43a047' : '#4BAAD4',
+                  width: `${Math.round((batchStatus.done + batchStatus.failed) / batchStatus.total * 100)}%`,
+                  transition: 'width 0.4s',
+                }} />
+              </div>
+              {batchStatus.running && batchStatus.current && (
+                <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  ▶ {batchStatus.current}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 시작 버튼 (미시작 or 완료 후 재시작) */}
+          {(!batchStatus || !batchStatus.running) && (
+            <div style={{ padding: '10px 16px' }}>
+              <button
+                onClick={startBatchCollect}
+                style={{
+                  width: '100%', padding: '8px', fontSize: '13px', fontWeight: 700,
+                  background: '#4BAAD4', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                }}
+              >{batchStatus ? '다시 수집 시작' : '지금 시작'}</button>
+              <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '6px', textAlign: 'center' }}>
+                미수집 단지 우선 → 수집된 단지는 증분 업데이트
+              </div>
+            </div>
+          )}
+
+          {/* 결과 목록 */}
+          {batchStatus && batchStatus.results.length > 0 && (
+            <div style={{ overflowY: 'auto', padding: '6px 16px 14px', flex: 1 }}>
+              <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '6px', fontWeight: 600 }}>수집 결과</div>
+              {[...batchStatus.results].reverse().map((r, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '4px 0', borderBottom: '1px solid #f8f8f8', fontSize: '12px',
+                }}>
+                  <span style={{ color: r.ok ? '#43a047' : '#e53935', fontSize: '11px', flexShrink: 0 }}>{r.ok ? '✓' : '✗'}</span>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#344054' }}>{r.name}</span>
+                  {r.ok && (r as any).collectedMonths != null && (
+                    <span style={{ color: '#9aa0a6', fontSize: '11px', flexShrink: 0 }}>{(r as any).collectedMonths}개월</span>
+                  )}
+                  {!r.ok && r.reason && (
+                    <span style={{ color: '#e53935', fontSize: '10px', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.reason}>{r.reason}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* 거래량 이력 비교 모달 */}
