@@ -168,6 +168,9 @@ const App: React.FC = () => {
   const [compareMode, setCompareMode] = useState<'normal' | 'evaluation'>('normal');
   const [tradeCompareOpen, setTradeCompareOpen] = useState(false);
 
+  // 데스크탑 Row 2 드롭다운 열림 상태 — 한 번에 하나만 열림
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+
   // 일괄 수집 상태
   const [batchStatus, setBatchStatus] = useState<BatchCollectStatus | null>(null);
   const [batchPanelOpen, setBatchPanelOpen] = useState(false);
@@ -830,7 +833,7 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* 데스크탑 Row 2: 금액대 + 지도 도구 버튼 */}
+            {/* 데스크탑 Row 2: 금액대 + 5개 목적별 드롭다운 메뉴 */}
             <div style={{
               display: 'flex', alignItems: 'center', padding: '0 12px', height: '36px', gap: '6px',
               borderTop: '1px solid #d4edfb', backgroundColor: '#f0f8fd',
@@ -845,199 +848,369 @@ const App: React.FC = () => {
                 complexes={complexes}
               />
               <div style={{ width: '1px', height: '18px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
-              {/* 로드뷰 */}
-              <button
-                onClick={() => setRoadViewOpen(v => !v)}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: roadViewOpen ? '#5AAF84' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: roadViewOpen ? '#e6f4ea' : '#fff',
-                  color: roadViewOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >로드뷰</button>
-              {/* 구 경계 */}
-              <DistrictSelector value={selectedDistrict} onChange={setSelectedDistrict} />
-              {/* 내 단지 / 아파트 on/off 토글 — 구 선택 시에만 표시 */}
-              {selectedDistrict && (
-                <>
-                  <button
-                    onClick={() => setShowMyComplexes(v => !v)}
-                    style={{
-                      padding: '2px 7px', fontSize: '11px', fontWeight: 600,
-                      border: '1px solid', borderColor: showMyComplexes ? '#89CFF0' : '#dadce0',
-                      borderRadius: '6px', backgroundColor: showMyComplexes ? '#f0f8fd' : '#fff',
-                      color: showMyComplexes ? '#1a6a9a' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                    }}
-                  >내단지</button>
-                  {publicComplexes.length > 0 && (
-                    <button
-                      onClick={() => setShowPublicComplexes(v => !v)}
-                      style={{
-                        padding: '2px 7px', fontSize: '11px', fontWeight: 600,
-                        border: '1px solid', borderColor: showPublicComplexes ? '#89CFF0' : '#dadce0',
-                        borderRadius: '6px', backgroundColor: showPublicComplexes ? '#f0f8fd' : '#fff',
-                        color: showPublicComplexes ? '#1a6a9a' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                      }}
-                    >아파트</button>
-                  )}
-                </>
+
+              {/* 드롭다운 외부 클릭 시 닫기용 투명 오버레이 */}
+              {openMenu && (
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 999 }}
+                  onClick={() => setOpenMenu(null)}
+                />
               )}
-              {/* 체크리스트 */}
-              <button
-                onClick={() => setChecklistPanelOpen(v => !v)}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: checklistPanelOpen ? '#FFD97D' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: checklistPanelOpen ? '#fef9e7' : '#fff',
-                  color: checklistPanelOpen ? '#b07d00' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >체크리스트</button>
-              {/* 경로 */}
-              <button
-                onClick={() => setRoutePanelOpen(v => !v)}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: routePanelOpen ? '#5AAF84' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: routePanelOpen ? '#e6f4ea' : '#fff',
-                  color: routePanelOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >경로</button>
-              {/* 생활권 */}
-              <button
-                onClick={() => {
-                  const next = !livingZoneOpen;
-                  setLivingZoneOpen(next);
-                  if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
-                }}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: livingZoneOpen ? '#89CFF0' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: livingZoneOpen ? '#D4EFFC' : '#fff',
-                  color: livingZoneOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >생활권</button>
-              {/* 대출분석 */}
-              <button
-                onClick={() => {
-                  const next = !affordOpen;
-                  setAffordOpen(next);
-                  if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
-                }}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: affordOpen ? '#5AAF84' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: affordOpen ? '#e6f4ea' : '#fff',
-                  color: affordOpen ? '#5AAF84' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >대출분석</button>
-              {/* 달력 */}
-              <button
-                onClick={() => setCalendarOpen(v => !v)}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: `1px solid ${calendarOpen ? '#89CFF0' : '#dadce0'}`,
-                  borderRadius: '6px', backgroundColor: calendarOpen ? '#e0f8ff' : '#fff',
-                  color: calendarOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >📅 달력</button>
-              {/* 가계부 */}
-              <button
-                onClick={() => {
-                  if (!localStorage.getItem(BUDGET_USER_STORAGE_KEY)) {
-                    setShowUserSelect(true);
-                  } else {
-                    setBudgetOpen(true);
-                  }
-                }}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: `1px solid ${budgetOpen ? '#89CFF0' : '#dadce0'}`,
-                  borderRadius: '6px', backgroundColor: budgetOpen ? '#e0f8ff' : '#fff',
-                  color: budgetOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >💰 가계부</button>
-              {/* 구별 시세 */}
-              <button
-                onClick={() => setDistrictStatsOpen(v => !v)}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: districtStatsOpen ? '#89CFF0' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: districtStatsOpen ? '#D4EFFC' : '#fff',
-                  color: districtStatsOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >구별 시세</button>
-              {/* 거래이력 일괄 수집 */}
-              <button
-                onClick={() => batchStatus ? setBatchPanelOpen(v => !v) : checkBatchStatus()}
-                style={{
-                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                  border: `1px solid ${batchStatus?.running ? '#43a047' : '#dadce0'}`,
-                  borderRadius: '6px',
-                  backgroundColor: batchStatus?.running ? '#e8f5e9' : '#fff',
-                  color: batchStatus?.running ? '#2e7d32' : '#5f6368',
-                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >{batchStatus?.running ? `수집중 ${batchStatus.done}/${batchStatus.total}` : '거래이력 수집'}</button>
-              {/* 공공단지 수집 */}
-              <div style={{ position: 'relative', flexShrink: 0 }}>
-                <button
-                  onClick={() => { setCollectPanelOpen(v => !v); setCollectStatus('idle'); }}
-                  style={{
-                    padding: '3px 9px', fontSize: '12px', fontWeight: 600,
-                    border: `1px solid ${collectPanelOpen ? '#E06060' : '#dadce0'}`,
-                    borderRadius: '6px', backgroundColor: collectPanelOpen ? '#fdecea' : '#fff',
-                    color: collectPanelOpen ? '#E06060' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                >공공단지 수집</button>
-                {collectPanelOpen && (
-                  <div style={{
-                    position: 'absolute', top: '100%', right: 0, marginTop: '4px',
-                    background: '#fff', border: '1px solid #dadce0', borderRadius: '8px',
-                    padding: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.12)', zIndex: 1000,
-                    display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '220px',
-                  }}>
-                    <div style={{ fontSize: '12px', color: '#5f6368', fontWeight: 600 }}>수도권 지역 선택</div>
-                    <select
-                      value={selectedCollectGu}
-                      onChange={e => { setSelectedCollectGu(e.target.value); setCollectStatus('idle'); }}
-                      style={{ fontSize: '13px', padding: '5px 8px', borderRadius: '6px', border: '1px solid #dadce0' }}
-                    >
-                      {/* province별로 optgroup 그룹핑 */}
-                      {['서울', '경기', '인천'].map(prov => {
-                        const items = guList.filter(g => g.province === prov);
-                        if (items.length === 0) return null;
-                        return (
-                          <optgroup key={prov} label={prov}>
-                            {items.map(g => <option key={g.guName} value={g.guName}>{g.guName}</option>)}
-                          </optgroup>
-                        );
-                      })}
-                    </select>
+
+              {/* ─── 🗺 지도 드롭다운 ─── */}
+              {(() => {
+                const key = 'map';
+                const isOpen = openMenu === key;
+                const isActive = roadViewOpen || routePanelOpen || !!selectedDistrict;
+                const menuItemStyle = (active: boolean, color: string): React.CSSProperties => ({
+                  padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '12px', fontWeight: active ? 700 : 500,
+                  color: active ? color : '#344054',
+                  backgroundColor: active ? `${color}22` : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  userSelect: 'none',
+                });
+                return (
+                  <div style={{ position: 'relative', flexShrink: 0, zIndex: isOpen ? 1000 : 1 }}>
                     <button
-                      onClick={handleCollect}
-                      disabled={collectStatus === 'collecting' || !selectedCollectGu}
+                      onClick={() => setOpenMenu(isOpen ? null : key)}
                       style={{
-                        padding: '6px', fontSize: '13px', fontWeight: 600, borderRadius: '6px',
-                        border: 'none', cursor: collectStatus === 'collecting' ? 'not-allowed' : 'pointer',
-                        background: collectStatus === 'collecting' ? '#ccc' : '#E06060',
-                        color: '#fff',
+                        padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                        border: '1px solid',
+                        borderColor: isOpen ? '#4BAAD4' : isActive ? '#89CFF0' : '#dadce0',
+                        borderRadius: '6px',
+                        backgroundColor: isOpen ? '#D4EFFC' : isActive ? '#f0f8fd' : '#fff',
+                        color: isOpen || isActive ? '#2a6090' : '#5f6368',
+                        cursor: 'pointer', whiteSpace: 'nowrap',
+                        display: 'flex', alignItems: 'center', gap: '4px',
                       }}
                     >
-                      {collectStatus === 'collecting' ? '수집 중…' : '수집 시작'}
+                      🗺 지도 <span style={{ fontSize: '9px', opacity: 0.6 }}>{isOpen ? '▲' : '▼'}</span>
                     </button>
-                    {collectStatus === 'done' && (
-                      <div style={{ fontSize: '12px', color: '#2e7d32', fontWeight: 600 }}>
-                        ✅ {selectedCollectGu} 수집 요청 완료 (백그라운드 진행 중)
-                      </div>
-                    )}
-                    {collectStatus === 'error' && (
-                      <div style={{ fontSize: '12px', color: '#E06060', fontWeight: 600 }}>
-                        ❌ 수집 실패 — 서버 로그 확인
+                    {isOpen && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, marginTop: '4px',
+                        background: '#fff', border: '1px solid #dadce0', borderRadius: '10px',
+                        padding: '6px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 1000,
+                        minWidth: '210px', display: 'flex', flexDirection: 'column', gap: '2px',
+                      }}>
+                        {/* 로드뷰 */}
+                        <div style={menuItemStyle(roadViewOpen, '#5AAF84')}
+                          onClick={() => { setRoadViewOpen(v => !v); setOpenMenu(null); }}>
+                          로드뷰 {roadViewOpen && <span style={{ fontSize: '10px', color: '#5AAF84' }}>ON</span>}
+                        </div>
+                        {/* 경로 */}
+                        <div style={menuItemStyle(routePanelOpen, '#5AAF84')}
+                          onClick={() => { routePanelOpen ? handleClosRoutePanel() : setRoutePanelOpen(true); setOpenMenu(null); }}>
+                          경로 {routePanelOpen && <span style={{ fontSize: '10px', color: '#5AAF84' }}>ON</span>}
+                        </div>
+                        <div style={{ height: '1px', background: '#f0f0f0', margin: '2px 0' }} />
+                        {/* 구 경계 */}
+                        <div style={{ padding: '4px 10px' }}>
+                          <div style={{ fontSize: '11px', color: '#9aa0a6', marginBottom: '4px', fontWeight: 600 }}>구 경계</div>
+                          <DistrictSelector value={selectedDistrict} onChange={setSelectedDistrict} />
+                        </div>
+                        {/* 내단지 / 아파트 토글 — 구 선택 시에만 */}
+                        {selectedDistrict && (
+                          <div style={{ padding: '2px 10px', display: 'flex', gap: '6px' }}>
+                            <button
+                              onClick={() => setShowMyComplexes(v => !v)}
+                              style={{
+                                flex: 1, padding: '5px 0', fontSize: '11px', fontWeight: 600,
+                                border: '1px solid', borderColor: showMyComplexes ? '#89CFF0' : '#dadce0',
+                                borderRadius: '6px', backgroundColor: showMyComplexes ? '#f0f8fd' : '#fff',
+                                color: showMyComplexes ? '#1a6a9a' : '#5f6368', cursor: 'pointer',
+                              }}
+                            >내단지</button>
+                            {publicComplexes.length > 0 && (
+                              <button
+                                onClick={() => setShowPublicComplexes(v => !v)}
+                                style={{
+                                  flex: 1, padding: '5px 0', fontSize: '11px', fontWeight: 600,
+                                  border: '1px solid', borderColor: showPublicComplexes ? '#89CFF0' : '#dadce0',
+                                  borderRadius: '6px', backgroundColor: showPublicComplexes ? '#f0f8fd' : '#fff',
+                                  color: showPublicComplexes ? '#1a6a9a' : '#5f6368', cursor: 'pointer',
+                                }}
+                              >아파트</button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
+
+              {/* ─── 📋 임장 드롭다운 ─── */}
+              {(() => {
+                const key = 'checklist';
+                const isOpen = openMenu === key;
+                const isActive = checklistPanelOpen || livingZoneOpen;
+                const menuItemStyle = (active: boolean, color: string): React.CSSProperties => ({
+                  padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '12px', fontWeight: active ? 700 : 500,
+                  color: active ? color : '#344054',
+                  backgroundColor: active ? `${color}22` : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  userSelect: 'none',
+                });
+                return (
+                  <div style={{ position: 'relative', flexShrink: 0, zIndex: isOpen ? 1000 : 1 }}>
+                    <button
+                      onClick={() => setOpenMenu(isOpen ? null : key)}
+                      style={{
+                        padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                        border: '1px solid',
+                        borderColor: isOpen ? '#4BAAD4' : isActive ? '#FFD97D' : '#dadce0',
+                        borderRadius: '6px',
+                        backgroundColor: isOpen ? '#D4EFFC' : isActive ? '#fef9e7' : '#fff',
+                        color: isOpen ? '#2a6090' : isActive ? '#b07d00' : '#5f6368',
+                        cursor: 'pointer', whiteSpace: 'nowrap',
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                      }}
+                    >
+                      📋 임장 <span style={{ fontSize: '9px', opacity: 0.6 }}>{isOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {isOpen && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, marginTop: '4px',
+                        background: '#fff', border: '1px solid #dadce0', borderRadius: '10px',
+                        padding: '6px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 1000,
+                        minWidth: '160px', display: 'flex', flexDirection: 'column', gap: '2px',
+                      }}>
+                        <div style={menuItemStyle(checklistPanelOpen, '#b07d00')}
+                          onClick={() => { setChecklistPanelOpen(v => !v); setOpenMenu(null); }}>
+                          체크리스트 {checklistPanelOpen && <span style={{ fontSize: '10px', color: '#b07d00' }}>ON</span>}
+                        </div>
+                        <div style={menuItemStyle(livingZoneOpen, '#2a6090')}
+                          onClick={() => {
+                            const next = !livingZoneOpen;
+                            setLivingZoneOpen(next);
+                            if (next) { setSelectedComplex(null); setRadiusCenter(null); setAffordOpen(false); }
+                            setOpenMenu(null);
+                          }}>
+                          생활권 {livingZoneOpen && <span style={{ fontSize: '10px', color: '#2a6090' }}>ON</span>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ─── 📊 시세분석 드롭다운 ─── */}
+              {(() => {
+                const key = 'stats';
+                const isOpen = openMenu === key;
+                const isActive = districtStatsOpen || affordOpen;
+                const menuItemStyle = (active: boolean, color: string): React.CSSProperties => ({
+                  padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '12px', fontWeight: active ? 700 : 500,
+                  color: active ? color : '#344054',
+                  backgroundColor: active ? `${color}22` : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  userSelect: 'none',
+                });
+                return (
+                  <div style={{ position: 'relative', flexShrink: 0, zIndex: isOpen ? 1000 : 1 }}>
+                    <button
+                      onClick={() => setOpenMenu(isOpen ? null : key)}
+                      style={{
+                        padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                        border: '1px solid',
+                        borderColor: isOpen ? '#4BAAD4' : isActive ? '#89CFF0' : '#dadce0',
+                        borderRadius: '6px',
+                        backgroundColor: isOpen ? '#D4EFFC' : isActive ? '#f0f8fd' : '#fff',
+                        color: isOpen || isActive ? '#2a6090' : '#5f6368',
+                        cursor: 'pointer', whiteSpace: 'nowrap',
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                      }}
+                    >
+                      📊 시세분석 <span style={{ fontSize: '9px', opacity: 0.6 }}>{isOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {isOpen && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, marginTop: '4px',
+                        background: '#fff', border: '1px solid #dadce0', borderRadius: '10px',
+                        padding: '6px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 1000,
+                        minWidth: '160px', display: 'flex', flexDirection: 'column', gap: '2px',
+                      }}>
+                        <div style={menuItemStyle(districtStatsOpen, '#2a6090')}
+                          onClick={() => { setDistrictStatsOpen(v => !v); setOpenMenu(null); }}>
+                          구별 시세 {districtStatsOpen && <span style={{ fontSize: '10px', color: '#2a6090' }}>ON</span>}
+                        </div>
+                        <div style={menuItemStyle(affordOpen, '#5AAF84')}
+                          onClick={() => {
+                            const next = !affordOpen;
+                            setAffordOpen(next);
+                            if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); }
+                            setOpenMenu(null);
+                          }}>
+                          대출 분석 {affordOpen && <span style={{ fontSize: '10px', color: '#5AAF84' }}>ON</span>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ─── 📅 생활 드롭다운 ─── */}
+              {(() => {
+                const key = 'life';
+                const isOpen = openMenu === key;
+                const isActive = calendarOpen || budgetOpen;
+                const menuItemStyle = (active: boolean, color: string): React.CSSProperties => ({
+                  padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '12px', fontWeight: active ? 700 : 500,
+                  color: active ? color : '#344054',
+                  backgroundColor: active ? `${color}22` : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  userSelect: 'none',
+                });
+                return (
+                  <div style={{ position: 'relative', flexShrink: 0, zIndex: isOpen ? 1000 : 1 }}>
+                    <button
+                      onClick={() => setOpenMenu(isOpen ? null : key)}
+                      style={{
+                        padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                        border: '1px solid',
+                        borderColor: isOpen ? '#4BAAD4' : isActive ? '#89CFF0' : '#dadce0',
+                        borderRadius: '6px',
+                        backgroundColor: isOpen ? '#D4EFFC' : isActive ? '#f0f8fd' : '#fff',
+                        color: isOpen || isActive ? '#2a6090' : '#5f6368',
+                        cursor: 'pointer', whiteSpace: 'nowrap',
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                      }}
+                    >
+                      📅 생활 <span style={{ fontSize: '9px', opacity: 0.6 }}>{isOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {isOpen && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, marginTop: '4px',
+                        background: '#fff', border: '1px solid #dadce0', borderRadius: '10px',
+                        padding: '6px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 1000,
+                        minWidth: '160px', display: 'flex', flexDirection: 'column', gap: '2px',
+                      }}>
+                        <div style={menuItemStyle(calendarOpen, '#2a6090')}
+                          onClick={() => { setCalendarOpen(v => !v); setOpenMenu(null); }}>
+                          📅 달력 {calendarOpen && <span style={{ fontSize: '10px', color: '#2a6090' }}>ON</span>}
+                        </div>
+                        <div style={menuItemStyle(budgetOpen, '#2a6090')}
+                          onClick={() => {
+                            if (!localStorage.getItem(BUDGET_USER_STORAGE_KEY)) {
+                              setShowUserSelect(true);
+                            } else {
+                              setBudgetOpen(true);
+                            }
+                            setOpenMenu(null);
+                          }}>
+                          💰 가계부 {budgetOpen && <span style={{ fontSize: '10px', color: '#2a6090' }}>ON</span>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ─── ⚙ 데이터 드롭다운 ─── */}
+              {(() => {
+                const key = 'data';
+                const isOpen = openMenu === key;
+                const isActive = !!(batchStatus?.running) || collectPanelOpen;
+                const menuItemStyle = (active: boolean, color: string): React.CSSProperties => ({
+                  padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '12px', fontWeight: active ? 700 : 500,
+                  color: active ? color : '#344054',
+                  backgroundColor: active ? `${color}22` : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  userSelect: 'none',
+                });
+                return (
+                  <div style={{ position: 'relative', flexShrink: 0, zIndex: isOpen ? 1000 : 1 }}>
+                    <button
+                      onClick={() => setOpenMenu(isOpen ? null : key)}
+                      style={{
+                        padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                        border: '1px solid',
+                        borderColor: isOpen ? '#4BAAD4' : isActive ? '#E06060' : '#dadce0',
+                        borderRadius: '6px',
+                        backgroundColor: isOpen ? '#D4EFFC' : isActive ? '#fdecea' : '#fff',
+                        color: isOpen ? '#2a6090' : isActive ? '#E06060' : '#5f6368',
+                        cursor: 'pointer', whiteSpace: 'nowrap',
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                      }}
+                    >
+                      ⚙ 데이터 <span style={{ fontSize: '9px', opacity: 0.6 }}>{isOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {isOpen && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, marginTop: '4px',
+                        background: '#fff', border: '1px solid #dadce0', borderRadius: '10px',
+                        padding: '6px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 1000,
+                        minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '2px',
+                      }}>
+                        {/* 거래이력 수집 */}
+                        <div style={menuItemStyle(!!(batchStatus?.running), '#43a047')}
+                          onClick={() => { batchStatus ? setBatchPanelOpen(v => !v) : checkBatchStatus(); setOpenMenu(null); }}>
+                          거래이력 수집
+                          {batchStatus?.running
+                            ? <span style={{ fontSize: '10px', color: '#43a047' }}>{batchStatus.done}/{batchStatus.total}</span>
+                            : null}
+                        </div>
+                        {/* 공공단지 수집 */}
+                        <div style={menuItemStyle(collectPanelOpen, '#E06060')}
+                          onClick={() => { setCollectPanelOpen(v => !v); setCollectStatus('idle'); }}>
+                          공공단지 수집 {collectPanelOpen && <span style={{ fontSize: '10px', color: '#E06060' }}>ON</span>}
+                        </div>
+                        {/* 공공단지 수집 인라인 패널 */}
+                        {collectPanelOpen && (
+                          <div style={{
+                            margin: '2px 4px', background: '#fafafa', border: '1px solid #f0f0f0',
+                            borderRadius: '8px', padding: '8px',
+                            display: 'flex', flexDirection: 'column', gap: '6px',
+                          }}>
+                            <div style={{ fontSize: '11px', color: '#5f6368', fontWeight: 600 }}>수도권 지역 선택</div>
+                            <select
+                              value={selectedCollectGu}
+                              onChange={e => { setSelectedCollectGu(e.target.value); setCollectStatus('idle'); }}
+                              onClick={e => e.stopPropagation()}
+                              style={{ fontSize: '12px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #dadce0' }}
+                            >
+                              {['서울', '경기', '인천'].map(prov => {
+                                const items = guList.filter(g => g.province === prov);
+                                if (items.length === 0) return null;
+                                return (
+                                  <optgroup key={prov} label={prov}>
+                                    {items.map(g => <option key={g.guName} value={g.guName}>{g.guName}</option>)}
+                                  </optgroup>
+                                );
+                              })}
+                            </select>
+                            <button
+                              onClick={e => { e.stopPropagation(); handleCollect(); }}
+                              disabled={collectStatus === 'collecting' || !selectedCollectGu}
+                              style={{
+                                padding: '5px', fontSize: '12px', fontWeight: 600, borderRadius: '6px',
+                                border: 'none', cursor: collectStatus === 'collecting' ? 'not-allowed' : 'pointer',
+                                background: collectStatus === 'collecting' ? '#ccc' : '#E06060', color: '#fff',
+                              }}
+                            >{collectStatus === 'collecting' ? '수집 중…' : '수집 시작'}</button>
+                            {collectStatus === 'done' && (
+                              <div style={{ fontSize: '11px', color: '#2e7d32', fontWeight: 600 }}>
+                                ✅ 수집 요청 완료 (백그라운드 진행)
+                              </div>
+                            )}
+                            {collectStatus === 'error' && (
+                              <div style={{ fontSize: '11px', color: '#E06060', fontWeight: 600 }}>
+                                ❌ 수집 실패 — 서버 로그 확인
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </>
         )}
