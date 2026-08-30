@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, calcChecklistScore } from '../../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool, updateNaverComplexNumber, getComplexPriceSnapshots, ComplexPriceSnapshot } from '../../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool, updateNaverComplexNumber, getComplexPriceSnapshots, ComplexPriceSnapshot, getTradeHistory, getTradeHistoryStatus, collectTradeHistory, TradeHistoryMonth } from '../../services/api';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -376,6 +377,13 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [priceSnapshots, setPriceSnapshots] = useState<ComplexPriceSnapshot[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
 
+  // 거래량 이력 — MOLIT 실거래 10년 데이터
+  const [tradeHistory, setTradeHistory] = useState<TradeHistoryMonth[]>([]);
+  const [tradeCollected, setTradeCollected] = useState(false);
+  const [tradeCollecting, setTradeCollecting] = useState(false);
+  const [tradeGranularity, setTradeGranularity] = useState<'month' | 'quarter' | 'year'>('year');
+  const [tradeAreaFilter, setTradeAreaFilter] = useState<string>('전체');
+
   // 차트 평형 필터 — '' = 전체, '전용 59' 등 선택 시 해당 타입의 매매/전세 세트만 표시
   const [selectedAreaType, setSelectedAreaType] = useState('');
 
@@ -652,6 +660,39 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       .catch(() => setPriceSnapshots([]))
       .finally(() => setSnapshotsLoading(false));
   }, [complex?.id, complex?.naverComplexNumber]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 거래 이력 — 단지 변경 시 수집 여부 확인 + 이력 로드
+  useEffect(() => {
+    if (!complex?.id) { setTradeHistory([]); setTradeCollected(false); return; }
+    getTradeHistoryStatus(complex.id).then(s => {
+      setTradeCollected(s.collected);
+      if (s.collected) getTradeHistory(complex.id).then(setTradeHistory).catch(() => {});
+    }).catch(() => {});
+  }, [complex?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCollectTradeHistory = async () => {
+    if (!complex?.id) return;
+    setTradeCollecting(true);
+    try {
+      await collectTradeHistory(complex.id);
+      // 폴링: 5초마다 상태 확인, 완료되면 이력 로드
+      const poll = setInterval(async () => {
+        const s = await getTradeHistoryStatus(complex.id);
+        if (s.collected && (s.totalMonths ?? 0) > 0) {
+          clearInterval(poll);
+          setTradeCollected(true);
+          setTradeCollecting(false);
+          const data = await getTradeHistory(complex.id);
+          setTradeHistory(data);
+        }
+      }, 5000);
+      // 최대 4분 후 자동 중단
+      setTimeout(() => { clearInterval(poll); setTradeCollecting(false); }, 240000);
+    } catch {
+      setTradeCollecting(false);
+      alert('수집 시작에 실패했습니다.');
+    }
+  };
 
   // 네이버 단지번호 저장
   const handleSaveNaverNo = async () => {
@@ -4038,6 +4079,141 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             })()}
           </div>
         )}
+
+        {/* 거래량 이력 — MOLIT 실거래 10년 */}
+        <div style={{ marginBottom: '16px', borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>거래량 이력</h3>
+            {tradeCollected && !tradeCollecting && (
+              <>
+                {/* 기간 단위 토글 */}
+                {(['month', 'quarter', 'year'] as const).map(g => (
+                  <button key={g} onClick={() => setTradeGranularity(g)} style={{
+                    fontSize: '11px', padding: '2px 7px',
+                    border: `1px solid ${tradeGranularity === g ? '#4BAAD4' : '#dadce0'}`,
+                    borderRadius: '4px', background: tradeGranularity === g ? '#e0f4fb' : '#fff',
+                    color: tradeGranularity === g ? '#1a73e8' : '#5f6368', cursor: 'pointer',
+                  }}>{g === 'month' ? '월별' : g === 'quarter' ? '분기별' : '연별'}</button>
+                ))}
+                {/* 평형 필터 */}
+                {(() => {
+                  const areas = Array.from(new Set(
+                    tradeHistory.flatMap(m => Object.keys(m.areaBreakdown))
+                  )).sort((a, b) => (parseFloat(a) || 999) - (parseFloat(b) || 999));
+                  if (areas.length <= 1) return null;
+                  return (
+                    <select value={tradeAreaFilter} onChange={e => setTradeAreaFilter(e.target.value)}
+                      style={{ fontSize: '11px', padding: '2px 5px', border: '1px solid #dadce0', borderRadius: '4px' }}>
+                      <option value="전체">전체 평형</option>
+                      {areas.map(a => <option key={a} value={a}>{a}㎡</option>)}
+                    </select>
+                  );
+                })()}
+                <button onClick={handleCollectTradeHistory} style={{
+                  fontSize: '11px', padding: '2px 7px', border: '1px solid #dadce0',
+                  borderRadius: '4px', background: '#fff', color: '#9aa0a6', cursor: 'pointer', marginLeft: 'auto',
+                }}>재수집</button>
+              </>
+            )}
+            {!tradeCollected && !tradeCollecting && (
+              <button onClick={handleCollectTradeHistory} style={{
+                fontSize: '11px', padding: '2px 8px', border: '1px solid #4BAAD4',
+                borderRadius: '4px', background: '#fff', color: '#4BAAD4', cursor: 'pointer',
+              }}>10년 데이터 수집</button>
+            )}
+            {tradeCollecting && (
+              <span style={{ fontSize: '11px', color: '#9aa0a6' }}>수집 중… (2~3분 소요)</span>
+            )}
+          </div>
+
+          {!tradeCollected && !tradeCollecting && (
+            <div style={{ fontSize: '12px', color: '#9aa0a6' }}>
+              국토교통부 실거래가 기준 10년 거래량 데이터를 수집합니다.
+            </div>
+          )}
+
+          {tradeCollected && tradeHistory.length > 0 && (() => {
+            // 단위별 집계
+            const aggregated: { label: string; count: number; direct: number }[] = [];
+
+            if (tradeGranularity === 'month') {
+              tradeHistory.forEach(m => {
+                const count = tradeAreaFilter === '전체'
+                  ? m.tradeCount
+                  : (m.areaBreakdown[tradeAreaFilter]?.count ?? 0);
+                aggregated.push({ label: m.yearMonth, count, direct: m.directCount });
+              });
+            } else if (tradeGranularity === 'quarter') {
+              const qMap = new Map<string, { count: number; direct: number }>();
+              tradeHistory.forEach(m => {
+                const y = m.yearMonth.slice(0, 4);
+                const mo = parseInt(m.yearMonth.slice(4));
+                const q = Math.ceil(mo / 3);
+                const key = `${y}Q${q}`;
+                const count = tradeAreaFilter === '전체' ? m.tradeCount : (m.areaBreakdown[tradeAreaFilter]?.count ?? 0);
+                const cur = qMap.get(key) ?? { count: 0, direct: 0 };
+                qMap.set(key, { count: cur.count + count, direct: cur.direct + m.directCount });
+              });
+              qMap.forEach((v, k) => aggregated.push({ label: k, count: v.count, direct: v.direct }));
+            } else {
+              const yMap = new Map<string, { count: number; direct: number }>();
+              tradeHistory.forEach(m => {
+                const y = m.yearMonth.slice(0, 4);
+                const count = tradeAreaFilter === '전체' ? m.tradeCount : (m.areaBreakdown[tradeAreaFilter]?.count ?? 0);
+                const cur = yMap.get(y) ?? { count: 0, direct: 0 };
+                yMap.set(y, { count: cur.count + count, direct: cur.direct + m.directCount });
+              });
+              yMap.forEach((v, k) => aggregated.push({ label: k, count: v.count, direct: v.direct }));
+            }
+
+            const maxCount = Math.max(...aggregated.map(d => d.count), 1);
+
+            return (
+              <div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={aggregated} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#9aa0a6' }}
+                      interval={tradeGranularity === 'month' ? 11 : 0} />
+                    <YAxis tick={{ fontSize: 9, fill: '#9aa0a6' }} allowDecimals={false} />
+                    <Tooltip
+                      formatter={(v: number, name: string) => [
+                        `${v}건`, name === 'count' ? '총 거래' : '직거래'
+                      ]}
+                      labelFormatter={(l: string) => `${l}`}
+                      contentStyle={{ fontSize: '11px' }}
+                    />
+                    <Bar dataKey="count" maxBarSize={24} radius={[2, 2, 0, 0]}>
+                      {aggregated.map((d, i) => (
+                        <Cell key={i}
+                          fill={d.count === 0 ? '#f0f0f0' : d.count >= maxCount * 0.7 ? '#E06060' : d.count >= maxCount * 0.35 ? '#FFD97D' : '#89CFF0'}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                {/* 요약 — 연간 평균 거래량 */}
+                {(() => {
+                  const total = aggregated.reduce((s, d) => s + d.count, 0);
+                  const years = tradeGranularity === 'year'
+                    ? aggregated.length
+                    : tradeGranularity === 'quarter'
+                    ? aggregated.length / 4
+                    : aggregated.length / 12;
+                  const annualAvg = years > 0 ? Math.round(total / years) : 0;
+                  const directTotal = aggregated.reduce((s, d) => s + d.direct, 0);
+                  const directPct = total > 0 ? Math.round(directTotal / total * 100) : 0;
+                  return (
+                    <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '4px', display: 'flex', gap: '12px' }}>
+                      <span>10년 합계 <b style={{ color: '#344054' }}>{total.toLocaleString()}건</b></span>
+                      <span>연 평균 <b style={{ color: '#344054' }}>{annualAvg}건</b></span>
+                      <span>직거래 <b style={{ color: '#344054' }}>{directPct}%</b></span>
+                    </div>
+                  );
+                })()}
+              </div>
+            );
+          })()}
+        </div>
 
         {/* 네이버 호가 감시 — 단지번호 등록 + 스냅샷 이력 */}
         <div style={{ marginBottom: '16px', borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>

@@ -2029,4 +2029,31 @@ export const getComplexPriceSnapshots = async (
   }));
 };
 
+// ─── 단지 거래 이력 (MOLIT 10년) ────────────────────────────────────────────
+
+export interface TradeHistoryMonth {
+  yearMonth: string;      // "202308"
+  tradeCount: number;
+  directCount: number;
+  avgPrice: number | null;  // 만원 단위
+  minPrice: number | null;
+  maxPrice: number | null;
+  areaBreakdown: Record<string, { count: number; avg: number | null; min: number | null }>;
+  collectedAt: string | null;
+}
+
+export const getTradeHistory = async (complexId: number): Promise<TradeHistoryMonth[]> => {
+  const { data } = await api.get(`/api/complexes/${complexId}/trade-history`);
+  return data as TradeHistoryMonth[];
+};
+
+export const getTradeHistoryStatus = async (complexId: number): Promise<{ collected: boolean; lastUpdated?: string; totalMonths?: number }> => {
+  const { data } = await api.get(`/api/complexes/${complexId}/trade-history/status`);
+  return data;
+};
+
+export const collectTradeHistory = async (complexId: number): Promise<void> => {
+  await api.post(`/api/complexes/${complexId}/trade-history/collect`);
+};
+
 export default api;
