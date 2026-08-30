@@ -83,6 +83,7 @@ const ScheduleFormModal: React.FC<Props> = ({ date, schedules, onClose, onSaved,
   const resetForm = () => {
     setForm(emptyForm(date, defaultUserId));
     setEditingId(null);
+    setRegisterAsDday(false);
   };
 
   const startEdit = (s: Schedule) => {
