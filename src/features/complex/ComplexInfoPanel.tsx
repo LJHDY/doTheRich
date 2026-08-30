@@ -383,6 +383,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [tradeCollecting, setTradeCollecting] = useState(false);
   const [tradeGranularity, setTradeGranularity] = useState<'month' | 'quarter' | 'year'>('year');
   const [tradeAreaFilter, setTradeAreaFilter] = useState<string>('전체');
+  const [tradeSelectedYear, setTradeSelectedYear] = useState<string>(''); // 월별 모드 연도 선택
 
   // 차트 평형 필터 — '' = 전체, '전용 59' 등 선택 시 해당 타입의 매매/전세 세트만 표시
   const [selectedAreaType, setSelectedAreaType] = useState('');
@@ -4091,19 +4092,34 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           const effectiveArea = (tradeAreaFilter !== '전체' && allAreas.includes(tradeAreaFilter))
             ? tradeAreaFilter : (allAreas[0] ?? '전체');
 
+          // 월별 모드 연도 목록 + 유효 연도
+          const availableYears = Array.from(new Set(tradeHistory.map(m => m.yearMonth.slice(0, 4)))).sort();
+          const latestYear = availableYears[availableYears.length - 1] ?? '';
+          const effectiveYear = (tradeSelectedYear && availableYears.includes(tradeSelectedYear))
+            ? tradeSelectedYear : latestYear;
+
           // 단위별 집계 — {label, count, avgPrice(억)}
           type AggRow = { label: string; count: number; avgPrice: number | null };
           const aggregate = (area: string): AggRow[] => {
             const rows: AggRow[] = [];
             if (tradeGranularity === 'month') {
-              tradeHistory.forEach(m => {
-                const bd = area === '전체' ? null : m.areaBreakdown[area];
-                const count = area === '전체' ? m.tradeCount : (bd?.count ?? 0);
-                const avgP  = area === '전체'
-                  ? (m.avgPrice != null ? m.avgPrice / 10000 : null)
-                  : (bd?.avg != null ? bd.avg / 10000 : null);
-                rows.push({ label: m.yearMonth.slice(0, 4) + '.' + m.yearMonth.slice(4), count, avgPrice: avgP });
-              });
+              // 선택 연도의 1~12월만 표시 (없는 달은 0으로 채움)
+              const monthMap = new Map(
+                tradeHistory
+                  .filter(m => m.yearMonth.slice(0, 4) === effectiveYear)
+                  .map(m => [m.yearMonth.slice(4), m])
+              );
+              for (let mo = 1; mo <= 12; mo++) {
+                const moStr = String(mo).padStart(2, '0');
+                const m = monthMap.get(moStr);
+                const bd = area === '전체' ? null : (m?.areaBreakdown[area]);
+                const count = m == null ? 0 : (area === '전체' ? m.tradeCount : (bd?.count ?? 0));
+                const avgP = m == null ? null
+                  : area === '전체'
+                    ? (m.avgPrice != null ? m.avgPrice / 10000 : null)
+                    : (bd?.avg != null ? bd.avg / 10000 : null);
+                rows.push({ label: `${mo}월`, count, avgPrice: avgP });
+              }
             } else if (tradeGranularity === 'quarter') {
               const map = new Map<string, { count: number; prices: number[] }>();
               tradeHistory.forEach(m => {
@@ -4147,10 +4163,10 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           const minPriceY    = pricePoints.length ? Math.floor(Math.min(...pricePoints.map(d => d.avgPrice!)) * 0.95 * 10) / 10 : 0;
           const maxPriceY    = pricePoints.length ? Math.ceil(Math.max(...pricePoints.map(d => d.avgPrice!)) * 1.05 * 10) / 10 : 10;
 
-          // 연평균 거래량
+          // 연평균 거래량 (월별 모드는 해당 연도만 집계이므로 별도 처리)
           const years = tradeGranularity === 'year' ? chartData.length
             : tradeGranularity === 'quarter' ? chartData.length / 4
-            : chartData.length / 12;
+            : 1; // 월별은 1년치만 표시
           const annualAvg = years > 0 ? Math.round(totalCount / years) : 0;
 
           return (
@@ -4168,6 +4184,30 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                         color: tradeGranularity === g ? '#1a73e8' : '#5f6368', cursor: 'pointer',
                       }}>{g === 'month' ? '월별' : g === 'quarter' ? '분기별' : '연별'}</button>
                     ))}
+                    {/* 월별 모드 — 연도 ◀ ▶ 네비게이터 */}
+                    {tradeGranularity === 'month' && availableYears.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '4px' }}>
+                        <button
+                          onClick={() => {
+                            const idx = availableYears.indexOf(effectiveYear);
+                            if (idx > 0) setTradeSelectedYear(availableYears[idx - 1]);
+                          }}
+                          disabled={availableYears.indexOf(effectiveYear) === 0}
+                          style={{ fontSize: '11px', padding: '1px 5px', border: '1px solid #dadce0', borderRadius: '4px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}
+                        >◀</button>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#344054', padding: '0 4px', minWidth: '36px', textAlign: 'center' }}>
+                          {effectiveYear}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const idx = availableYears.indexOf(effectiveYear);
+                            if (idx < availableYears.length - 1) setTradeSelectedYear(availableYears[idx + 1]);
+                          }}
+                          disabled={availableYears.indexOf(effectiveYear) === availableYears.length - 1}
+                          style={{ fontSize: '11px', padding: '1px 5px', border: '1px solid #dadce0', borderRadius: '4px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}
+                        >▶</button>
+                      </div>
+                    )}
                     <button onClick={handleCollectTradeHistory} style={{
                       fontSize: '11px', padding: '2px 7px', border: '1px solid #dadce0',
                       borderRadius: '4px', background: '#fff', color: '#9aa0a6',
@@ -4222,8 +4262,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
                   <ResponsiveContainer width="100%" height={180}>
                     <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#9aa0a6' }}
-                        interval={tradeGranularity === 'month' ? 11 : 0} />
+                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#9aa0a6' }} interval={0} />
                       <YAxis yAxisId="left" orientation="left"
                         tick={{ fontSize: 9, fill: '#89CFF0' }} allowDecimals={false}
                         label={{ value: '건', position: 'insideTopLeft', fontSize: 9, fill: '#89CFF0', dy: -4 }} />
