@@ -24,7 +24,8 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   const [collecting, setCollecting] = useState<Set<number>>(new Set());
   const [granularity, setGranularity] = useState<'month' | 'quarter' | 'year'>('year');
   const [selectedYear, setSelectedYear] = useState('');
-  const [areaFilter, setAreaFilter] = useState('전체');
+  // 단지별 독립 평형 선택 (complexId → 선택된 면적 or '전체')
+  const [areaFilters, setAreaFilters] = useState<Map<number, string>>(new Map());
 
   // 모달 오픈 시 각 단지 수집 상태 + 이력 로드
   useEffect(() => {
@@ -66,16 +67,22 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
 
   const isSingle = entries.length === 1;
 
-  // 수집된 단지의 평형 목록 합집합
-  const allAreas = Array.from(new Set(
-    entries.flatMap(({ complexId }) =>
-      (histories.get(complexId) || []).flatMap(m => Object.keys(m.areaBreakdown))
-    )
-  )).sort((a, b) => (parseFloat(a) || 999) - (parseFloat(b) || 999));
+  // 단지별 보유 평형 목록 (area_breakdown 키 합집합, 숫자 오름차순)
+  const areasPerComplex = new Map<number, string[]>(
+    entries.map(({ complexId }) => {
+      const areas = Array.from(new Set(
+        (histories.get(complexId) || []).flatMap(m => Object.keys(m.areaBreakdown))
+      )).sort((a, b) => (parseFloat(a) || 999) - (parseFloat(b) || 999));
+      return [complexId, areas];
+    })
+  );
 
-  const effectiveArea = areaFilter !== '전체' && allAreas.includes(areaFilter) ? areaFilter : '전체';
+  // 단지별 현재 선택 평형
+  const getArea = (complexId: number) => areaFilters.get(complexId) ?? '전체';
+  const setArea = (complexId: number, area: string) =>
+    setAreaFilters(prev => new Map(prev).set(complexId, area));
 
-  // 수집된 단지의 연도 합집합
+  // 연도 합집합
   const availableYears = Array.from(new Set(
     entries.flatMap(({ complexId }) =>
       (histories.get(complexId) || []).map(m => m.yearMonth.slice(0, 4))
@@ -86,9 +93,10 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   const effectiveYear = showAll ? latestYear
     : (selectedYear && availableYears.includes(selectedYear)) ? selectedYear : latestYear;
 
-  // 단지별 집계 맵 생성
+  // 단지별 집계 맵 — 각 단지의 선택 평형을 독립 적용
   const getAgg = (complexId: number): Map<string, { count: number; avgPrice: number | null }> => {
     const hist = histories.get(complexId) || [];
+    const area = getArea(complexId);
     const acc = new Map<string, { count: number; prices: number[] }>();
 
     hist.forEach(m => {
@@ -105,9 +113,9 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
         label = m.yearMonth.slice(0, 4);
       }
 
-      const bd = effectiveArea === '전체' ? null : m.areaBreakdown[effectiveArea];
-      const cnt = effectiveArea === '전체' ? m.tradeCount : (bd?.count ?? 0);
-      const p = effectiveArea === '전체' ? m.avgPrice : bd?.avg;
+      const bd = area === '전체' ? null : m.areaBreakdown[area];
+      const cnt = area === '전체' ? m.tradeCount : (bd?.count ?? 0);
+      const p = area === '전체' ? m.avgPrice : bd?.avg;
       const cur = acc.get(label) ?? { count: 0, prices: [] };
       cur.count += cnt;
       if (p != null) cur.prices.push(p);
@@ -127,10 +135,7 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
     Array.from(allAggs.values()).flatMap(agg => Array.from(agg.keys()))
   )).sort();
 
-  // 월별 단일 연도: 없는 달도 0으로 채움
-  if (granularity === 'month' && !showAll && labels.length === 0 && effectiveYear) {
-    labels = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
-  } else if (granularity === 'month' && !showAll) {
+  if (granularity === 'month' && !showAll) {
     labels = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
   }
 
@@ -158,7 +163,6 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
     entries.some(({ complexId }) => (row[`c${complexId}_count`] as number) > 0)
   );
 
-  // 단일 단지: 거래량 bar = 하늘색, 가격 line = 빨강 / 비교: 단지별 color 통일
   const barColor = (e: TradeComplexEntry) => isSingle ? '#89CFF0' : e.color;
   const lineColor = (e: TradeComplexEntry) => isSingle ? '#E06060' : e.color;
 
@@ -183,7 +187,7 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
         style={{
           background: '#fff',
           borderRadius: '18px',
-          width: '100%', maxWidth: '920px',
+          width: '100%', maxWidth: '960px',
           maxHeight: '92vh', overflowY: 'auto',
           boxShadow: '0 24px 80px rgba(0,0,0,0.3)',
           display: 'flex', flexDirection: 'column',
@@ -234,7 +238,7 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
               </button>
             ))}
 
-            {/* 월별 모드 — 연도 네비게이터 */}
+            {/* 월별 — 연도 네비게이터 */}
             {granularity === 'month' && availableYears.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '10px' }}>
                 <button
@@ -274,28 +278,86 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
             )}
           </div>
 
-          {/* 평형 탭 */}
-          {allAreas.length > 0 && (
-            <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-              {allAreas.length > 1 && (
-                <button onClick={() => setAreaFilter('전체')} style={{
-                  padding: '3px 11px', fontSize: '11px',
-                  border: `1px solid ${effectiveArea === '전체' ? '#344054' : '#e0e0e0'}`,
-                  borderRadius: '16px',
-                  background: effectiveArea === '전체' ? '#344054' : '#f8f9fa',
-                  color: effectiveArea === '전체' ? '#fff' : '#5f6368', cursor: 'pointer',
-                }}>전체</button>
-              )}
-              {allAreas.map(a => (
-                <button key={a} onClick={() => setAreaFilter(a)} style={{
-                  padding: '3px 11px', fontSize: '11px',
-                  border: `1px solid ${effectiveArea === a ? '#4BAAD4' : '#e0e0e0'}`,
-                  borderRadius: '16px',
-                  background: effectiveArea === a ? '#e0f4fb' : '#f8f9fa',
-                  color: effectiveArea === a ? '#1a73e8' : '#5f6368', cursor: 'pointer',
-                }}>{parseFloat(a).toFixed(0)}㎡</button>
-              ))}
-            </div>
+          {/* 평형 선택 — 단일 모드: 가로 버튼 / 비교 모드: 단지별 행 */}
+          {isSingle ? (
+            /* 단일: 기존 방식 — 전체 면적의 가로 탭 */
+            (() => {
+              const areas = areasPerComplex.get(entries[0].complexId) ?? [];
+              const cur = getArea(entries[0].complexId);
+              return areas.length > 0 ? (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
+                  {areas.length > 1 && (
+                    <button onClick={() => setArea(entries[0].complexId, '전체')} style={{
+                      padding: '3px 11px', fontSize: '11px',
+                      border: `1px solid ${cur === '전체' ? '#344054' : '#e0e0e0'}`,
+                      borderRadius: '16px',
+                      background: cur === '전체' ? '#344054' : '#f8f9fa',
+                      color: cur === '전체' ? '#fff' : '#5f6368', cursor: 'pointer',
+                    }}>전체</button>
+                  )}
+                  {areas.map(a => (
+                    <button key={a} onClick={() => setArea(entries[0].complexId, a)} style={{
+                      padding: '3px 11px', fontSize: '11px',
+                      border: `1px solid ${cur === a ? '#4BAAD4' : '#e0e0e0'}`,
+                      borderRadius: '16px',
+                      background: cur === a ? '#e0f4fb' : '#f8f9fa',
+                      color: cur === a ? '#1a73e8' : '#5f6368', cursor: 'pointer',
+                    }}>{parseFloat(a).toFixed(0)}㎡</button>
+                  ))}
+                </div>
+              ) : null;
+            })()
+          ) : (
+            /* 비교 모드: 단지마다 독립 평형 선택 행 */
+            (() => {
+              const collectedEntries = entries.filter(e => statuses.get(e.complexId));
+              if (collectedEntries.length === 0) return null;
+              return (
+                <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {collectedEntries.map(e => {
+                    const areas = areasPerComplex.get(e.complexId) ?? [];
+                    const cur = getArea(e.complexId);
+                    return (
+                      <div key={e.complexId} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {/* 단지 색상 + 이름 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '80px' }}>
+                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: e.color, flexShrink: 0 }} />
+                          <span style={{
+                            fontSize: '11px', fontWeight: 700, color: '#344054',
+                            maxWidth: '70px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }} title={e.complexName}>{e.complexName}</span>
+                        </div>
+                        {/* 평형 버튼 */}
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          {areas.length > 1 && (
+                            <button onClick={() => setArea(e.complexId, '전체')} style={{
+                              padding: '2px 9px', fontSize: '11px',
+                              border: `1px solid ${cur === '전체' ? '#344054' : '#e0e0e0'}`,
+                              borderRadius: '14px',
+                              background: cur === '전체' ? '#344054' : '#f8f9fa',
+                              color: cur === '전체' ? '#fff' : '#5f6368', cursor: 'pointer',
+                            }}>전체</button>
+                          )}
+                          {areas.map(a => (
+                            <button key={a} onClick={() => setArea(e.complexId, a)} style={{
+                              padding: '2px 9px', fontSize: '11px',
+                              border: `1px solid ${cur === a ? e.color : '#e0e0e0'}`,
+                              borderRadius: '14px',
+                              background: cur === a ? `${e.color}22` : '#f8f9fa',
+                              color: cur === a ? e.color : '#5f6368',
+                              cursor: 'pointer', fontWeight: cur === a ? 700 : 400,
+                            }}>{parseFloat(a).toFixed(0)}㎡</button>
+                          ))}
+                          {areas.length === 0 && (
+                            <span style={{ fontSize: '11px', color: '#9aa0a6' }}>평형 정보 없음</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
           )}
         </div>
 
@@ -358,7 +420,9 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                     const [prefix, type] = (name as string).split('_');
                     const cid = parseInt(prefix.slice(1));
                     const entry = entries.find(e => e.complexId === cid);
-                    const label = isSingle ? '' : `${entry?.complexName ?? ''} `;
+                    const selectedArea = getArea(cid);
+                    const areaSuffix = selectedArea !== '전체' ? ` (${parseFloat(selectedArea).toFixed(0)}㎡)` : '';
+                    const label = isSingle ? '' : `${entry?.complexName ?? ''}${areaSuffix} `;
                     if (type === 'count') return [`${value}건`, `${label}거래량`];
                     return [`${value?.toFixed ? value.toFixed(2) : '-'}억`, `${label}평균가`];
                   }}
@@ -413,15 +477,18 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                 const prices = Array.from(agg?.values() || [])
                   .map(v => v.avgPrice != null ? v.avgPrice / 10000 : null)
                   .filter((p): p is number => p != null);
+                const selectedArea = getArea(e.complexId);
+                const areaLabel = selectedArea !== '전체' ? ` · ${parseFloat(selectedArea).toFixed(0)}㎡` : '';
                 return (
                   <div key={e.complexId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {/* 색상 범례 — bar + line 표시 */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                         <div style={{ width: '14px', height: '14px', borderRadius: '3px', background: barColor(e), opacity: isSingle ? 0.7 : 0.5 }} />
                         <div style={{ width: '22px', height: '3px', borderRadius: '2px', background: lineColor(e) }} />
                       </div>
-                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#344054' }}>{e.complexName}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#344054' }}>
+                        {e.complexName}{areaLabel}
+                      </span>
                     </div>
                     <div style={{ fontSize: '12px', color: '#9aa0a6' }}>
                       총 <b style={{ color: '#344054' }}>{totalCount.toLocaleString()}건</b>
