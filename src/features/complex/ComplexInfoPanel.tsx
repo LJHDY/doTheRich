@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, calcChecklistScore } from '../../types';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool, updateNaverComplexNumber, getComplexPriceSnapshots, ComplexPriceSnapshot, getTradeHistory, getTradeHistoryStatus, collectTradeHistory, TradeHistoryMonth } from '../../services/api';
-import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Line, CartesianGrid } from 'recharts';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool, updateNaverComplexNumber, getComplexPriceSnapshots, ComplexPriceSnapshot, getTradeHistoryStatus } from '../../services/api';
+import TradeHistoryModal from './TradeHistoryModal';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
@@ -377,13 +377,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [priceSnapshots, setPriceSnapshots] = useState<ComplexPriceSnapshot[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
 
-  // 거래량 이력 — MOLIT 실거래 10년 데이터
-  const [tradeHistory, setTradeHistory] = useState<TradeHistoryMonth[]>([]);
+  // 거래량 이력 — 수집 여부 + 모달 열기 상태만 관리 (차트는 TradeHistoryModal에서 처리)
   const [tradeCollected, setTradeCollected] = useState(false);
-  const [tradeCollecting, setTradeCollecting] = useState(false);
-  const [tradeGranularity, setTradeGranularity] = useState<'month' | 'quarter' | 'year'>('year');
-  const [tradeAreaFilter, setTradeAreaFilter] = useState<string>('전체');
-  const [tradeSelectedYear, setTradeSelectedYear] = useState<string>(''); // 월별 모드 연도 선택
+  const [tradeModalOpen, setTradeModalOpen] = useState(false);
 
   // 차트 평형 필터 — '' = 전체, '전용 59' 등 선택 시 해당 타입의 매매/전세 세트만 표시
   const [selectedAreaType, setSelectedAreaType] = useState('');
@@ -662,38 +658,11 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       .finally(() => setSnapshotsLoading(false));
   }, [complex?.id, complex?.naverComplexNumber]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 거래 이력 — 단지 변경 시 수집 여부 확인 + 이력 로드
+  // 거래 이력 — 단지 변경 시 수집 여부만 확인 (상세는 TradeHistoryModal에서 처리)
   useEffect(() => {
-    if (!complex?.id) { setTradeHistory([]); setTradeCollected(false); return; }
-    getTradeHistoryStatus(complex.id).then(s => {
-      setTradeCollected(s.collected);
-      if (s.collected) getTradeHistory(complex.id).then(setTradeHistory).catch(() => {});
-    }).catch(() => {});
+    if (!complex?.id) { setTradeCollected(false); return; }
+    getTradeHistoryStatus(complex.id).then(s => setTradeCollected(s.collected)).catch(() => {});
   }, [complex?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleCollectTradeHistory = async () => {
-    if (!complex?.id) return;
-    setTradeCollecting(true);
-    try {
-      await collectTradeHistory(complex.id);
-      // 폴링: 5초마다 상태 확인, 완료되면 이력 로드
-      const poll = setInterval(async () => {
-        const s = await getTradeHistoryStatus(complex.id);
-        if (s.collected && (s.totalMonths ?? 0) > 0) {
-          clearInterval(poll);
-          setTradeCollected(true);
-          setTradeCollecting(false);
-          const data = await getTradeHistory(complex.id);
-          setTradeHistory(data);
-        }
-      }, 5000);
-      // 최대 4분 후 자동 중단
-      setTimeout(() => { clearInterval(poll); setTradeCollecting(false); }, 240000);
-    } catch {
-      setTradeCollecting(false);
-      alert('수집 시작에 실패했습니다.');
-    }
-  };
 
   // 네이버 단지번호 저장
   const handleSaveNaverNo = async () => {
@@ -4081,264 +4050,33 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           </div>
         )}
 
-        {/* 거래량 이력 — MOLIT 실거래 10년, 평형별 거래량+가격 복합 차트 */}
-        {(() => {
-          // 평형 목록 (면적 오름차순)
-          const allAreas = Array.from(new Set(
-            tradeHistory.flatMap(m => Object.keys(m.areaBreakdown))
-          )).sort((a, b) => (parseFloat(a) || 999) - (parseFloat(b) || 999));
-
-          // 선택 평형이 존재하지 않는 경우 초기화
-          const effectiveArea = (tradeAreaFilter !== '전체' && allAreas.includes(tradeAreaFilter))
-            ? tradeAreaFilter : (allAreas[0] ?? '전체');
-
-          // 월별 모드 연도 목록 + 유효 연도 ('ALL' = 전체 기간)
-          const availableYears = Array.from(new Set(tradeHistory.map(m => m.yearMonth.slice(0, 4)))).sort();
-          const latestYear = availableYears[availableYears.length - 1] ?? '';
-          const showAllMonths = tradeSelectedYear === 'ALL';
-          const effectiveYear = showAllMonths
-            ? latestYear
-            : ((tradeSelectedYear && availableYears.includes(tradeSelectedYear)) ? tradeSelectedYear : latestYear);
-
-          // 단위별 집계 — {label, count, avgPrice(억)}
-          type AggRow = { label: string; count: number; avgPrice: number | null };
-          const aggregate = (area: string): AggRow[] => {
-            const rows: AggRow[] = [];
-            if (tradeGranularity === 'month') {
-              if (showAllMonths) {
-                // 전체 기간: 수집된 모든 월을 시간순으로 표시
-                tradeHistory.forEach(m => {
-                  const bd = area === '전체' ? null : m.areaBreakdown[area];
-                  const count = area === '전체' ? m.tradeCount : (bd?.count ?? 0);
-                  const avgP = area === '전체'
-                    ? (m.avgPrice != null ? m.avgPrice / 10000 : null)
-                    : (bd?.avg != null ? bd.avg / 10000 : null);
-                  // YYYY.MM 형식 레이블
-                  const label = `${m.yearMonth.slice(0, 4)}.${m.yearMonth.slice(4)}`;
-                  rows.push({ label, count, avgPrice: avgP });
-                });
-              } else {
-                // 선택 연도의 1~12월만 표시 (없는 달은 0으로 채움)
-                const monthMap = new Map(
-                  tradeHistory
-                    .filter(m => m.yearMonth.slice(0, 4) === effectiveYear)
-                    .map(m => [m.yearMonth.slice(4), m])
-                );
-                for (let mo = 1; mo <= 12; mo++) {
-                  const moStr = String(mo).padStart(2, '0');
-                  const m = monthMap.get(moStr);
-                  const bd = area === '전체' ? null : (m?.areaBreakdown[area]);
-                  const count = m == null ? 0 : (area === '전체' ? m.tradeCount : (bd?.count ?? 0));
-                  const avgP = m == null ? null
-                    : area === '전체'
-                      ? (m.avgPrice != null ? m.avgPrice / 10000 : null)
-                      : (bd?.avg != null ? bd.avg / 10000 : null);
-                  rows.push({ label: `${mo}월`, count, avgPrice: avgP });
-                }
-              }
-            } else if (tradeGranularity === 'quarter') {
-              const map = new Map<string, { count: number; prices: number[] }>();
-              tradeHistory.forEach(m => {
-                const mo  = parseInt(m.yearMonth.slice(4));
-                const key = `${m.yearMonth.slice(0, 4)}Q${Math.ceil(mo / 3)}`;
-                const bd  = area === '전체' ? null : m.areaBreakdown[area];
-                const cnt = area === '전체' ? m.tradeCount : (bd?.count ?? 0);
-                const p   = area === '전체' ? m.avgPrice : bd?.avg;
-                const cur = map.get(key) ?? { count: 0, prices: [] };
-                cur.count += cnt;
-                if (p != null) cur.prices.push(p);
-                map.set(key, cur);
-              });
-              map.forEach((v, k) => rows.push({
-                label: k, count: v.count,
-                avgPrice: v.prices.length ? v.prices.reduce((a, b) => a + b, 0) / v.prices.length / 10000 : null,
-              }));
-            } else {
-              const map = new Map<string, { count: number; prices: number[] }>();
-              tradeHistory.forEach(m => {
-                const key = m.yearMonth.slice(0, 4);
-                const bd  = area === '전체' ? null : m.areaBreakdown[area];
-                const cnt = area === '전체' ? m.tradeCount : (bd?.count ?? 0);
-                const p   = area === '전체' ? m.avgPrice : bd?.avg;
-                const cur = map.get(key) ?? { count: 0, prices: [] };
-                cur.count += cnt;
-                if (p != null) cur.prices.push(p);
-                map.set(key, cur);
-              });
-              map.forEach((v, k) => rows.push({
-                label: k, count: v.count,
-                avgPrice: v.prices.length ? v.prices.reduce((a, b) => a + b, 0) / v.prices.length / 10000 : null,
-              }));
-            }
-            return rows;
-          };
-
-          const chartData = aggregate(effectiveArea);
-          const totalCount   = chartData.reduce((s, d) => s + d.count, 0);
-          const pricePoints  = chartData.filter(d => d.avgPrice != null);
-          const minPriceY    = pricePoints.length ? Math.floor(Math.min(...pricePoints.map(d => d.avgPrice!)) * 0.95 * 10) / 10 : 0;
-          const maxPriceY    = pricePoints.length ? Math.ceil(Math.max(...pricePoints.map(d => d.avgPrice!)) * 1.05 * 10) / 10 : 10;
-
-          // 연평균 거래량
-          const years = tradeGranularity === 'year' ? chartData.length
-            : tradeGranularity === 'quarter' ? chartData.length / 4
-            : showAllMonths ? (chartData.length / 12) // 전체 기간은 실제 월 수 기준
-            : 1; // 월별 단일 연도는 1년치만 표시
-          const annualAvg = years > 0 ? Math.round(totalCount / years) : 0;
-
-          return (
-            <div style={{ marginBottom: '16px', borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
-              {/* 헤더 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>거래량 이력</h3>
-                {tradeCollected && !tradeCollecting && (
-                  <>
-                    {(['month', 'quarter', 'year'] as const).map(g => (
-                      <button key={g} onClick={() => setTradeGranularity(g)} style={{
-                        fontSize: '11px', padding: '2px 6px',
-                        border: `1px solid ${tradeGranularity === g ? '#4BAAD4' : '#dadce0'}`,
-                        borderRadius: '4px', background: tradeGranularity === g ? '#e0f4fb' : '#fff',
-                        color: tradeGranularity === g ? '#1a73e8' : '#5f6368', cursor: 'pointer',
-                      }}>{g === 'month' ? '월별' : g === 'quarter' ? '분기별' : '연별'}</button>
-                    ))}
-                    {/* 월별 모드 — 연도 ◀ ▶ 네비게이터 + 전체 기간 버튼 */}
-                    {tradeGranularity === 'month' && availableYears.length > 0 && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '4px' }}>
-                        <button
-                          onClick={() => {
-                            if (showAllMonths) {
-                              setTradeSelectedYear(latestYear);
-                            } else {
-                              const idx = availableYears.indexOf(effectiveYear);
-                              if (idx > 0) setTradeSelectedYear(availableYears[idx - 1]);
-                            }
-                          }}
-                          disabled={!showAllMonths && availableYears.indexOf(effectiveYear) === 0}
-                          style={{ fontSize: '11px', padding: '1px 5px', border: '1px solid #dadce0', borderRadius: '4px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}
-                        >◀</button>
-                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#344054', padding: '0 4px', minWidth: '36px', textAlign: 'center' }}>
-                          {showAllMonths ? '전체' : effectiveYear}
-                        </span>
-                        <button
-                          onClick={() => {
-                            const idx = availableYears.indexOf(effectiveYear);
-                            if (idx < availableYears.length - 1) setTradeSelectedYear(availableYears[idx + 1]);
-                          }}
-                          disabled={showAllMonths || availableYears.indexOf(effectiveYear) === availableYears.length - 1}
-                          style={{ fontSize: '11px', padding: '1px 5px', border: '1px solid #dadce0', borderRadius: '4px', background: '#fff', cursor: 'pointer', color: '#5f6368' }}
-                        >▶</button>
-                        <button
-                          onClick={() => setTradeSelectedYear(showAllMonths ? latestYear : 'ALL')}
-                          style={{
-                            fontSize: '11px', padding: '1px 6px', marginLeft: '2px',
-                            border: `1px solid ${showAllMonths ? '#4BAAD4' : '#dadce0'}`,
-                            borderRadius: '4px',
-                            background: showAllMonths ? '#e0f4fb' : '#fff',
-                            color: showAllMonths ? '#1a73e8' : '#5f6368', cursor: 'pointer',
-                          }}
-                        >전체</button>
-                      </div>
-                    )}
-                    <button onClick={handleCollectTradeHistory} style={{
-                      fontSize: '11px', padding: '2px 7px', border: '1px solid #dadce0',
-                      borderRadius: '4px', background: '#fff', color: '#9aa0a6',
-                      cursor: 'pointer', marginLeft: 'auto',
-                    }}>업데이트</button>
-                  </>
-                )}
-                {!tradeCollected && !tradeCollecting && (
-                  <button onClick={handleCollectTradeHistory} style={{
-                    fontSize: '11px', padding: '2px 8px', border: '1px solid #4BAAD4',
-                    borderRadius: '4px', background: '#fff', color: '#4BAAD4', cursor: 'pointer',
-                  }}>10년 데이터 수집</button>
-                )}
-                {tradeCollecting && (
-                  <span style={{ fontSize: '11px', color: '#9aa0a6' }}>수집 중… (2~3분 소요)</span>
-                )}
-              </div>
-
-              {!tradeCollected && !tradeCollecting && (
-                <div style={{ fontSize: '12px', color: '#9aa0a6' }}>
-                  국토교통부 실거래가 기준 10년 거래량·가격 데이터를 수집합니다.
-                </div>
-              )}
-
-              {tradeCollected && tradeHistory.length > 0 && (
-                <>
-                  {/* 평형 탭 */}
-                  {allAreas.length > 0 && (
-                    <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                      {allAreas.length > 1 && (
-                        <button onClick={() => setTradeAreaFilter('전체')} style={{
-                          fontSize: '11px', padding: '2px 7px',
-                          border: `1px solid ${effectiveArea === '전체' ? '#344054' : '#dadce0'}`,
-                          borderRadius: '4px',
-                          background: effectiveArea === '전체' ? '#344054' : '#fff',
-                          color: effectiveArea === '전체' ? '#fff' : '#5f6368', cursor: 'pointer',
-                        }}>전체</button>
-                      )}
-                      {allAreas.map(a => (
-                        <button key={a} onClick={() => setTradeAreaFilter(a)} style={{
-                          fontSize: '11px', padding: '2px 7px',
-                          border: `1px solid ${effectiveArea === a ? '#4BAAD4' : '#dadce0'}`,
-                          borderRadius: '4px',
-                          background: effectiveArea === a ? '#e0f4fb' : '#fff',
-                          color: effectiveArea === a ? '#1a73e8' : '#5f6368', cursor: 'pointer',
-                        }}>{parseFloat(a).toFixed(0)}㎡</button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 복합 차트 — 거래량(bar) + 평균가(line) */}
-                  <ResponsiveContainer width="100%" height={180}>
-                    <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fontSize: 9, fill: '#9aa0a6' }}
-                        interval={showAllMonths ? 11 : 0}
-                        tickFormatter={showAllMonths ? (v: string) => v.slice(0, 4) : undefined}
-                      />
-                      <YAxis yAxisId="left" orientation="left"
-                        tick={{ fontSize: 9, fill: '#89CFF0' }} allowDecimals={false}
-                        label={{ value: '건', position: 'insideTopLeft', fontSize: 9, fill: '#89CFF0', dy: -4 }} />
-                      <YAxis yAxisId="right" orientation="right"
-                        tick={{ fontSize: 9, fill: '#E06060' }}
-                        domain={[minPriceY, maxPriceY]}
-                        tickFormatter={(v: number) => `${v.toFixed(1)}`}
-                        label={{ value: '억', position: 'insideTopRight', fontSize: 9, fill: '#E06060', dy: -4 }} />
-                      <Tooltip
-                        contentStyle={{ fontSize: '11px' }}
-                        formatter={(v: number, name: string) =>
-                          name === 'count'
-                            ? [`${v}건`, '거래량']
-                            : [`${v != null ? v.toFixed(2) : '-'}억`, '평균가']
-                        }
-                      />
-                      <Bar yAxisId="left" dataKey="count" fill="#89CFF0" maxBarSize={20}
-                        radius={[2, 2, 0, 0]} opacity={0.85} />
-                      <Line yAxisId="right" dataKey="avgPrice" stroke="#E06060"
-                        strokeWidth={2} dot={false} connectNulls />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-
-                  {/* 요약 */}
-                  <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '6px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    <span>합계 <b style={{ color: '#344054' }}>{totalCount.toLocaleString()}건</b></span>
-                    <span>연평균 <b style={{ color: '#344054' }}>{annualAvg}건</b></span>
-                    {pricePoints.length > 0 && (
-                      <span>가격 범위 <b style={{ color: '#344054' }}>
-                        {Math.min(...pricePoints.map(d => d.avgPrice!)).toFixed(1)}억
-                        {' ~ '}
-                        {Math.max(...pricePoints.map(d => d.avgPrice!)).toFixed(1)}억
-                      </b></span>
-                    )}
-                  </div>
-                </>
-              )}
+        {/* 거래량 이력 — 모달 트리거 */}
+        <div style={{ marginBottom: '16px', borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: 0 }}>거래량 이력</h3>
+            <button
+              onClick={() => setTradeModalOpen(true)}
+              style={{
+                fontSize: '11px', padding: '3px 10px',
+                border: '1px solid #4BAAD4', borderRadius: '14px',
+                background: '#fff', color: '#4BAAD4', cursor: 'pointer', fontWeight: 600,
+              }}
+            >
+              📊 {tradeCollected ? '차트 보기' : '수집 및 보기'}
+            </button>
+          </div>
+          {tradeCollected && (
+            <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '4px' }}>
+              국토교통부 실거래가 기준 10년 데이터 수집 완료
             </div>
-          );
-        })()}
+          )}
+        </div>
+        {tradeModalOpen && (
+          <TradeHistoryModal
+            entries={[{ complexId: complex.id, complexName: complex.complexName, color: '#4BAAD4' }]}
+            onClose={() => setTradeModalOpen(false)}
+          />
+        )}
 
         {/* 네이버 호가 감시 — 단지번호 등록 + 스냅샷 이력 */}
         <div style={{ marginBottom: '16px', borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>

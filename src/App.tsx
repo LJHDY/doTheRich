@@ -29,6 +29,9 @@ import CalendarModal from './features/schedule/CalendarModal';
 import ContactsModal from './features/contacts/ContactsModal';
 import InvestmentMemoModal from './features/investment-memo/InvestmentMemoModal';
 import CameraStampButton from './shared/CameraStampButton';
+import TradeHistoryModal from './features/complex/TradeHistoryModal';
+
+const TRADE_COMPARE_COLORS = ['#4285f4', '#e53935', '#43a047', '#ff8f00'];
 
 const App: React.FC = () => {
   const isMobile = useIsMobile();
@@ -163,6 +166,7 @@ const App: React.FC = () => {
     try { return JSON.parse(sessionStorage.getItem('compare_ids') || '[]'); } catch { return []; }
   });
   const [compareMode, setCompareMode] = useState<'normal' | 'evaluation'>('normal');
+  const [tradeCompareOpen, setTradeCompareOpen] = useState(false);
 
   // 전체 패널 열림 상태 → sessionStorage 동기화 (새로고침 후 복원용)
   useEffect(() => {
@@ -1016,6 +1020,26 @@ const App: React.FC = () => {
               );
             })}
 
+            {/* 거래량 이력 비교 플로팅 버튼 */}
+            <button
+              onClick={() => setTradeCompareOpen(true)}
+              title="거래량 이력 비교"
+              style={{
+                position: 'absolute', bottom: '20px', right: '20px',
+                zIndex: 50,
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '10px 16px',
+                background: '#fff',
+                border: '1.5px solid #4BAAD4',
+                borderRadius: '24px',
+                color: '#4BAAD4', fontSize: '13px', fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(75,170,212,0.25)',
+              }}
+            >
+              📊 거래량 이력
+            </button>
+
             {compareMode === 'evaluation' ? (
               compareIds.length < 2 ? (
                 /* 비교평가 — 1개만 선택됐을 때 빈 슬롯 */
@@ -1405,6 +1429,17 @@ const App: React.FC = () => {
         <RealEstateAnalysisModal
           complexes={compareIds.map(id => complexes.find(c => c.id === id)!).filter(Boolean)}
           onClose={() => setRealEstateAiOpen(false)}
+        />
+      )}
+
+      {/* 거래량 이력 비교 모달 */}
+      {tradeCompareOpen && compareIds.length > 0 && (
+        <TradeHistoryModal
+          entries={compareIds.map((id, idx) => {
+            const c = complexes.find(x => x.id === id);
+            return { complexId: id, complexName: c?.complexName ?? String(id), color: TRADE_COMPARE_COLORS[idx % TRADE_COMPARE_COLORS.length] };
+          })}
+          onClose={() => setTradeCompareOpen(false)}
         />
       )}
 
