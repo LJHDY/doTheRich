@@ -1821,13 +1821,13 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
           <div style={{ padding: '10px 20px 20px' }}>
             <CalendarView
               yearMonth={yearMonth}
-              entries={entries}
+              entries={[...entries, ...nextMonthBoundary]} // 25일 사이클 — 이번달 날짜(day>=25)인 다음달 항목도 달력에 표시
               selectedDate={calSelectedDate}
               onSelectDate={d => setCalSelectedDate(prev => prev === d ? null : d)}
               onEdit={openEdit}
               onDelete={handleDelete}
               userId={userId}
-              onEntriesAdded={newEntries => setEntries(prev => [...newEntries, ...prev])}
+              onEntriesAdded={newEntries => newEntries.forEach(addToDisplay)} // 25일 사이클 라우팅 적용
               paymentMethods={paymentMethods}
               incomeCats={incomeCatsDB}
               varExpCats={varExpCats}
@@ -2519,7 +2519,7 @@ const CalendarView: React.FC<{
     try {
       const payload = validRows.map(r => ({
         userId,
-        yearMonth,
+        yearMonth: toSettledYearMonth(selectedDate), // 25일 사이클 기준 정산 월
         entryDate: selectedDate,
         entryType: r.entryType,
         category: r.category,
