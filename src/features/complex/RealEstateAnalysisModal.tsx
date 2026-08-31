@@ -364,29 +364,41 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
                       <span style={{ fontSize: '12px', fontWeight: 600, color: '#1a3a5c', minWidth: '100px', flexShrink: 0 }}>
                         {c.complexName}
                       </span>
-                      {areas.length > 0 ? (
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {areas.map(a => (
-                            <button
-                              key={a}
-                              onClick={() => setAreaSelections(prev => ({ ...prev, [c.id]: a }))}
-                              style={{
-                                padding: '3px 10px', fontSize: '12px', fontWeight: 600,
-                                border: '1px solid',
-                                borderColor: selected === a ? '#4BAAD4' : '#dadce0',
-                                borderRadius: '12px',
-                                background: selected === a ? '#4BAAD4' : '#fff',
-                                color: selected === a ? '#fff' : '#5f6368',
-                                cursor: 'pointer', whiteSpace: 'nowrap',
-                              }}
-                            >
-                              전용 {a}㎡
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: '11px', color: '#9aa0a6' }}>평형 정보 없음 (전체 분석)</span>
-                      )}
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {/* 등록된 평형 버튼 */}
+                        {areas.map(a => (
+                          <button
+                            key={a}
+                            onClick={() => setAreaSelections(prev => ({ ...prev, [c.id]: a }))}
+                            style={{
+                              padding: '3px 10px', fontSize: '12px', fontWeight: 600,
+                              border: '1px solid',
+                              borderColor: selected === a ? '#4BAAD4' : '#dadce0',
+                              borderRadius: '12px',
+                              background: selected === a ? '#4BAAD4' : '#fff',
+                              color: selected === a ? '#fff' : '#5f6368',
+                              cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}
+                          >
+                            전용 {a}㎡
+                          </button>
+                        ))}
+                        {/* 직접 입력 필드 — 항상 표시, 숫자 입력 시 해당 평형으로 선택 */}
+                        <input
+                          type="number"
+                          placeholder="직접 입력"
+                          value={areas.includes(selected) ? '' : selected}
+                          onChange={e => setAreaSelections(prev => ({ ...prev, [c.id]: e.target.value }))}
+                          style={{
+                            width: '80px', padding: '3px 8px', fontSize: '12px',
+                            border: `1px solid ${!areas.includes(selected) && selected ? '#4BAAD4' : '#dadce0'}`,
+                            borderRadius: '12px', outline: 'none',
+                            background: !areas.includes(selected) && selected ? '#e8f6ff' : '#fff',
+                            color: '#344054',
+                          }}
+                        />
+                        {selected && <span style={{ fontSize: '11px', color: '#4BAAD4', fontWeight: 600 }}>전용 {selected}㎡ 선택됨</span>}
+                      </div>
                     </div>
                   );
                 })}
