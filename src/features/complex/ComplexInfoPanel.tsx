@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, calcChecklistScore } from '../../types';
+// 중복 정의를 complexUtils로 분리하여 CompareCard와 공유
+import { stripHtml, haversineKm, INFRA_TYPES_LIST, VISIT_TYPE_LABELS, GRADE_COLORS, calcSchoolGrade, calcInfraGrade, Tag } from './complexUtils';
 import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool, updateNaverComplexNumber, getComplexPriceSnapshots, ComplexPriceSnapshot, getTradeHistoryStatus } from '../../services/api';
 import TradeHistoryModal from './TradeHistoryModal';
 import PriceChart from './PriceChart';
@@ -172,25 +174,7 @@ const parseLineFromCategory = (category: string): string =>
 const isStation = (category: string) =>
   category.includes('지하철') || category.includes('전철');
 
-// HTML 태그 제거 (네이버 검색 결과 title에 <b> 태그가 포함되어 있어 제거)
-const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '');
-
-// 두 좌표 사이의 직선 거리(km) 계산 — 도보 API 실패 시 fallback으로 사용
-const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
-// 인프라 유형 목록 — 셀렉트박스 옵션 생성에 사용
-const INFRA_TYPES_LIST = [
-  { key: 'DEPARTMENT_STORE', label: '백화점' },
-  { key: 'MART', label: '마트' },
-  { key: 'HOSPITAL', label: '병원' },
-  { key: 'ETC', label: '기타' },
-];
+// stripHtml, haversineKm, INFRA_TYPES_LIST → complexUtils에서 import
 
 // 인라인 편집 폼 인풋 공통 스타일
 const editInputStyle: React.CSSProperties = {
@@ -217,55 +201,12 @@ const REDEVELOP_STAGE_LABELS: Record<string, string> = {
   ASSOCIATION: '조합 설립 인가', APPROVAL: '사업시행인가',
   MGMT_APPROVAL: '관리처분인가', RELOCATION: '이주·철거 및 착공', COMPLETION: '준공 및 입주',
 };
-const VISIT_TYPE_LABELS: Record<string, string> = {
-  ATMOSPHERE: '분위기 임장', COMPLEX: '단지 임장', LISTING: '매물 임장', NONE: '임장X',
-};
+// VISIT_TYPE_LABELS, calcSchoolGrade, calcInfraGrade, Tag, GRADE_COLORS → complexUtils에서 import
 const SCHOOL_TYPE_LABELS: Record<string, string> = {
   ELEMENTARY: '초등', MIDDLE: '중학',
 };
 const INFRA_TYPE_LABELS: Record<string, string> = {
   DEPARTMENT_STORE: '백화점', MART: '마트', HOSPITAL: '병원', ETC: '기타',
-};
-
-// 중학교 학업성취도 기준 학군 등급 — 중학교 없거나 점수 없으면 null
-const calcSchoolGrade = (
-  schoolInfos: SchoolInfo[]
-): { grade: 'S' | 'A' | 'B' | 'C'; color: string } | null => {
-  const scores = schoolInfos
-    .filter(s => s.schoolType === 'MIDDLE' && s.achievementScore != null)
-    .map(s => s.achievementScore!);
-  if (scores.length === 0) return null;
-  const best = Math.max(...scores);
-  if (best >= 95) return { grade: 'S', color: '#F08080' };
-  if (best >= 90) return { grade: 'A', color: '#FFD97D' };
-  if (best >= 85) return { grade: 'B', color: '#7DC8A0' };
-  return { grade: 'C', color: '#4BAAD4' };
-};
-
-// 인프라 등급 — 백화점 2개↑=S, 1개=A, 대형마트 1개↑=B, 그외=C / 인프라 없어도 항상 표시
-const calcInfraGrade = (
-  infraInfos: InfraInfo[]
-): { grade: 'S' | 'A' | 'B' | 'C'; color: string } => {
-  const deptCount = infraInfos.filter(i => i.infraType === 'DEPARTMENT_STORE').length;
-  const martCount = infraInfos.filter(i => i.infraType === 'MART').length;
-  if (deptCount >= 2) return { grade: 'S', color: '#F08080' };
-  if (deptCount >= 1) return { grade: 'A', color: '#FFD97D' };
-  if (martCount >= 1) return { grade: 'B', color: '#7DC8A0' };
-  return { grade: 'C', color: '#4BAAD4' };
-};
-
-// 인라인 뱃지 — 학교유형·인프라유형 등 짧은 분류 태그 표시용
-const Tag: React.FC<{ label: string; color?: string }> = ({ label, color = '#5f6368' }) => (
-  <span style={{
-    fontSize: '10px', fontWeight: 700, color: '#fff',
-    backgroundColor: color, padding: '1px 6px', borderRadius: '8px',
-    whiteSpace: 'nowrap', flexShrink: 0,
-  }}>{label}</span>
-);
-
-// S/A/B/C 등급 → 색상 매핑 (직장밀도·학군·인프라 공통)
-const GRADE_COLORS: Record<string, string> = {
-  S: '#F08080', A: '#FFD97D', B: '#7DC8A0', C: '#89CFF0',
 };
 
 // 만 단위 축약 (240689 → "24만", 9500 → "9,500")

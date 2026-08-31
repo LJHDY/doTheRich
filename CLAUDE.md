@@ -101,7 +101,8 @@ src/
 │   │       ├── districtGeoJson.ts  # EPSG:5179 → WGS84 변환 (proj4), GeoJSON 캐시
 │   │       └── geo.ts              # pointInPolygon (Ray casting) 등 지오 유틸
 │   ├── complex/                    # 단지 관련
-│   │   ├── ComplexInfoPanel.tsx    # 우측 단지 상세 패널
+│   │   ├── ComplexInfoPanel.tsx    # 우측 단지 상세 패널 — complexUtils 공유
+│   │   ├── complexUtils.tsx        # ComplexInfoPanel·CompareCard 공통 유틸·상수·컴포넌트
 │   │   ├── ComplexListModal.tsx    # 단지 목록 팝업 (금액대·평형·검색 필터)
 │   │   ├── RegisterModal.tsx       # 단지 등록 폼
 │   │   ├── PriceChart.tsx          # 평형×매매/전세 다중 라인 차트
@@ -115,7 +116,7 @@ src/
 │   │       ├── hazardLocations.ts  # 유해시설 위치 데이터
 │   │       └── hanRiverParks.ts    # 한강공원 위치 데이터
 │   ├── compare/                    # 단지 비교
-│   │   ├── CompareCard.tsx         # 비교 뷰 단지 카드 (1/3 너비)
+│   │   ├── CompareCard.tsx         # 비교 뷰 단지 카드 (1/3 너비) — complexUtils 공유
 │   │   ├── CompareListModal.tsx    # 비교 단지 선택 패널 + 비교평가 모드 토글
 │   │   └── ComparisonEvalPanel.tsx # 1:1 비교평가 패널 (사진·평가·결론)
 │   ├── checklist/                  # 임장 체크리스트
@@ -126,7 +127,15 @@ src/
 │   │   ├── LivingZonePanel.tsx     # 생활권 사이드패널 (구획·순위·체크리스트)
 │   │   └── ZonePhotoModal.tsx      # 생활권 사진 모달
 │   ├── budget/                     # 가계부 / 자산
-│   │   ├── BudgetPage.tsx          # 전체화면 가계부 (내역·통장·자산·통합·AI분석)
+│   │   ├── BudgetPage.tsx          # 전체화면 가계부 메인 (내역탭 + 탭 라우팅, ~3700줄)
+│   │   ├── MarketReportView.tsx    # 시장리포트 탭 (티커그리드·Gemini분석, ~1600줄)
+│   │   ├── AccountManagementView.tsx # 통장관리 탭 (공유계좌·공통코드 포함)
+│   │   ├── AssetView.tsx           # 자산 탭 (스냅샷·이력·그래프·세부내역, ~1340줄)
+│   │   ├── OverviewView.tsx        # 통합 보기 탭
+│   │   ├── AIReportView.tsx        # AI 분석 탭 (재무리포트)
+│   │   ├── IntegratedReportView.tsx # 통합리포트 탭 + RankingTable 헬퍼
+│   │   ├── ScreeningReportView.tsx  # 우량주 스크리닝 탭
+│   │   ├── CompanyAnalysisView.tsx  # 기업분석 탭
 │   │   ├── UserSelectModal.tsx     # 유저 선택 모달
 │   │   └── budgetConstants.ts      # ASSET_COLUMNS, ACCOUNT_GROUPS 등 상수
 │   ├── schedule/                   # 캘린더 / 일정
@@ -1031,6 +1040,17 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
     - `POST /api/screening/reports/generate?market_type=ALL|KOSPI|KOSDAQ` — 즉시 생성 (202)
   - 환경변수: `DART_API_KEY` (Railway), `GEMINI_API_KEY` (기존)
   - `_fetch_dart_financials_batch(reprt_code)` 파라미터 추가 — 연간/분기 공통 함수 재사용
+
+- [x] 리팩토링 — ComplexInfoPanel / CompareCard 중복 로직 공통화
+  - `src/features/complex/complexUtils.tsx` 신규 생성: `stripHtml`, `haversineKm`, `INFRA_TYPES_LIST`, `VISIT_TYPE_LABELS`, `GRADE_COLORS`, `calcSchoolGrade`, `calcInfraGrade`, `Tag` (size prop 지원)
+  - ComplexInfoPanel, CompareCard에서 중복 정의 제거 후 import 전환
+- [x] 리팩토링 — BudgetPage.tsx 탭 분리 (8,652줄 → 3,695줄)
+  - 모듈 레벨 View 컴포넌트 8개를 별도 파일로 분리: MarketReportView / AccountManagementView / OverviewView / AssetView / AIReportView / IntegratedReportView / ScreeningReportView / CompanyAnalysisView
+  - 각 View의 내부 헬퍼·모달·서브컴포넌트도 함께 이동
+  - BudgetPage에서 FixedExpenseModal·CalendarView·EntryRow 등 내역탭 전용 컴포넌트만 유지
+- [x] 리팩토링 — market_report_service.py 프롬프트 빌더 정리 (백엔드)
+  - `_fmt_market_groups(market_data, groups)` 헬퍼 추출: 3개 빌더 함수의 동일한 [그룹] 루프 통합
+  - `_MACRO_DEFS` 상수 + `_fmt_macro_block(market_data)` 헬퍼 추출: FRED 거시지표 5개 포맷 로직 통합
 
 ## 미완성 / TODO
 

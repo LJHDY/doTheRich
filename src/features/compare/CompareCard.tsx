@@ -4,6 +4,8 @@ import { getPriceHistories, getNearbySchools, NearbySchool } from '../../service
 import PriceChart from '../complex/PriceChart';
 import CommuteGradeBadge from '../complex/CommuteGradeBadge';
 import ChecklistSection from '../checklist/ChecklistSection';
+// 중복 정의를 complexUtils로 분리하여 ComplexInfoPanel과 공유
+import { VISIT_TYPE_LABELS, GRADE_COLORS, calcSchoolGrade, calcInfraGrade, Tag } from '../complex/complexUtils';
 
 interface CompareCardProps {
   complex: ApartmentComplex;
@@ -21,7 +23,8 @@ const InfoRow = React.memo<{ label: string; value?: string | number | null }>(({
   );
 });
 
-// ComplexInfoPanel과 동일한 레이블 맵
+// VISIT_TYPE_LABELS, GRADE_COLORS, calcSchoolGrade, calcInfraGrade, Tag → complexUtils에서 import
+// ComplexInfoPanel과 동일한 레이블 맵 (complexUtils에 없는 것만 여기에 정의)
 const REDEVELOP_TYPE_LABELS: Record<string, string> = {
   REDEVELOPMENT: '재개발', RECONSTRUCTION: '재건축', REMODELING: '리모델링',
 };
@@ -30,17 +33,11 @@ const REDEVELOP_STAGE_LABELS: Record<string, string> = {
   ASSOCIATION: '조합 설립 인가', APPROVAL: '사업시행인가',
   MGMT_APPROVAL: '관리처분인가', RELOCATION: '이주·철거 및 착공', COMPLETION: '준공 및 입주',
 };
-const VISIT_TYPE_LABELS: Record<string, string> = {
-  ATMOSPHERE: '분위기 임장', COMPLEX: '단지 임장', LISTING: '매물 임장', NONE: '임장X',
-};
 const SCHOOL_TYPE_LABELS: Record<string, string> = {
   ELEMENTARY: '초등', MIDDLE: '중학',
 };
 const INFRA_TYPE_LABELS: Record<string, string> = {
   DEPARTMENT_STORE: '백화점', MART: '마트', HOSPITAL: '병원', ETC: '기타',
-};
-const GRADE_COLORS: Record<string, string> = {
-  S: '#F08080', A: '#FFD97D', B: '#7DC8A0', C: '#89CFF0',
 };
 
 const formatCount = (n: number): string =>
@@ -48,42 +45,6 @@ const formatCount = (n: number): string =>
 
 // areaType 문자열에서 숫자 추출 ("전용 84" → 84)
 const areaTypeNum = (at: string) => parseFloat(at.replace(/[^0-9.]/g, '')) || 0;
-
-// 중학교 학업성취도 기준 학군 등급
-const calcSchoolGrade = (
-  schoolInfos: SchoolInfo[]
-): { grade: 'S' | 'A' | 'B' | 'C'; color: string } | null => {
-  const scores = schoolInfos
-    .filter(s => s.schoolType === 'MIDDLE' && s.achievementScore != null)
-    .map(s => s.achievementScore!);
-  if (scores.length === 0) return null;
-  const best = Math.max(...scores);
-  if (best >= 95) return { grade: 'S', color: '#F08080' };
-  if (best >= 90) return { grade: 'A', color: '#FFD97D' };
-  if (best >= 85) return { grade: 'B', color: '#7DC8A0' };
-  return { grade: 'C', color: '#4BAAD4' };
-};
-
-// 인프라 등급 — 인프라 없어도 항상 반환
-const calcInfraGrade = (
-  infraInfos: InfraInfo[]
-): { grade: 'S' | 'A' | 'B' | 'C'; color: string } => {
-  const deptCount = infraInfos.filter(i => i.infraType === 'DEPARTMENT_STORE').length;
-  const martCount = infraInfos.filter(i => i.infraType === 'MART').length;
-  if (deptCount >= 2) return { grade: 'S', color: '#F08080' };
-  if (deptCount >= 1) return { grade: 'A', color: '#FFD97D' };
-  if (martCount >= 1) return { grade: 'B', color: '#7DC8A0' };
-  return { grade: 'C', color: '#4BAAD4' };
-};
-
-// 인라인 뱃지 — 학교유형·인프라유형 등 짧은 분류 태그
-const Tag: React.FC<{ label: string; color?: string }> = ({ label, color = '#5f6368' }) => (
-  <span style={{
-    fontSize: '9px', fontWeight: 700, color: '#fff',
-    backgroundColor: color, padding: '1px 5px', borderRadius: '7px',
-    whiteSpace: 'nowrap', flexShrink: 0,
-  }}>{label}</span>
-);
 
 const SALE_COLORS = ['#89CFF0', '#4285f4', '#185abc', '#669df6'];
 const JEONSE_COLORS = ['#F08080', '#c62828', '#ef5350', '#e57373'];
@@ -539,6 +500,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
                   <Tag
                     label={SCHOOL_TYPE_LABELS[s.schoolType] ?? s.schoolType}
                     color={s.schoolType === 'MIDDLE' ? '#89CFF0' : '#7DC8A0'}
+                    size="sm"
                   />
                   <span style={{ fontSize: '12px', fontWeight: 600, color: '#202124', flex: 1 }}>{s.schoolName}</span>
                   {s.walkingMinutes != null && (
@@ -609,7 +571,7 @@ const CompareCard: React.FC<CompareCardProps> = ({ complex, onClose }) => {
           {complex.infraInfos && complex.infraInfos.length > 0 ? (
             complex.infraInfos.map((inf: InfraInfo) => (
               <div key={inf.id} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <Tag label={INFRA_TYPE_LABELS[inf.infraType] ?? inf.infraType} color='#FFD97D' />
+                <Tag label={INFRA_TYPE_LABELS[inf.infraType] ?? inf.infraType} color='#FFD97D' size="sm" />
                 <span style={{ fontSize: '12px', color: '#202124', flex: 1 }}>{inf.infraName}</span>
                 {inf.distance != null && (
                   <span style={{ fontSize: '11px', color: '#80868b', flexShrink: 0 }}>도보 {inf.distance}분</span>
