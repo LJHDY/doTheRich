@@ -3680,7 +3680,7 @@ const TICKER_GROUPS = [
   { label: '미국 증시',     keys: ['sp500', 'nasdaq', 'dow'],                                                          accent: '#40a060' },
   { label: '원자재',        keys: ['wti', 'gold'],                                                                     accent: '#c8882a' },
   { label: '환율 / 달러',  keys: ['dxy', 'usdkrw', 'usdjpy'],                                                         accent: '#d4704a' },
-  { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'nikkei'],                                                       accent: '#c0404a' },
+  { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'kpi200', 'fut', 'kqi150', 'kvalue', 'nikkei'],               accent: '#c0404a' },
 ];
 
 // ── 미국 주가상위 100 접기/펼치기 테이블 ─────────────────────────────────────
