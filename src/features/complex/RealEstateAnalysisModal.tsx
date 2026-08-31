@@ -151,6 +151,14 @@ function renderMarkdown(text: string): React.ReactNode[] {
   return result;
 }
 
+// 45~90㎡ 범위 평형만 필터
+function filterTargetAreas(areas: string[] | undefined): string[] {
+  return (areas ?? []).filter(a => {
+    const v = parseFloat(a);
+    return !isNaN(v) && v >= 45 && v <= 90;
+  }).sort((a, b) => parseFloat(a) - parseFloat(b));
+}
+
 const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
   const [histories, setHistories] = useState<ComplexAnalysis[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -159,6 +167,19 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 단지별 선택 평형 — complexId → areaType 문자열
+  const [areaSelections, setAreaSelections] = useState<Record<number, string>>({});
+
+  // 단지가 바뀌면 각 단지의 첫 번째 가용 평형으로 초기화
+  useEffect(() => {
+    const init: Record<number, string> = {};
+    complexes.forEach(c => {
+      const areas = filterTargetAreas(c.areaTypes);
+      if (areas.length > 0) init[c.id] = areas[0];
+    });
+    setAreaSelections(init);
+  }, [complexes]);
 
   // 모달 열릴 때 이력 로드
   useEffect(() => {
@@ -189,7 +210,15 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
     setAnalyzing(true);
     setError('');
     try {
-      const result = await analyzeRealEstate(complexes.map(c => c.id), attachedImages.length > 0 ? attachedImages : undefined);
+      // 선택된 평형 목록 구성 (빈 선택 제외)
+      const selections = Object.entries(areaSelections)
+        .filter(([, area]) => area)
+        .map(([id, area]) => ({ complexId: Number(id), areaType: area }));
+      const result = await analyzeRealEstate(
+        complexes.map(c => c.id),
+        attachedImages.length > 0 ? attachedImages : undefined,
+        selections.length > 0 ? selections : undefined,
+      );
       setHistories(prev => [result, ...prev]);
       setSelectedId(result.id);
     } catch (e: any) {
@@ -237,21 +266,6 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
 
           {/* 컨트롤 바: 이력 선택 + 새 분석 버튼 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            {/* 현재 비교 단지 칩 (2개 이상일 때만 표시) */}
-            {complexes.length >= 2 && (
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {complexes.map(c => (
-                  <span key={c.id} style={{
-                    padding: '4px 10px', borderRadius: '12px',
-                    background: '#e0f0ff', color: '#1a3a5c',
-                    fontSize: '12px', fontWeight: 600,
-                  }}>
-                    📍 {c.complexName}
-                  </span>
-                ))}
-              </div>
-            )}
-
             {/* 이력 드롭다운 */}
             {histories.length > 0 && (
               <select
@@ -261,7 +275,7 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
                   padding: '5px 10px', fontSize: '12px',
                   border: '1px solid #dadce0', borderRadius: '8px',
                   background: '#fff', color: '#344054',
-                  maxWidth: '320px', marginLeft: 'auto',
+                  maxWidth: '340px',
                 }}
               >
                 {histories.map(h => (
@@ -279,14 +293,58 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
                   padding: '7px 18px', fontSize: '13px', fontWeight: 600,
                   border: 'none', borderRadius: '10px', cursor: analyzing ? 'default' : 'pointer',
                   background: analyzing ? '#b0c4de' : '#89CFF0', color: '#fff',
-                  marginLeft: histories.length > 0 ? undefined : 'auto',
-                  flexShrink: 0,
+                  marginLeft: 'auto', flexShrink: 0,
                 }}
               >
                 {analyzing ? '⚙️ 분석 중…' : attachedImages.length > 0 ? `✨ 분석 (이미지 ${attachedImages.length}장)` : '✨ 지금 분석'}
               </button>
             )}
           </div>
+
+          {/* 단지별 분석 평형 선택 — 단지 2개 이상일 때만 표시 */}
+          {complexes.length >= 2 && (
+            <div style={{ marginTop: '12px', padding: '10px 14px', background: '#f8fbff', borderRadius: '10px', border: '1px solid #d4edfb' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#4BAAD4', marginBottom: '8px', letterSpacing: '0.3px' }}>
+                📐 단지별 분석 평형 선택
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {complexes.map(c => {
+                  const areas = filterTargetAreas(c.areaTypes);
+                  const selected = areaSelections[c.id] ?? '';
+                  return (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#1a3a5c', minWidth: '100px', flexShrink: 0 }}>
+                        {c.complexName}
+                      </span>
+                      {areas.length > 0 ? (
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          {areas.map(a => (
+                            <button
+                              key={a}
+                              onClick={() => setAreaSelections(prev => ({ ...prev, [c.id]: a }))}
+                              style={{
+                                padding: '3px 10px', fontSize: '12px', fontWeight: 600,
+                                border: '1px solid',
+                                borderColor: selected === a ? '#4BAAD4' : '#dadce0',
+                                borderRadius: '12px',
+                                background: selected === a ? '#4BAAD4' : '#fff',
+                                color: selected === a ? '#fff' : '#5f6368',
+                                cursor: 'pointer', whiteSpace: 'nowrap',
+                              }}
+                            >
+                              전용 {a}㎡
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: '#9aa0a6' }}>평형 정보 없음 (전체 분석)</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 이미지 첨부 영역 — 단지 2개 이상일 때만 표시 */}
           {complexes.length >= 2 && (

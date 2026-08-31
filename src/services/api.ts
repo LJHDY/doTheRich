@@ -1471,10 +1471,17 @@ export const getComplexAnalyses = async (): Promise<ComplexAnalysis[]> => {
   return res.data;
 };
 
-export const analyzeRealEstate = async (complexIds: number[], images?: File[]): Promise<ComplexAnalysis> => {
-  // 이미지 첨부 시 multipart/form-data, 없으면 JSON
+export const analyzeRealEstate = async (
+  complexIds: number[],
+  images?: File[],
+  // 단지별 분석 평형 선택: [{ complexId, areaType }] — 지정 시 해당 평형만 AI에 전달
+  areaSelections?: { complexId: number; areaType: string }[],
+): Promise<ComplexAnalysis> => {
   const form = new FormData();
   form.append('complex_ids', JSON.stringify(complexIds));
+  if (areaSelections && areaSelections.length > 0) {
+    form.append('area_selections', JSON.stringify(areaSelections));
+  }
   (images ?? []).forEach(f => form.append('images', f));
   const res = await api.post<ComplexAnalysis>('/api/ai/real-estate/analyze', form, {
     timeout: 120_000,
