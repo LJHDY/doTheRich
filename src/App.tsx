@@ -311,7 +311,7 @@ const App: React.FC = () => {
 
   // 로고 클릭 — 페이지 전체 새로고침
   const handleGoHome = () => {
-    window.location.reload();
+    window.location.href = '/';
   };
 
   // 패널 닫기 — 지도의 경로·그리기 상태 모두 초기화
