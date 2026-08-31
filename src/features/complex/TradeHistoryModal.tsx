@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  getTradeHistory, getTradeHistoryStatus, collectTradeHistory, TradeHistoryMonth,
+  getTradeHistory, getTradeHistoryStatus, collectTradeHistory, TradeHistoryMonth, TradeRawItem,
 } from '../../services/api';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
@@ -24,8 +24,9 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   const [collecting, setCollecting] = useState<Set<number>>(new Set());
   const [granularity, setGranularity] = useState<'month' | 'quarter' | 'year'>('year');
   const [selectedYear, setSelectedYear] = useState('');
-  // 단지별 독립 평형 선택 (complexId → 선택된 면적 or '전체')
   const [areaFilters, setAreaFilters] = useState<Map<number, string>>(new Map());
+  // 클릭한 레이블 → 드릴다운 표시
+  const [clickedLabel, setClickedLabel] = useState<string | null>(null);
 
   // 모달 오픈 시 각 단지 수집 상태 + 이력 로드
   useEffect(() => {
@@ -170,6 +171,49 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
     : granularity === 'quarter' && labels.length > 20 ? 3 : 0;
   const xFormatter = showAll && granularity === 'month'
     ? (v: string) => v.slice(0, 4) : undefined;
+
+  // 레이블 → 해당하는 yearMonth 목록 변환
+  const getLabelMonths = (label: string): string[] => {
+    if (granularity === 'month') {
+      if (showAll) {
+        // "2024.01" → "202401"
+        return [label.replace('.', '')];
+      } else {
+        // "1월" → effectiveYear + "01"
+        const mo = String(parseInt(label)).padStart(2, '0');
+        return [`${effectiveYear}${mo}`];
+      }
+    } else if (granularity === 'quarter') {
+      // "2024Q1" → ["202401", "202402", "202403"]
+      const [yearPart, qPart] = label.split('Q');
+      const q = parseInt(qPart);
+      const startMo = (q - 1) * 3 + 1;
+      return Array.from({ length: 3 }, (_, i) => `${yearPart}${String(startMo + i).padStart(2, '0')}`);
+    } else {
+      // "2024" → ["202401", ..., "202412"]
+      return Array.from({ length: 12 }, (_, i) => `${label}${String(i + 1).padStart(2, '0')}`);
+    }
+  };
+
+  // 클릭 레이블의 개별 거래 목록 (평형 필터 적용, 날짜 내림차순)
+  const drillDownItems: (TradeRawItem & { complexId: number })[] = clickedLabel
+    ? (() => {
+        const months = new Set(getLabelMonths(clickedLabel));
+        const result: (TradeRawItem & { complexId: number })[] = [];
+        entries.forEach(({ complexId }) => {
+          const selectedArea = getArea(complexId);
+          (histories.get(complexId) || [])
+            .filter(m => months.has(m.yearMonth))
+            .forEach(m => {
+              const items = (m.rawItems || []).filter(it =>
+                selectedArea === '전체' || it.area === selectedArea
+              );
+              items.forEach(it => result.push({ ...it, complexId }));
+            });
+        });
+        return result.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      })()
+    : [];
 
   return (
     <div
@@ -439,6 +483,12 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                     maxBarSize={isSingle ? 28 : 36}
                     radius={[3, 3, 0, 0]}
                     name={`c${e.complexId}_count`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(data) => {
+                      // Recharts Bar onClick: data = chartData 행 (label 포함)
+                      const l = data?.label as string | undefined;
+                      if (l) setClickedLabel(prev => prev === l ? null : l);
+                    }}
                   />
                 ))}
                 {/* 평균가 라인 */}
@@ -461,6 +511,90 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
           {!hasAnyData && entries.some(e => statuses.get(e.complexId)) && (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9aa0a6', fontSize: '14px' }}>
               거래 데이터가 없습니다.
+            </div>
+          )}
+
+          {/* 드릴다운 — 클릭한 기간 개별 거래 목록 */}
+          {clickedLabel && (
+            <div style={{
+              marginTop: '16px',
+              border: '1.5px solid #e0f4fb',
+              borderRadius: '12px',
+              overflow: 'hidden',
+            }}>
+              {/* 드릴다운 헤더 */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 16px',
+                background: '#f0f8fd',
+                borderBottom: '1px solid #e0f4fb',
+              }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>
+                  {clickedLabel} 개별 거래 ({drillDownItems.length}건)
+                </span>
+                <button
+                  onClick={() => setClickedLabel(null)}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', color: '#9aa0a6', lineHeight: 1 }}
+                >×</button>
+              </div>
+
+              {drillDownItems.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#9aa0a6', fontSize: '13px' }}>
+                  거래 데이터가 없습니다. (이전 수집 데이터는 포함되지 않을 수 있습니다)
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ background: '#fafafa', borderBottom: '1px solid #f0f0f0' }}>
+                        {!isSingle && <th style={thStyle}>단지</th>}
+                        <th style={thStyle}>거래일</th>
+                        <th style={thStyle}>평형(㎡)</th>
+                        <th style={thStyle}>층</th>
+                        <th style={{ ...thStyle, textAlign: 'right' }}>실거래가</th>
+                        <th style={thStyle}>구분</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drillDownItems.map((it, idx) => {
+                        const entry = entries.find(e => e.complexId === it.complexId);
+                        const dateStr = it.date
+                          ? `${it.date.slice(0, 4)}.${it.date.slice(4, 6)}.${it.date.slice(6, 8)}`
+                          : '-';
+                        const priceStr = it.price != null
+                          ? `${(it.price / 10000).toFixed(2).replace(/\.?0+$/, '')}억`
+                          : '-';
+                        return (
+                          <tr key={idx} style={{
+                            borderBottom: '1px solid #f8f9fa',
+                            background: idx % 2 === 0 ? '#fff' : '#fafafa',
+                          }}>
+                            {!isSingle && (
+                              <td style={tdStyle}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: entry?.color, display: 'inline-block', flexShrink: 0 }} />
+                                  <span style={{ maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry?.complexName}</span>
+                                </span>
+                              </td>
+                            )}
+                            <td style={tdStyle}>{dateStr}</td>
+                            <td style={{ ...tdStyle, color: '#4BAAD4', fontWeight: 600 }}>
+                              {it.area ? `${parseFloat(it.area).toFixed(1)}` : '-'}
+                            </td>
+                            <td style={tdStyle}>{it.floor ? `${it.floor}층` : '-'}</td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#1a1a2e' }}>{priceStr}</td>
+                            <td style={tdStyle}>
+                              {it.isDirect
+                                ? <span style={{ color: '#E06060', fontWeight: 600 }}>직거래</span>
+                                : <span style={{ color: '#9aa0a6' }}>중개</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -510,6 +644,14 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
       </div>
     </div>
   );
+};
+
+const thStyle: React.CSSProperties = {
+  padding: '8px 12px', textAlign: 'left', fontWeight: 600,
+  color: '#5f6368', fontSize: '11px', whiteSpace: 'nowrap',
+};
+const tdStyle: React.CSSProperties = {
+  padding: '7px 12px', color: '#344054', whiteSpace: 'nowrap',
 };
 
 export default TradeHistoryModal;

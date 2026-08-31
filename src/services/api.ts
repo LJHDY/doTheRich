@@ -2042,6 +2042,14 @@ export const getComplexPriceSnapshots = async (
 
 // ─── 단지 거래 이력 (MOLIT 10년) ────────────────────────────────────────────
 
+export interface TradeRawItem {
+  area: string;         // 전용면적 (㎡)
+  floor: string | null; // 층
+  date: string | null;  // "YYYYMMDD"
+  price: number | null; // 만원
+  isDirect: boolean;    // 직거래 여부
+}
+
 export interface TradeHistoryMonth {
   yearMonth: string;      // "202308"
   tradeCount: number;
@@ -2050,6 +2058,7 @@ export interface TradeHistoryMonth {
   minPrice: number | null;
   maxPrice: number | null;
   areaBreakdown: Record<string, { count: number; avg: number | null; min: number | null }>;
+  rawItems: TradeRawItem[];
   collectedAt: string | null;
 }
 
