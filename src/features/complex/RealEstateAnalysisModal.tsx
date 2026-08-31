@@ -151,12 +151,18 @@ function renderMarkdown(text: string): React.ReactNode[] {
   return result;
 }
 
-// 숫자 평형만 정렬 (범위 제한 없음 — 모든 등록 평형 표시)
+// 평형 문자열에서 숫자 추출 ("전용 59" → 59, "59" → 59)
+const areaNum = (a: string) => parseFloat(a.replace(/[^0-9.]/g, '')) || 0;
+
+// 유효한 평형만 정렬 ("전용 59", "59" 등 숫자가 포함된 문자열)
 function filterTargetAreas(areas: string[] | undefined): string[] {
   return (areas ?? [])
-    .filter(a => !isNaN(parseFloat(a)))
-    .sort((a, b) => parseFloat(a) - parseFloat(b));
+    .filter(a => areaNum(a) > 0)
+    .sort((a, b) => areaNum(a) - areaNum(b));
 }
+
+// 평형 표시 레이블 — "전용 59"는 그대로, "59"는 "전용 59"로
+const areaLabel = (a: string) => a.startsWith('전용') ? a : `전용 ${a}`;
 
 const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
   const [histories, setHistories] = useState<ComplexAnalysis[]>([]);
@@ -380,7 +386,7 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
                               cursor: 'pointer', whiteSpace: 'nowrap',
                             }}
                           >
-                            전용 {a}㎡
+                            {areaLabel(a)}㎡
                           </button>
                         ))}
                         {/* 직접 입력 필드 — 항상 표시, 숫자 입력 시 해당 평형으로 선택 */}
@@ -397,7 +403,7 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
                             color: '#344054',
                           }}
                         />
-                        {selected && <span style={{ fontSize: '11px', color: '#4BAAD4', fontWeight: 600 }}>전용 {selected}㎡ 선택됨</span>}
+                        {selected && <span style={{ fontSize: '11px', color: '#4BAAD4', fontWeight: 600 }}>{areaLabel(selected)}㎡ 선택됨</span>}
                       </div>
                     </div>
                   );
