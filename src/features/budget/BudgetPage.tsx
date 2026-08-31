@@ -3674,12 +3674,12 @@ const TickerHistoryModal: React.FC<{
 // 티커 그룹 정의 (화면 표시용) — accent: 섹션 헤더 및 카드 왼쪽 테두리 색상
 // 기준금리 → 채권 → 증시 순서, vix는 별도 공포/변동성 섹션에서 F&G와 함께 표시
 const TICKER_GROUPS = [
-  { label: '기준금리',      keys: ['rate_us', 'rate_kr', 'rate_jp'],                                                  accent: '#3b7dd8' },
+  { label: '기준금리',      keys: ['rate_us', 'rate_kr', 'rate_jp', 'rate_eu', 'rate_gb'],                            accent: '#3b7dd8' },
   { label: '거시지표',      keys: ['macro_cpi_us', 'macro_core_cpi_us', 'macro_cpi_kr', 'macro_unemployment_us', 'macro_ppi_us'], accent: '#7b68ee' },
-  { label: '미국 채권',     keys: ['us10y', 'us30y', 'us3m'],                                                         accent: '#2a9d8f' },
+  { label: '국채',          keys: ['us10y', 'us30y', 'us3m', 'kr10y', 'jp10y', 'de10y'],                             accent: '#2a9d8f' },
   { label: '미국 증시',     keys: ['sp500', 'nasdaq', 'dow'],                                                          accent: '#40a060' },
-  { label: '원자재',        keys: ['wti', 'gold'],                                                                     accent: '#c8882a' },
-  { label: '환율 / 달러',  keys: ['dxy', 'usdkrw', 'usdjpy'],                                                         accent: '#d4704a' },
+  { label: '원자재',        keys: ['wti', 'brent', 'gold', 'silver'],                                                 accent: '#c8882a' },
+  { label: '환율 / 달러',  keys: ['dxy', 'usdkrw', 'usdjpy', 'eurusd', 'eurkrw'],                                   accent: '#d4704a' },
   { label: '한국 / 아시아', keys: ['kospi', 'kosdaq', 'kpi200', 'fut', 'kqi150', 'kvalue', 'nikkei'],               accent: '#c0404a' },
 ];
 
