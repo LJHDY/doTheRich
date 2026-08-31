@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { analyzeRealEstate, ComplexAnalysis, getComplexAnalyses } from '../../services/api';
+import { analyzeRealEstate, ComplexAnalysis, deleteComplexAnalysis, getComplexAnalyses } from '../../services/api';
 import { ApartmentComplex } from '../../types';
 
 interface Props {
@@ -151,12 +151,11 @@ function renderMarkdown(text: string): React.ReactNode[] {
   return result;
 }
 
-// 45~90㎡ 범위 평형만 필터
+// 숫자 평형만 정렬 (범위 제한 없음 — 모든 등록 평형 표시)
 function filterTargetAreas(areas: string[] | undefined): string[] {
-  return (areas ?? []).filter(a => {
-    const v = parseFloat(a);
-    return !isNaN(v) && v >= 45 && v <= 90;
-  }).sort((a, b) => parseFloat(a) - parseFloat(b));
+  return (areas ?? [])
+    .filter(a => !isNaN(parseFloat(a)))
+    .sort((a, b) => parseFloat(a) - parseFloat(b));
 }
 
 const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
@@ -204,6 +203,20 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
   const handleImageRemove = (idx: number) => {
     setAttachedImages(prev => prev.filter((_, i) => i !== idx));
     setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleDeleteHistory = async (id: number) => {
+    if (!window.confirm('이 분석 리포트를 삭제할까요?')) return;
+    try {
+      await deleteComplexAnalysis(id);
+      setHistories(prev => prev.filter(h => h.id !== id));
+      if (selectedId === id) {
+        const remaining = histories.filter(h => h.id !== id);
+        setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+      }
+    } catch {
+      alert('삭제에 실패했습니다.');
+    }
   };
 
   const handleAnalyze = async () => {
@@ -264,24 +277,37 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
             <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#9aa0a6', padding: '4px 8px' }}>×</button>
           </div>
 
-          {/* 컨트롤 바: 이력 선택 + 새 분석 버튼 */}
+          {/* 컨트롤 바: 이력 선택 + 삭제 + 새 분석 버튼 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            {/* 이력 드롭다운 */}
+            {/* 이력 드롭다운 + 삭제 버튼 */}
             {histories.length > 0 && (
-              <select
-                value={selectedId ?? ''}
-                onChange={e => setSelectedId(Number(e.target.value))}
-                style={{
-                  padding: '5px 10px', fontSize: '12px',
-                  border: '1px solid #dadce0', borderRadius: '8px',
-                  background: '#fff', color: '#344054',
-                  maxWidth: '340px',
-                }}
-              >
-                {histories.map(h => (
-                  <option key={h.id} value={h.id}>{historyLabel(h)}</option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={selectedId ?? ''}
+                  onChange={e => setSelectedId(Number(e.target.value))}
+                  style={{
+                    padding: '5px 10px', fontSize: '12px',
+                    border: '1px solid #dadce0', borderRadius: '8px',
+                    background: '#fff', color: '#344054',
+                    maxWidth: '300px',
+                  }}
+                >
+                  {histories.map(h => (
+                    <option key={h.id} value={h.id}>{historyLabel(h)}</option>
+                  ))}
+                </select>
+                {selectedId && (
+                  <button
+                    onClick={() => handleDeleteHistory(selectedId)}
+                    title="이 리포트 삭제"
+                    style={{
+                      padding: '5px 10px', fontSize: '12px', fontWeight: 600,
+                      border: '1px solid #e88', borderRadius: '8px',
+                      background: '#fff', color: '#c62828', cursor: 'pointer', flexShrink: 0,
+                    }}
+                  >🗑 삭제</button>
+                )}
+              </>
             )}
 
             {/* 분석 버튼 — 단지 2개 이상 선택 시에만 표시 */}

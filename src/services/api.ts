@@ -1471,6 +1471,10 @@ export const getComplexAnalyses = async (): Promise<ComplexAnalysis[]> => {
   return res.data;
 };
 
+export const deleteComplexAnalysis = async (id: number): Promise<void> => {
+  await api.delete(`/api/ai/real-estate/analyses/${id}`);
+};
+
 export const analyzeRealEstate = async (
   complexIds: number[],
   images?: File[],
