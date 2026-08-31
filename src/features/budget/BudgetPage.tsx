@@ -71,18 +71,14 @@ import {
   deleteCompanyAnalysisReport,
   CompanyAnalysisResult,
 } from '../../services/api';
-import { AssetSnapshotCell, AssetSnapshotDetail, BudgetEntry, CommonCode, FixedExpense, IntegratedReport, KrInvestorDayFlow, KrSectorData, KrTopGainer, MarketReport, PaymentMethod, ScreeningRankItem, ScreeningReport, ScreeningTopPick, formatAmount, formatAmountShort } from '../../types';
+import { BudgetEntry, FixedExpense, PaymentMethod, formatAmountShort } from '../../types';
 import UserSelectModal from './UserSelectModal';
 import WorkoutTab from './WorkoutTab';
 // ── 분리된 뷰 컴포넌트 임포트 (각 파일에서 default export)
-import MarketReportView from './MarketReportView';
-import { CommonCodeModal } from './MarketReportView';
 import AccountManagementView, { SharedAccountSection } from './AccountManagementView';
 import OverviewView from './OverviewView';
 import AssetView from './AssetView';
 import AIReportView from './AIReportView';
-
-const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
 
 interface Props {
   onClose: () => void;
