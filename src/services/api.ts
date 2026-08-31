@@ -2076,6 +2076,10 @@ export const collectTradeHistory = async (complexId: number): Promise<void> => {
   await api.post(`/api/complexes/${complexId}/trade-history/collect`);
 };
 
+export const deleteTradeHistory = async (complexId: number): Promise<void> => {
+  await api.delete(`/api/complexes/${complexId}/trade-history`);
+};
+
 export interface BatchCollectStatus {
   running: boolean;
   total: number;

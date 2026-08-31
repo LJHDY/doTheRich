@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApartmentComplex, PriceHistory, PriceHistoryItem, PriceHistoryRequest, ChartDataRow, ChartSeries, formatPrice, toUkUnit, SchoolInfo, InfraInfo, SubwayInfo, calcCommuteGrade, OverlayMarker, calcChecklistScore } from '../../types';
 // 중복 정의를 complexUtils로 분리하여 CompareCard와 공유
 import { stripHtml, haversineKm, INFRA_TYPES_LIST, VISIT_TYPE_LABELS, GRADE_COLORS, calcSchoolGrade, calcInfraGrade, Tag } from './complexUtils';
-import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool, updateNaverComplexNumber, getComplexPriceSnapshots, ComplexPriceSnapshot, getTradeHistoryStatus } from '../../services/api';
+import api, { getPriceHistories, addPriceHistory, updateComplexMemo, deleteComplex, getComplexById, addSchoolInfos, updateSchoolInfo, deleteSchoolInfo, addInfraInfos, updateInfraInfo, deleteInfraInfo, addHazardInfos, updateHazardInfo, deleteHazardInfo, addSubwayInfos, updateSubwayInfo, deleteSubwayInfo, toggleFavorite, updatePriceHistoryItem, updateVisitType, updateComplexBasicInfo, updateCommuteTimes, deletePriceHistoryByAreaType, updateRedevelopInfo, searchNearby, getTransitRoutes, TransitRoute, getNearbySchools, NearbySchool, updateNaverComplexNumber, getComplexPriceSnapshots, ComplexPriceSnapshot, getTradeHistoryStatus, deleteTradeHistory } from '../../services/api';
 import TradeHistoryModal from './TradeHistoryModal';
 import PriceChart from './PriceChart';
 import PriceInputForm from './PriceInputForm';
@@ -4005,6 +4005,27 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
             >
               📊 {tradeCollected ? '차트 보기' : '수집 및 보기'}
             </button>
+            {/* 수집된 이력이 있을 때만 삭제 버튼 표시 */}
+            {tradeCollected && (
+              <button
+                onClick={async () => {
+                  if (!window.confirm('수집된 거래량 이력을 모두 삭제합니다.\n이 작업은 되돌릴 수 없습니다.')) return;
+                  try {
+                    await deleteTradeHistory(complex.id);
+                    setTradeCollected(false);
+                  } catch {
+                    alert('삭제에 실패했습니다.');
+                  }
+                }}
+                style={{
+                  fontSize: '11px', padding: '3px 10px',
+                  border: '1px solid #E06060', borderRadius: '14px',
+                  background: '#fff', color: '#E06060', cursor: 'pointer', fontWeight: 600,
+                }}
+              >
+                삭제
+              </button>
+            )}
           </div>
           {tradeCollected && (
             <div style={{ fontSize: '11px', color: '#9aa0a6', marginTop: '4px' }}>
