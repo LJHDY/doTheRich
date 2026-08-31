@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { analyzeRealEstate, ComplexAnalysis, deleteComplexAnalysis, getComplexAnalyses } from '../../services/api';
+import { analyzeRealEstate, ComplexAnalysis, deleteComplexAnalysis, getComplexAnalyses, getPriceHistories } from '../../services/api';
 import { ApartmentComplex } from '../../types';
 
 interface Props {
@@ -169,15 +169,37 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
 
   // 단지별 선택 평형 — complexId → areaType 문자열
   const [areaSelections, setAreaSelections] = useState<Record<number, string>>({});
+  // 단지별 가용 평형 목록 — 시세 이력에서 직접 추출
+  const [complexAreaMap, setComplexAreaMap] = useState<Record<number, string[]>>({});
 
-  // 단지가 바뀌면 각 단지의 첫 번째 가용 평형으로 초기화
+  // 단지가 바뀌면 시세 이력에서 평형 목록 조회 → 첫 번째 평형으로 초기화
   useEffect(() => {
-    const init: Record<number, string> = {};
-    complexes.forEach(c => {
-      const areas = filterTargetAreas(c.areaTypes);
-      if (areas.length > 0) init[c.id] = areas[0];
+    if (complexes.length === 0) return;
+    Promise.all(
+      complexes.map(async c => {
+        // areaTypes가 있으면 그대로 사용, 없으면 시세 이력 직접 조회
+        if (c.areaTypes && c.areaTypes.length > 0) {
+          return { id: c.id, areas: filterTargetAreas(c.areaTypes) };
+        }
+        try {
+          const histories = await getPriceHistories(c.id);
+          const areaSet = new Set<string>();
+          histories.forEach(h => h.items.forEach(item => { if (item.areaType) areaSet.add(item.areaType); }));
+          return { id: c.id, areas: filterTargetAreas(Array.from(areaSet)) };
+        } catch {
+          return { id: c.id, areas: [] };
+        }
+      })
+    ).then(results => {
+      const areaMap: Record<number, string[]> = {};
+      const init: Record<number, string> = {};
+      results.forEach(({ id, areas }) => {
+        areaMap[id] = areas;
+        if (areas.length > 0) init[id] = areas[0];
+      });
+      setComplexAreaMap(areaMap);
+      setAreaSelections(init);
     });
-    setAreaSelections(init);
   }, [complexes]);
 
   // 모달 열릴 때 이력 로드
@@ -335,7 +357,7 @@ const RealEstateAnalysisModal: React.FC<Props> = ({ complexes, onClose }) => {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {complexes.map(c => {
-                  const areas = filterTargetAreas(c.areaTypes);
+                  const areas = complexAreaMap[c.id] ?? [];
                   const selected = areaSelections[c.id] ?? '';
                   return (
                     <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
