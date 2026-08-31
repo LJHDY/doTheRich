@@ -1,15 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, ReferenceLine,
   PieChart, Pie, Cell, Tooltip as PieTooltip,
 } from 'recharts';
 import {
-  ACCOUNT_GROUPS,
   ACCOUNT_MAINS,
-  ASSET_COLUMNS,
-  ASSET_LIQUIDITY_COLORS,
   BUDGET_CAT_CODES,
   BUDGET_USER_STORAGE_KEY,
   BUDGET_USERS,
@@ -18,7 +13,6 @@ import {
   VARIABLE_EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   INVESTMENT_TYPES,
-  buildAssetCellCode,
 } from './budgetConstants';
 import {
   getBudgetEntries,
@@ -43,8 +37,6 @@ import {
   carryOverAccountBalances,
   getCommonCodes,
   createCommonCode,
-  updateCommonCode,
-  deleteCommonCode,
   invalidateCommonCodeCache,
 } from '../../services/api';
 import { BudgetEntry, FixedExpense, PaymentMethod, formatAmountShort } from '../../types';
