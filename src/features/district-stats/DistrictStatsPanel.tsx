@@ -20,9 +20,10 @@ const toUk = (v?: number | null): string => {
 };
 
 
-type AreaKey = '18' | '21' | '24' | '26' | '33';
+type AreaKey = '15' | '18' | '21' | '24' | '26' | '33';
 
 const AREA_LABELS: Record<AreaKey, string> = {
+  '15': '전용 49㎡ (15평)',
   '18': '전용 59㎡ (18평)',
   '21': '전용 69㎡ (21평)',
   '24': '전용 79㎡ (24평)',
@@ -186,26 +187,30 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
   const getVal = (s: DistrictStat | undefined, area: AreaKey, mode: ViewMode) => {
     if (!s) return undefined;
     if (mode === 'trade') {
-      return area === '18' ? s.avgTrade18 : area === '21' ? s.avgTrade21
-           : area === '24' ? s.avgTrade24 : area === '26' ? s.avgTrade26 : s.avgTrade33;
+      return area === '15' ? s.avgTrade15 : area === '18' ? s.avgTrade18
+           : area === '21' ? s.avgTrade21 : area === '24' ? s.avgTrade24
+           : area === '26' ? s.avgTrade26 : s.avgTrade33;
     } else {
-      return area === '18' ? s.avgJeonse18 : area === '21' ? s.avgJeonse21
-           : area === '24' ? s.avgJeonse24 : area === '26' ? s.avgJeonse26 : s.avgJeonse33;
+      return area === '15' ? s.avgJeonse15 : area === '18' ? s.avgJeonse18
+           : area === '21' ? s.avgJeonse21 : area === '24' ? s.avgJeonse24
+           : area === '26' ? s.avgJeonse26 : s.avgJeonse33;
     }
   };
 
   const getCount = (s: DistrictStat | undefined, area: AreaKey, mode: ViewMode) => {
     if (!s) return undefined;
     if (mode === 'trade') {
-      return area === '18' ? s.tradeCount18 : area === '21' ? s.tradeCount21
-           : area === '24' ? s.tradeCount24 : area === '26' ? s.tradeCount26 : s.tradeCount33;
+      return area === '15' ? s.tradeCount15 : area === '18' ? s.tradeCount18
+           : area === '21' ? s.tradeCount21 : area === '24' ? s.tradeCount24
+           : area === '26' ? s.tradeCount26 : s.tradeCount33;
     } else {
-      return area === '18' ? s.jeonseCount18 : area === '21' ? s.jeonseCount21
-           : area === '24' ? s.jeonseCount24 : area === '26' ? s.jeonseCount26 : s.jeonseCount33;
+      return area === '15' ? s.jeonseCount15 : area === '18' ? s.jeonseCount18
+           : area === '21' ? s.jeonseCount21 : area === '24' ? s.jeonseCount24
+           : area === '26' ? s.jeonseCount26 : s.jeonseCount33;
     }
   };
 
-  const ALL_AREAS = ['18', '21', '24', '26', '33'] as AreaKey[];
+  const ALL_AREAS = ['15', '18', '21', '24', '26', '33'] as AreaKey[];
 
   // 전체 보기: 상급지→중급지→하급지 순서 (GRADE_ORDER)
   // 평형 선택 시: 해당 평형 가격 내림차순, 데이터 없는 구는 하단
@@ -224,7 +229,7 @@ const DistrictStatsPanel: React.FC<Props> = ({ onClose, onToast, isMobile }) => 
 
   // 같은 평형대 내 최댓값 — 히트맵에서 상대 비율(0~1)을 계산하기 위한 기준값
   // 평형 간 절대값 비교가 아닌 동일 평형 내 상대 순위로 색상 결정
-  const maxVals: Record<AreaKey, number> = { '18': 0, '21': 0, '24': 0, '26': 0, '33': 0 };
+  const maxVals: Record<AreaKey, number> = { '15': 0, '18': 0, '21': 0, '24': 0, '26': 0, '33': 0 };
   for (const s of Array.from(statMap.values())) {
     ALL_AREAS.forEach(a => {
       const v = getVal(s, a, viewMode);
