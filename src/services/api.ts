@@ -1729,6 +1729,8 @@ const toTravelLog = (l: any): TravelLog => ({
   title: l.title,
   travelDate: l.travel_date,
   endDate: l.end_date,
+  weather: l.weather,
+  transportMode: l.transport_mode,
   memo: l.memo,
   aiDraft: l.ai_draft,
   createdAt: l.created_at,
@@ -1741,26 +1743,32 @@ export const getTravelLogs = async (): Promise<TravelLog[]> => {
 };
 
 export const createTravelLog = async (payload: {
-  title: string; travelDate?: string; endDate?: string; memo?: string;
+  title: string; travelDate?: string; endDate?: string;
+  weather?: string; transportMode?: string; memo?: string;
 }): Promise<TravelLog> => {
   const { data } = await api.post('/api/travel-logs', {
     title: payload.title,
     travel_date: payload.travelDate || null,
     end_date: payload.endDate || null,
+    weather: payload.weather || null,
+    transport_mode: payload.transportMode || null,
     memo: payload.memo || null,
   });
   return toTravelLog(data);
 };
 
 export const updateTravelLog = async (id: number, payload: {
-  title?: string; travelDate?: string; endDate?: string; memo?: string; aiDraft?: string;
+  title?: string; travelDate?: string; endDate?: string;
+  weather?: string; transportMode?: string; memo?: string; aiDraft?: string;
 }): Promise<TravelLog> => {
   const body: any = {};
-  if (payload.title     !== undefined) body.title      = payload.title;
-  if (payload.travelDate !== undefined) body.travel_date = payload.travelDate || null;
-  if (payload.endDate   !== undefined) body.end_date   = payload.endDate || null;
-  if (payload.memo      !== undefined) body.memo       = payload.memo;
-  if (payload.aiDraft   !== undefined) body.ai_draft   = payload.aiDraft;
+  if (payload.title          !== undefined) body.title          = payload.title;
+  if (payload.travelDate     !== undefined) body.travel_date    = payload.travelDate || null;
+  if (payload.endDate        !== undefined) body.end_date       = payload.endDate || null;
+  if (payload.weather        !== undefined) body.weather        = payload.weather || null;
+  if (payload.transportMode  !== undefined) body.transport_mode = payload.transportMode || null;
+  if (payload.memo           !== undefined) body.memo           = payload.memo;
+  if (payload.aiDraft        !== undefined) body.ai_draft       = payload.aiDraft;
   const { data } = await api.patch(`/api/travel-logs/${id}`, body);
   return toTravelLog(data);
 };

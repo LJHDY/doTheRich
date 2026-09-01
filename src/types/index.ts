@@ -874,6 +874,45 @@ export interface WorkoutLog {
   createdAt?: string | null;
 }
 
+// ─── 여행일지 ───────────────────────────────────────────────
+
+/** 방문지 사진 */
+export interface TravelPlacePhoto {
+  id: number;
+  travelPlaceId: number;
+  url: string;
+  fileName?: string;
+  createdAt?: string;
+}
+
+/** 방문지 — 여행일지 내 1개 장소 */
+export interface TravelPlace {
+  id: number;
+  travelLogId: number;
+  placeName: string;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+  visitDate?: string;      // YYYY-MM-DD
+  memo?: string;
+  displayOrder: number;    // 순서 (1부터 시작)
+  photos: TravelPlacePhoto[];
+}
+
+/** 여행일지 — 여행 단위 컨테이너 */
+export interface TravelLog {
+  id: number;
+  title: string;
+  travelDate?: string;      // YYYY-MM-DD (시작일)
+  endDate?: string;         // YYYY-MM-DD (종료일)
+  weather?: string;         // 날씨 (맑음/흐림/비/눈 등 자유 입력)
+  transportMode?: string;   // 이동 수단 (자차/기차/항공/버스 등 자유 입력)
+  memo?: string;
+  aiDraft?: string;         // AI 생성 블로그 초안
+  createdAt: string;
+  places: TravelPlace[];
+}
+
 /** 금액을 "0,000원" 형식으로 포맷 */
 export const formatAmount = (amount: number): string =>
   amount.toLocaleString('ko-KR') + '원';

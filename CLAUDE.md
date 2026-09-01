@@ -41,6 +41,7 @@
 **기타**
 - 캘린더 — 일정 추가, 할일 관리, 네이버 캘린더 OAuth 연동
 - 공통코드 관리 — DB 기반 코드 그룹 CRUD
+- 여행일지 — 방문지 검색·지도 연동·순서변경·메모·사진·AI 블로그 초안 작성
 
 ---
 
@@ -142,8 +143,10 @@ src/
 │   │   ├── CalendarModal.tsx       # 캘린더 모달 (일정·할일·고정비·네이버 연동)
 │   │   ├── ScheduleFormModal.tsx   # 일정 추가/수정 폼
 │   │   └── DayScheduleModal.tsx    # 원형 24시간 스케줄 모달 (SVG 드래그, 10분 단위)
-│   └── district-stats/             # 구별 시세
-│       └── DistrictStatsPanel.tsx  # 서울 25구 × 평형대 히트맵 테이블
+│   ├── district-stats/             # 구별 시세
+│   │   └── DistrictStatsPanel.tsx  # 서울 25구 × 평형대 히트맵 테이블
+│   └── travel/                     # 여행일지
+│       └── TravelLogPanel.tsx      # 여행일지 사이드패널 (방문지·사진·AI초안)
 └── shared/                         # 기능에 종속되지 않는 공통 모듈
     ├── PasswordGate.tsx            # 앱 진입 비밀번호 게이트
     ├── CameraStampButton.tsx       # 카메라 스탬프 버튼
@@ -359,6 +362,17 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
 | POST | `/api/screening/reports/generate?market_type=ALL` | 스크리닝 리포트 즉시 생성 (202 백그라운드, market_type=ALL|KOSPI|KOSDAQ) |
 | GET | `/api/day-schedules?date=YYYY-MM-DD&user_id=` | 하루 스케줄 조회 — `{ blocks: DayScheduleBlock[] }` |
 | PUT | `/api/day-schedules` | 하루 스케줄 저장 — `{ user_id, schedule_date, blocks }` (upsert) |
+| GET | `/api/travel-logs` | 여행일지 목록 (places 포함, 최신순) |
+| POST | `/api/travel-logs` | 여행일지 생성 — `{ title, travel_date?, end_date?, weather?, transport_mode?, memo? }` (201) |
+| PATCH | `/api/travel-logs/:id` | 여행일지 수정 — `{ title?, travel_date?, end_date?, weather?, transport_mode?, memo?, ai_draft? }` |
+| DELETE | `/api/travel-logs/:id` | 여행일지 삭제 (places·photos CASCADE, 204) |
+| POST | `/api/travel-logs/:id/places` | 방문지 추가 — `{ place_name, latitude?, longitude?, address?, memo? }` (201) |
+| PATCH | `/api/travel-logs/:id/places/:placeId` | 방문지 수정 — `{ place_name?, memo?, display_order? }` |
+| DELETE | `/api/travel-logs/:id/places/:placeId` | 방문지 삭제 (photos CASCADE, 204) |
+| PATCH | `/api/travel-logs/:id/places/reorder` | 방문지 순서 변경 — `{ place_ids: number[] }` |
+| POST | `/api/travel-logs/:id/places/:placeId/photos` | 방문지 사진 업로드 (multipart, 201) |
+| DELETE | `/api/travel-logs/:id/places/:placeId/photos/:photoId` | 방문지 사진 삭제 (204) |
+| POST | `/api/travel-logs/:id/generate-draft` | AI 블로그 초안 생성 — Gemini API, `{ content: string }` 반환 |
 
 ---
 
@@ -1051,6 +1065,21 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
 - [x] 리팩토링 — market_report_service.py 프롬프트 빌더 정리 (백엔드)
   - `_fmt_market_groups(market_data, groups)` 헬퍼 추출: 3개 빌더 함수의 동일한 [그룹] 루프 통합
   - `_MACRO_DEFS` 상수 + `_fmt_macro_block(market_data)` 헬퍼 추출: FRED 거시지표 5개 포맷 로직 통합
+
+- [x] 여행일지 기능 (`src/features/travel/TravelLogPanel.tsx`)
+  - 헤더 "📅 생활" → "🗺 여행일지" 메뉴 → 우측 사이드패널 (380px 데스크탑, 모바일 전체화면)
+  - **방문지 검색**: 네이버 로컬 검색 (`/api/search/local`) → mapx/mapy 좌표 변환 (÷1e7)
+  - **지도 연동**: 활성 여행일지의 방문지를 지도에 번호 원형 마커(빨강) + 점선 폴리라인으로 표시 → `onMapPlacesChange` 콜백 → App.tsx → MapPage `travelPlaces` prop
+  - **방문지 순서 변경**: ▲▼ 버튼 → 낙관적 UI 업데이트 + `reorderTravelPlaces` API
+  - **방문지별 메모**: 인라인 편집 (✏ 버튼 → textarea, blur/Enter 저장)
+  - **방문지별 사진**: `compressImages` 압축 후 multipart 업로드, 썸네일 갤러리, 개별 삭제
+  - **AI 블로그 초안**: "✨ AI 초안" 버튼 → `POST /api/travel-logs/:id/generate-draft` (Gemini) → textarea 표시 → 저장/복사 가능
+  - **날씨·이동수단**: 여행 생성/수정 폼에 weather·transport_mode 필드, 카드 헤더에 표시
+  - **기간**: 시작일(travel_date)·종료일(end_date) 날짜 입력
+  - 새 타입: `TravelLog`, `TravelPlace`, `TravelPlacePhoto` (`src/types/index.ts`)
+  - 새 API 함수: `getTravelLogs`, `createTravelLog`, `updateTravelLog`, `deleteTravelLog`, `createTravelPlace`, `updateTravelPlace`, `deleteTravelPlace`, `reorderTravelPlaces`, `uploadTravelPlacePhotos`, `deleteTravelPlacePhoto`, `generateTravelDraft` (`src/services/api.ts`)
+  - MapPage: `travelPlaces` prop 추가, `travelMarkersRef`/`travelPolylineRef`로 마커·폴리라인 수명 관리
+  - 백엔드 필요: `travel_log`, `travel_place`, `travel_place_photo` 테이블 + API 11종 (위 API 테이블 참조)
 
 ## 미완성 / TODO
 

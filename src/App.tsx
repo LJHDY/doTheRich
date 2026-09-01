@@ -28,6 +28,7 @@ import RealEstateAnalysisModal from './features/complex/RealEstateAnalysisModal'
 import CalendarModal from './features/schedule/CalendarModal';
 import ContactsModal from './features/contacts/ContactsModal';
 import InvestmentMemoModal from './features/investment-memo/InvestmentMemoModal';
+import TravelLogPanel, { TravelMapPlace } from './features/travel/TravelLogPanel';
 import CameraStampButton from './shared/CameraStampButton';
 import TradeHistoryModal from './features/complex/TradeHistoryModal';
 
@@ -119,6 +120,9 @@ const App: React.FC = () => {
   // 가계부 — 새로고침 후에도 열린 상태 복원
   const [budgetOpen, setBudgetOpen] = useState(() => sessionStorage.getItem('budget_open') === 'true');
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [travelLogOpen, setTravelLogOpen] = useState(() => sessionStorage.getItem('panel_travel') === 'true');
+  // 여행일지 지도 표시 방문지 목록 — TravelLogPanel에서 콜백으로 갱신
+  const [activeTravelPlaces, setActiveTravelPlaces] = useState<TravelMapPlace[]>([]);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [investmentMemoOpen, setInvestmentMemoOpen] = useState(false);
   useEffect(() => { sessionStorage.setItem('budget_open', String(budgetOpen)); }, [budgetOpen]);
@@ -217,9 +221,10 @@ const App: React.FC = () => {
     sessionStorage.setItem('panel_afford',      String(affordOpen));
     sessionStorage.setItem('panel_checklist',   String(checklistPanelOpen));
     sessionStorage.setItem('panel_compare',     String(compareOpen));
+    sessionStorage.setItem('panel_travel',      String(travelLogOpen));
     sessionStorage.setItem('compare_ids',       JSON.stringify(compareIds));
     sessionStorage.setItem('selected_district', selectedDistrict ?? '');
-  }, [livingZoneOpen, routePanelOpen, districtStatsOpen, affordOpen, checklistPanelOpen, compareOpen, compareIds, selectedDistrict]);
+  }, [livingZoneOpen, routePanelOpen, districtStatsOpen, affordOpen, checklistPanelOpen, compareOpen, travelLogOpen, compareIds, selectedDistrict]);
 
   // 체크박스 토글 — 모드별 최대값 체크 후 추가/해제
   const handleCompareToggle = (id: number) => {
@@ -1060,7 +1065,7 @@ const App: React.FC = () => {
               {(() => {
                 const key = 'life';
                 const isOpen = openMenu === key;
-                const isActive = calendarOpen || budgetOpen;
+                const isActive = calendarOpen || budgetOpen || travelLogOpen;
                 const menuItemStyle = (active: boolean, color: string): React.CSSProperties => ({
                   padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
                   fontSize: '12px', fontWeight: active ? 700 : 500,
@@ -1107,6 +1112,15 @@ const App: React.FC = () => {
                             setOpenMenu(null);
                           }}>
                           💰 가계부 {budgetOpen && <span style={{ fontSize: '10px', color: '#2a6090' }}>ON</span>}
+                        </div>
+                        <div style={menuItemStyle(travelLogOpen, '#6a1b9a')}
+                          onClick={() => {
+                            const next = !travelLogOpen;
+                            setTravelLogOpen(next);
+                            if (next) { setSelectedComplex(null); setRadiusCenter(null); setLivingZoneOpen(false); setAffordOpen(false); }
+                            setOpenMenu(null);
+                          }}>
+                          🗺 여행일지 {travelLogOpen && <span style={{ fontSize: '10px', color: '#6a1b9a' }}>ON</span>}
                         </div>
                       </div>
                     )}
@@ -1341,6 +1355,7 @@ const App: React.FC = () => {
               onZonePointAdd={handleZonePointAdd}
               zonePolygons={zonePolygons}
               publicComplexes={showPublicComplexes ? publicComplexes : []}
+              travelPlaces={activeTravelPlaces}
               previewMarker={registerData ? { lat: registerData.latitude, lng: registerData.longitude } : null}
               hanRiverParkMarker={(() => {
                 const name = selectedComplex?.hanRiverParkName;
@@ -1396,6 +1411,19 @@ const App: React.FC = () => {
                   complexes={complexes}
                   onClose={() => setAffordOpen(false)}
                   isMobile={isMobile}
+                />
+              </div>
+            )}
+            {/* 여행일지 패널 */}
+            {travelLogOpen && (
+              <div style={isMobile ? {
+                position: 'fixed', inset: 0, zIndex: 500,
+                display: 'flex', flexDirection: 'column',
+              } : {}}>
+                <TravelLogPanel
+                  onClose={() => { setTravelLogOpen(false); setActiveTravelPlaces([]); }}
+                  isMobile={isMobile}
+                  onMapPlacesChange={setActiveTravelPlaces}
                 />
               </div>
             )}

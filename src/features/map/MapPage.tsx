@@ -62,13 +62,15 @@ interface MapPageProps {
   hanRiverParkMarker?: { name: string; lat: number; lng: number } | null;
   // 선택된 구의 공공단지 목록 — 작은 원형 마커로 표시
   publicComplexes?: PublicComplex[];
+  // 여행일지 활성 방문지 목록 — 번호 마커 + 연결 폴리라인으로 표시
+  travelPlaces?: { id: number; placeName: string; lat: number; lng: number; displayOrder: number }[];
 }
 
 const MapPage: React.FC<MapPageProps> = ({
   complexes, selectedComplex, onComplexSelect, focusLocation, overlayMarkers, radiusCenter,
   routes, drawingPoints, isDrawingRoute, onRoutePointAdd, selectedDistrict, roadViewOpen, isMobile,
   isDrawingZone, drawingZonePoints, onZonePointAdd, zonePolygons, previewMarker, hanRiverParkMarker,
-  publicComplexes,
+  publicComplexes, travelPlaces,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -107,6 +109,9 @@ const MapPage: React.FC<MapPageProps> = ({
   // 저장된 생활권 구획 폴리곤 오버레이 배열
   const zoneSavedPolygonsRef = useRef<any[]>([]);
   const zoneLabelMarkersRef = useRef<any[]>([]);
+  // 여행일지 방문지 마커 + 연결 폴리라인
+  const travelMarkersRef = useRef<any[]>([]);
+  const travelPolylineRef = useRef<any>(null);
   // 단지 등록 모달에서 검색한 위치 임시 마커
   const previewMarkerRef = useRef<any>(null);
   // ComplexInfoPanel 선택 단지의 한강공원 라벨 마커
@@ -1183,6 +1188,49 @@ const MapPage: React.FC<MapPageProps> = ({
       zoneLabelMarkersRef.current.push(labelMarker);
     });
   }, [zonePolygons]);
+
+  // 여행일지 방문지 마커 + 연결 폴리라인 — travelPlaces 변경 시 갱신
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.naver) return;
+    // 기존 마커·폴리라인 제거
+    travelMarkersRef.current.forEach(m => m.setMap(null));
+    travelMarkersRef.current = [];
+    if (travelPolylineRef.current) { travelPolylineRef.current.setMap(null); travelPolylineRef.current = null; }
+
+    const places = travelPlaces ?? [];
+    if (places.length === 0) return;
+
+    const sorted = [...places].sort((a, b) => a.displayOrder - b.displayOrder);
+
+    // 번호 마커 (산호색 원 + 흰 숫자)
+    sorted.forEach((p, i) => {
+      const m = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(p.lat, p.lng),
+        map,
+        icon: {
+          content: `<div style="width:26px;height:26px;border-radius:50%;background:#E06060;border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">${i + 1}</div>`,
+          anchor: new window.naver.maps.Point(13, 13),
+        },
+        title: p.placeName,
+        zIndex: 30,
+      });
+      travelMarkersRef.current.push(m);
+    });
+
+    // 방문지 연결 폴리라인 (산호색 점선)
+    if (sorted.length >= 2) {
+      travelPolylineRef.current = new window.naver.maps.Polyline({
+        path: sorted.map(p => new window.naver.maps.LatLng(p.lat, p.lng)),
+        strokeColor: '#E06060',
+        strokeWeight: 3,
+        strokeStyle: 'shortdash',
+        strokeOpacity: 0.8,
+        map,
+        zIndex: 25,
+      });
+    }
+  }, [travelPlaces]);
 
   // 생활권 구획 그리기 모드 — isDrawingZone 토글 시 지도 클릭 리스너 추가·제거
   useEffect(() => {
