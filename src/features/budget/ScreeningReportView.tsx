@@ -8,7 +8,11 @@ import { ScreeningReport, ScreeningTopPick } from '../../types';
 // IntegratedReportView에서 공유 유틸·컴포넌트 임포트
 import { _numColor, _fmtNum, _fmtMC, RankingTable } from './IntegratedReportView';
 
-const ScreeningReportView: React.FC = () => {
+interface ScreeningReportViewProps {
+  onCompanyClick?: (query: string) => void;
+}
+
+const ScreeningReportView: React.FC<ScreeningReportViewProps> = ({ onCompanyClick }) => {
   const isMobile = useIsMobile();
   // 시장 유형 탭 — 생성 시 어떤 market_type을 생성할지 결정하고, 목록도 해당 유형만 표시
   const [activeMarket, setActiveMarket] = useState<'ALL' | 'KOSPI' | 'KOSDAQ'>('ALL');
@@ -476,9 +480,16 @@ const ScreeningReportView: React.FC = () => {
                             <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 800, fontSize: idx < 3 ? '15px' : '13px', color: idx < 3 ? rankColors[idx] : '#c0cad5' }}>
                               {idx + 1}
                             </td>
-                            {/* 종목명 */}
-                            <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 700, color: '#1a3a5c', fontSize: '14px' }}>
-                              {pick.corpName}
+                            {/* 종목명 — 클릭 시 기업 분석 탭으로 이동 */}
+                            <td
+                              style={{ ...tdStyle, textAlign: 'left', fontWeight: 700, color: '#1a3a5c', fontSize: '14px',
+                                cursor: onCompanyClick ? 'pointer' : 'default' }}
+                              onClick={() => onCompanyClick?.(pick.stockCode)}
+                              title={onCompanyClick ? `${pick.corpName} 기업 분석 보기` : undefined}
+                            >
+                              <span style={{ borderBottom: onCompanyClick ? '1px dashed #89CFF0' : 'none' }}>
+                                {pick.corpName}
+                              </span>
                               <span style={{ fontSize: '11px', color: '#b0bec5', marginLeft: '5px', fontWeight: 400 }}>({pick.stockCode})</span>
                             </td>
                             {/* 시장 */}

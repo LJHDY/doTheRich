@@ -17,6 +17,13 @@ const AIReportView: React.FC = () => {
   const isMobile = useIsMobile();
   // 서브탭: AI 재무분석 / 시장 리포트 / 우량주 스크리닝 / 통합 투자 의견 / 기업 분석
   const [aiSubTab, setAiSubTab] = useState<'financial' | 'market' | 'screening' | 'integrated' | 'company'>('financial');
+  // 스크리닝·시장 리포트에서 종목 클릭 시 기업 분석 탭으로 이동
+  const [companyQuery, setCompanyQuery] = useState('');
+
+  const handleCompanyClick = (query: string) => {
+    setCompanyQuery(query);
+    setAiSubTab('company');
+  };
 
   const [reports, setReports] = useState<FinancialReportType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -154,16 +161,16 @@ const AIReportView: React.FC = () => {
         </div>
 
         {/* ── 시장 리포트 탭 */}
-        {aiSubTab === 'market' && <MarketReportView />}
+        {aiSubTab === 'market' && <MarketReportView onCompanyClick={handleCompanyClick} />}
 
         {/* ── 우량주 스크리닝 탭 */}
-        {aiSubTab === 'screening' && <ScreeningReportView />}
+        {aiSubTab === 'screening' && <ScreeningReportView onCompanyClick={handleCompanyClick} />}
 
         {/* ── 통합 투자 의견 탭 */}
         {aiSubTab === 'integrated' && <IntegratedReportView />}
 
         {/* ── 기업 분석 탭 */}
-        {aiSubTab === 'company' && <CompanyAnalysisView />}
+        {aiSubTab === 'company' && <CompanyAnalysisView initialQuery={companyQuery} onQueryConsumed={() => setCompanyQuery('')} />}
 
         {/* ── AI 재무분석 탭 */}
         {aiSubTab === 'financial' && <>

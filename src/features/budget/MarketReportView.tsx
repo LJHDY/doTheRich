@@ -606,7 +606,11 @@ const UsaSectorsPanel: React.FC<{ daily: UsaSector[]; weekly: UsaSector[] }> = (
   );
 };
 
-const MarketReportView: React.FC = () => {
+interface MarketReportViewProps {
+  onCompanyClick?: (query: string) => void;
+}
+
+const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) => {
   const isMobile = useIsMobile();
   const [reports, setReports] = useState<MarketReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1240,15 +1244,27 @@ const MarketReportView: React.FC = () => {
                           </div>
                           {items.map((g, i) => {
                             const isPos = g.changePct >= 0;
+                            // 6자리 숫자 ticker는 한국 종목코드 → 기업분석 이동 가능
+                            const isKrCode = /^\d{6}$/.test(g.ticker);
                             return (
-                              <div key={i} style={{
-                                display: 'grid', gridTemplateColumns: '24px 1fr 70px 80px',
-                                alignItems: 'center', padding: '6px 12px',
-                                borderBottom: i < items.length - 1 ? '1px solid #f0f4f8' : 'none',
-                              }}>
+                              <div
+                                key={i}
+                                onClick={() => isKrCode && onCompanyClick?.(g.ticker)}
+                                style={{
+                                  display: 'grid', gridTemplateColumns: '24px 1fr 70px 80px',
+                                  alignItems: 'center', padding: '6px 12px',
+                                  borderBottom: i < items.length - 1 ? '1px solid #f0f4f8' : 'none',
+                                  cursor: isKrCode && onCompanyClick ? 'pointer' : 'default',
+                                  transition: 'background 0.1s',
+                                }}
+                                onMouseEnter={e => { if (isKrCode && onCompanyClick) (e.currentTarget as HTMLDivElement).style.background = '#f0f8fd'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = ''; }}
+                              >
                                 <span style={{ fontSize: '11px', color: '#b0bec5', fontWeight: 600 }}>{i + 1}</span>
                                 <div>
-                                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a3a5c' }}>{g.name}</div>
+                                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a3a5c',
+                                    borderBottom: isKrCode && onCompanyClick ? '1px dashed #89CFF0' : 'none',
+                                    display: 'inline-block' }}>{g.name}</div>
                                   <div style={{ fontSize: '10px', color: '#b0bec5' }}>{g.ticker}</div>
                                 </div>
                                 <span style={{ fontSize: '13px', fontWeight: 700, textAlign: 'right', color: isPos ? '#2e7d32' : '#c62828' }}>

@@ -256,7 +256,12 @@ const ProfitChart: React.FC<ProfitChartProps> = ({ data }) => {
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
 
-const CompanyAnalysisView: React.FC = () => {
+interface CompanyAnalysisViewProps {
+  initialQuery?: string;        // 스크리닝/시장 리포트에서 클릭 시 주입
+  onQueryConsumed?: () => void; // 쿼리 소비 완료 콜백 (부모 상태 초기화용)
+}
+
+const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery, onQueryConsumed }) => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CompanyAnalysisResult | null>(null);
@@ -269,12 +274,45 @@ const CompanyAnalysisView: React.FC = () => {
     getCompanyAnalysisReports().then(setSavedReports).catch(() => {});
   }, []);
 
+  // 외부(스크리닝·시장 리포트)에서 종목 클릭 시 자동 분석
+  useEffect(() => {
+    if (!initialQuery) return;
+    setQuery(initialQuery);
+    onQueryConsumed?.();
+    // 약간의 지연 후 실행 (렌더링 완료 보장)
+    const timer = setTimeout(() => { handleAnalyzeWith(initialQuery); }, 50);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
+
   const handleDeleteReport = async (r: CompanyAnalysisResult, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!r.id || !window.confirm(`"${r.companyName}" 분석 리포트를 삭제할까요?`)) return;
     await deleteCompanyAnalysisReport(r.id).catch(() => {});
     setSavedReports(prev => prev.filter(p => p.id !== r.id));
     if (result?.id === r.id) setResult(null);
+  };
+
+  const handleAnalyzeWith = async (q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    setLoading(true);
+    setError('');
+    setResult(null);
+    try {
+      const res = await analyzeCompany(trimmed);
+      setResult(res);
+      setSavedReports(prev => {
+        const filtered = prev.filter(r => r.companyName !== res.companyName);
+        return [res, ...filtered];
+      });
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        || '분석 중 오류가 발생했습니다.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAnalyze = async () => {
