@@ -182,7 +182,17 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
     setSelectedPlace(null);
     try {
       const { data } = await (api as any).get('/api/search/local', { params: { query: placeQuery.trim() } }) as { data: { items: SearchLocalItem[] } };
-      setPlaceResults(data.items ?? []);
+      const items: SearchLocalItem[] = data.items ?? [];
+      const q = placeQuery.trim().toLowerCase();
+      // 검색어와 정확히 일치하는 장소명을 위로 — 부속시설(다이닝룸·바 등)보다 본체가 먼저 노출
+      items.sort((a, b) => {
+        const aName = stripHtml(a.title).toLowerCase();
+        const bName = stripHtml(b.title).toLowerCase();
+        const aExact = aName === q ? 0 : aName.startsWith(q) && aName.length - q.length < 6 ? 1 : 2;
+        const bExact = bName === q ? 0 : bName.startsWith(q) && bName.length - q.length < 6 ? 1 : 2;
+        return aExact - bExact;
+      });
+      setPlaceResults(items);
     } catch { /* ignore */ }
     setPlaceSearching(false);
   };
