@@ -359,9 +359,16 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
                 <input type="date" value={newEndDate} onChange={e => setNewEndDate(e.target.value)} style={{ width: '100%', padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', boxSizing: 'border-box' }} />
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-              <input value={newWeather} onChange={e => setNewWeather(e.target.value)} placeholder="🌤 날씨 (예: 맑음)" style={{ flex: 1, padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px' }} />
-              <input value={newTransport} onChange={e => setNewTransport(e.target.value)} placeholder="🚗 이동수단 (예: 자차)" style={{ flex: 1, padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px' }} />
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {['☀️', '🌤️', '⛈️', '🌨️'].map(w => (
+                  <button key={w} onClick={() => setNewWeather(prev => prev === w ? '' : w)}
+                    style={{ ...btnBase, fontSize: '18px', padding: '3px 5px', background: newWeather === w ? '#e8f4fd' : '#fff', border: `1px solid ${newWeather === w ? '#89CFF0' : '#dadce0'}`, borderRadius: '6px' }}>
+                    {w}
+                  </button>
+                ))}
+              </div>
+              <input value={newTransport} onChange={e => setNewTransport(e.target.value)} placeholder="🚗 이동수단" style={{ flex: 1, padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px' }} />
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
               <button onClick={handleCreate} disabled={creating || !newTitle.trim()} style={{ ...btnBase, flex: 1, padding: '8px', fontSize: '13px', background: newTitle.trim() ? '#89CFF0' : '#f1f3f4', color: newTitle.trim() ? '#1a3a5c' : '#9e9e9e', cursor: newTitle.trim() ? 'pointer' : 'not-allowed' }}>
@@ -430,8 +437,15 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
                     <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={{ flex: 1, padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px' }} />
                     <input type="date" value={editEndDate} onChange={e => setEditEndDate(e.target.value)} style={{ flex: 1, padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px' }} />
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                    <input value={editWeather} onChange={e => setEditWeather(e.target.value)} placeholder="🌤 날씨" style={{ flex: 1, padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px' }} />
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {['☀️', '🌤️', '⛈️', '🌨️'].map(w => (
+                        <button key={w} onClick={() => setEditWeather(prev => prev === w ? '' : w)}
+                          style={{ ...btnBase, fontSize: '18px', padding: '3px 5px', background: editWeather === w ? '#e8f4fd' : '#fff', border: `1px solid ${editWeather === w ? '#89CFF0' : '#dadce0'}`, borderRadius: '6px' }}>
+                          {w}
+                        </button>
+                      ))}
+                    </div>
                     <input value={editTransport} onChange={e => setEditTransport(e.target.value)} placeholder="🚗 이동수단" style={{ flex: 1, padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px' }} />
                   </div>
                   <div style={{ display: 'flex', gap: '6px' }}>
