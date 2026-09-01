@@ -757,18 +757,20 @@ const App: React.FC = () => {
           </>
         ) : (
           <>
-            {/* 데스크탑 Row 1: 로고 + 검색 + 주요 버튼 */}
-            <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', height: '48px', gap: '8px' }}>
+            {/* 데스크탑 Row 1: 로고 + 검색(고정폭) + spacer + 단지 탐색 버튼들 */}
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px', height: '48px', gap: '8px' }}>
               {/* 로고 */}
               <div onClick={handleGoHome} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, cursor: 'pointer' }}>
-                <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '30px', height: '30px', borderRadius: '8px', objectFit: 'contain' }} />
+                <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '28px', height: '28px', borderRadius: '8px', objectFit: 'contain' }} />
                 <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap' }}>DoTheRich</span>
               </div>
               <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
-              {/* 검색바 — fluid로 flex:1 영역 전체 사용 */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <SearchBar onSelect={handleSearchSelect} fluid />
+              {/* 검색바 — 고정 280px */}
+              <div style={{ width: '280px', flexShrink: 0 }}>
+                <SearchBar onSelect={handleSearchSelect} />
               </div>
+              {/* 오른쪽 버튼 그룹을 우측으로 밀기 */}
+              <div style={{ flex: 1 }} />
               <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
               {/* 내 단지 */}
               <button
@@ -780,31 +782,7 @@ const App: React.FC = () => {
                   color: myComplexListOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >내 단지</button>
-              {/* 필터 */}
-              <button
-                onClick={() => setFilterOpen(v => !v)}
-                style={{
-                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid',
-                  borderColor: filterOpen || isFiltersActive(activeFilters) ? '#BA8BD8' : '#dadce0',
-                  borderRadius: '6px',
-                  backgroundColor: filterOpen || isFiltersActive(activeFilters) ? '#f3e5f5' : '#fff',
-                  color: filterOpen || isFiltersActive(activeFilters) ? '#BA8BD8' : '#5f6368',
-                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', gap: '5px',
-                }}
-              >
-                <span>필터</span>
-                {isFiltersActive(activeFilters) && (
-                  <span style={{
-                    backgroundColor: '#BA8BD8', color: '#fff', borderRadius: '8px',
-                    fontSize: '10px', fontWeight: 700, padding: '1px 5px',
-                  }}>
-                    {filteredComplexes.length}/{complexes.length}
-                  </span>
-                )}
-              </button>
-              {/* 즐겨찾기 */}
+              {/* ★ 즐겨찾기 */}
               <button
                 onClick={() => setFavoriteListOpen(v => !v)}
                 style={{
@@ -827,15 +805,18 @@ const App: React.FC = () => {
                   cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >{compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}</button>
-              {/* 단지 수 */}
-              <div style={{ fontSize: '12px', color: '#80868b', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {/* 단지 수 뱃지 */}
+              <div style={{
+                fontSize: '11px', color: '#80868b', whiteSpace: 'nowrap', flexShrink: 0,
+                background: '#f1f3f4', borderRadius: '12px', padding: '3px 8px',
+              }}>
                 {loading ? '로딩...' : `${complexes.length}개`}
               </div>
             </div>
 
-            {/* 데스크탑 Row 2: 금액대 + 5개 목적별 드롭다운 메뉴 */}
+            {/* 데스크탑 Row 2: 금액대 + 필터 + 5개 목적별 드롭다운 메뉴 */}
             <div style={{
-              display: 'flex', alignItems: 'center', padding: '0 12px', height: '36px', gap: '6px',
+              display: 'flex', alignItems: 'center', padding: '0 16px', height: '36px', gap: '6px',
               borderTop: '1px solid #d4edfb', backgroundColor: '#f0f8fd',
             }}>
               {/* 금액대 필터 */}
@@ -847,6 +828,30 @@ const App: React.FC = () => {
                 onSelectAreaType={handleAreaTypeSelect}
                 complexes={complexes}
               />
+              {/* 필터 — Row 2로 이동, 금액대 바로 옆에 배치 */}
+              <button
+                onClick={() => setFilterOpen(v => !v)}
+                style={{
+                  padding: '3px 9px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid',
+                  borderColor: filterOpen || isFiltersActive(activeFilters) ? '#BA8BD8' : '#dadce0',
+                  borderRadius: '6px',
+                  backgroundColor: filterOpen || isFiltersActive(activeFilters) ? '#f3e5f5' : '#fff',
+                  color: filterOpen || isFiltersActive(activeFilters) ? '#BA8BD8' : '#5f6368',
+                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                }}
+              >
+                <span>필터</span>
+                {isFiltersActive(activeFilters) && (
+                  <span style={{
+                    backgroundColor: '#BA8BD8', color: '#fff', borderRadius: '8px',
+                    fontSize: '10px', fontWeight: 700, padding: '1px 5px',
+                  }}>
+                    {filteredComplexes.length}/{complexes.length}
+                  </span>
+                )}
+              </button>
               <div style={{ width: '1px', height: '18px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
 
               {/* 드롭다운 외부 클릭 시 닫기용 투명 오버레이 */}
