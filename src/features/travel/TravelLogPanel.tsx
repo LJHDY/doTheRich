@@ -386,7 +386,7 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
           const isMapActive = activeMapLogId === log.id;
 
           return (
-            <div key={log.id} style={{ border: '1px solid #e0e0e0', borderRadius: '10px', marginBottom: '10px', overflow: 'hidden' }}>
+            <div key={log.id} style={{ border: `1px solid ${isExpanded ? '#b8dff5' : '#e8eaed'}`, borderRadius: '12px', marginBottom: '10px', overflow: 'hidden', boxShadow: isExpanded ? '0 2px 8px rgba(137,207,240,0.15)' : '0 1px 3px rgba(0,0,0,0.06)' }}>
 
               {/* 카드 헤더 */}
               <div
@@ -395,36 +395,46 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
                   next.has(log.id) ? next.delete(log.id) : next.add(log.id);
                   return next;
                 })}
-                style={{ padding: '11px 14px', background: isExpanded ? '#f0f8fd' : '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                style={{ padding: '13px 14px 11px', background: isExpanded ? '#f0f8fd' : '#fff', cursor: 'pointer' }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {/* 1행: 제목 + 버튼들 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '7px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
                     {log.title}
+                    {log.aiDraft && <span style={{ marginLeft: '6px', fontSize: '12px' }}>✨</span>}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#9e9e9e', marginTop: '2px' }}>
-                    {log.travelDate
-                      ? `${log.travelDate}${log.endDate ? ` ~ ${log.endDate}` : ''}`
-                      : '날짜 미설정'}
-                    <span style={{ marginLeft: '8px' }}>📍 {log.places.length}개</span>
-                    {log.weather && <span style={{ marginLeft: '6px' }}>🌤 {log.weather}</span>}
-                    {log.transportMode && <span style={{ marginLeft: '6px' }}>🚗 {log.transportMode}</span>}
-                    {log.aiDraft && <span style={{ marginLeft: '6px', color: '#FFD97D' }}>✨</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0, marginLeft: '8px' }} onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => { setEditingLogId(log.id); setEditTitle(log.title); setEditDate(log.travelDate ?? ''); setEditEndDate(log.endDate ?? ''); setEditWeather(log.weather ?? ''); setEditTransport(log.transportMode ?? ''); }}
+                      style={{ background: 'none', border: 'none', fontSize: '14px', color: '#9e9e9e', cursor: 'pointer', padding: '2px 4px', lineHeight: 1 }}
+                    >✏️</button>
+                    {deleteConfirmLogId === log.id ? (
+                      <>
+                        <button onClick={() => handleDeleteLog(log.id)} style={{ ...btnBase, padding: '3px 7px', fontSize: '11px', background: '#E06060', color: '#fff' }}>확인</button>
+                        <button onClick={() => setDeleteConfirmLogId(null)} style={{ ...btnBase, padding: '3px 7px', fontSize: '11px', background: '#f1f3f4', color: '#5f6368', fontWeight: 500 }}>취소</button>
+                      </>
+                    ) : (
+                      <button onClick={() => setDeleteConfirmLogId(log.id)} style={{ background: 'none', border: 'none', fontSize: '17px', color: '#c8c8c8', cursor: 'pointer', padding: '2px 4px', lineHeight: 1 }}>×</button>
+                    )}
+                    <span style={{ fontSize: '11px', color: '#b0b8c1' }}>{isExpanded ? '▲' : '▼'}</span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                  <button
-                    onClick={() => { setEditingLogId(log.id); setEditTitle(log.title); setEditDate(log.travelDate ?? ''); setEditEndDate(log.endDate ?? ''); setEditWeather(log.weather ?? ''); setEditTransport(log.transportMode ?? ''); }}
-                    style={{ ...btnBase, padding: '3px 8px', fontSize: '11px', border: '1px solid #89CFF0', background: '#fff', color: '#2a6090', fontWeight: 500 }}
-                  >✏</button>
-                  {deleteConfirmLogId === log.id ? (
-                    <>
-                      <button onClick={() => handleDeleteLog(log.id)} style={{ ...btnBase, padding: '3px 7px', fontSize: '11px', background: '#E06060', color: '#fff' }}>확인</button>
-                      <button onClick={() => setDeleteConfirmLogId(null)} style={{ ...btnBase, padding: '3px 7px', fontSize: '11px', background: '#f1f3f4', color: '#5f6368', fontWeight: 500 }}>취소</button>
-                    </>
+                {/* 2행: 날짜 + 메타 뱃지 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  {log.travelDate ? (
+                    <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
+                      📅 {log.travelDate}{log.endDate && log.endDate !== log.travelDate ? ` – ${log.endDate}` : ''}
+                    </span>
                   ) : (
-                    <button onClick={() => setDeleteConfirmLogId(log.id)} style={{ background: 'none', border: 'none', fontSize: '16px', color: '#bdbdbd', cursor: 'pointer', padding: '2px 4px' }}>×</button>
+                    <span style={{ fontSize: '12px', color: '#c0c0c0' }}>날짜 미설정</span>
                   )}
-                  <span style={{ fontSize: '12px', color: '#bdbdbd', marginLeft: '2px' }}>{isExpanded ? '▲' : '▼'}</span>
+                  {log.weather && (
+                    <span style={{ fontSize: '15px', lineHeight: 1 }}>{log.weather}</span>
+                  )}
+                  {log.transportMode && (
+                    <span style={{ fontSize: '11px', color: '#6b7280', background: '#f1f3f4', borderRadius: '20px', padding: '2px 8px', fontWeight: 500 }}>{log.transportMode}</span>
+                  )}
+                  <span style={{ fontSize: '11px', color: '#6b7280', background: '#f1f3f4', borderRadius: '20px', padding: '2px 8px', fontWeight: 500 }}>📍 {log.places.length}곳</span>
                 </div>
               </div>
 
