@@ -1834,7 +1834,7 @@ export const deleteTravelPlacePhoto = async (
 
 /** AI 블로그 초안 생성 — 백엔드가 Gemini API 호출 후 초안 텍스트 반환 */
 export const generateTravelDraft = async (travelLogId: number): Promise<string> => {
-  const { data } = await api.post(`/api/travel-logs/${travelLogId}/generate-draft`);
+  const { data } = await api.post(`/api/travel-logs/${travelLogId}/generate-draft`, {}, { timeout: 60_000 });
   return (data as any).content as string;
 };
 

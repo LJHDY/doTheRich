@@ -309,7 +309,7 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
       const content = await generateTravelDraft(logId);
       setDraftText(prev => ({ ...prev, [logId]: content }));
       setShowDraftIds(prev => new Set(Array.from(prev).concat(logId)));
-    } catch { alert('AI 초안 생성 실패. 방문지가 1개 이상 있어야 합니다.'); }
+    } catch (e: any) { alert('AI 초안 생성 실패: ' + (e?.response?.data?.detail ?? e?.message ?? '알 수 없는 오류')); }
     setDraftLoading(prev => ({ ...prev, [logId]: false }));
   };
 
