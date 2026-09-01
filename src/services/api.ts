@@ -46,6 +46,9 @@ import {
   ScreeningTopPick,
   ScreeningRankItem,
   IntegratedReport,
+  TravelLog,
+  TravelPlace,
+  TravelPlacePhoto,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -1698,6 +1701,135 @@ export const deleteWorkout = async (id: number): Promise<void> => {
   await api.delete(`/api/workouts/${id}`);
 };
 
+// ─── 여행일지 API ─────────────────────────────────────────────────────────────
+
+const toTravelPhoto = (p: any): TravelPlacePhoto => ({
+  id: p.id,
+  travelPlaceId: p.travel_place_id,
+  url: p.url,
+  fileName: p.file_name,
+  createdAt: p.created_at,
+});
+
+const toTravelPlace = (p: any): TravelPlace => ({
+  id: p.id,
+  travelLogId: p.travel_log_id,
+  placeName: p.place_name,
+  latitude: p.latitude,
+  longitude: p.longitude,
+  address: p.address,
+  visitDate: p.visit_date,
+  memo: p.memo,
+  displayOrder: p.display_order ?? 0,
+  photos: (p.photos ?? []).map(toTravelPhoto),
+});
+
+const toTravelLog = (l: any): TravelLog => ({
+  id: l.id,
+  title: l.title,
+  travelDate: l.travel_date,
+  endDate: l.end_date,
+  memo: l.memo,
+  aiDraft: l.ai_draft,
+  createdAt: l.created_at,
+  places: (l.places ?? []).map(toTravelPlace),
+});
+
+export const getTravelLogs = async (): Promise<TravelLog[]> => {
+  const { data } = await api.get('/api/travel-logs');
+  return (data as any[]).map(toTravelLog);
+};
+
+export const createTravelLog = async (payload: {
+  title: string; travelDate?: string; endDate?: string; memo?: string;
+}): Promise<TravelLog> => {
+  const { data } = await api.post('/api/travel-logs', {
+    title: payload.title,
+    travel_date: payload.travelDate || null,
+    end_date: payload.endDate || null,
+    memo: payload.memo || null,
+  });
+  return toTravelLog(data);
+};
+
+export const updateTravelLog = async (id: number, payload: {
+  title?: string; travelDate?: string; endDate?: string; memo?: string; aiDraft?: string;
+}): Promise<TravelLog> => {
+  const body: any = {};
+  if (payload.title     !== undefined) body.title      = payload.title;
+  if (payload.travelDate !== undefined) body.travel_date = payload.travelDate || null;
+  if (payload.endDate   !== undefined) body.end_date   = payload.endDate || null;
+  if (payload.memo      !== undefined) body.memo       = payload.memo;
+  if (payload.aiDraft   !== undefined) body.ai_draft   = payload.aiDraft;
+  const { data } = await api.patch(`/api/travel-logs/${id}`, body);
+  return toTravelLog(data);
+};
+
+export const deleteTravelLog = async (id: number): Promise<void> => {
+  await api.delete(`/api/travel-logs/${id}`);
+};
+
+export const createTravelPlace = async (travelLogId: number, payload: {
+  placeName: string; latitude?: number; longitude?: number;
+  address?: string; visitDate?: string; memo?: string; displayOrder?: number;
+}): Promise<TravelPlace> => {
+  const { data } = await api.post(`/api/travel-logs/${travelLogId}/places`, {
+    place_name: payload.placeName,
+    latitude: payload.latitude ?? null,
+    longitude: payload.longitude ?? null,
+    address: payload.address || null,
+    visit_date: payload.visitDate || null,
+    memo: payload.memo || null,
+    display_order: payload.displayOrder ?? 0,
+  });
+  return toTravelPlace(data);
+};
+
+export const updateTravelPlace = async (travelLogId: number, placeId: number, payload: {
+  placeName?: string; visitDate?: string; memo?: string;
+}): Promise<TravelPlace> => {
+  const body: any = {};
+  if (payload.placeName !== undefined) body.place_name = payload.placeName;
+  if (payload.visitDate !== undefined) body.visit_date = payload.visitDate || null;
+  if (payload.memo      !== undefined) body.memo       = payload.memo;
+  const { data } = await api.patch(`/api/travel-logs/${travelLogId}/places/${placeId}`, body);
+  return toTravelPlace(data);
+};
+
+export const deleteTravelPlace = async (travelLogId: number, placeId: number): Promise<void> => {
+  await api.delete(`/api/travel-logs/${travelLogId}/places/${placeId}`);
+};
+
+export const reorderTravelPlaces = async (travelLogId: number, placeIds: number[]): Promise<TravelLog> => {
+  const { data } = await api.patch(`/api/travel-logs/${travelLogId}/places/reorder`, { place_ids: placeIds });
+  return toTravelLog(data);
+};
+
+export const uploadTravelPlacePhotos = async (
+  travelLogId: number, placeId: number, files: File[]
+): Promise<TravelPlacePhoto[]> => {
+  const formData = new FormData();
+  files.forEach(f => formData.append('files', f));
+  const { data } = await api.post(
+    `/api/travel-logs/${travelLogId}/places/${placeId}/photos`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }
+  );
+  return (data as any[]).map(toTravelPhoto);
+};
+
+export const deleteTravelPlacePhoto = async (
+  travelLogId: number, placeId: number, photoId: number
+): Promise<void> => {
+  await api.delete(`/api/travel-logs/${travelLogId}/places/${placeId}/photos/${photoId}`);
+};
+
+/** AI 블로그 초안 생성 — 백엔드가 Gemini API 호출 후 초안 텍스트 반환 */
+export const generateTravelDraft = async (travelLogId: number): Promise<string> => {
+  const { data } = await api.post(`/api/travel-logs/${travelLogId}/generate-draft`);
+  return (data as any).content as string;
+};
+
 export interface NearbyPlace {
   name: string;
   address: string;
@@ -2111,7 +2243,7 @@ export interface BlogDraft {
 }
 
 export const generateBlogDraft = async (complexId: number): Promise<BlogDraft> => {
-  const { data } = await api.post(`/api/blog/complexes/${complexId}/draft`);
+  const { data } = await api.post(`/api/blog/complexes/${complexId}/draft`, {}, { timeout: 60_000 });
   return data;
 };
 
