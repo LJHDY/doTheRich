@@ -708,10 +708,19 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
                           ))}
                         </div>
                       )}
-                      {/* 선택된 장소 표시 */}
+                      {/* 선택된 장소 — 이름 직접 수정 + × 해제 */}
                       {selectedPlace && (
-                        <div style={{ padding: '5px 8px', background: '#D4EFFC', borderRadius: '5px', marginBottom: '6px', fontSize: '12px', color: '#1a3a5c' }}>
-                          ✓ {selectedPlace.title}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#D4EFFC', borderRadius: '6px', padding: '5px 8px', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '12px', color: '#2a6090', flexShrink: 0 }}>✓</span>
+                          <input
+                            value={selectedPlace.title}
+                            onChange={e => setSelectedPlace({ ...selectedPlace, title: e.target.value })}
+                            style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '12px', fontWeight: 600, color: '#1a3a5c', outline: 'none', minWidth: 0 }}
+                          />
+                          <button
+                            onClick={() => { setSelectedPlace(null); setPlaceResults([]); setPlaceQuery(''); }}
+                            style={{ background: 'none', border: 'none', fontSize: '15px', color: '#7bafd4', cursor: 'pointer', padding: '0 2px', flexShrink: 0, lineHeight: 1 }}
+                          >×</button>
                         </div>
                       )}
                       <input type="date" value={placeDate} onChange={e => setPlaceDate(e.target.value)} style={{ width: '100%', padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', marginBottom: '5px', boxSizing: 'border-box' }} />
