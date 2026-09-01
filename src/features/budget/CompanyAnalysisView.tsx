@@ -39,11 +39,6 @@ const numColor = (v: number | null, inverse = false): string => {
 };
 
 /** 억 단위 Y축 포맷 (Recharts용) */
-const yAxisBillion = (v: number) => {
-  if (Math.abs(v) >= 1_000_000_000_000) return `${(v / 1_000_000_000_000).toFixed(1)}조`;
-  if (Math.abs(v) >= 100_000_000) return `${Math.round(v / 100_000_000)}억`;
-  return String(v);
-};
 
 /** 주가 Y축 포맷 */
 const yAxisPrice = (v: number) => {
