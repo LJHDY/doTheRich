@@ -9,6 +9,7 @@ import PriceInputForm from './PriceInputForm';
 import CommuteGradeBadge from './CommuteGradeBadge';
 import PhotoSlideModal from './PhotoSlideModal';
 import ChecklistModal from '../checklist/ChecklistModal';
+import BlogDraftModal from './BlogDraftModal';
 import { getComplexChecklist, getPropertyVisits } from '../../services/api';
 import { useNumberedTextarea } from '../../hooks/useNumberedTextarea';
 import { FACILITY_MACRO_CATEGORY, getSimplifiedCategory } from './constants/hazardCategories';
@@ -339,6 +340,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
 
   // 사진 슬라이드 모달 표시 여부
   const [showPhotoModal, setShowPhotoModal] = useState(false);
+
+  // 임장일지 초안 모달 표시 여부
+  const [showBlogDraftModal, setShowBlogDraftModal] = useState(false);
 
   // 도보 30분 반경 원 표시 여부
   const [showRadius, setShowRadius] = useState(false);
@@ -1869,6 +1873,12 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
               onClick={handleToggleFavorite}
               style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: 0, color: isFavorite ? '#FFD97D' : 'rgba(255,255,255,0.4)', flexShrink: 0 }}
             >★</button>
+            {/* 임장일지 초안 버튼 */}
+            <button
+              onClick={() => setShowBlogDraftModal(true)}
+              title="임장일지 초안 생성"
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0, color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}
+            >✍️</button>
             {/* 사진 보기 버튼 — 가격 없는 단지(임장용 등)도 항상 표시 */}
             <button
               onClick={() => setShowPhotoModal(true)}
@@ -4250,6 +4260,15 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           complexId={complex.id}
           complexName={complex.complexName}
           onClose={() => setShowPhotoModal(false)}
+        />
+      )}
+
+      {/* 임장일지 초안 모달 */}
+      {showBlogDraftModal && (
+        <BlogDraftModal
+          complexId={complex.id}
+          complexName={complex.complexName}
+          onClose={() => setShowBlogDraftModal(false)}
         />
       )}
 

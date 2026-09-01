@@ -2100,4 +2100,19 @@ export const getCollectAllStatus = async (): Promise<BatchCollectStatus> => {
   return res.data;
 };
 
+// ── 블로그 임장일지 초안 ───────────────────────────────────────────────────────
+
+export interface BlogDraft {
+  complexId: number;
+  complexName: string;
+  title: string;
+  html: string;
+  photoUrls: string[];
+}
+
+export const generateBlogDraft = async (complexId: number): Promise<BlogDraft> => {
+  const { data } = await api.post(`/api/blog/complexes/${complexId}/draft`);
+  return data;
+};
+
 export default api;
