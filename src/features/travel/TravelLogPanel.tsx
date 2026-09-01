@@ -8,6 +8,27 @@ import {
 } from '../../services/api';
 import { compressImages } from '../../shared/imageUtils';
 
+// ── 날짜 범위 배열 생성 (yyyy-mm-dd)
+const getDatesInRange = (start: string, end: string): string[] => {
+  const dates: string[] = [];
+  const cur = new Date(start + 'T00:00:00');
+  const endD = new Date(end + 'T00:00:00');
+  while (cur <= endD && dates.length < 60) {
+    dates.push(cur.toISOString().slice(0, 10));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+};
+
+const KO_ORDINAL = ['첫째', '둘째', '셋째', '넷째', '다섯째', '여섯째', '일곱째', '여덟째', '아홉째', '열째'];
+const KO_WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
+
+const getDayLabel = (idx: number, dateStr: string): string => {
+  const ordinal = idx < KO_ORDINAL.length ? KO_ORDINAL[idx] : `${idx + 1}번째`;
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${ordinal}날  (${d.getMonth() + 1}/${d.getDate()} ${KO_WEEKDAY[d.getDay()]})`;
+};
+
 // 통합 장소 검색 결과 타입 (네이버 장소명 + 카카오 주소 검색 합산)
 interface SearchPlaceItem {
   source: 'naver' | 'kakao_addr';
@@ -104,6 +125,9 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
   // 삭제 확인 상태
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<number | null>(null);
   const [deletePlaceConfirmId, setDeletePlaceConfirmId] = useState<number | null>(null);
+
+  // 날짜 그룹별 방문지 추가 — 어느 날 섹션에서 추가 중인지 (null = 미분류/날짜 범위 없음)
+  const [addingDayDate, setAddingDayDate] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -337,6 +361,157 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
 
   const btnBase: React.CSSProperties = { border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 };
 
+  // ── 방문지 행 렌더러 (날짜 그룹·플랫 뷰 공용)
+  const renderPlaceItem = (
+    log: TravelLog,
+    place: TravelLog['places'][number],
+    displayNum: number,
+    showReorder: boolean,
+  ) => {
+    const globalIdx = log.places.findIndex(p => p.id === place.id);
+    const isPlaceExpanded = expandedPlaceIds.has(place.id);
+    return (
+      <div key={place.id} style={{ border: '1px solid #f0f0f0', borderRadius: '8px', marginBottom: '6px', overflow: 'hidden' }}>
+        <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', gap: '6px', background: isPlaceExpanded ? '#f8f9fa' : '#fff' }}>
+          <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#89CFF0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#1a3a5c', flexShrink: 0 }}>
+            {displayNum}
+          </div>
+          {showReorder && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flexShrink: 0 }}>
+              <button
+                onClick={() => handleMovePlace(log.id, place.id, 'up')}
+                disabled={globalIdx === 0 || !!reorderSaving[log.id]}
+                style={{ width: '16px', height: '13px', padding: 0, fontSize: '8px', border: 'none', borderRadius: '2px', background: globalIdx === 0 ? '#f1f3f4' : '#e8f4fd', color: globalIdx === 0 ? '#bdbdbd' : '#2a6090', cursor: globalIdx === 0 ? 'default' : 'pointer' }}
+              >▲</button>
+              <button
+                onClick={() => handleMovePlace(log.id, place.id, 'down')}
+                disabled={globalIdx === log.places.length - 1 || !!reorderSaving[log.id]}
+                style={{ width: '16px', height: '13px', padding: 0, fontSize: '8px', border: 'none', borderRadius: '2px', background: globalIdx === log.places.length - 1 ? '#f1f3f4' : '#e8f4fd', color: globalIdx === log.places.length - 1 ? '#bdbdbd' : '#2a6090', cursor: globalIdx === log.places.length - 1 ? 'default' : 'pointer' }}
+              >▼</button>
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {editingPlaceNameId === place.id ? (
+              <input
+                autoFocus value={placeNameText}
+                onChange={e => setPlaceNameText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handlePlaceNameSave(log.id, place.id); if (e.key === 'Escape') setEditingPlaceNameId(null); }}
+                onBlur={() => handlePlaceNameSave(log.id, place.id)}
+                disabled={placeNameSaving}
+                style={{ width: '100%', padding: '3px 6px', fontSize: '13px', fontWeight: 600, border: '1px solid #89CFF0', borderRadius: '5px', color: '#344054', boxSizing: 'border-box' }}
+              />
+            ) : (
+              <div
+                style={{ fontSize: '13px', fontWeight: 600, color: '#344054', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                onClick={() => setExpandedPlaceIds(prev => { const next = new Set(prev); next.has(place.id) ? next.delete(place.id) : next.add(place.id); return next; })}
+              >
+                {place.placeName}
+              </div>
+            )}
+            {/* 날짜 그룹 모드에서는 visitDate 표시 생략 (이미 섹션 헤더에 날짜 있음) */}
+            {showReorder && place.visitDate && <div style={{ fontSize: '10px', color: '#9e9e9e' }}>{place.visitDate}</div>}
+          </div>
+          <div style={{ display: 'flex', gap: '3px', flexShrink: 0, fontSize: '11px', color: '#9e9e9e' }}>
+            {place.memo && <span title="메모 있음">📝</span>}
+            {place.photos.length > 0 && <span title={`사진 ${place.photos.length}장`}>📷{place.photos.length}</span>}
+          </div>
+          {editingPlaceNameId !== place.id && (
+            <button onClick={() => { setEditingPlaceNameId(place.id); setPlaceNameText(place.placeName); }} style={{ background: 'none', border: 'none', fontSize: '12px', color: '#b0b8c1', cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}>✏️</button>
+          )}
+          {deletePlaceConfirmId === place.id ? (
+            <>
+              <button onClick={() => handleDeletePlace(log.id, place.id)} style={{ ...btnBase, padding: '2px 6px', fontSize: '10px', background: '#E06060', color: '#fff' }}>삭제</button>
+              <button onClick={() => setDeletePlaceConfirmId(null)} style={{ ...btnBase, padding: '2px 6px', fontSize: '10px', background: '#f1f3f4', color: '#5f6368', fontWeight: 500 }}>취소</button>
+            </>
+          ) : (
+            <button onClick={() => setDeletePlaceConfirmId(place.id)} style={{ background: 'none', border: 'none', fontSize: '14px', color: '#bdbdbd', cursor: 'pointer', padding: '0 3px' }}>×</button>
+          )}
+        </div>
+
+        {isPlaceExpanded && (
+          <div style={{ padding: '10px 12px', borderTop: '1px solid #f5f5f5', background: '#fafafa' }}>
+            {place.address && <div style={{ fontSize: '11px', color: '#9e9e9e', marginBottom: '8px' }}>📍 {place.address}</div>}
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#9e9e9e', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                <span>메모</span>
+                {editingPlaceMemoId !== place.id && (
+                  <button onClick={() => { setEditingPlaceMemoId(place.id); setPlaceMemoText(place.memo ?? ''); }} style={{ fontSize: '11px', background: 'none', border: 'none', color: '#89CFF0', cursor: 'pointer', padding: 0 }}>✏</button>
+                )}
+              </div>
+              {editingPlaceMemoId === place.id ? (
+                <>
+                  <textarea value={placeMemoText} onChange={e => setPlaceMemoText(e.target.value)} rows={3} style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', resize: 'none', boxSizing: 'border-box' }} />
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                    <button onClick={() => handlePlaceMemoSave(log.id, place.id)} disabled={placeMemoSaving} style={{ ...btnBase, flex: 1, padding: '5px', fontSize: '12px', background: '#89CFF0', color: '#1a3a5c' }}>저장</button>
+                    <button onClick={() => setEditingPlaceMemoId(null)} style={{ ...btnBase, padding: '5px 10px', fontSize: '12px', background: '#f1f3f4', color: '#5f6368', fontWeight: 500 }}>취소</button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: '12px', color: place.memo ? '#344054' : '#bdbdbd', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>{place.memo || '메모 없음'}</div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#9e9e9e', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>사진 ({place.photos.length})</span>
+                <label style={{ fontSize: '11px', padding: '3px 8px', border: '1px solid #89CFF0', borderRadius: '5px', color: '#2a6090', cursor: 'pointer', background: '#fff' }}>
+                  {photoUploading[place.id] ? '업로드 중...' : '+ 사진 추가'}
+                  <input type="file" multiple accept="image/*" style={{ display: 'none' }} disabled={!!photoUploading[place.id]}
+                    onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length > 0) handlePhotoUpload(log.id, place.id, files); e.target.value = ''; }} />
+                </label>
+              </div>
+              {place.photos.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {place.photos.map(photo => (
+                    <div key={photo.id} style={{ position: 'relative', width: '72px', height: '72px' }}>
+                      <img src={photo.url} alt="" style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer' }} onClick={() => window.open(photo.url, '_blank')} />
+                      <button onClick={() => handlePhotoDelete(log.id, place.id, photo.id)} style={{ position: 'absolute', top: '2px', right: '2px', width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '10px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── 방문지 추가 폼 렌더러
+  const renderAddPlaceForm = (logId: number) => (
+    <div style={{ border: '1px solid #89CFF0', borderRadius: '8px', padding: '10px', marginBottom: '8px', background: '#f0f8fd' }}>
+      <div style={{ fontSize: '12px', fontWeight: 600, color: '#2a6090', marginBottom: '8px' }}>방문지 추가 (네이버 검색)</div>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+        <input value={placeQuery} onChange={e => setPlaceQuery(e.target.value)} placeholder="장소명 검색..." style={{ flex: 1, padding: '6px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px' }} onKeyDown={e => { if (e.key === 'Enter') handlePlaceSearch(); }} />
+        <button onClick={handlePlaceSearch} disabled={placeSearching} style={{ ...btnBase, padding: '6px 10px', fontSize: '12px', background: '#89CFF0', color: '#1a3a5c' }}>{placeSearching ? '...' : '검색'}</button>
+      </div>
+      {placeResults.length > 0 && (
+        <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '6px', marginBottom: '6px', background: '#fff' }}>
+          {placeResults.map((item, i) => (
+            <div key={i} onClick={() => setSelectedPlace(item)} style={{ padding: '8px 10px', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', background: selectedPlace === item ? '#D4EFFC' : 'transparent' }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#344054' }}>{item.title}</div>
+              <div style={{ fontSize: '10px', color: '#9e9e9e' }}>{item.roadAddress || item.address}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {selectedPlace && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#D4EFFC', borderRadius: '6px', padding: '5px 8px', marginBottom: '6px' }}>
+          <span style={{ fontSize: '12px', color: '#2a6090', flexShrink: 0 }}>✓</span>
+          <input value={selectedPlace.title} onChange={e => setSelectedPlace({ ...selectedPlace, title: e.target.value })} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '12px', fontWeight: 600, color: '#1a3a5c', outline: 'none', minWidth: 0 }} />
+          <button onClick={() => { setSelectedPlace(null); setPlaceResults([]); setPlaceQuery(''); }} style={{ background: 'none', border: 'none', fontSize: '15px', color: '#7bafd4', cursor: 'pointer', padding: '0 2px', flexShrink: 0, lineHeight: 1 }}>×</button>
+        </div>
+      )}
+      <input type="date" value={placeDate} onChange={e => setPlaceDate(e.target.value)} style={{ width: '100%', padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', marginBottom: '5px', boxSizing: 'border-box' }} />
+      <textarea value={placeNote} onChange={e => setPlaceNote(e.target.value)} rows={2} placeholder="방문 메모 (선택)" style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', resize: 'none', marginBottom: '6px', boxSizing: 'border-box' }} />
+      <div style={{ display: 'flex', gap: '6px' }}>
+        <button onClick={() => handleAddPlace(logId)} disabled={placeAdding || !selectedPlace} style={{ ...btnBase, flex: 1, padding: '7px', fontSize: '12px', background: selectedPlace ? '#89CFF0' : '#f1f3f4', color: selectedPlace ? '#1a3a5c' : '#9e9e9e', cursor: selectedPlace ? 'pointer' : 'not-allowed' }}>
+          {placeAdding ? '추가 중...' : '추가'}
+        </button>
+        <button onClick={() => { setAddingPlaceLogId(null); setAddingDayDate(null); setPlaceQuery(''); setPlaceResults([]); setSelectedPlace(null); setPlaceDate(''); setPlaceNote(''); }} style={{ ...btnBase, padding: '7px 12px', fontSize: '12px', background: '#f1f3f4', color: '#5f6368', fontWeight: 500 }}>취소</button>
+      </div>
+    </div>
+  );
+
   return (
     <div style={panelStyle}>
       {/* 헤더 */}
@@ -529,224 +704,85 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
                     )}
                   </div>
 
-                  {/* 방문지 목록 */}
+                  {/* 방문지 목록 — 기간 설정 시 날짜별 그룹, 아니면 플랫 리스트 */}
                   <div style={{ fontSize: '11px', fontWeight: 600, color: '#9e9e9e', marginBottom: '6px' }}>방문지 목록</div>
-                  {log.places.length === 0 && (
-                    <div style={{ fontSize: '12px', color: '#bdbdbd', textAlign: 'center', padding: '8px 0' }}>등록된 방문지가 없습니다.</div>
-                  )}
-                  {log.places.map((place, idx) => {
-                    const isPlaceExpanded = expandedPlaceIds.has(place.id);
-                    return (
-                      <div key={place.id} style={{ border: '1px solid #f0f0f0', borderRadius: '8px', marginBottom: '6px', overflow: 'hidden' }}>
-                        {/* 방문지 행 */}
-                        <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', gap: '6px', background: isPlaceExpanded ? '#f8f9fa' : '#fff' }}>
-                          {/* 순서 번호 */}
-                          <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#89CFF0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#1a3a5c', flexShrink: 0 }}>
-                            {idx + 1}
-                          </div>
-                          {/* ▲▼ 순서 변경 */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flexShrink: 0 }}>
-                            <button
-                              onClick={() => handleMovePlace(log.id, place.id, 'up')}
-                              disabled={idx === 0 || !!reorderSaving[log.id]}
-                              style={{ width: '16px', height: '13px', padding: 0, fontSize: '8px', border: 'none', borderRadius: '2px', background: idx === 0 ? '#f1f3f4' : '#e8f4fd', color: idx === 0 ? '#bdbdbd' : '#2a6090', cursor: idx === 0 ? 'default' : 'pointer' }}
-                            >▲</button>
-                            <button
-                              onClick={() => handleMovePlace(log.id, place.id, 'down')}
-                              disabled={idx === log.places.length - 1 || !!reorderSaving[log.id]}
-                              style={{ width: '16px', height: '13px', padding: 0, fontSize: '8px', border: 'none', borderRadius: '2px', background: idx === log.places.length - 1 ? '#f1f3f4' : '#e8f4fd', color: idx === log.places.length - 1 ? '#bdbdbd' : '#2a6090', cursor: idx === log.places.length - 1 ? 'default' : 'pointer' }}
-                            >▼</button>
-                          </div>
-                          {/* 이름 + 날짜 */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            {editingPlaceNameId === place.id ? (
-                              <input
-                                autoFocus
-                                value={placeNameText}
-                                onChange={e => setPlaceNameText(e.target.value)}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') handlePlaceNameSave(log.id, place.id);
-                                  if (e.key === 'Escape') setEditingPlaceNameId(null);
-                                }}
-                                onBlur={() => handlePlaceNameSave(log.id, place.id)}
-                                disabled={placeNameSaving}
-                                style={{ width: '100%', padding: '3px 6px', fontSize: '13px', fontWeight: 600, border: '1px solid #89CFF0', borderRadius: '5px', color: '#344054', boxSizing: 'border-box' }}
-                              />
-                            ) : (
-                              <div
-                                style={{ fontSize: '13px', fontWeight: 600, color: '#344054', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
-                                onClick={() => setExpandedPlaceIds(prev => {
-                                  const next = new Set(prev);
-                                  next.has(place.id) ? next.delete(place.id) : next.add(place.id);
-                                  return next;
-                                })}
-                              >
-                                {place.placeName}
-                              </div>
-                            )}
-                            {place.visitDate && <div style={{ fontSize: '10px', color: '#9e9e9e' }}>{place.visitDate}</div>}
-                          </div>
-                          {/* 아이콘 표시 */}
-                          <div style={{ display: 'flex', gap: '3px', flexShrink: 0, fontSize: '11px', color: '#9e9e9e' }}>
-                            {place.memo && <span title="메모 있음">📝</span>}
-                            {place.photos.length > 0 && <span title={`사진 ${place.photos.length}장`}>📷{place.photos.length}</span>}
-                          </div>
-                          {/* 이름 편집 버튼 */}
-                          {editingPlaceNameId !== place.id && (
-                            <button
-                              onClick={() => { setEditingPlaceNameId(place.id); setPlaceNameText(place.placeName); }}
-                              style={{ background: 'none', border: 'none', fontSize: '12px', color: '#b0b8c1', cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}
-                            >✏️</button>
-                          )}
-                          {/* 삭제 */}
-                          {deletePlaceConfirmId === place.id ? (
-                            <>
-                              <button onClick={() => handleDeletePlace(log.id, place.id)} style={{ ...btnBase, padding: '2px 6px', fontSize: '10px', background: '#E06060', color: '#fff' }}>삭제</button>
-                              <button onClick={() => setDeletePlaceConfirmId(null)} style={{ ...btnBase, padding: '2px 6px', fontSize: '10px', background: '#f1f3f4', color: '#5f6368', fontWeight: 500 }}>취소</button>
-                            </>
-                          ) : (
-                            <button onClick={() => setDeletePlaceConfirmId(place.id)} style={{ background: 'none', border: 'none', fontSize: '14px', color: '#bdbdbd', cursor: 'pointer', padding: '0 3px' }}>×</button>
-                          )}
-                        </div>
+                  {(() => {
+                    const hasDayRange = !!(log.travelDate && log.endDate);
+                    const dayDates = hasDayRange ? getDatesInRange(log.travelDate!, log.endDate!) : [];
+                    const rangeSet = new Set(dayDates);
 
-                        {/* 방문지 상세 (펼친 상태) */}
-                        {isPlaceExpanded && (
-                          <div style={{ padding: '10px 12px', borderTop: '1px solid #f5f5f5', background: '#fafafa' }}>
-                            {place.address && (
-                              <div style={{ fontSize: '11px', color: '#9e9e9e', marginBottom: '8px' }}>📍 {place.address}</div>
-                            )}
-
-                            {/* 방문지 메모 */}
-                            <div style={{ marginBottom: '10px' }}>
-                              <div style={{ fontSize: '11px', fontWeight: 600, color: '#9e9e9e', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                                <span>메모</span>
-                                {editingPlaceMemoId !== place.id && (
-                                  <button onClick={() => { setEditingPlaceMemoId(place.id); setPlaceMemoText(place.memo ?? ''); }} style={{ fontSize: '11px', background: 'none', border: 'none', color: '#89CFF0', cursor: 'pointer', padding: 0 }}>✏</button>
+                    if (hasDayRange) {
+                      const uncategorized = log.places.filter(p => !p.visitDate || !rangeSet.has(p.visitDate));
+                      return (
+                        <>
+                          {dayDates.map((dateStr, di) => {
+                            const dayPlaces = log.places.filter(p => p.visitDate === dateStr);
+                            const isAddingHere = addingPlaceLogId === log.id && addingDayDate === dateStr;
+                            return (
+                              <div key={dateStr} style={{ marginBottom: '10px' }}>
+                                {/* 날 섹션 헤더 */}
+                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#2a6090', background: '#e8f4fd', borderRadius: '6px', padding: '5px 10px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span>📅</span>
+                                  <span>{getDayLabel(di, dateStr)}</span>
+                                  <span style={{ marginLeft: 'auto', fontWeight: 400, color: '#6b7280', fontSize: '10px' }}>{dayPlaces.length}곳</span>
+                                </div>
+                                {dayPlaces.length === 0 && !isAddingHere && (
+                                  <div style={{ fontSize: '11px', color: '#bdbdbd', textAlign: 'center', padding: '6px 0' }}>방문지 없음</div>
+                                )}
+                                {dayPlaces.map((place, localIdx) => renderPlaceItem(log, place, localIdx + 1, false))}
+                                {isAddingHere ? renderAddPlaceForm(log.id) : (
+                                  <button
+                                    onClick={() => { setAddingPlaceLogId(log.id); setAddingDayDate(dateStr); setPlaceDate(dateStr); }}
+                                    style={{ width: '100%', padding: '5px', fontSize: '11px', background: 'none', border: '1px dashed #b8dff5', borderRadius: '6px', color: '#89CFF0', cursor: 'pointer', marginBottom: '4px' }}
+                                  >+ 방문지 추가</button>
                                 )}
                               </div>
-                              {editingPlaceMemoId === place.id ? (
-                                <>
-                                  <textarea value={placeMemoText} onChange={e => setPlaceMemoText(e.target.value)} rows={3} style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', resize: 'none', boxSizing: 'border-box' }} />
-                                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                                    <button onClick={() => handlePlaceMemoSave(log.id, place.id)} disabled={placeMemoSaving} style={{ ...btnBase, flex: 1, padding: '5px', fontSize: '12px', background: '#89CFF0', color: '#1a3a5c' }}>저장</button>
-                                    <button onClick={() => setEditingPlaceMemoId(null)} style={{ ...btnBase, padding: '5px 10px', fontSize: '12px', background: '#f1f3f4', color: '#5f6368', fontWeight: 500 }}>취소</button>
-                                  </div>
-                                </>
-                              ) : (
-                                <div style={{ fontSize: '12px', color: place.memo ? '#344054' : '#bdbdbd', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>{place.memo || '메모 없음'}</div>
-                              )}
-                            </div>
+                            );
+                          })}
 
-                            {/* 사진 */}
-                            <div>
-                              <div style={{ fontSize: '11px', fontWeight: 600, color: '#9e9e9e', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>사진 ({place.photos.length})</span>
-                                <label style={{ fontSize: '11px', padding: '3px 8px', border: '1px solid #89CFF0', borderRadius: '5px', color: '#2a6090', cursor: 'pointer', background: '#fff' }}>
-                                  {photoUploading[place.id] ? '업로드 중...' : '+ 사진 추가'}
-                                  <input
-                                    type="file" multiple accept="image/*" style={{ display: 'none' }}
-                                    disabled={!!photoUploading[place.id]}
-                                    onChange={e => {
-                                      const files = Array.from(e.target.files ?? []);
-                                      if (files.length > 0) handlePhotoUpload(log.id, place.id, files);
-                                      e.target.value = '';
-                                    }}
-                                  />
-                                </label>
+                          {/* 미분류 — 날짜 없거나 범위 밖 */}
+                          {uncategorized.length > 0 && (
+                            <div style={{ marginBottom: '10px' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#9e9e9e', background: '#f5f5f5', borderRadius: '6px', padding: '5px 10px', marginBottom: '6px' }}>
+                                📋 미분류 ({uncategorized.length}곳)
                               </div>
-                              {place.photos.length > 0 && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                  {place.photos.map(photo => (
-                                    <div key={photo.id} style={{ position: 'relative', width: '72px', height: '72px' }}>
-                                      <img
-                                        src={photo.url} alt=""
-                                        style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer' }}
-                                        onClick={() => window.open(photo.url, '_blank')}
-                                      />
-                                      <button
-                                        onClick={() => handlePhotoDelete(log.id, place.id, photo.id)}
-                                        style={{ position: 'absolute', top: '2px', right: '2px', width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '10px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                      >×</button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                              {uncategorized.map((place, localIdx) => renderPlaceItem(log, place, localIdx + 1, false))}
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          )}
 
-                  {/* + 방문지 추가 */}
-                  {addingPlaceLogId === log.id ? (
-                    <div style={{ border: '1px solid #89CFF0', borderRadius: '8px', padding: '10px', marginBottom: '8px', background: '#f0f8fd' }}>
-                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#2a6090', marginBottom: '8px' }}>방문지 추가 (네이버 검색)</div>
-                      <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-                        <input
-                          value={placeQuery} onChange={e => setPlaceQuery(e.target.value)}
-                          placeholder="장소명 검색..."
-                          style={{ flex: 1, padding: '6px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px' }}
-                          onKeyDown={e => { if (e.key === 'Enter') handlePlaceSearch(); }}
-                        />
-                        <button onClick={handlePlaceSearch} disabled={placeSearching} style={{ ...btnBase, padding: '6px 10px', fontSize: '12px', background: '#89CFF0', color: '#1a3a5c' }}>
-                          {placeSearching ? '...' : '검색'}
-                        </button>
-                      </div>
-                      {/* 검색 결과 */}
-                      {placeResults.length > 0 && (
-                        <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '6px', marginBottom: '6px', background: '#fff' }}>
-                          {placeResults.map((item, i) => (
-                            <div
-                              key={i}
-                              onClick={() => setSelectedPlace(item)}
-                              style={{ padding: '8px 10px', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', background: selectedPlace === item ? '#D4EFFC' : 'transparent' }}
-                            >
-                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#344054' }}>{item.title}</div>
-                              <div style={{ fontSize: '10px', color: '#9e9e9e' }}>{item.roadAddress || item.address}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {/* 선택된 장소 — 이름 직접 수정 + × 해제 */}
-                      {selectedPlace && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#D4EFFC', borderRadius: '6px', padding: '5px 8px', marginBottom: '6px' }}>
-                          <span style={{ fontSize: '12px', color: '#2a6090', flexShrink: 0 }}>✓</span>
-                          <input
-                            value={selectedPlace.title}
-                            onChange={e => setSelectedPlace({ ...selectedPlace, title: e.target.value })}
-                            style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '12px', fontWeight: 600, color: '#1a3a5c', outline: 'none', minWidth: 0 }}
-                          />
-                          <button
-                            onClick={() => { setSelectedPlace(null); setPlaceResults([]); setPlaceQuery(''); }}
-                            style={{ background: 'none', border: 'none', fontSize: '15px', color: '#7bafd4', cursor: 'pointer', padding: '0 2px', flexShrink: 0, lineHeight: 1 }}
-                          >×</button>
-                        </div>
-                      )}
-                      <input type="date" value={placeDate} onChange={e => setPlaceDate(e.target.value)} style={{ width: '100%', padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', marginBottom: '5px', boxSizing: 'border-box' }} />
-                      <textarea value={placeNote} onChange={e => setPlaceNote(e.target.value)} rows={2} placeholder="방문 메모 (선택)" style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', resize: 'none', marginBottom: '6px', boxSizing: 'border-box' }} />
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          onClick={() => handleAddPlace(log.id)}
-                          disabled={placeAdding || !selectedPlace}
-                          style={{ ...btnBase, flex: 1, padding: '7px', fontSize: '12px', background: selectedPlace ? '#89CFF0' : '#f1f3f4', color: selectedPlace ? '#1a3a5c' : '#9e9e9e', cursor: selectedPlace ? 'pointer' : 'not-allowed' }}
-                        >
-                          {placeAdding ? '추가 중...' : '추가'}
-                        </button>
-                        <button
-                          onClick={() => { setAddingPlaceLogId(null); setPlaceQuery(''); setPlaceResults([]); setSelectedPlace(null); setPlaceDate(''); setPlaceNote(''); }}
-                          style={{ ...btnBase, padding: '7px 12px', fontSize: '12px', background: '#f1f3f4', color: '#5f6368', fontWeight: 500 }}
-                        >취소</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAddingPlaceLogId(log.id)}
-                      style={{ width: '100%', padding: '7px', fontSize: '12px', background: 'none', border: '1px dashed #dadce0', borderRadius: '6px', color: '#9e9e9e', cursor: 'pointer', marginBottom: '8px' }}
-                    >
-                      + 방문지 추가
-                    </button>
-                  )}
+                          {/* 날짜 지정 없는 방문지 추가 (미분류) */}
+                          {addingPlaceLogId === log.id && addingDayDate === null
+                            ? renderAddPlaceForm(log.id)
+                            : (
+                              <button
+                                onClick={() => { setAddingPlaceLogId(log.id); setAddingDayDate(null); setPlaceDate(''); }}
+                                style={{ width: '100%', padding: '7px', fontSize: '12px', background: 'none', border: '1px dashed #dadce0', borderRadius: '6px', color: '#9e9e9e', cursor: 'pointer', marginBottom: '8px' }}
+                              >+ 방문지 추가 (날짜 미정)</button>
+                            )}
+                        </>
+                      );
+                    }
+
+                    // 기간 미설정 — 기존 플랫 리스트
+                    return (
+                      <>
+                        {log.places.length === 0 && (
+                          <div style={{ fontSize: '12px', color: '#bdbdbd', textAlign: 'center', padding: '8px 0' }}>등록된 방문지가 없습니다.</div>
+                        )}
+                        {log.places.map((place, idx) => renderPlaceItem(log, place, idx + 1, true))}
+
+                        {/* + 방문지 추가 */}
+                        {addingPlaceLogId === log.id && addingDayDate === null
+                          ? renderAddPlaceForm(log.id)
+                          : (
+                            <button
+                              onClick={() => { setAddingPlaceLogId(log.id); setAddingDayDate(null); }}
+                              style={{ width: '100%', padding: '7px', fontSize: '12px', background: 'none', border: '1px dashed #dadce0', borderRadius: '6px', color: '#9e9e9e', cursor: 'pointer', marginBottom: '8px' }}
+                            >+ 방문지 추가</button>
+                          )}
+                      </>
+                    );
+                  })()}
 
                   {/* AI 블로그 초안 섹션 */}
                   {showDraftIds.has(log.id) && (
