@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import api from '../../services/api';
-import { TravelLog, TravelPlace } from '../../types';
+import { TravelLog } from '../../types';
 import {
   getTravelLogs, createTravelLog, updateTravelLog, deleteTravelLog,
   createTravelPlace, updateTravelPlace, deleteTravelPlace, reorderTravelPlaces,
