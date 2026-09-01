@@ -34,8 +34,6 @@ interface Props {
   onMapPlacesChange?: (places: TravelMapPlace[]) => void;
 }
 
-// HTML 태그 제거 (네이버 검색 결과 title에 <b> 태그 포함)
-const stripHtml = (s: string) => s.replace(/<[^>]+>/g, '');
 
 const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange }) => {
   const [logs, setLogs] = useState<TravelLog[]>([]);
