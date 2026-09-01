@@ -1003,20 +1003,20 @@ const MarketReportView: React.FC = () => {
 
                     // 섹션 헤더: 액센트 컬러 왼쪽 바 + 라벨
                     const sectionHeader = (label: string, accent: string) => (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
-                        <div style={{ width: '3px', height: '14px', borderRadius: '2px', background: accent, flexShrink: 0 }} />
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054', letterSpacing: '0.3px' }}>{label}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                        <div style={{ width: '4px', height: '18px', borderRadius: '2px', background: accent, flexShrink: 0 }} />
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', letterSpacing: '0.2px' }}>{label}</span>
                       </div>
                     );
 
                     // 공통 카드 쉘: 흰 배경 + 그림자 + 액센트 왼쪽 테두리
                     const cardStyle = (accent: string): React.CSSProperties => ({
                       background: '#fff',
-                      borderRadius: '10px',
-                      padding: '10px 12px',
-                      border: '1px solid #dde4ed',
-                      borderLeft: `3px solid ${accent}`,
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.07)',
+                      borderRadius: '12px',
+                      padding: '14px 16px',
+                      border: '1px solid #eaeef2',
+                      borderLeft: `4px solid ${accent}`,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                     });
 
                     const tickerCard = (key: string, data: typeof tickers[0]['data']) => {
@@ -1034,8 +1034,8 @@ const MarketReportView: React.FC = () => {
                           onClick={() => setChartTicker({ key, label: data.label, isRate: isRate || isMacroRate })}
                           title="클릭하면 이력 그래프를 볼 수 있어요"
                         >
-                          <div style={{ fontSize: '11px', color: '#7a8fa6', marginBottom: '2px' }}>{data.label}</div>
-                          <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
+                          <div style={{ fontSize: '11px', color: '#8a9bb0', marginBottom: '4px', letterSpacing: '0.2px' }}>{data.label}</div>
+                          <div style={{ fontSize: '21px', fontWeight: 700, color: '#1a3a5c', lineHeight: 1.15, marginBottom: '3px' }}>
                             {(isMacro && !isMacroRate)
                               /* CPI/PPI: YoY%가 핵심 수치 */
                               ? <>{data.changePct != null ? `${data.changePct >= 0 ? '+' : ''}${data.changePct.toFixed(1)}` : '-'}<span style={{ fontSize: '11px', fontWeight: 400 }}>% YoY</span></>
@@ -1043,27 +1043,17 @@ const MarketReportView: React.FC = () => {
                               : <>{data.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}{(isRate || isMacroRate) ? '%' : ''}</>
                             }
                           </div>
-                          <div style={{ fontSize: '12px', fontWeight: 600, color: changeColor(isRate || isMacroRate ? data.change : (isMacro ? data.changePct : data.changePct)) }}>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: changeColor(isRate || isMacroRate ? data.change : (isMacro ? data.changePct : data.changePct)) }}>
                             {(isRate || isMacroRate) ? (
-                              /* 기준금리·실업률: pp 변화 */
                               data.change != null
-                                ? <>{changeSign(data.change)}{data.change.toFixed(2)}<span style={{ fontSize: '10px', fontWeight: 400 }}>pp</span></>
-                                : <span style={{ color: '#9aa0a6' }}>-</span>
+                                ? <>{data.change > 0 ? '▲ ' : data.change < 0 ? '▼ ' : ''}{changeSign(data.change)}{data.change.toFixed(2)}<span style={{ fontSize: '10px', fontWeight: 400 }}>pp</span></>
+                                : <span style={{ color: '#9aa0a6' }}>—</span>
                             ) : isMacro ? (
-                              /* CPI/PPI: 보조로 MoM 지수포인트 변화 */
                               data.change != null
-                                ? <>{changeSign(data.change)}{data.change.toFixed(2)}<span style={{ fontSize: '10px', fontWeight: 400 }}>pt MoM</span></>
-                                : <span style={{ color: '#9aa0a6' }}>-</span>
+                                ? <>{data.change > 0 ? '▲ ' : data.change < 0 ? '▼ ' : ''}{changeSign(data.change)}{data.change.toFixed(2)}<span style={{ fontSize: '10px', fontWeight: 400 }}>pt MoM</span></>
+                                : <span style={{ color: '#9aa0a6' }}>—</span>
                             ) : (
-                              /* 일반 시장 지표: 일간 등락률 */
-                              <>
-                                {changeSign(data.changePct)}{data.changePct?.toFixed(2) ?? '-'}%
-                                {data.change != null && (
-                                  <span style={{ fontWeight: 400, marginLeft: '4px', color: changeColor(data.change) }}>
-                                    ({changeSign(data.change)}{data.change.toLocaleString('ko-KR', { maximumFractionDigits: 4 })})
-                                  </span>
-                                )}
-                              </>
+                              <>{data.changePct != null ? (data.changePct > 0 ? '▲ ' : data.changePct < 0 ? '▼ ' : '') : ''}{changeSign(data.changePct)}{data.changePct?.toFixed(2) ?? '—'}%</>
                             )}
                           </div>
                           {/* CPI/PPI: 보조 줄에 실제 지수값 표시 */}
@@ -1126,16 +1116,11 @@ const MarketReportView: React.FC = () => {
                                       )}
                                     </div>
                                     <div style={{ fontSize: '11px', color: '#7a8fa6', marginBottom: '2px' }}>{vix.label}</div>
-                                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c' }}>
+                                    <div style={{ fontSize: '21px', fontWeight: 700, color: '#1a3a5c', lineHeight: 1.15, marginBottom: '3px' }}>
                                       {vix.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
                                     </div>
-                                    <div style={{ fontSize: '12px', color: changeColor(vix.changePct), fontWeight: 600 }}>
-                                      {changeSign(vix.changePct)}{vix.changePct?.toFixed(2) ?? '-'}%
-                                      {vix.change != null && (
-                                        <span style={{ fontWeight: 400, marginLeft: '4px', color: changeColor(vix.change) }}>
-                                          ({changeSign(vix.change)}{vix.change.toLocaleString('ko-KR', { maximumFractionDigits: 4 })})
-                                        </span>
-                                      )}
+                                    <div style={{ fontSize: '13px', color: changeColor(vix.changePct), fontWeight: 700 }}>
+                                      {vix.changePct != null ? (vix.changePct > 0 ? '▲ ' : vix.changePct < 0 ? '▼ ' : '') : ''}{changeSign(vix.changePct)}{vix.changePct?.toFixed(2) ?? '—'}%
                                     </div>
                                     <div style={{ fontSize: '10px', color: '#b0bec5', marginTop: '2px' }}>{vix.date}</div>
                                   </div>
@@ -1156,8 +1141,8 @@ const MarketReportView: React.FC = () => {
                                 return (
                                   <div style={cardStyle(FEAR_ACCENT)}>
                                     <div style={{ fontSize: '11px', color: '#7a8fa6', marginBottom: '3px' }}>CNN Fear &amp; Greed</div>
-                                    <div style={{ fontSize: '15px', fontWeight: 700, color: info.color }}>{info.emoji} {fg.score.toFixed(1)}</div>
-                                    <div style={{ fontSize: '12px', color: info.color, fontWeight: 600, marginBottom: '5px' }}>{info.ko}</div>
+                                    <div style={{ fontSize: '21px', fontWeight: 700, color: info.color, lineHeight: 1.15, marginBottom: '2px' }}>{info.emoji} {fg.score.toFixed(1)}</div>
+                                    <div style={{ fontSize: '12px', color: info.color, fontWeight: 700, marginBottom: '6px' }}>{info.ko}</div>
                                     {/* 미니 게이지 */}
                                     <div style={{ position: 'relative', height: '5px', borderRadius: '3px',
                                       background: 'linear-gradient(to right, #c62828 0%, #e65100 25%, #f9a825 50%, #7cb342 75%, #1b5e20 100%)',

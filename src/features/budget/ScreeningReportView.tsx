@@ -259,14 +259,15 @@ const ScreeningReportView: React.FC = () => {
 
   // 테이블 헤더 공통 스타일 (정렬 가능 컬럼)
   const thStyle: React.CSSProperties = {
-    padding: '6px 8px', fontSize: '11px', fontWeight: 600,
-    color: '#5f6368', background: '#f0f4f8',
-    borderBottom: '1px solid #e0e4e8', whiteSpace: 'nowrap', textAlign: 'center',
+    padding: '11px 14px', fontSize: '12px', fontWeight: 600,
+    color: '#8a9bb0', background: '#fafbfd',
+    borderBottom: '2px solid #eaeef2', whiteSpace: 'nowrap', textAlign: 'center',
+    letterSpacing: '0.2px',
   };
   const thSortStyle = (key: keyof ScreeningTopPick): React.CSSProperties => ({
     ...thStyle,
     cursor: 'pointer', userSelect: 'none',
-    color: mainSortKey === key ? '#1565c0' : '#5f6368',
+    color: mainSortKey === key ? '#1565c0' : '#8a9bb0',
   });
   // 정렬 아이콘 — 선택된 컬럼은 현재 방향 화살표, 나머지는 회색 ⇅
   const mainSortIcon = (key: keyof ScreeningTopPick) =>
@@ -288,8 +289,9 @@ const ScreeningReportView: React.FC = () => {
     </span>
   );
   const tdStyle: React.CSSProperties = {
-    padding: '6px 8px', fontSize: '12px',
-    borderBottom: '1px solid #f0f4f8', textAlign: 'right',
+    padding: '13px 14px', fontSize: '13px',
+    borderBottom: '1px solid #f0f2f5', textAlign: 'right',
+    verticalAlign: 'middle',
   };
 
   return (
@@ -410,19 +412,20 @@ const ScreeningReportView: React.FC = () => {
 
           {/* ── 우량주 테이블 */}
           {selected.topPicks.length > 0 && (
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '8px' }}>
-                🏆 우량주 TOP {showAll ? selected.topPicks.length : DEFAULT_TOP}
-                {!showAll && selected.topPicks.length > DEFAULT_TOP && (
-                  <span style={{ fontSize: '12px', color: '#9aa0a6', fontWeight: 400, marginLeft: '8px' }}>
-                    (상위 {DEFAULT_TOP}개 표시 중)
-                  </span>
-                )}
-                <span style={{ fontSize: '11px', color: '#9aa0a6', fontWeight: 400, marginLeft: '8px' }}>
-                  — 📊 아이콘 클릭 시 분기 실적 확장
-                </span>
-              </div>
-              <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #e0e4e8' }}>
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #eaeef2', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                {/* 카드 헤더 — QuantNova 스타일 */}
+                <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #eaeef2' }}>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#1a3a5c' }}>
+                    🏆 우량주 TOP {showAll ? selected.topPicks.length : DEFAULT_TOP}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#8a9bb0', marginTop: '4px' }}>
+                    DART 사업보고서 기반 ROE · 영업이익률 · 부채비율 · 매출성장률 · PBR 종합 스코어
+                    {!showAll && selected.topPicks.length > DEFAULT_TOP && <span> &nbsp;· 상위 {DEFAULT_TOP}개 표시 중</span>}
+                    <span> &nbsp;· 📊 클릭 시 분기실적</span>
+                  </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '680px' }}>
                   <thead>
                     <tr>
@@ -460,27 +463,31 @@ const ScreeningReportView: React.FC = () => {
                     {visiblePicks.map((pick, idx) => {
                       const isExpanded = expandedQuarterly.has(pick.stockCode);
                       const hasQuarterly = !!(pick.quarterly?.q1 || pick.quarterly?.h1);
-                      const rowBg = idx % 2 === 0 ? '#fff' : '#fafbfc';
+                      const rankColors = ['#e67e22', '#8a9bb0', '#b87333'];
 
                       return (
                         <React.Fragment key={pick.stockCode}>
-                          <tr style={{ background: rowBg }}>
+                          <tr
+                            style={{ background: '#fff', transition: 'background 0.12s' }}
+                            onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = '#f7fafd'}
+                            onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = '#fff'}
+                          >
                             {/* 순위 */}
-                            <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: idx < 3 ? '#c8882a' : '#5f6368' }}>
+                            <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 800, fontSize: idx < 3 ? '15px' : '13px', color: idx < 3 ? rankColors[idx] : '#c0cad5' }}>
                               {idx + 1}
                             </td>
                             {/* 종목명 */}
-                            <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 600, color: '#1a3a5c' }}>
+                            <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 700, color: '#1a3a5c', fontSize: '14px' }}>
                               {pick.corpName}
-                              <span style={{ fontSize: '11px', color: '#9aa0a6', marginLeft: '4px' }}>({pick.stockCode})</span>
+                              <span style={{ fontSize: '11px', color: '#b0bec5', marginLeft: '5px', fontWeight: 400 }}>({pick.stockCode})</span>
                             </td>
                             {/* 시장 */}
                             <td style={{ ...tdStyle, textAlign: 'center' }}>
                               <span style={{
-                                fontSize: '10px', padding: '2px 6px', borderRadius: '4px',
-                                background: pick.market === 'KOSPI' ? '#e3f2fd' : '#f3e5f5',
-                                color: pick.market === 'KOSPI' ? '#1565c0' : '#6a1b9a',
-                                fontWeight: 600,
+                                fontSize: '11px', padding: '4px 9px', borderRadius: '20px',
+                                background: pick.market === 'KOSPI' ? '#e8f0fe' : '#e6f4ea',
+                                color: pick.market === 'KOSPI' ? '#1565c0' : '#1e7e34',
+                                fontWeight: 700, letterSpacing: '0.3px',
                               }}>
                                 {pick.market}
                               </span>
@@ -512,7 +519,7 @@ const ScreeningReportView: React.FC = () => {
                               {pick.per != null ? pick.per.toFixed(1) : '—'}
                             </td>
                             {/* 스코어 */}
-                            <td style={{ ...tdStyle, fontWeight: 700, color: '#1a3a5c' }}>
+                            <td style={{ ...tdStyle, fontWeight: 800, color: '#e67e22', fontSize: '15px' }}>
                               {pick.score.toFixed(1)}
                             </td>
                             {/* 분기 실적 토글 버튼 */}
@@ -624,6 +631,7 @@ const ScreeningReportView: React.FC = () => {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               {/* 전체 펼치기/접기 버튼 */}
@@ -631,9 +639,9 @@ const ScreeningReportView: React.FC = () => {
                 <button
                   onClick={() => setShowAll(v => !v)}
                   style={{
-                    marginTop: '8px', padding: '6px 16px', fontSize: '12px',
-                    borderRadius: '6px', border: '1px solid #dadce0', background: '#fff',
-                    cursor: 'pointer', color: '#5f6368',
+                    marginTop: '10px', padding: '8px 22px', fontSize: '13px',
+                    borderRadius: '8px', border: '1px solid #eaeef2', background: '#fff',
+                    cursor: 'pointer', color: '#5f6368', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                   }}
                 >
                   {showAll ? '▲ 접기' : `▼ 전체 ${selected.topPicks.length}개 보기`}
