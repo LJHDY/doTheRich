@@ -757,7 +757,7 @@ const App: React.FC = () => {
           </>
         ) : (
           <>
-            {/* 데스크탑 Row 1: 로고 + 검색(고정폭) + spacer + 단지 탐색 버튼들 */}
+            {/* 데스크탑 Row 1: 로고 + 검색(가변) + 버튼들 */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px', height: '48px', gap: '8px' }}>
               {/* 로고 */}
               <div onClick={handleGoHome} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, cursor: 'pointer' }}>
@@ -765,12 +765,10 @@ const App: React.FC = () => {
                 <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap' }}>DoTheRich</span>
               </div>
               <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
-              {/* 검색바 — 고정 280px */}
-              <div style={{ width: '280px', flexShrink: 0 }}>
-                <SearchBar onSelect={handleSearchSelect} />
+              {/* 검색바 — 남은 공간 채우되 최대 480px */}
+              <div style={{ flex: 1, maxWidth: '480px' }}>
+                <SearchBar onSelect={handleSearchSelect} fluid />
               </div>
-              {/* 오른쪽 버튼 그룹을 우측으로 밀기 */}
-              <div style={{ flex: 1 }} />
               <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
               {/* 내 단지 */}
               <button
