@@ -76,6 +76,11 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
   const [placeNote, setPlaceNote] = useState('');
   const [placeAdding, setPlaceAdding] = useState(false);
 
+  // 방문지 이름 인라인 편집
+  const [editingPlaceNameId, setEditingPlaceNameId] = useState<number | null>(null);
+  const [placeNameText, setPlaceNameText] = useState('');
+  const [placeNameSaving, setPlaceNameSaving] = useState(false);
+
   // 방문지 메모 인라인 편집
   const [editingPlaceMemoId, setEditingPlaceMemoId] = useState<number | null>(null);
   const [placeMemoText, setPlaceMemoText] = useState('');
@@ -245,6 +250,19 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
       setLogs(prev => prev.map(l => l.id === logId ? { ...l, places: updated.places } : l));
     } catch { alert('순서 저장 실패'); await load(); }
     setReorderSaving(prev => ({ ...prev, [logId]: false }));
+  };
+
+  const handlePlaceNameSave = async (logId: number, placeId: number) => {
+    if (!placeNameText.trim()) return;
+    setPlaceNameSaving(true);
+    try {
+      const updated = await updateTravelPlace(logId, placeId, { placeName: placeNameText.trim() });
+      setLogs(prev => prev.map(l => l.id === logId ? {
+        ...l, places: l.places.map(p => p.id === placeId ? { ...p, placeName: updated.placeName } : p)
+      } : l));
+      setEditingPlaceNameId(null);
+    } catch { alert('저장 실패'); }
+    setPlaceNameSaving(false);
   };
 
   const handlePlaceMemoSave = async (logId: number, placeId: number) => {
@@ -540,15 +558,32 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
                             >▼</button>
                           </div>
                           {/* 이름 + 날짜 */}
-                          <div
-                            style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
-                            onClick={() => setExpandedPlaceIds(prev => {
-                              const next = new Set(prev);
-                              next.has(place.id) ? next.delete(place.id) : next.add(place.id);
-                              return next;
-                            })}
-                          >
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#344054', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{place.placeName}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {editingPlaceNameId === place.id ? (
+                              <input
+                                autoFocus
+                                value={placeNameText}
+                                onChange={e => setPlaceNameText(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') handlePlaceNameSave(log.id, place.id);
+                                  if (e.key === 'Escape') setEditingPlaceNameId(null);
+                                }}
+                                onBlur={() => handlePlaceNameSave(log.id, place.id)}
+                                disabled={placeNameSaving}
+                                style={{ width: '100%', padding: '3px 6px', fontSize: '13px', fontWeight: 600, border: '1px solid #89CFF0', borderRadius: '5px', color: '#344054', boxSizing: 'border-box' }}
+                              />
+                            ) : (
+                              <div
+                                style={{ fontSize: '13px', fontWeight: 600, color: '#344054', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                                onClick={() => setExpandedPlaceIds(prev => {
+                                  const next = new Set(prev);
+                                  next.has(place.id) ? next.delete(place.id) : next.add(place.id);
+                                  return next;
+                                })}
+                              >
+                                {place.placeName}
+                              </div>
+                            )}
                             {place.visitDate && <div style={{ fontSize: '10px', color: '#9e9e9e' }}>{place.visitDate}</div>}
                           </div>
                           {/* 아이콘 표시 */}
@@ -556,6 +591,13 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
                             {place.memo && <span title="메모 있음">📝</span>}
                             {place.photos.length > 0 && <span title={`사진 ${place.photos.length}장`}>📷{place.photos.length}</span>}
                           </div>
+                          {/* 이름 편집 버튼 */}
+                          {editingPlaceNameId !== place.id && (
+                            <button
+                              onClick={() => { setEditingPlaceNameId(place.id); setPlaceNameText(place.placeName); }}
+                              style={{ background: 'none', border: 'none', fontSize: '12px', color: '#b0b8c1', cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}
+                            >✏️</button>
+                          )}
                           {/* 삭제 */}
                           {deletePlaceConfirmId === place.id ? (
                             <>
