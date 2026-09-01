@@ -2108,6 +2108,28 @@ export const getNearbySchools = async (
 
 // ─── 기업 투자 분석 ───────────────────────────────────────────────────────────
 
+/** DART 연도별 재무 데이터 (한국 기업만, 최근 6년) */
+export interface AnnualFinancial {
+  year: number;
+  revenue: number | null;
+  opIncome: number | null;
+  netIncome: number | null;
+  equity: number | null;
+  debt: number | null;
+  assets: number | null;
+  roe: number | null;
+  roa: number | null;
+  opMargin: number | null;
+  netMargin: number | null;
+  debtRatio: number | null;
+}
+
+/** yfinance 월별 주가 데이터 포인트 */
+export interface PricePoint {
+  date: string;   // 'YYYY-MM-01' 형식
+  close: number;  // 원 단위 종가
+}
+
 export interface CompanyAnalysisResult {
   id?: number;            // DB 저장 후 부여되는 PK (신규 분석 직후엔 없을 수 있음)
   companyName: string;
@@ -2124,6 +2146,8 @@ export interface CompanyAnalysisResult {
   roe: number | null;
   fromCache: boolean;
   content: string;        // Gemini 마크다운 분석
+  annualFinancials: AnnualFinancial[];  // DART 연도별 재무 (한국 기업만)
+  priceHistory: PricePoint[];           // 5년 월별 주가 (한국 기업만)
 }
 
 export const analyzeCompany = async (company: string): Promise<CompanyAnalysisResult> => {
