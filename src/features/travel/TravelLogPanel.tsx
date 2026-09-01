@@ -8,14 +8,14 @@ import {
 } from '../../services/api';
 import { compressImages } from '../../shared/imageUtils';
 
-// 네이버 장소 검색 결과 타입
-interface SearchLocalItem {
+// 통합 장소 검색 결과 타입 (네이버 장소명 + 카카오 주소 검색 합산)
+interface SearchPlaceItem {
+  source: 'naver' | 'kakao_addr';
   title: string;
-  category: string;
   address: string;
   roadAddress: string;
-  mapx: string;
-  mapy: string;
+  lat: number | null;
+  lng: number | null;
 }
 
 // 지도 전달용 방문지 정보
@@ -71,9 +71,9 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
   // 방문지 추가 폼 (어느 여행에 추가 중인지)
   const [addingPlaceLogId, setAddingPlaceLogId] = useState<number | null>(null);
   const [placeQuery, setPlaceQuery] = useState('');
-  const [placeResults, setPlaceResults] = useState<SearchLocalItem[]>([]);
+  const [placeResults, setPlaceResults] = useState<SearchPlaceItem[]>([]);
   const [placeSearching, setPlaceSearching] = useState(false);
-  const [selectedPlace, setSelectedPlace] = useState<SearchLocalItem | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<SearchPlaceItem | null>(null);
   const [placeDate, setPlaceDate] = useState('');
   const [placeNote, setPlaceNote] = useState('');
   const [placeAdding, setPlaceAdding] = useState(false);
@@ -181,13 +181,14 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
     setPlaceResults([]);
     setSelectedPlace(null);
     try {
-      const { data } = await (api as any).get('/api/search/local', { params: { query: placeQuery.trim() } }) as { data: { items: SearchLocalItem[] } };
-      const items: SearchLocalItem[] = data.items ?? [];
+      // 통합 검색 — 네이버(장소명) + 카카오(주소) 병합 결과
+      const { data } = await (api as any).get('/api/search/place', { params: { query: placeQuery.trim() } }) as { data: { items: SearchPlaceItem[] } };
+      const items: SearchPlaceItem[] = data.items ?? [];
       const q = placeQuery.trim().toLowerCase();
-      // 검색어와 정확히 일치하는 장소명을 위로 — 부속시설(다이닝룸·바 등)보다 본체가 먼저 노출
+      // 정확히 일치하거나 검색어로 시작하는 짧은 이름을 상위로
       items.sort((a, b) => {
-        const aName = stripHtml(a.title).toLowerCase();
-        const bName = stripHtml(b.title).toLowerCase();
+        const aName = a.title.toLowerCase();
+        const bName = b.title.toLowerCase();
         const aExact = aName === q ? 0 : aName.startsWith(q) && aName.length - q.length < 6 ? 1 : 2;
         const bExact = bName === q ? 0 : bName.startsWith(q) && bName.length - q.length < 6 ? 1 : 2;
         return aExact - bExact;
@@ -200,12 +201,12 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
   const handleAddPlace = async (logId: number) => {
     if (!selectedPlace) { alert('장소를 검색 후 선택해주세요.'); return; }
     setPlaceAdding(true);
-    const lat = parseInt(selectedPlace.mapy) / 1e7;
-    const lng = parseInt(selectedPlace.mapx) / 1e7;
+    const lat = selectedPlace.lat ?? 0;
+    const lng = selectedPlace.lng ?? 0;
     const log = logs.find(l => l.id === logId)!;
     try {
       const place = await createTravelPlace(logId, {
-        placeName: stripHtml(selectedPlace.title),
+        placeName: selectedPlace.title,
         latitude: lat,
         longitude: lng,
         address: selectedPlace.roadAddress || selectedPlace.address,
@@ -651,8 +652,8 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
                               onClick={() => setSelectedPlace(item)}
                               style={{ padding: '8px 10px', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', background: selectedPlace === item ? '#D4EFFC' : 'transparent' }}
                             >
-                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#344054' }}>{stripHtml(item.title)}</div>
-                              <div style={{ fontSize: '10px', color: '#9e9e9e' }}>{item.category} · {item.roadAddress || item.address}</div>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#344054' }}>{item.title}</div>
+                              <div style={{ fontSize: '10px', color: '#9e9e9e' }}>{item.roadAddress || item.address}</div>
                             </div>
                           ))}
                         </div>
@@ -660,7 +661,7 @@ const TravelLogPanel: React.FC<Props> = ({ onClose, isMobile, onMapPlacesChange 
                       {/* 선택된 장소 표시 */}
                       {selectedPlace && (
                         <div style={{ padding: '5px 8px', background: '#D4EFFC', borderRadius: '5px', marginBottom: '6px', fontSize: '12px', color: '#1a3a5c' }}>
-                          ✓ {stripHtml(selectedPlace.title)}
+                          ✓ {selectedPlace.title}
                         </div>
                       )}
                       <input type="date" value={placeDate} onChange={e => setPlaceDate(e.target.value)} style={{ width: '100%', padding: '5px', fontSize: '12px', border: '1px solid #dadce0', borderRadius: '6px', marginBottom: '5px', boxSizing: 'border-box' }} />
