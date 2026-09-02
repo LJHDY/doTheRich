@@ -2148,6 +2148,8 @@ export interface CompanyAnalysisResult {
   market: string;         // 'KR' | 'US'
   exchange: string | null;
   sector: string | null;
+  industry?: string | null;    // 세부 업종 (예: Banks - Diversified)
+  bizSummary?: string | null;  // 사업 개요 (yfinance longBusinessSummary 축약)
   price: number | null;
   currency: string;       // 'KRW' | 'USD'
   marketCap: number | null;

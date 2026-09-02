@@ -91,8 +91,35 @@ const calcUndervalueScore = (
   return Math.round(totalS / totalW);
 };
 
+// ── 저평가 점수 산정 이유 생성 ─────────────────────────────────────────────────
+const buildScoreReason = (
+  result: CompanyAnalysisResult,
+  latestFin?: AnnualFinancial,
+): string => {
+  const parts: string[] = [];
+  if (result.per != null && result.per > 0) {
+    const tag = result.per <= 10 ? '저평가' : result.per <= 15 ? '양호' : result.per <= 25 ? '보통' : '고평가';
+    parts.push(`PER ${result.per.toFixed(1)}배(${tag})`);
+  }
+  if (result.pbr != null && result.pbr > 0) {
+    const tag = result.pbr <= 1 ? '저평가' : result.pbr <= 2 ? '양호' : result.pbr <= 3 ? '보통' : '고평가';
+    parts.push(`PBR ${result.pbr.toFixed(2)}배(${tag})`);
+  }
+  const roe = latestFin?.roe ?? result.roe;
+  if (roe != null) {
+    const tag = roe >= 15 ? '우수' : roe >= 10 ? '양호' : roe >= 5 ? '보통' : '미흡';
+    parts.push(`ROE ${roe.toFixed(1)}%(${tag})`);
+  }
+  const dr = latestFin?.debtRatio;
+  if (dr != null) {
+    const tag = dr <= 100 ? '안정' : dr <= 200 ? '적정' : '주의';
+    parts.push(`부채비율 ${dr.toFixed(0)}%(${tag})`);
+  }
+  return parts.join(' · ');
+};
+
 // ── 저평가 점수 게이지 ─────────────────────────────────────────────────────────
-const UndervalueGauge: React.FC<{ score: number }> = ({ score }) => {
+const UndervalueGauge: React.FC<{ score: number; reason?: string }> = ({ score, reason }) => {
   const label = score >= 80 ? '매우 저평가' : score >= 60 ? '저평가' : score >= 40 ? '적정가치' : score >= 20 ? '고평가' : '매우 고평가';
   const scoreColor = score >= 80 ? '#1e7e34' : score >= 60 ? '#5cb85c' : score >= 40 ? '#f59e0b' : score >= 20 ? '#e65100' : '#c0392b';
 
@@ -126,6 +153,11 @@ const UndervalueGauge: React.FC<{ score: number }> = ({ score }) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#aaa', marginTop: '4px' }}>
         <span>고평가</span><span>저평가</span>
       </div>
+      {reason && (
+        <div style={{ fontSize: '10px', color: '#8a9ab0', marginTop: '5px', lineHeight: 1.5 }}>
+          {reason}
+        </div>
+      )}
     </div>
   );
 };
@@ -478,8 +510,9 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
   // 최신 연도 재무 데이터 (annualFinancials[0])
   const latestFin = result?.annualFinancials[0];
 
-  // 저평가 점수
+  // 저평가 점수 + 산정 이유
   const uvScore = result ? calcUndervalueScore(result, latestFin) : null;
+  const uvReason = result ? buildScoreReason(result, latestFin) : '';
 
   // 4열 지표 그리드 데이터 구성
   const metricGroups: MetricGroup[] = result ? [
@@ -621,8 +654,18 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
               </span>
               {result.exchange && <span style={{ fontSize: '11px', color: '#666', background: '#f5f5f5', borderRadius: '4px', padding: '1px 6px' }}>{result.exchange}</span>}
               {result.sector && <span style={{ fontSize: '11px', color: '#555', background: '#eef4ff', borderRadius: '4px', padding: '1px 8px' }}>{result.sector}</span>}
+              {result.industry && result.industry !== result.sector && (
+                <span style={{ fontSize: '11px', color: '#4a6fa5', background: '#ddeeff', borderRadius: '4px', padding: '1px 8px' }}>{result.industry}</span>
+              )}
               {result.fromCache && <span style={{ fontSize: '11px', color: '#9aa0a6', background: '#f5f5f5', borderRadius: '4px', padding: '1px 6px' }}>캐시</span>}
             </div>
+
+            {/* 사업 개요 */}
+            {result.bizSummary && (
+              <div style={{ fontSize: '12px', color: '#5a6a7e', lineHeight: 1.6, marginBottom: '12px', padding: '8px 10px', background: '#f8fafc', borderRadius: '6px', borderLeft: '3px solid #89CFF0' }}>
+                {result.bizSummary.length > 160 ? result.bizSummary.slice(0, 160) + '…' : result.bizSummary}
+              </div>
+            )}
 
             {/* 현재가 + 게이지 */}
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '20px', flexWrap: 'wrap' }}>
@@ -636,7 +679,7 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
                   <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>시가총액 {fmtCap(result.marketCap, result.market)}</div>
                 )}
               </div>
-              {uvScore !== null && <UndervalueGauge score={uvScore} />}
+              {uvScore !== null && <UndervalueGauge score={uvScore} reason={uvReason || undefined} />}
             </div>
           </div>
 
