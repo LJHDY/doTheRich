@@ -42,8 +42,6 @@ const pctColor = (v: number | null): string => {
   return v >= 10 ? '#1e7e34' : v >= 5 ? '#2e7d32' : v >= 0 ? '#666' : '#c0392b';
 };
 
-const dateToYear = (d: string): string => d.slice(0, 4);
-
 // ── 3년 CAGR 계산 (annualFinancials는 최신→과거 정렬) ─────────────────────────
 const calcCAGR = (
   financials: AnnualFinancial[],
