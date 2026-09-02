@@ -240,7 +240,9 @@ const FinancialTable: React.FC<{ rows: AnnualFinancial[] }> = ({ rows }) => {
     </div>
   );
 
-  const years = rows.map(r => r.year);
+  // 테이블은 과거→현재 순 표시 (annualFinancials는 최신→과거 정렬 기준)
+  const displayRows = [...rows].reverse();
+  const years = displayRows.map(r => r.year);
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -275,7 +277,7 @@ const FinancialTable: React.FC<{ rows: AnnualFinancial[] }> = ({ rows }) => {
                   <td style={{ padding: '6px 10px', color: '#344054', fontWeight: 500, background: '#fafcff', position: 'sticky', left: 0, zIndex: 1 }}>
                     {label}
                   </td>
-                  {rows.map(r => {
+                  {displayRows.map(r => {
                     const v = r[key] as number | null;
                     return (
                       <td key={r.year} style={{ padding: '6px 10px', textAlign: 'right', color: color ? color(v) : '#344054', fontWeight: 500 }}>
