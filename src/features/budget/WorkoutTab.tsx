@@ -9,7 +9,7 @@ interface Props {
 type SetRow = { weight: string; reps: string };
 
 const MUSCLE_GROUPS = ['등', '가슴', '하체', '이두', '삼두', '어깨'];
-const TODAY = () => new Date().toISOString().slice(0, 10);
+const TODAY = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
 const inp: React.CSSProperties = {
   padding: '7px 10px', fontSize: '13px', border: '1px solid #dadce0',

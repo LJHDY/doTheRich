@@ -34,8 +34,14 @@ import {
 // 달러 현금 USD → KRW 환산 환율 localStorage 키 (MarketReport 자동 업데이트 연동)
 const EXCHANGE_RATE_KEY = 'asset_exchange_rate';
 
-// 오늘 날짜 (ISO YYYY-MM-DD)
-const today = () => new Date().toISOString().slice(0, 10);
+// 오늘 날짜 KST 기준 YYYY-MM-DD — toISOString()은 UTC 변환으로 자정~9시 사이에 하루 밀림
+const today = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 /** 원 단위 금액을 한글로 표기 — 예: 1500000 → "150만", 150000000 → "1억 5000만" */
 const formatAmountKorean = (won: number): string => {

@@ -286,7 +286,7 @@ const actionBtn = (bg: string, disabled: boolean): React.CSSProperties => ({
 });
 
 const RegisterModal: React.FC<Props> = ({ initialData, onClose, onSuccess, isMobile, hidden, onShowMap }) => {
-  const today = new Date().toISOString().split('T')[0];
+  const _td = new Date(); const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
 
   // 드래그 이동 상태 — 초기 위치: 화면 왼쪽 상단 여백
   const [pos, setPos] = useState(() => ({ x: 20, y: 64 }));

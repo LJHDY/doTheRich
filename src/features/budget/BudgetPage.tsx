@@ -53,7 +53,7 @@ interface Props {
 }
 
 // ─── 유틸 ────────────────────────────────────────────────────
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => fmtLocalDate(new Date());
 
 /** 원 단위 금액을 한글로 표기 — 예: 1500000 → "150만원", 150000000 → "1억 5000만원" */
 const formatAmountKorean = (won: number): string => {
@@ -2447,7 +2447,7 @@ const CalendarView: React.FC<{
     else dayMap[e.entryDate].expense += e.amount;
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = fmtLocalDate(new Date());
   const cells: (number | null)[] = [
     ...Array(firstWeekday).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),

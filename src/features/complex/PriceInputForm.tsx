@@ -137,7 +137,7 @@ const PriceInputForm: React.FC<PriceInputFormProps> = ({
   onSubmit,
   onCancel,
 }) => {
-  const today = new Date().toISOString().split('T')[0];
+  const _td = new Date(); const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
 
   const [recordDate, setRecordDate] = useState<string>(today);
   const [memo, setMemo] = useState<string>('');

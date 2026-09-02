@@ -1464,7 +1464,7 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
                 const tomorrowDate = (() => {
                   const d = new Date(reportDate + 'T00:00:00');
                   d.setDate(d.getDate() + 1);
-                  return d.toISOString().split('T')[0];
+                  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 })();
 
                 const todayResults = earningsResults.filter((e: any) => e.date === reportDate);

@@ -776,7 +776,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
       if (item?.id) {
         await updatePriceHistoryItem(complex.id, item.id, payload);
       } else {
-        const today = new Date().toISOString().slice(0, 10);
+        const d = new Date(); const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         await addPriceHistory(complex.id, { recordDate: today, items: [payload] });
       }
       await loadPriceHistories(complex.id);
