@@ -43,17 +43,18 @@ const pctColor = (v: number | null): string => {
   return v >= 10 ? '#1e7e34' : v >= 5 ? '#2e7d32' : v >= 0 ? '#666' : '#c0392b';
 };
 
-// ── 3년 CAGR 계산 (annualFinancials는 최신→과거 정렬) ─────────────────────────
+// ── CAGR 계산 (annualFinancials는 최신→과거 정렬, 데이터 부족 시 가용 연수로 fallback) ─
 const calcCAGR = (
   financials: AnnualFinancial[],
   key: 'revenue' | 'opIncome' | 'netIncome',
   years = 3,
-): number | null => {
-  if (financials.length < years + 1) return null;
+): { cagr: number; actualYears: number } | null => {
+  if (financials.length < 2) return null;
+  const actualYears = Math.min(years, financials.length - 1);
   const endVal = financials[0][key];
-  const startVal = financials[years][key];
+  const startVal = financials[actualYears][key];
   if (!endVal || !startVal || startVal <= 0 || endVal <= 0) return null;
-  return (Math.pow(endVal / startVal, 1 / years) - 1) * 100;
+  return { cagr: (Math.pow(endVal / startVal, 1 / actualYears) - 1) * 100, actualYears };
 };
 
 // ── 저평가 점수 계산 (0~100, 높을수록 저평가) ─────────────────────────────────
@@ -503,17 +504,22 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
       ],
     },
     {
-      title: '성장성 (3Y CAGR)',
+      title: (() => {
+        const fins = result.annualFinancials;
+        const yr = fins.length >= 2 ? Math.min(3, fins.length - 1) : 3;
+        return `성장성 (${yr}Y CAGR)`;
+      })(),
       color: '#e65100',
       items: (() => {
         const fins = result.annualFinancials;
-        const revCagr = calcCAGR(fins, 'revenue');
-        const opCagr = calcCAGR(fins, 'opIncome');
-        const netCagr = calcCAGR(fins, 'netIncome');
+        const revRes = calcCAGR(fins, 'revenue');
+        const opRes = calcCAGR(fins, 'opIncome');
+        const netRes = calcCAGR(fins, 'netIncome');
+        const fmt = (r: { cagr: number } | null) => r != null ? `${r.cagr > 0 ? '+' : ''}${r.cagr.toFixed(1)}%` : '-';
         return [
-          { label: '매출 성장률', value: revCagr != null ? `${revCagr > 0 ? '+' : ''}${revCagr.toFixed(1)}%` : '-', color: revCagr != null ? pctColor(revCagr) : '#666' },
-          { label: '영업이익 성장률', value: opCagr != null ? `${opCagr > 0 ? '+' : ''}${opCagr.toFixed(1)}%` : '-', color: opCagr != null ? pctColor(opCagr) : '#666' },
-          { label: '순이익 성장률', value: netCagr != null ? `${netCagr > 0 ? '+' : ''}${netCagr.toFixed(1)}%` : '-', color: netCagr != null ? pctColor(netCagr) : '#666' },
+          { label: '매출 성장률', value: fmt(revRes), color: revRes != null ? pctColor(revRes.cagr) : '#666' },
+          { label: '영업이익 성장률', value: fmt(opRes), color: opRes != null ? pctColor(opRes.cagr) : '#666' },
+          { label: '순이익 성장률', value: fmt(netRes), color: netRes != null ? pctColor(netRes.cagr) : '#666' },
         ];
       })(),
     },
