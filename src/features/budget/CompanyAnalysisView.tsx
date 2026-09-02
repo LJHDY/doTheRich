@@ -12,6 +12,7 @@ import {
   deleteCompanyAnalysisReport,
   CompanyAnalysisResult,
   AnnualFinancial,
+  InvestorTradingData,
   PricePoint,
 } from '../../services/api';
 
@@ -326,6 +327,53 @@ const ProfitChart: React.FC<{ data: AnnualFinancial[] }> = ({ data }) => {
   );
 };
 
+// ── 투자자별 수급 바 (외국인/기관/개인 60일 순매수) ─────────────────────────────
+const InvestorBar: React.FC<{ label: string; value: number; maxAbs: number }> = ({ label, value, maxAbs }) => {
+  const isPos = value >= 0;
+  const barPct = maxAbs > 0 ? Math.abs(value) / maxAbs * 100 : 0;
+  const barColor = isPos ? '#1565c0' : '#c0392b';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px' }}>
+      <span style={{ width: '40px', color: '#6b8ba4', textAlign: 'right', flexShrink: 0 }}>{label}</span>
+      <div style={{ flex: 1, position: 'relative', height: '14px', background: '#f0f4f8', borderRadius: '4px', overflow: 'hidden' }}>
+        {/* 가운데 기준선 */}
+        <div style={{ position: 'absolute', left: '50%', top: 0, width: '1px', height: '100%', background: '#ccc', zIndex: 1 }} />
+        {/* 순매수/순매도 바 */}
+        <div style={{
+          position: 'absolute',
+          top: '2px', bottom: '2px',
+          borderRadius: '3px',
+          background: barColor,
+          ...(isPos
+            ? { left: '50%', width: `${barPct / 2}%` }
+            : { right: '50%', width: `${barPct / 2}%` }
+          ),
+        }} />
+      </div>
+      <span style={{ width: '62px', textAlign: 'right', fontWeight: 700, color: barColor, flexShrink: 0 }}>
+        {isPos ? '+' : ''}{value.toFixed(1)}억
+      </span>
+    </div>
+  );
+};
+
+const InvestorTradingSection: React.FC<{ data: InvestorTradingData }> = ({ data }) => {
+  const maxAbs = Math.max(Math.abs(data.foreigners), Math.abs(data.institutions), Math.abs(data.individuals), 1);
+  return (
+    <div style={{ background: '#fff', borderRadius: '10px', padding: '14px 16px', border: '1px solid #e0e4e8' }}>
+      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px' }}>
+        👥 투자자별 수급 <span style={{ fontWeight: 400, fontSize: '11px', color: '#9aa0a6', marginLeft: '6px' }}>최근 60일 순매수 (Toss API)</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+        <InvestorBar label="외국인" value={data.foreigners} maxAbs={maxAbs} />
+        <InvestorBar label="기관" value={data.institutions} maxAbs={maxAbs} />
+        <InvestorBar label="개인" value={data.individuals} maxAbs={maxAbs} />
+      </div>
+    </div>
+  );
+};
+
 // ── 마크다운 렌더러 ─────────────────────────────────────────────────────────────
 const renderContent = (text: string) => {
   return text.split('\n').map((line, i) => {
@@ -588,6 +636,11 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
 
           {/* ② 4열 지표 그리드 */}
           <MetricGrid groups={metricGroups} />
+
+          {/* ②-b 투자자별 수급 (Toss API, KR only) */}
+          {result.investorTrading && (
+            <InvestorTradingSection data={result.investorTrading} />
+          )}
 
           {/* ③ 차트 2분할 */}
           {(result.annualFinancials.length > 0 || result.priceHistory.length > 0) && (

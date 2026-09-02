@@ -2127,10 +2127,18 @@ export interface AnnualFinancial {
   debtRatio: number | null;
 }
 
-/** yfinance 월별 주가 데이터 포인트 */
+/** Toss / yfinance 일별 주가 데이터 포인트 */
 export interface PricePoint {
-  date: string;   // 'YYYY-MM-01' 형식
+  date: string;   // 'YYYY-MM-DD' 형식
   close: number;  // 원 단위 종가
+}
+
+/** Toss API 투자자별 60일 순매수 (억원 단위, KR 기업만) */
+export interface InvestorTradingData {
+  foreigners: number;    // 외국인 순매수 (양수=순매수, 음수=순매도)
+  institutions: number;  // 기관 순매수
+  individuals: number;   // 개인 순매수
+  period: string;        // '60d'
 }
 
 export interface CompanyAnalysisResult {
@@ -2149,8 +2157,9 @@ export interface CompanyAnalysisResult {
   roe: number | null;
   fromCache: boolean;
   content: string;        // Gemini 마크다운 분석
-  annualFinancials: AnnualFinancial[];  // DART 연도별 재무 (한국 기업만)
-  priceHistory: PricePoint[];           // 5년 월별 주가 (한국 기업만)
+  annualFinancials: AnnualFinancial[];          // DART 연도별 재무 (한국 기업만)
+  priceHistory: PricePoint[];                   // 5년 일별 주가 (한국 기업만)
+  investorTrading?: InvestorTradingData | null; // Toss 60일 수급 (한국 기업만, 선택)
 }
 
 export const analyzeCompany = async (company: string): Promise<CompanyAnalysisResult> => {
