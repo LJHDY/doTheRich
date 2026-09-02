@@ -1,5 +1,5 @@
 // ─── 기업 투자 분석 뷰 ────────────────────────────────────────────────────────
-// 기업명 또는 종목코드 입력 → Gemini + yfinance/DART 기반 투자 분석 대시보드
+// 기업명/종목코드 입력 → DART 6년 재무 + yfinance 5년 주가 + Gemini 투자 분석
 // AIReportView의 'company' 서브탭에서 렌더링
 import React, { useEffect, useState } from 'react';
 import {
@@ -17,7 +17,6 @@ import {
 
 // ── 포맷 유틸 ──────────────────────────────────────────────────────────────────
 
-/** 금액(원) → "X조" / "X억" / "X만" 형식 */
 const fmtAmount = (v: number | null): string => {
   if (v === null || v === undefined) return '-';
   const abs = Math.abs(v);
@@ -28,136 +27,233 @@ const fmtAmount = (v: number | null): string => {
   return `${sign}${abs.toLocaleString()}`;
 };
 
-/** 숫자 → "X.X%" (null이면 '-') */
 const fmtPct = (v: number | null): string => (v === null || v === undefined) ? '-' : `${v.toFixed(1)}%`;
 
-/** 수치 색상: positive(초록) / negative(빨강) / null(회색). inverse=true 이면 반전(부채비율 등) */
+const fmtWon = (v: number | null): string => (v === null || v === undefined) ? '-' : `₩${Math.round(v).toLocaleString()}`;
+
 const numColor = (v: number | null, inverse = false): string => {
   if (v === null || v === undefined) return '#666';
-  const positive = inverse ? v < 30 : v > 0;
-  return positive ? '#1e7e34' : '#c0392b';
+  const good = inverse ? v < 200 : v > 0;
+  return good ? '#1e7e34' : '#c0392b';
 };
 
-/** 억 단위 Y축 포맷 (Recharts용) */
-
-/** 주가 Y축 포맷 */
-const yAxisPrice = (v: number) => {
-  if (v >= 100_000_000) return `${(v / 100_000_000).toFixed(0)}억`;
-  if (v >= 10_000) return `${Math.round(v / 10_000)}만`;
-  return v.toLocaleString();
+const pctColor = (v: number | null): string => {
+  if (v === null || v === undefined) return '#666';
+  return v >= 10 ? '#1e7e34' : v >= 5 ? '#2e7d32' : v >= 0 ? '#666' : '#c0392b';
 };
 
-/** 날짜 문자열 'YYYY-MM-01' → '20YY' 연도만 추출 */
 const dateToYear = (d: string): string => d.slice(0, 4);
 
-// ── 마크다운 렌더러 ─────────────────────────────────────────────────────────────
-
-const renderContent = (text: string) => {
-  const lines = text.split('\n');
-  return lines.map((line, i) => {
-    if (line.startsWith('## ')) {
-      return (
-        <h2 key={i} style={{ fontSize: '16px', fontWeight: 700, color: '#1a3a5c', margin: '20px 0 8px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>
-          {line.slice(3)}
-        </h2>
-      );
-    }
-    if (line.startsWith('### ')) {
-      return (
-        <h3 key={i} style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: '14px 0 6px' }}>
-          {line.slice(4)}
-        </h3>
-      );
-    }
-    if (line.startsWith('**') && line.endsWith('**') && line.length > 4) {
-      return (
-        <p key={i} style={{ fontWeight: 700, color: '#1a3a5c', margin: '8px 0 4px', fontSize: '13px' }}>
-          {line.slice(2, -2)}
-        </p>
-      );
-    }
-    if (line.startsWith('- ') || line.startsWith('* ')) {
-      const parts = line.slice(2).split(/(\*\*[^*]+\*\*)/g);
-      return (
-        <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
-          <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
-          <span>
-            {parts.map((p, j) =>
-              p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : p
-            )}
-          </span>
-        </div>
-      );
-    }
-    if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
-    const parts = line.split(/(\*\*[^*]+\*\*)/g);
-    return (
-      <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.6' }}>
-        {parts.map((p, j) =>
-          p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : p
-        )}
-      </p>
-    );
-  });
+// ── 3년 CAGR 계산 (annualFinancials는 최신→과거 정렬) ─────────────────────────
+const calcCAGR = (
+  financials: AnnualFinancial[],
+  key: 'revenue' | 'opIncome' | 'netIncome',
+  years = 3,
+): number | null => {
+  if (financials.length < years + 1) return null;
+  const endVal = financials[0][key];
+  const startVal = financials[years][key];
+  if (!endVal || !startVal || startVal <= 0 || endVal <= 0) return null;
+  return (Math.pow(endVal / startVal, 1 / years) - 1) * 100;
 };
 
-// ── 재무 테이블 ────────────────────────────────────────────────────────────────
+// ── 저평가 점수 계산 (0~100, 높을수록 저평가) ─────────────────────────────────
+const calcUndervalueScore = (
+  result: CompanyAnalysisResult,
+  latestFin?: AnnualFinancial,
+): number => {
+  const comps: { score: number; w: number }[] = [];
 
-interface FinancialTableProps {
-  rows: AnnualFinancial[];
-}
-
-const FinancialTable: React.FC<FinancialTableProps> = ({ rows }) => {
-  if (rows.length === 0) {
-    return (
-      <div style={{ padding: '24px', textAlign: 'center', color: '#9aa0a6', fontSize: '13px' }}>
-        재무 데이터 없음
-      </div>
-    );
+  if (result.per != null && result.per > 0) {
+    const s = result.per <= 5 ? 100 : result.per <= 10 ? 85 : result.per <= 15 ? 65
+            : result.per <= 20 ? 45 : result.per <= 30 ? 25 : 5;
+    comps.push({ score: s, w: 35 });
+  }
+  if (result.pbr != null && result.pbr > 0) {
+    const s = result.pbr <= 0.5 ? 100 : result.pbr <= 1 ? 85 : result.pbr <= 2 ? 65
+            : result.pbr <= 3 ? 45 : result.pbr <= 5 ? 25 : 5;
+    comps.push({ score: s, w: 25 });
+  }
+  const roe = latestFin?.roe ?? result.roe;
+  if (roe != null) {
+    const s = roe >= 20 ? 100 : roe >= 15 ? 85 : roe >= 10 ? 65 : roe >= 5 ? 45 : roe >= 0 ? 25 : 5;
+    comps.push({ score: s, w: 25 });
+  }
+  const dr = latestFin?.debtRatio;
+  if (dr != null) {
+    const s = dr <= 50 ? 100 : dr <= 100 ? 85 : dr <= 150 ? 65 : dr <= 200 ? 45 : dr <= 300 ? 25 : 5;
+    comps.push({ score: s, w: 15 });
   }
 
-  // 연도별 컬럼 (최신순 정렬은 백엔드에서 이미 처리됨)
-  const years = rows.map(r => r.year);
+  if (comps.length === 0) return 50;
+  const totalW = comps.reduce((s, c) => s + c.w, 0);
+  const totalS = comps.reduce((s, c) => s + c.score * c.w, 0);
+  return Math.round(totalS / totalW);
+};
 
-  const tableRows: { label: string; key: keyof AnnualFinancial; fmt: (v: number | null) => string; color?: (v: number | null) => string }[] = [
-    { label: '매출', key: 'revenue', fmt: fmtAmount },
-    { label: '영업이익', key: 'opIncome', fmt: fmtAmount, color: v => numColor(v) },
-    { label: '순이익', key: 'netIncome', fmt: fmtAmount, color: v => numColor(v) },
-    { label: 'ROE', key: 'roe', fmt: fmtPct, color: v => numColor(v) },
-    { label: '영업이익률', key: 'opMargin', fmt: fmtPct, color: v => numColor(v) },
-    { label: '부채비율', key: 'debtRatio', fmt: fmtPct, color: v => numColor(v, true) },
-  ];
+// ── 저평가 점수 게이지 ─────────────────────────────────────────────────────────
+const UndervalueGauge: React.FC<{ score: number }> = ({ score }) => {
+  const label = score >= 80 ? '매우 저평가' : score >= 60 ? '저평가' : score >= 40 ? '적정가치' : score >= 20 ? '고평가' : '매우 고평가';
+  const scoreColor = score >= 80 ? '#1e7e34' : score >= 60 ? '#5cb85c' : score >= 40 ? '#f59e0b' : score >= 20 ? '#e65100' : '#c0392b';
+
+  return (
+    <div style={{ minWidth: '220px' }}>
+      <div style={{ fontSize: '11px', color: '#6b8ba4', marginBottom: '6px', fontWeight: 600 }}>저평가 점수</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ flex: 1, position: 'relative', height: '10px' }}>
+          <div style={{
+            height: '10px', borderRadius: '5px',
+            background: 'linear-gradient(to right, #c0392b, #e65100, #f59e0b, #5cb85c, #1e7e34)',
+          }} />
+          {/* 위치 마커 */}
+          <div style={{
+            position: 'absolute', top: '-3px',
+            left: `calc(${score}% - 8px)`,
+            width: '16px', height: '16px',
+            borderRadius: '50%', background: scoreColor,
+            border: '2px solid #fff',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+          }} />
+        </div>
+        <div style={{
+          background: scoreColor, color: '#fff', borderRadius: '8px',
+          padding: '4px 10px', textAlign: 'center', minWidth: '72px',
+        }}>
+          <div style={{ fontSize: '18px', fontWeight: 900, lineHeight: 1 }}>{score}</div>
+          <div style={{ fontSize: '9px', marginTop: '2px', whiteSpace: 'nowrap' }}>{label}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#aaa', marginTop: '4px' }}>
+        <span>고평가</span><span>저평가</span>
+      </div>
+    </div>
+  );
+};
+
+// ── 4열 지표 그리드 ────────────────────────────────────────────────────────────
+interface MetricItem { label: string; value: string; sub?: string; color?: string }
+interface MetricGroup { title: string; color: string; items: MetricItem[] }
+
+const MetricGrid: React.FC<{ groups: MetricGroup[] }> = ({ groups }) => (
+  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+    {groups.map(g => (
+      <div key={g.title} style={{ background: '#fff', borderRadius: '10px', border: `1px solid ${g.color}30`, overflow: 'hidden' }}>
+        <div style={{ background: `${g.color}18`, padding: '7px 12px', fontSize: '11px', fontWeight: 700, color: g.color, borderBottom: `1px solid ${g.color}20` }}>
+          {g.title}
+        </div>
+        <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {g.items.map(item => (
+            <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: '#6b8ba4' }}>{item.label}</span>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: item.color || '#1a3a5c' }}>{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// ── 재무제표 테이블 (12행) ─────────────────────────────────────────────────────
+
+interface TableSection {
+  sectionLabel: string;
+  rows: {
+    label: string;
+    key: keyof AnnualFinancial;
+    fmt: (v: number | null) => string;
+    color?: (v: number | null) => string;
+  }[];
+}
+
+const TABLE_SECTIONS: TableSection[] = [
+  {
+    sectionLabel: '재무성과',
+    rows: [
+      { label: '매출', key: 'revenue', fmt: fmtAmount },
+      { label: '영업이익', key: 'opIncome', fmt: fmtAmount, color: v => numColor(v) },
+      { label: '순이익', key: 'netIncome', fmt: fmtAmount, color: v => numColor(v) },
+      { label: '자기자본', key: 'equity', fmt: fmtAmount },
+    ],
+  },
+  {
+    sectionLabel: '수익성',
+    rows: [
+      { label: 'ROE', key: 'roe', fmt: fmtPct, color: v => pctColor(v) },
+      { label: 'ROA', key: 'roa', fmt: fmtPct, color: v => pctColor(v) },
+      { label: '영업이익률', key: 'opMargin', fmt: fmtPct, color: v => pctColor(v) },
+      { label: '순이익률', key: 'netMargin', fmt: fmtPct, color: v => pctColor(v) },
+    ],
+  },
+  {
+    sectionLabel: '주당지표',
+    rows: [
+      { label: 'EPS', key: 'eps', fmt: fmtWon },
+      { label: 'BPS', key: 'bps', fmt: fmtWon },
+    ],
+  },
+  {
+    sectionLabel: '안정성',
+    rows: [
+      { label: '부채비율', key: 'debtRatio', fmt: fmtPct, color: v => v !== null ? (v <= 100 ? '#1e7e34' : v <= 200 ? '#e65100' : '#c0392b') : '#666' },
+      { label: '유동비율', key: 'currentRatio', fmt: fmtPct, color: v => v !== null ? (v >= 150 ? '#1e7e34' : v >= 100 ? '#e65100' : '#c0392b') : '#666' },
+    ],
+  },
+];
+
+const FinancialTable: React.FC<{ rows: AnnualFinancial[] }> = ({ rows }) => {
+  if (rows.length === 0) return (
+    <div style={{ padding: '24px', textAlign: 'center', color: '#9aa0a6', fontSize: '13px' }}>
+      재무 데이터 없음
+    </div>
+  );
+
+  const years = rows.map(r => r.year);
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
         <thead>
           <tr style={{ background: '#f0f8fd' }}>
-            <th style={{ padding: '8px 10px', textAlign: 'left', color: '#1a3a5c', fontWeight: 700, borderBottom: '1px solid #d0e8f5', minWidth: '80px' }}>
+            <th style={{ padding: '7px 10px', textAlign: 'left', color: '#1a3a5c', fontWeight: 700, borderBottom: '2px solid #d0e8f5', minWidth: '80px', position: 'sticky', left: 0, background: '#f0f8fd', zIndex: 1 }}>
               항목
             </th>
             {years.map(y => (
-              <th key={y} style={{ padding: '8px 10px', textAlign: 'right', color: '#1a3a5c', fontWeight: 700, borderBottom: '1px solid #d0e8f5', minWidth: '70px' }}>
+              <th key={y} style={{ padding: '7px 10px', textAlign: 'right', color: '#1a3a5c', fontWeight: 700, borderBottom: '2px solid #d0e8f5', minWidth: '65px' }}>
                 {y}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {tableRows.map(({ label, key, fmt, color }) => (
-            <tr key={label} style={{ borderBottom: '1px solid #f0f0f0' }}>
-              <td style={{ padding: '7px 10px', color: '#344054', fontWeight: 600, background: '#fafcff' }}>
-                {label}
-              </td>
-              {rows.map(r => {
-                const v = r[key] as number | null;
-                return (
-                  <td key={r.year} style={{ padding: '7px 10px', textAlign: 'right', color: color ? color(v) : '#344054', fontWeight: 500 }}>
-                    {fmt(v)}
+          {TABLE_SECTIONS.map(sec => (
+            <React.Fragment key={sec.sectionLabel}>
+              {/* 섹션 헤더 행 */}
+              <tr>
+                <td
+                  colSpan={years.length + 1}
+                  style={{ padding: '5px 10px', background: '#eef4ff', fontSize: '11px', fontWeight: 700, color: '#4a6fa5', borderTop: '1px solid #d0e8f5' }}
+                >
+                  {sec.sectionLabel}
+                </td>
+              </tr>
+              {/* 데이터 행 */}
+              {sec.rows.map(({ label, key, fmt, color }) => (
+                <tr key={label} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                  <td style={{ padding: '6px 10px', color: '#344054', fontWeight: 500, background: '#fafcff', position: 'sticky', left: 0, zIndex: 1 }}>
+                    {label}
                   </td>
-                );
-              })}
-            </tr>
+                  {rows.map(r => {
+                    const v = r[key] as number | null;
+                    return (
+                      <td key={r.year} style={{ padding: '6px 10px', textAlign: 'right', color: color ? color(v) : '#344054', fontWeight: 500 }}>
+                        {fmt(v)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </React.Fragment>
           ))}
         </tbody>
       </table>
@@ -165,32 +261,24 @@ const FinancialTable: React.FC<FinancialTableProps> = ({ rows }) => {
   );
 };
 
-// ── 주가 차트 ──────────────────────────────────────────────────────────────────
+// ── 5년 주가 차트 (일별) ────────────────────────────────────────────────────────
+const PriceChart: React.FC<{ data: PricePoint[] }> = ({ data }) => {
+  if (data.length === 0) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#9aa0a6', fontSize: '13px' }}>
+      주가 데이터 없음
+    </div>
+  );
 
-interface PriceChartProps {
-  data: PricePoint[];
-}
-
-const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
-  if (data.length === 0) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#9aa0a6', fontSize: '13px' }}>
-        주가 데이터 없음
-      </div>
-    );
+  // 연도별 첫 거래일만 X축 틱으로 표시
+  const yearTicks: string[] = [];
+  const seenYears = new Set<string>();
+  for (const p of data) {
+    const y = p.date.slice(0, 4);
+    if (!seenYears.has(y)) { seenYears.add(y); yearTicks.push(p.date); }
   }
 
-  // x축은 연도만 표시 (중복 제거: 같은 연도 첫 포인트만)
-  const displayedYears = new Set<string>();
-  const tickFormatter = (d: string) => {
-    const y = dateToYear(d);
-    if (displayedYears.has(y)) return '';
-    displayedYears.add(y);
-    return y;
-  };
-
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={210}>
       <AreaChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
         <defs>
           <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
@@ -199,48 +287,39 @@ const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-        <XAxis dataKey="date" tickFormatter={tickFormatter} tick={{ fontSize: 11, fill: '#666' }} />
-        <YAxis tickFormatter={yAxisPrice} tick={{ fontSize: 11, fill: '#666' }} width={60} />
+        <XAxis dataKey="date" ticks={yearTicks} tickFormatter={d => d.slice(0, 4)} tick={{ fontSize: 11, fill: '#666' }} />
+        <YAxis tickFormatter={v => v >= 100_000 ? `${Math.round(v / 10_000)}만` : v.toLocaleString()} tick={{ fontSize: 11, fill: '#666' }} width={55} />
         <Tooltip
           formatter={(v: number) => [`₩${v.toLocaleString()}`, '종가']}
-          labelFormatter={(l: string) => l.slice(0, 7)}
+          labelFormatter={(l: string) => l}
           contentStyle={{ fontSize: '12px', borderRadius: '6px', border: '1px solid #e0e4e8' }}
         />
-        <Area type="monotone" dataKey="close" stroke="#4BAAD4" strokeWidth={2} fill="url(#priceGradient)" dot={false} />
+        <Area type="monotone" dataKey="close" stroke="#4BAAD4" strokeWidth={1.5} fill="url(#priceGradient)" dot={false} />
       </AreaChart>
     </ResponsiveContainer>
   );
 };
 
 // ── 수익성 추이 차트 ───────────────────────────────────────────────────────────
-
-interface ProfitChartProps {
-  data: AnnualFinancial[];
-}
-
-const ProfitChart: React.FC<ProfitChartProps> = ({ data }) => {
-  // 최신 → 과거 정렬이므로 차트 표시는 오래된 것부터
-  const sorted = [...data].reverse();
-
-  if (sorted.length === 0) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#9aa0a6', fontSize: '13px' }}>
-        수익성 데이터 없음
-      </div>
-    );
-  }
+const ProfitChart: React.FC<{ data: AnnualFinancial[] }> = ({ data }) => {
+  const sorted = [...data].reverse(); // 과거→최신 순 정렬
+  if (sorted.length === 0) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#9aa0a6', fontSize: '13px' }}>
+      수익성 데이터 없음
+    </div>
+  );
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={sorted} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+    <ResponsiveContainer width="100%" height={210}>
+      <LineChart data={sorted} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#666' }} />
-        <YAxis unit="%" tick={{ fontSize: 11, fill: '#666' }} width={42} />
+        <YAxis unit="%" tick={{ fontSize: 11, fill: '#666' }} width={40} />
         <Tooltip
           formatter={(v: number, name: string) => [`${v?.toFixed(1)}%`, name]}
           contentStyle={{ fontSize: '12px', borderRadius: '6px', border: '1px solid #e0e4e8' }}
         />
-        <Legend iconSize={10} wrapperStyle={{ fontSize: '12px' }} />
+        <Legend iconSize={10} wrapperStyle={{ fontSize: '11px' }} />
         <Line type="monotone" dataKey="roe" name="ROE" stroke="#1565c0" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         <Line type="monotone" dataKey="opMargin" name="영업이익률" stroke="#2e7d32" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         <Line type="monotone" dataKey="netMargin" name="순이익률" stroke="#e65100" strokeWidth={2} dot={{ r: 3 }} connectNulls />
@@ -249,11 +328,43 @@ const ProfitChart: React.FC<ProfitChartProps> = ({ data }) => {
   );
 };
 
+// ── 마크다운 렌더러 ─────────────────────────────────────────────────────────────
+const renderContent = (text: string) => {
+  return text.split('\n').map((line, i) => {
+    if (line.startsWith('## ')) return (
+      <h2 key={i} style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', margin: '18px 0 7px', borderBottom: '2px solid #e0f0ff', paddingBottom: '4px' }}>
+        {line.slice(3)}
+      </h2>
+    );
+    if (line.startsWith('### ')) return (
+      <h3 key={i} style={{ fontSize: '13px', fontWeight: 700, color: '#344054', margin: '12px 0 5px' }}>
+        {line.slice(4)}
+      </h3>
+    );
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      const parts = line.slice(2).split(/(\*\*[^*]+\*\*)/g);
+      return (
+        <div key={i} style={{ display: 'flex', gap: '6px', margin: '3px 0', fontSize: '13px', color: '#344054' }}>
+          <span style={{ color: '#89CFF0', flexShrink: 0 }}>•</span>
+          <span>{parts.map((p, j) => p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : p)}</span>
+        </div>
+      );
+    }
+    if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />;
+    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+    return (
+      <p key={i} style={{ fontSize: '13px', color: '#444', margin: '3px 0', lineHeight: '1.6' }}>
+        {parts.map((p, j) => p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : p)}
+      </p>
+    );
+  });
+};
+
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
 
 interface CompanyAnalysisViewProps {
-  initialQuery?: string;        // 스크리닝/시장 리포트에서 클릭 시 주입
-  onQueryConsumed?: () => void; // 쿼리 소비 완료 콜백 (부모 상태 초기화용)
+  initialQuery?: string;
+  onQueryConsumed?: () => void;
 }
 
 const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery, onQueryConsumed }) => {
@@ -261,24 +372,40 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CompanyAnalysisResult | null>(null);
   const [error, setError] = useState('');
-  // DB에서 불러온 이전 분석 이력
   const [savedReports, setSavedReports] = useState<CompanyAnalysisResult[]>([]);
 
-  // 마운트 시 저장된 분석 목록 로드
   useEffect(() => {
     getCompanyAnalysisReports().then(setSavedReports).catch(() => {});
   }, []);
 
-  // 외부(스크리닝·시장 리포트)에서 종목 클릭 시 자동 분석
   useEffect(() => {
     if (!initialQuery) return;
     setQuery(initialQuery);
     onQueryConsumed?.();
-    // 약간의 지연 후 실행 (렌더링 완료 보장)
     const timer = setTimeout(() => { handleAnalyzeWith(initialQuery); }, 50);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
+
+  const runAnalysis = async (q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    setLoading(true);
+    setError('');
+    setResult(null);
+    try {
+      const res = await analyzeCompany(trimmed);
+      setResult(res);
+      setSavedReports(prev => [res, ...prev.filter(r => r.companyName !== res.companyName)]);
+    } catch (e: unknown) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '분석 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAnalyzeWith = (q: string) => runAnalysis(q);
+  const handleAnalyze = () => runAnalysis(query);
 
   const handleDeleteReport = async (r: CompanyAnalysisResult, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -288,55 +415,9 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
     if (result?.id === r.id) setResult(null);
   };
 
-  const handleAnalyzeWith = async (q: string) => {
-    const trimmed = q.trim();
-    if (!trimmed) return;
-    setLoading(true);
-    setError('');
-    setResult(null);
-    try {
-      const res = await analyzeCompany(trimmed);
-      setResult(res);
-      setSavedReports(prev => {
-        const filtered = prev.filter(r => r.companyName !== res.companyName);
-        return [res, ...filtered];
-      });
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        || '분석 중 오류가 발생했습니다.';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAnalyze = async () => {
-    const trimmed = query.trim();
-    if (!trimmed) return;
-    setLoading(true);
-    setError('');
-    setResult(null);
-    try {
-      const res = await analyzeCompany(trimmed);
-      setResult(res);
-      // 저장 목록 갱신 (upsert 결과 반영)
-      setSavedReports(prev => {
-        const filtered = prev.filter(r => r.companyName !== res.companyName);
-        return [res, ...filtered];
-      });
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        || '분석 중 오류가 발생했습니다.';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fmtNum = (v: number | null, digits = 1) =>
     v == null ? '-' : v.toLocaleString('ko-KR', { maximumFractionDigits: digits });
 
-  // market='KR'이면 원화 표시, 아니면 달러 표시
   const fmtCap = (cap: number | null, market: string) => {
     if (cap == null) return '-';
     if (market === 'KR') {
@@ -347,19 +428,78 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
     return b >= 1 ? `$${b.toFixed(1)}B` : `$${(cap / 1e6).toFixed(0)}M`;
   };
 
+  // 최신 연도 재무 데이터 (annualFinancials[0])
+  const latestFin = result?.annualFinancials[0];
+
+  // 저평가 점수
+  const uvScore = result ? calcUndervalueScore(result, latestFin) : null;
+
+  // 4열 지표 그리드 데이터 구성
+  const metricGroups: MetricGroup[] = result ? [
+    {
+      title: '밸류에이션',
+      color: '#1565c0',
+      items: [
+        { label: 'PER', value: result.per != null ? `${fmtNum(result.per)}배` : '-' },
+        { label: 'PBR', value: result.pbr != null ? `${fmtNum(result.pbr)}배` : '-' },
+        { label: 'EPS', value: result.eps != null ? `₩${Math.round(result.eps).toLocaleString()}` : '-' },
+        { label: '시가총액', value: fmtCap(result.marketCap, result.market) },
+      ],
+    },
+    {
+      title: '수익성',
+      color: '#2e7d32',
+      items: [
+        { label: 'ROE', value: fmtPct(latestFin?.roe ?? result.roe), color: pctColor(latestFin?.roe ?? result.roe) },
+        { label: '영업이익률', value: fmtPct(latestFin?.opMargin ?? null), color: pctColor(latestFin?.opMargin ?? null) },
+        { label: '순이익률', value: fmtPct(latestFin?.netMargin ?? null), color: pctColor(latestFin?.netMargin ?? null) },
+        { label: 'ROA', value: fmtPct(latestFin?.roa ?? null), color: pctColor(latestFin?.roa ?? null) },
+      ],
+    },
+    {
+      title: '성장성 (3Y CAGR)',
+      color: '#e65100',
+      items: (() => {
+        const fins = result.annualFinancials;
+        const revCagr = calcCAGR(fins, 'revenue');
+        const opCagr = calcCAGR(fins, 'opIncome');
+        const netCagr = calcCAGR(fins, 'netIncome');
+        return [
+          { label: '매출 성장률', value: revCagr != null ? `${revCagr > 0 ? '+' : ''}${revCagr.toFixed(1)}%` : '-', color: revCagr != null ? pctColor(revCagr) : '#666' },
+          { label: '영업이익 성장률', value: opCagr != null ? `${opCagr > 0 ? '+' : ''}${opCagr.toFixed(1)}%` : '-', color: opCagr != null ? pctColor(opCagr) : '#666' },
+          { label: '순이익 성장률', value: netCagr != null ? `${netCagr > 0 ? '+' : ''}${netCagr.toFixed(1)}%` : '-', color: netCagr != null ? pctColor(netCagr) : '#666' },
+        ];
+      })(),
+    },
+    {
+      title: '안정성',
+      color: '#6a1b9a',
+      items: [
+        {
+          label: '부채비율',
+          value: fmtPct(latestFin?.debtRatio ?? null),
+          color: latestFin?.debtRatio != null ? (latestFin.debtRatio <= 100 ? '#1e7e34' : latestFin.debtRatio <= 200 ? '#e65100' : '#c0392b') : '#666',
+        },
+        {
+          label: '유동비율',
+          value: fmtPct(latestFin?.currentRatio ?? null),
+          color: latestFin?.currentRatio != null ? (latestFin.currentRatio >= 150 ? '#1e7e34' : latestFin.currentRatio >= 100 ? '#e65100' : '#c0392b') : '#666',
+        },
+        { label: '자기자본', value: fmtAmount(latestFin?.equity ?? null) },
+      ],
+    },
+  ] : [];
+
   return (
     <div>
       {/* ── 검색창 */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !loading && handleAnalyze()}
           placeholder="기업명 또는 티커 입력 (예: 삼성전자, 005930, AAPL)"
-          style={{
-            flex: 1, padding: '10px 14px', borderRadius: '8px',
-            border: '1px solid #dadce0', fontSize: '14px', outline: 'none',
-          }}
+          style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #dadce0', fontSize: '14px', outline: 'none' }}
         />
         <button
           onClick={handleAnalyze}
@@ -367,42 +507,29 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
           style={{
             padding: '10px 20px', borderRadius: '8px', border: 'none',
             background: loading ? '#b0cfdf' : '#89CFF0', color: '#fff',
-            fontWeight: 700, fontSize: '14px', cursor: loading ? 'default' : 'pointer',
-            whiteSpace: 'nowrap',
+            fontWeight: 700, fontSize: '14px', cursor: loading ? 'default' : 'pointer', whiteSpace: 'nowrap',
           }}
         >
           {loading ? '분석 중…' : '🔍 분석'}
         </button>
       </div>
 
-      {/* ── 저장된 분석 이력 탭 (DB 기반) */}
+      {/* ── 저장된 분석 이력 */}
       {savedReports.length > 0 && (
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
           {savedReports.map((r, i) => {
             const isActive = result?.companyName === r.companyName;
-            const label = r.companyName + (r.ticker ? ` (${r.ticker})` : '');
             return (
-              <div key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0', borderRadius: '20px', border: '1px solid #89CFF0', overflow: 'hidden' }}>
+              <div key={i} style={{ display: 'inline-flex', alignItems: 'center', borderRadius: '20px', border: '1px solid #89CFF0', overflow: 'hidden' }}>
                 <button
                   onClick={() => setResult(r)}
-                  style={{
-                    padding: '4px 8px 4px 10px', fontSize: '12px', border: 'none',
-                    background: isActive ? '#89CFF0' : '#fff',
-                    color: isActive ? '#fff' : '#1a3a5c',
-                    cursor: 'pointer',
-                  }}
+                  style={{ padding: '4px 8px 4px 10px', fontSize: '12px', border: 'none', background: isActive ? '#89CFF0' : '#fff', color: isActive ? '#fff' : '#1a3a5c', cursor: 'pointer' }}
                 >
-                  {label}
+                  {r.companyName}{r.ticker ? ` (${r.ticker})` : ''}
                 </button>
                 <button
                   onClick={e => handleDeleteReport(r, e)}
-                  title="삭제"
-                  style={{
-                    padding: '4px 7px 4px 4px', fontSize: '11px', border: 'none',
-                    background: isActive ? '#89CFF0' : '#fff',
-                    color: isActive ? '#fff' : '#888',
-                    cursor: 'pointer', lineHeight: 1,
-                  }}
+                  style={{ padding: '4px 7px 4px 4px', fontSize: '11px', border: 'none', background: isActive ? '#89CFF0' : '#fff', color: isActive ? '#fff' : '#888', cursor: 'pointer', lineHeight: 1 }}
                 >
                   ×
                 </button>
@@ -412,146 +539,100 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
         </div>
       )}
 
-      {/* ── 에러 메시지 */}
       {error && (
-        <div style={{ padding: '12px 16px', background: '#fff0f0', border: '1px solid #fca5a5', borderRadius: '8px', color: '#991b1b', fontSize: '13px', marginBottom: '16px' }}>
+        <div style={{ padding: '12px 16px', background: '#fff0f0', border: '1px solid #fca5a5', borderRadius: '8px', color: '#991b1b', fontSize: '13px', marginBottom: '12px' }}>
           ❌ {error}
         </div>
       )}
 
-      {/* ── 로딩 */}
       {loading && (
         <div style={{ textAlign: 'center', padding: '40px 0', color: '#89CFF0', fontSize: '14px' }}>
           <div style={{ marginBottom: '10px', fontSize: '24px' }}>🔍</div>
-          Gemini가 분석 중입니다. 잠시만 기다려주세요…
+          DART + yfinance + Gemini 분석 중… (30초~1분 소요)
         </div>
       )}
 
       {/* ── 결과 대시보드 */}
       {result && !loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-          {/* ① 기업 헤더 카드 */}
+          {/* ① 기업 헤더 */}
           <div style={{ background: '#fff', borderRadius: '10px', padding: '16px 20px', border: '1px solid #e0e4e8' }}>
-            {/* 회사명 + 배지 행 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a5c' }}>{result.companyName}</span>
+            {/* 회사명 + 배지 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: '#1a3a5c' }}>{result.companyName}</span>
               {result.ticker && (
-                <span style={{ fontSize: '13px', color: '#666', background: '#f0f4f8', borderRadius: '6px', padding: '2px 8px' }}>
-                  {result.ticker}
-                </span>
+                <span style={{ fontSize: '13px', color: '#666', background: '#f0f4f8', borderRadius: '6px', padding: '2px 8px' }}>{result.ticker}</span>
               )}
-              <span style={{
-                fontSize: '12px', padding: '2px 8px', borderRadius: '20px', fontWeight: 600,
-                background: result.market === 'KR' ? '#e0f0ff' : '#fff0e0',
-                color: result.market === 'KR' ? '#1565c0' : '#e65100',
-              }}>
-                {result.market === 'KR' ? '🇰🇷 국내' : '🇺🇸 해외'}
+              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', fontWeight: 600, background: result.market === 'KR' ? '#e0f0ff' : '#fff0e0', color: result.market === 'KR' ? '#1565c0' : '#e65100' }}>
+                {result.market === 'KR' ? '🇰🇷 KOSPI/KOSDAQ' : '🇺🇸 US'}
               </span>
-              {result.exchange && (
-                <span style={{ fontSize: '11px', color: '#666', background: '#f5f5f5', borderRadius: '4px', padding: '1px 6px' }}>
-                  {result.exchange}
-                </span>
-              )}
-              {result.sector && (
-                <span style={{ fontSize: '11px', color: '#555', background: '#eef4ff', borderRadius: '4px', padding: '1px 8px' }}>
-                  {result.sector}
-                </span>
-              )}
-              {result.fromCache && (
-                <span style={{ fontSize: '11px', color: '#9aa0a6', background: '#f5f5f5', borderRadius: '4px', padding: '1px 6px' }}>
-                  캐시
-                </span>
-              )}
+              {result.exchange && <span style={{ fontSize: '11px', color: '#666', background: '#f5f5f5', borderRadius: '4px', padding: '1px 6px' }}>{result.exchange}</span>}
+              {result.sector && <span style={{ fontSize: '11px', color: '#555', background: '#eef4ff', borderRadius: '4px', padding: '1px 8px' }}>{result.sector}</span>}
+              {result.fromCache && <span style={{ fontSize: '11px', color: '#9aa0a6', background: '#f5f5f5', borderRadius: '4px', padding: '1px 6px' }}>캐시</span>}
             </div>
 
-            {/* 현재가 + 시가총액 */}
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'baseline', marginBottom: '12px', flexWrap: 'wrap' }}>
-              {result.price != null && (
-                <span style={{ fontSize: '22px', fontWeight: 700, color: '#1a3a5c' }}>
-                  {result.market === 'KR' ? '₩' : '$'}{fmtNum(result.price, 0)}
-                </span>
-              )}
-              {result.marketCap != null && (
-                <span style={{ fontSize: '13px', color: '#666' }}>
-                  시가총액 {fmtCap(result.marketCap, result.market)}
-                </span>
-              )}
-            </div>
-
-            {/* 핵심 지표 3종 */}
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              {([
-                { label: 'PER', value: result.per != null ? `${fmtNum(result.per)}배` : 'N/A' },
-                { label: 'PBR', value: result.pbr != null ? `${fmtNum(result.pbr)}배` : 'N/A' },
-                { label: 'ROE', value: result.roe != null ? `${fmtNum(result.roe)}%` : 'N/A' },
-              ] as { label: string; value: string }[]).map(({ label, value }) => (
-                <div key={label} style={{ background: '#f0f8fd', borderRadius: '8px', padding: '8px 14px', minWidth: '70px' }}>
-                  <div style={{ fontSize: '10px', color: '#6b8ba4', marginBottom: '2px' }}>{label}</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c' }}>{value}</div>
-                </div>
-              ))}
+            {/* 현재가 + 게이지 */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '20px', flexWrap: 'wrap' }}>
+              <div>
+                {result.price != null && (
+                  <div style={{ fontSize: '26px', fontWeight: 700, color: '#1a3a5c', lineHeight: 1 }}>
+                    {result.market === 'KR' ? '₩' : '$'}{fmtNum(result.price, 0)}
+                  </div>
+                )}
+                {result.marketCap != null && (
+                  <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>시가총액 {fmtCap(result.marketCap, result.market)}</div>
+                )}
+              </div>
+              {uvScore !== null && <UndervalueGauge score={uvScore} />}
             </div>
           </div>
 
-          {/* ② 차트 2분할 (주가 + 수익성 추이) — 데이터 있을 때만 */}
+          {/* ② 4열 지표 그리드 */}
+          <MetricGrid groups={metricGroups} />
+
+          {/* ③ 차트 2분할 */}
           {(result.annualFinancials.length > 0 || result.priceHistory.length > 0) && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '14px',
-            }}>
-              {/* 주가 차트 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
               <div style={{ background: '#fff', borderRadius: '10px', padding: '14px 16px', border: '1px solid #e0e4e8' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px' }}>
-                  📈 5년 주가 추이
-                </div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '8px' }}>📈 5년 주가 추이</div>
                 <PriceChart data={result.priceHistory} />
               </div>
-
-              {/* 수익성 추이 차트 */}
               <div style={{ background: '#fff', borderRadius: '10px', padding: '14px 16px', border: '1px solid #e0e4e8' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px' }}>
-                  📊 수익성 추이 (%)
-                </div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '8px' }}>📊 수익성 추이 (%)</div>
                 <ProfitChart data={result.annualFinancials} />
               </div>
             </div>
           )}
 
-          {/* ③ 재무제표 테이블 — 데이터 있을 때만 */}
+          {/* ④ 재무제표 테이블 */}
           {result.annualFinancials.length > 0 && (
             <div style={{ background: '#fff', borderRadius: '10px', padding: '14px 16px', border: '1px solid #e0e4e8' }}>
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px' }}>
-                📋 재무제표 요약 (단위: 억원 / %)
+                📋 재무제표 ({result.annualFinancials.length}개년)
+                <span style={{ fontWeight: 400, fontSize: '11px', color: '#9aa0a6', marginLeft: '8px' }}>단위: 억원 / % / 원(주당)</span>
               </div>
               <FinancialTable rows={result.annualFinancials} />
             </div>
           )}
 
-          {/* ④ Gemini AI 분석 본문 */}
+          {/* ⑤ Gemini AI 분석 */}
           <div style={{ background: '#fff', borderRadius: '10px', padding: '16px 20px', border: '1px solid #e0e4e8' }}>
-            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '12px' }}>
-              🤖 Gemini 투자 분석
-            </div>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '10px' }}>🤖 Gemini 투자 분석</div>
             {renderContent(result.content)}
           </div>
 
-          {/* 면책 안내 */}
           <div style={{ padding: '10px 14px', background: '#fff8e1', borderRadius: '8px', border: '1px solid #ffe082', fontSize: '12px', color: '#795548' }}>
             ⚠️ 본 분석은 AI 및 공개 데이터 기반 참고 자료입니다. 투자 결정 전 반드시 추가 검토가 필요합니다.
           </div>
         </div>
       )}
 
-      {/* 초기 안내 */}
       {!result && !loading && !error && (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9aa0a6' }}>
           <div style={{ fontSize: '36px', marginBottom: '12px' }}>🏢</div>
           <div style={{ fontSize: '14px', marginBottom: '6px' }}>기업명 또는 종목코드를 입력하세요</div>
-          <div style={{ fontSize: '12px', color: '#b0b8c1' }}>
-            예시: 삼성전자, 005930, AAPL, TSLA, 카카오, NVDA
-          </div>
+          <div style={{ fontSize: '12px', color: '#b0b8c1' }}>예시: 삼성전자, 005930, AAPL, TSLA, 카카오</div>
         </div>
       )}
     </div>

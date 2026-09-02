@@ -2117,6 +2117,9 @@ export interface AnnualFinancial {
   equity: number | null;
   debt: number | null;
   assets: number | null;
+  eps: number | null;
+  bps: number | null;
+  currentRatio: number | null;
   roe: number | null;
   roa: number | null;
   opMargin: number | null;
