@@ -454,6 +454,7 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
   const [result, setResult] = useState<CompanyAnalysisResult | null>(null);
   const [error, setError] = useState('');
   const [savedReports, setSavedReports] = useState<CompanyAnalysisResult[]>([]);
+  const [marketFilter, setMarketFilter] = useState<'KR' | 'US'>('KR');
 
   useEffect(() => {
     getCompanyAnalysisReports().then(setSavedReports).catch(() => {});
@@ -612,114 +613,114 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
         </button>
       </div>
 
-      {/* ── 저장된 분석 이력 셀렉트박스 */}
+      {/* ── 저장된 분석 이력 */}
       {savedReports.length > 0 && (() => {
         const krReports = savedReports.filter(r => r.market === 'KR');
         const usReports = savedReports.filter(r => r.market !== 'KR');
-        const selectedId = result?.id ?? '';
-
-        const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-          const id = Number(e.target.value);
-          const found = savedReports.find(r => r.id === id);
-          if (found) setResult(found);
-        };
+        const filtered  = marketFilter === 'KR' ? krReports : usReports;
 
         return (
-          <div style={{ marginBottom: '14px' }}>
-            {/* 섹션 타이틀 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '7px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#7a9ab8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>분석 이력</span>
-              <span style={{ fontSize: '11px', background: '#e8f4fb', color: '#1565c0', borderRadius: '10px', padding: '1px 7px', fontWeight: 700 }}>{savedReports.length}</span>
-              <span style={{ marginLeft: '4px', fontSize: '11px', color: '#aaa' }}>
-                {krReports.length > 0 && <span style={{ marginRight: '6px' }}>🇰🇷 {krReports.length}개</span>}
-                {usReports.length > 0 && <span>🇺🇸 {usReports.length}개</span>}
-              </span>
-            </div>
+          <div style={{ marginBottom: '14px', borderRadius: '12px', border: '1.5px solid #d0e4f0', overflow: 'hidden', background: '#f7fbff' }}>
 
-            {/* 셀렉트 + 삭제 버튼 행 */}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {/* 커스텀 셀렉트 래퍼 */}
-              <div style={{ position: 'relative', flex: 1 }}>
-                <select
-                  value={selectedId}
-                  onChange={handleSelect}
-                  style={{
-                    width: '100%',
-                    appearance: 'none',
-                    padding: '9px 36px 9px 14px',
-                    borderRadius: '10px',
-                    border: '1.5px solid #d0e4f0',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    color: selectedId ? '#1a3a5c' : '#9aa8b5',
-                    background: '#f7fbff',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    boxShadow: '0 1px 4px rgba(137,207,240,0.10)',
-                    transition: 'border-color 0.15s',
-                  }}
-                  onFocus={e => { e.currentTarget.style.borderColor = '#89CFF0'; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = '#d0e4f0'; }}
-                >
-                  <option value="" disabled>기업을 선택하세요</option>
-                  {krReports.length > 0 && (
-                    <optgroup label="🇰🇷 한국">
-                      {krReports.map(r => (
-                        <option key={r.id} value={r.id}>
-                          {r.companyName}{r.ticker ? ` (${r.ticker})` : ''}
-                          {r.updatedAt ? `  ·  ${r.updatedAt.slice(0, 10)}` : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {usReports.length > 0 && (
-                    <optgroup label="🇺🇸 미국">
-                      {usReports.map(r => (
-                        <option key={r.id} value={r.id}>
-                          {r.companyName}{r.ticker ? ` (${r.ticker})` : ''}
-                          {r.updatedAt ? `  ·  ${r.updatedAt.slice(0, 10)}` : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-                {/* 커스텀 화살표 */}
-                <span style={{
-                  position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
-                  pointerEvents: 'none', color: '#89CFF0', fontSize: '12px', fontWeight: 700,
-                }}>▼</span>
+            {/* 헤더: 타이틀 + 라디오 토글 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid #e4eff8', background: '#eef6fc' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#5a7ea0', letterSpacing: '0.07em', textTransform: 'uppercase' }}>분석 이력</span>
+                <span style={{ fontSize: '11px', background: '#d0eaff', color: '#1565c0', borderRadius: '10px', padding: '1px 7px', fontWeight: 700 }}>{savedReports.length}</span>
               </div>
 
-              {/* 선택된 기업 삭제 버튼 */}
-              {result && (
-                <button
-                  onClick={e => handleDeleteReport(result, e)}
-                  title={`${result.companyName} 삭제`}
-                  style={{
-                    padding: '8px 12px', borderRadius: '10px',
-                    border: '1.5px solid #fca5a5', background: '#fff5f5',
-                    color: '#c0392b', fontSize: '13px', fontWeight: 700,
-                    cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = '#fff5f5'; }}
-                >
-                  🗑 삭제
-                </button>
-              )}
+              {/* 라디오 토글 그룹 */}
+              <div style={{ display: 'flex', background: '#ddeef8', borderRadius: '8px', padding: '2px', gap: '2px' }}>
+                {([['KR', '🇰🇷 한국', krReports.length], ['US', '🇺🇸 미국', usReports.length]] as const).map(([mkt, label, cnt]) => {
+                  const active = marketFilter === mkt;
+                  return (
+                    <button
+                      key={mkt}
+                      onClick={() => setMarketFilter(mkt)}
+                      style={{
+                        padding: '4px 12px', borderRadius: '6px', border: 'none',
+                        fontSize: '12px', fontWeight: active ? 700 : 500,
+                        background: active ? (mkt === 'KR' ? '#1565c0' : '#e65100') : 'transparent',
+                        color: active ? '#fff' : '#5a7ea0',
+                        cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {label} {cnt > 0 && <span style={{ fontSize: '10px', opacity: 0.85 }}>({cnt})</span>}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* 선택된 기업 미리보기 칩 */}
-            {result && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', padding: '7px 12px', borderRadius: '8px', background: 'linear-gradient(135deg, #eaf6ff 0%, #f0f8ff 100%)', border: '1px solid #c8e6f8' }}>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>{result.companyName}</span>
-                {result.ticker && <span style={{ fontSize: '12px', color: '#5a7a9a', background: '#daeeff', borderRadius: '5px', padding: '1px 7px' }}>{result.ticker}</span>}
-                <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '12px', fontWeight: 600, background: result.market === 'KR' ? '#e0f0ff' : '#fff3e0', color: result.market === 'KR' ? '#1565c0' : '#e65100' }}>
-                  {result.market === 'KR' ? '🇰🇷' : '🇺🇸'} {result.market}
-                </span>
-                {result.sector && <span style={{ fontSize: '11px', color: '#7a9ab8' }}>· {result.sector}</span>}
-                {result.updatedAt && <span style={{ fontSize: '11px', color: '#aab8c8', marginLeft: 'auto' }}>{result.updatedAt.slice(0, 10)}</span>}
+            {/* 기업 리스트 */}
+            {filtered.length === 0 ? (
+              <div style={{ padding: '16px', textAlign: 'center', fontSize: '12px', color: '#aab8c8' }}>
+                {marketFilter === 'KR' ? '🇰🇷' : '🇺🇸'} 분석된 기업이 없습니다
+              </div>
+            ) : (
+              <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                {filtered.map((r, i) => {
+                  const isActive = result?.id === r.id;
+                  return (
+                    <div
+                      key={r.id ?? i}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '9px 14px',
+                        borderBottom: i < filtered.length - 1 ? '1px solid #e8f2fa' : 'none',
+                        background: isActive
+                          ? (marketFilter === 'KR' ? 'linear-gradient(90deg,#e8f2ff,#f0f8ff)' : 'linear-gradient(90deg,#fff3ec,#fff8f4)')
+                          : 'transparent',
+                        cursor: 'pointer',
+                        transition: 'background 0.12s',
+                      }}
+                      onClick={() => setResult(r)}
+                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = '#f0f7fc'; }}
+                      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+                    >
+                      {/* 선택 인디케이터 */}
+                      <div style={{
+                        width: '4px', height: '36px', borderRadius: '2px', flexShrink: 0,
+                        background: isActive ? (marketFilter === 'KR' ? '#1565c0' : '#e65100') : 'transparent',
+                        transition: 'background 0.15s',
+                      }} />
+
+                      {/* 기업 정보 */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: isActive ? 700 : 500, color: isActive ? '#1a3a5c' : '#2c3e50', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.companyName}
+                          </span>
+                          {r.ticker && (
+                            <span style={{ fontSize: '11px', color: '#5a7a9a', background: isActive ? (marketFilter === 'KR' ? '#cce0ff' : '#ffe0cc') : '#e8eef5', borderRadius: '4px', padding: '1px 6px', flexShrink: 0 }}>
+                              {r.ticker}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                          {r.sector && <span style={{ fontSize: '11px', color: '#8a9db8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sector}</span>}
+                          {r.updatedAt && <span style={{ fontSize: '10px', color: '#b0bec5', marginLeft: 'auto', flexShrink: 0 }}>{r.updatedAt.slice(0, 10)}</span>}
+                        </div>
+                      </div>
+
+                      {/* 삭제 버튼 */}
+                      <button
+                        onClick={e => handleDeleteReport(r, e)}
+                        title="삭제"
+                        style={{
+                          width: '26px', height: '26px', borderRadius: '6px', border: '1px solid #e0e8f0',
+                          background: '#fff', color: '#b0bec5', fontSize: '13px',
+                          cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.12s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; e.currentTarget.style.color = '#c0392b'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e0e8f0'; e.currentTarget.style.color = '#b0bec5'; }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
