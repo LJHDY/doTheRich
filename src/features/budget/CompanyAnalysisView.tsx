@@ -499,6 +499,17 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
   const fmtNum = (v: number | null, digits = 1) =>
     v == null ? '-' : v.toLocaleString('ko-KR', { maximumFractionDigits: digits });
 
+  // 네이버 증권 URL 생성
+  const buildNaverStockUrl = (ticker: string, market: string, exchange?: string | null): string => {
+    if (market === 'KR') {
+      return `https://stock.naver.com/domestic/stock/${ticker}/price`;
+    }
+    // US: exchange(yfinance) → Naver 시장 코드 (.O=NASDAQ, .N=NYSE)
+    const ex = (exchange || '').toUpperCase();
+    const suffix = (ex.includes('NAS') || ex === 'NMS' || ex === 'NGM') ? '.O' : '.N';
+    return `https://stock.naver.com/worldstock/stock/${ticker}${suffix}/price`;
+  };
+
   const fmtCap = (cap: number | null, market: string) => {
     if (cap == null) return '-';
     if (market === 'KR') {
@@ -660,6 +671,16 @@ const CompanyAnalysisView: React.FC<CompanyAnalysisViewProps> = ({ initialQuery,
                 <span style={{ fontSize: '11px', color: '#4a6fa5', background: '#ddeeff', borderRadius: '4px', padding: '1px 8px' }}>{result.industry}</span>
               )}
               {result.fromCache && <span style={{ fontSize: '11px', color: '#9aa0a6', background: '#f5f5f5', borderRadius: '4px', padding: '1px 6px' }}>캐시</span>}
+              {result.ticker && (
+                <a
+                  href={buildNaverStockUrl(result.ticker, result.market, result.exchange)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#03c75a', color: '#fff', fontWeight: 600, textDecoration: 'none', marginLeft: 'auto' }}
+                >
+                  N 네이버 증권 ↗
+                </a>
+              )}
             </div>
 
             {/* 사업 개요 */}
