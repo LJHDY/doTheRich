@@ -2159,9 +2159,10 @@ export interface CompanyAnalysisResult {
   roe: number | null;
   fromCache: boolean;
   content: string;        // Gemini 마크다운 분석
-  annualFinancials: AnnualFinancial[];          // DART 연도별 재무 (한국 기업만)
-  priceHistory: PricePoint[];                   // 5년 일별 주가 (한국 기업만)
-  investorTrading?: InvestorTradingData | null; // Toss 60일 수급 (한국 기업만, 선택)
+  annualFinancials: AnnualFinancial[];          // DART/yfinance 연도별 재무
+  priceHistory: PricePoint[];                   // 5년 일별 주가
+  investorTrading?: InvestorTradingData | null; // Toss 60일 수급 (KR only)
+  updatedAt?: string | null;                    // DB 업데이트 시각 (ISO 8601)
 }
 
 export const analyzeCompany = async (company: string): Promise<CompanyAnalysisResult> => {
