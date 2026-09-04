@@ -1430,24 +1430,59 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
                         </table>
                       </div>
                     ) : (
-                      <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #dde4ed', padding: '12px 8px 8px 0' }}>
-                        <ResponsiveContainer width="100%" height={200}>
-                          <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" />
-                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9aa0a6' }} />
-                            <YAxis tick={{ fontSize: 10, fill: '#9aa0a6' }} tickFormatter={(v: number) => `${(v / 1).toFixed(0)}`} />
-                            <Tooltip
-                              formatter={(value: number, name: string) => [fmtAmt(value), name]}
-                              labelStyle={{ fontSize: 11, fontWeight: 700 }}
-                              contentStyle={{ fontSize: 11 }}
-                            />
-                            <Legend wrapperStyle={{ fontSize: 11 }} />
-                            <ReferenceLine y={0} stroke="#aaa" strokeWidth={1} />
-                            {CHART_COLS.map(c => (
-                              <Bar key={c.key} dataKey={c.key} name={c.label} fill={c.color} radius={[3, 3, 0, 0]} maxBarSize={20} />
-                            ))}
-                          </BarChart>
-                        </ResponsiveContainer>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {/* ── 선형 그래프 (메인) */}
+                        <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #dde4ed', padding: '12px 8px 8px 0' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, color: '#9aa0a6', paddingLeft: '14px', marginBottom: '4px' }}>추세 (선형)</div>
+                          <ResponsiveContainer width="100%" height={200}>
+                            <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" />
+                              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9aa0a6' }} />
+                              <YAxis tick={{ fontSize: 10, fill: '#9aa0a6' }} />
+                              <Tooltip
+                                formatter={(value: number, name: string) => [fmtAmt(value), name]}
+                                labelStyle={{ fontSize: 11, fontWeight: 700 }}
+                                contentStyle={{ fontSize: 11 }}
+                              />
+                              <Legend wrapperStyle={{ fontSize: 11 }} />
+                              <ReferenceLine y={0} stroke="#bbb" strokeDasharray="4 2" strokeWidth={1} />
+                              {CHART_COLS.map(c => (
+                                <Line
+                                  key={c.key}
+                                  type="monotone"
+                                  dataKey={c.key}
+                                  name={c.label}
+                                  stroke={c.color}
+                                  strokeWidth={2}
+                                  dot={{ r: 3, fill: c.color, strokeWidth: 0 }}
+                                  activeDot={{ r: 5 }}
+                                />
+                              ))}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        {/* ── 막대 그래프 (보조) */}
+                        <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #dde4ed', padding: '12px 8px 8px 0' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, color: '#9aa0a6', paddingLeft: '14px', marginBottom: '4px' }}>일별 규모 (막대)</div>
+                          <ResponsiveContainer width="100%" height={160}>
+                            <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" />
+                              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9aa0a6' }} />
+                              <YAxis tick={{ fontSize: 10, fill: '#9aa0a6' }} />
+                              <Tooltip
+                                formatter={(value: number, name: string) => [fmtAmt(value), name]}
+                                labelStyle={{ fontSize: 11, fontWeight: 700 }}
+                                contentStyle={{ fontSize: 11 }}
+                              />
+                              <Legend wrapperStyle={{ fontSize: 11 }} />
+                              <ReferenceLine y={0} stroke="#aaa" strokeWidth={1} />
+                              {CHART_COLS.map(c => (
+                                <Bar key={c.key} dataKey={c.key} name={c.label} fill={c.color} radius={[2, 2, 0, 0]} maxBarSize={16} />
+                              ))}
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
                       </div>
                     )}
                   </div>
