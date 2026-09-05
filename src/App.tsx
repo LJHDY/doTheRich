@@ -621,11 +621,12 @@ const App: React.FC = () => {
                 {localStorage.getItem(BUDGET_USER_STORAGE_KEY) === 'ldy' && (
                   <span style={{
                     fontFamily: "'Nanum Brush Script', cursive",
-                    fontSize: '13px',
+                    fontSize: '15px',
+                    fontWeight: 700,
                     color: '#1a3a5c',
                     whiteSpace: 'nowrap',
                     marginLeft: 'auto',
-                    opacity: 0.75,
+                    opacity: 0.85,
                     flexShrink: 0,
                   }}>
                     나는 해야 한다. 그러므로 할 수 있다.
@@ -833,12 +834,13 @@ const App: React.FC = () => {
               {localStorage.getItem(BUDGET_USER_STORAGE_KEY) === 'ldy' && (
                 <span style={{
                   fontFamily: "'Nanum Brush Script', cursive",
-                  fontSize: '15px',
+                  fontSize: '17px',
+                  fontWeight: 700,
                   color: '#1a3a5c',
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
                   marginLeft: 'auto',
-                  opacity: 0.8,
+                  opacity: 0.85,
                   letterSpacing: '0.3px',
                 }}>
                   나는 해야 한다. 그러므로 할 수 있다.
