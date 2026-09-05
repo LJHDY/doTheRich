@@ -587,6 +587,9 @@ const App: React.FC = () => {
     return <PasswordGate onUnlock={() => setUnlocked(true)} />;
   }
 
+  // 동영 세션 여부 — 헤더 레이아웃 분기에 사용
+  const isLdy = localStorage.getItem(BUDGET_USER_STORAGE_KEY) === 'ldy';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {/* 헤더 — 데스크탑: 1줄 56px / 모바일: 2줄 (Row1 로고+버튼, Row2 검색+필터) */}
@@ -777,61 +780,22 @@ const App: React.FC = () => {
           </>
         ) : (
           <>
-            {/* 데스크탑 Row 1: 로고 + 검색(가변) + 버튼들 */}
-            <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px', height: '48px', gap: '8px' }}>
-              {/* 로고 */}
-              <div onClick={handleGoHome} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, cursor: 'pointer' }}>
-                <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '28px', height: '28px', borderRadius: '8px', objectFit: 'contain' }} />
-                <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap' }}>DoTheRich</span>
-              </div>
-              <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
-              {/* 검색바 — 남은 공간 채우되 최대 480px */}
-              <div style={{ flex: 1, maxWidth: '480px' }}>
-                <SearchBar onSelect={handleSearchSelect} fluid />
-              </div>
-              <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
-              {/* 내 단지 */}
-              <button
-                onClick={() => setMyComplexListOpen(v => !v)}
-                style={{
-                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: myComplexListOpen ? '#89CFF0' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: myComplexListOpen ? '#D4EFFC' : '#fff',
-                  color: myComplexListOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >내 단지</button>
-              {/* ★ 즐겨찾기 */}
-              <button
-                onClick={() => setFavoriteListOpen(v => !v)}
-                style={{
-                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid', borderColor: favoriteListOpen ? '#FFD97D' : '#dadce0',
-                  borderRadius: '6px', backgroundColor: favoriteListOpen ? '#fef9e7' : '#fff',
-                  color: favoriteListOpen ? '#a07600' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >★ 즐겨찾기</button>
-              {/* 비교하기 */}
-              <button
-                onClick={() => setCompareOpen(prev => !prev)}
-                style={{
-                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                  border: '1px solid',
-                  borderColor: compareOpen || compareIds.length > 0 ? '#89CFF0' : '#dadce0',
-                  borderRadius: '6px',
-                  backgroundColor: compareOpen || compareIds.length > 0 ? '#D4EFFC' : '#fff',
-                  color: compareOpen || compareIds.length > 0 ? '#2a6090' : '#5f6368',
-                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >{compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}</button>
-              {/* 단지 수 뱃지 */}
-              <div style={{
-                fontSize: '11px', color: '#80868b', whiteSpace: 'nowrap', flexShrink: 0,
-                background: '#f1f3f4', borderRadius: '12px', padding: '3px 8px',
-              }}>
-                {loading ? '로딩...' : `${complexes.length}개`}
-              </div>
-              {/* 동영 전용 다짐 문구 */}
-              {localStorage.getItem(BUDGET_USER_STORAGE_KEY) === 'ldy' && (
+            {/* 데스크탑 Row 1 — 동영 세션: [로고+검색] | [문구 중앙] | [버튼들] 3단 / 일반: 기존 플랫 구조 */}
+            {isLdy ? (
+              /* 동영 전용 3단 레이아웃 */
+              <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px', height: '48px' }}>
+                {/* 좌: 로고 + 검색 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <div onClick={handleGoHome} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, cursor: 'pointer' }}>
+                    <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '28px', height: '28px', borderRadius: '8px', objectFit: 'contain' }} />
+                    <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap' }}>DoTheRich</span>
+                  </div>
+                  <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
+                  <div style={{ flex: 1, maxWidth: '360px' }}>
+                    <SearchBar onSelect={handleSearchSelect} fluid />
+                  </div>
+                </div>
+                {/* 중: 다짐 문구 */}
                 <span style={{
                   fontFamily: "'Nanum Brush Script', cursive",
                   fontSize: '17px',
@@ -839,14 +803,39 @@ const App: React.FC = () => {
                   color: '#1a3a5c',
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
-                  marginLeft: 'auto',
+                  padding: '0 20px',
                   opacity: 0.85,
                   letterSpacing: '0.3px',
                 }}>
                   나는 해야 한다. 그러므로 할 수 있다.
                 </span>
-              )}
-            </div>
+                {/* 우: 버튼들 + 단지수 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
+                  <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
+                  <button onClick={() => setMyComplexListOpen(v => !v)} style={{ padding: '4px 10px', fontSize: '12px', fontWeight: 600, border: '1px solid', borderColor: myComplexListOpen ? '#89CFF0' : '#dadce0', borderRadius: '6px', backgroundColor: myComplexListOpen ? '#D4EFFC' : '#fff', color: myComplexListOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>내 단지</button>
+                  <button onClick={() => setFavoriteListOpen(v => !v)} style={{ padding: '4px 10px', fontSize: '12px', fontWeight: 600, border: '1px solid', borderColor: favoriteListOpen ? '#FFD97D' : '#dadce0', borderRadius: '6px', backgroundColor: favoriteListOpen ? '#fef9e7' : '#fff', color: favoriteListOpen ? '#a07600' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>★ 즐겨찾기</button>
+                  <button onClick={() => setCompareOpen(prev => !prev)} style={{ padding: '4px 10px', fontSize: '12px', fontWeight: 600, border: '1px solid', borderColor: compareOpen || compareIds.length > 0 ? '#89CFF0' : '#dadce0', borderRadius: '6px', backgroundColor: compareOpen || compareIds.length > 0 ? '#D4EFFC' : '#fff', color: compareOpen || compareIds.length > 0 ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}</button>
+                  <div style={{ fontSize: '11px', color: '#80868b', whiteSpace: 'nowrap', flexShrink: 0, background: '#f1f3f4', borderRadius: '12px', padding: '3px 8px' }}>{loading ? '로딩...' : `${complexes.length}개`}</div>
+                </div>
+              </div>
+            ) : (
+              /* 일반 세션 — 기존 플랫 레이아웃 */
+              <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px', height: '48px', gap: '8px' }}>
+                <div onClick={handleGoHome} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, cursor: 'pointer' }}>
+                  <img src="/do_the_rich.png" alt="DoTheRich" style={{ width: '28px', height: '28px', borderRadius: '8px', objectFit: 'contain' }} />
+                  <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap' }}>DoTheRich</span>
+                </div>
+                <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
+                <div style={{ flex: 1, maxWidth: '480px' }}>
+                  <SearchBar onSelect={handleSearchSelect} fluid />
+                </div>
+                <div style={{ width: '1px', height: '20px', backgroundColor: '#e8eaed', flexShrink: 0 }} />
+                <button onClick={() => setMyComplexListOpen(v => !v)} style={{ padding: '4px 10px', fontSize: '12px', fontWeight: 600, border: '1px solid', borderColor: myComplexListOpen ? '#89CFF0' : '#dadce0', borderRadius: '6px', backgroundColor: myComplexListOpen ? '#D4EFFC' : '#fff', color: myComplexListOpen ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>내 단지</button>
+                <button onClick={() => setFavoriteListOpen(v => !v)} style={{ padding: '4px 10px', fontSize: '12px', fontWeight: 600, border: '1px solid', borderColor: favoriteListOpen ? '#FFD97D' : '#dadce0', borderRadius: '6px', backgroundColor: favoriteListOpen ? '#fef9e7' : '#fff', color: favoriteListOpen ? '#a07600' : '#9e9e9e', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>★ 즐겨찾기</button>
+                <button onClick={() => setCompareOpen(prev => !prev)} style={{ padding: '4px 10px', fontSize: '12px', fontWeight: 600, border: '1px solid', borderColor: compareOpen || compareIds.length > 0 ? '#89CFF0' : '#dadce0', borderRadius: '6px', backgroundColor: compareOpen || compareIds.length > 0 ? '#D4EFFC' : '#fff', color: compareOpen || compareIds.length > 0 ? '#2a6090' : '#5f6368', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{compareIds.length > 0 ? `비교 중 ${compareIds.length}/3` : '비교하기'}</button>
+                <div style={{ fontSize: '11px', color: '#80868b', whiteSpace: 'nowrap', flexShrink: 0, background: '#f1f3f4', borderRadius: '12px', padding: '3px 8px' }}>{loading ? '로딩...' : `${complexes.length}개`}</div>
+              </div>
+            )}
 
             {/* 데스크탑 Row 2: 금액대 + 필터 + 5개 목적별 드롭다운 메뉴 */}
             <div style={{
