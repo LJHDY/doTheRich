@@ -49,6 +49,8 @@ import {
   TravelLog,
   TravelPlace,
   TravelPlacePhoto,
+  NationalDistrictStat,
+  NationalGapResponse,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -2280,8 +2282,6 @@ export const getCollectAllStatus = async (): Promise<BatchCollectStatus> => {
 };
 
 // ── 전국 시군구 갭 분석 ──────────────────────────────────────────────────────
-
-import type { NationalDistrictStat, NationalGapResponse } from '../types';
 
 /**
  * 전국 시군구 갭 통계 조회
