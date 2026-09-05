@@ -1039,7 +1039,7 @@ const App: React.FC = () => {
               {(() => {
                 const key = 'stats';
                 const isOpen = openMenu === key;
-                const isActive = districtStatsOpen || affordOpen || nationalGapOpen;
+                const isActive = districtStatsOpen || affordOpen;
                 const menuItemStyle = (active: boolean, color: string): React.CSSProperties => ({
                   padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
                   fontSize: '12px', fontWeight: active ? 700 : 500,
@@ -1075,11 +1075,6 @@ const App: React.FC = () => {
                         <div style={menuItemStyle(districtStatsOpen, '#2a6090')}
                           onClick={() => { setDistrictStatsOpen(v => !v); setOpenMenu(null); }}>
                           구별 시세 {districtStatsOpen && <span style={{ fontSize: '10px', color: '#2a6090' }}>ON</span>}
-                        </div>
-                        {/* 전국 갭 분석 패널 토글 */}
-                        <div style={menuItemStyle(nationalGapOpen, '#6c3483')}
-                          onClick={() => { setNationalGapOpen(v => !v); setOpenMenu(null); }}>
-                          🏙 전국 갭 {nationalGapOpen && <span style={{ fontSize: '10px', color: '#6c3483' }}>ON</span>}
                         </div>
                         <div style={menuItemStyle(affordOpen, '#5AAF84')}
                           onClick={() => {
@@ -1167,7 +1162,7 @@ const App: React.FC = () => {
               {(() => {
                 const key = 'data';
                 const isOpen = openMenu === key;
-                const isActive = !!(batchStatus?.running) || collectPanelOpen;
+                const isActive = !!(batchStatus?.running) || collectPanelOpen || nationalGapOpen;
                 const menuItemStyle = (active: boolean, color: string): React.CSSProperties => ({
                   padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
                   fontSize: '12px', fontWeight: active ? 700 : 500,
@@ -1200,6 +1195,11 @@ const App: React.FC = () => {
                         padding: '6px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 1000,
                         minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '2px',
                       }}>
+                        {/* 전국 갭 분석 */}
+                        <div style={menuItemStyle(nationalGapOpen, '#6c3483')}
+                          onClick={() => { setNationalGapOpen(v => !v); setOpenMenu(null); }}>
+                          🏙 전국 갭 {nationalGapOpen && <span style={{ fontSize: '10px', color: '#6c3483' }}>ON</span>}
+                        </div>
                         {/* 거래이력 수집 */}
                         <div style={menuItemStyle(!!(batchStatus?.running), '#43a047')}
                           onClick={() => { batchStatus ? setBatchPanelOpen(v => !v) : checkBatchStatus(); setOpenMenu(null); }}>
