@@ -8,7 +8,7 @@ interface Props {
 
 type SetRow = { weight: string; reps: string };
 
-const MUSCLE_GROUPS = ['등', '가슴', '하체', '이두', '삼두', '어깨'];
+const MUSCLE_GROUPS_FALLBACK = ['등', '가슴', '하체', '이두', '삼두', '어깨'];
 const TODAY = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
 const inp: React.CSSProperties = {
@@ -20,6 +20,7 @@ const WorkoutTab: React.FC<Props> = ({ userId }) => {
   const [date, setDate] = useState(TODAY());
   const [subTab, setSubTab] = useState<WorkoutType>('TENNIS');
   const [logs, setLogs] = useState<WorkoutLog[]>([]);
+  const [muscleGroups, setMuscleGroups] = useState<string[]>(MUSCLE_GROUPS_FALLBACK);
 
   // 테니스 폼
   const [tGames, setTGames] = useState('');
@@ -27,7 +28,7 @@ const WorkoutTab: React.FC<Props> = ({ userId }) => {
   const [tMemo, setTMemo] = useState('');
 
   // 헬스 폼
-  const [hMuscle, setHMuscle] = useState(MUSCLE_GROUPS[0]);
+  const [hMuscle, setHMuscle] = useState(MUSCLE_GROUPS_FALLBACK[0]);
   const [hExercises, setHExercises] = useState<CommonCode[]>([]);
   const [hExName, setHExName] = useState('');
   // 세트 목록 — 무게(선택)·횟수 1:N 입력
@@ -46,6 +47,17 @@ const WorkoutTab: React.FC<Props> = ({ userId }) => {
   }, [userId, date]);
 
   useEffect(() => { load(); }, [load]);
+
+  // 앱 시작 시 WORKOUT_CATEGORY 공통코드로 근육 그룹 로드 (없으면 fallback 유지)
+  useEffect(() => {
+    getCommonCodes('WORKOUT_CATEGORY').then(codes => {
+      if (codes.length > 0) {
+        const groups = codes.map(c => c.detailCodeName);
+        setMuscleGroups(groups);
+        setHMuscle(groups[0]);
+      }
+    });
+  }, []);
 
   // 운동부위 변경 시 공통코드에서 운동종류 로드
   useEffect(() => {
@@ -188,7 +200,7 @@ const WorkoutTab: React.FC<Props> = ({ userId }) => {
 
           {/* 운동부위 선택 */}
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
-            {MUSCLE_GROUPS.map(m => (
+            {muscleGroups.map(m => (
               <button key={m} onClick={() => setHMuscle(m)} style={{
                 padding: '4px 12px', fontSize: '12px', border: '1px solid',
                 borderRadius: '14px', cursor: 'pointer',
