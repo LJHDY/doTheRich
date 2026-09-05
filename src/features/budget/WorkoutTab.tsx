@@ -228,31 +228,36 @@ const WorkoutTab: React.FC<Props> = ({ userId }) => {
             </select>
           </div>
 
-          {/* 세트 목록 — 무게·횟수 1:N 입력 */}
+          {/* 세트 목록 — 유산소: 속도·시간 / 그 외: 무게·횟수 */}
+          {(() => {
+            const isCardio = hMuscle === '유산소';
+            return (
           <div style={{ marginBottom: '8px' }}>
             {/* 컬럼 헤더 */}
             <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr 28px', gap: '6px', marginBottom: '4px', paddingLeft: '2px' }}>
               <div />
-              <div style={{ fontSize: '11px', color: '#80868b' }}>무게 (kg)</div>
-              <div style={{ fontSize: '11px', color: '#80868b' }}>횟수</div>
+              <div style={{ fontSize: '11px', color: '#80868b' }}>{isCardio ? '속도 (km/h)' : '무게 (kg)'}</div>
+              <div style={{ fontSize: '11px', color: '#80868b' }}>{isCardio ? '시간 (분)' : '횟수'}</div>
               <div />
             </div>
 
             {hSetRows.map((row, i) => (
               <div key={i} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr 28px', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
-                {/* 세트 번호 */}
                 <div style={{ fontSize: '12px', color: '#9aa0a6', textAlign: 'center', fontWeight: 600 }}>{i + 1}</div>
                 <input
-                  type="number" value={row.weight} min="0" step="0.5" placeholder="-"
+                  type="number" value={row.weight}
+                  min="0" step={isCardio ? '0.1' : '0.5'}
+                  placeholder={isCardio ? '0.0' : '-'}
                   onChange={e => updateSetRow(i, 'weight', e.target.value)}
                   style={{ ...inp, width: '100%' }}
                 />
                 <input
-                  type="number" value={row.reps} min="1" placeholder="0"
+                  type="number" value={row.reps}
+                  min={isCardio ? '1' : '1'}
+                  placeholder="0"
                   onChange={e => updateSetRow(i, 'reps', e.target.value)}
                   style={{ ...inp, width: '100%' }}
                 />
-                {/* 행 삭제 (첫 행은 비활성) */}
                 <button
                   onClick={() => removeSetRow(i)}
                   disabled={hSetRows.length === 1}
@@ -266,14 +271,16 @@ const WorkoutTab: React.FC<Props> = ({ userId }) => {
               width: '100%', padding: '6px', fontSize: '12px', border: '1.5px dashed #89CFF0',
               borderRadius: '6px', background: 'transparent', color: '#4BAAD4', cursor: 'pointer', marginTop: '2px',
             }}>
-              + 세트 추가
+              + {isCardio ? '구간 추가' : '세트 추가'}
             </button>
           </div>
+            );
+          })()}
 
           {/* 세트 수 자동 표시 + 저장 */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
             <span style={{ fontSize: '12px', color: '#80868b' }}>
-              총 <strong style={{ color: '#344054' }}>{hSetRows.filter(r => r.reps.trim()).length}</strong> 세트
+              총 <strong style={{ color: '#344054' }}>{hSetRows.filter(r => r.reps.trim()).length}</strong> {hMuscle === '유산소' ? '구간' : '세트'}
             </span>
             <button onClick={handleSaveHealth} disabled={saving || !hExName} style={saveBtn}>추가</button>
           </div>
@@ -347,14 +354,22 @@ function renderHealthLogs(logs: WorkoutLog[], onDelete: (id: number) => void) {
               {/* 세트별 무게·횟수 태그 */}
               {log.setsData && log.setsData.length > 0 ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {log.setsData.map((s, i) => (
-                    <span key={i} style={{
-                      fontSize: '12px', padding: '2px 8px', borderRadius: '10px',
-                      background: '#e8f4fd', color: '#2a6090', border: '1px solid #cce4f7',
-                    }}>
-                      {i + 1}. {s.weight != null ? `${s.weight}kg` : '-'} × {s.reps}회
-                    </span>
-                  ))}
+                  {(() => {
+                    const isCardio = muscle === '유산소';
+                    return log.setsData!.map((s, i) => (
+                      <span key={i} style={{
+                        fontSize: '12px', padding: '2px 8px', borderRadius: '10px',
+                        background: isCardio ? '#f0fff4' : '#e8f4fd',
+                        color: isCardio ? '#1b5e20' : '#2a6090',
+                        border: `1px solid ${isCardio ? '#a5d6a7' : '#cce4f7'}`,
+                      }}>
+                        {i + 1}. {isCardio
+                          ? `${s.weight != null ? `${s.weight}km/h` : '-'} × ${s.reps}분`
+                          : `${s.weight != null ? `${s.weight}kg` : '-'} × ${s.reps}회`
+                        }
+                      </span>
+                    ));
+                  })()}
                 </div>
               ) : (
                 // 구버전 데이터 fallback
