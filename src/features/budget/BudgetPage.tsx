@@ -1887,7 +1887,9 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
 
       {/* ══ 운동 탭 ══════════════════════════════════════════ */}
       {tab === 'WORKOUT' && (
-        <WorkoutTab userId={userId} />
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <WorkoutTab userId={userId} />
+        </div>
       )}
 
       {/* ══ AI 재무 분석 탭 ══════════════════════════════════ */}
