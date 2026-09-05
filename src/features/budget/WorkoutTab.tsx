@@ -48,11 +48,19 @@ const WorkoutTab: React.FC<Props> = ({ userId }) => {
 
   useEffect(() => { load(); }, [load]);
 
-  // 앱 시작 시 WORKOUT_CATEGORY 공통코드로 근육 그룹 로드 (없으면 fallback 유지)
+  // 앱 시작 시 전체 공통코드에서 WORKOUT_* 그룹 자동 추출 (없으면 fallback 유지)
   useEffect(() => {
-    getCommonCodes('WORKOUT_CATEGORY').then(codes => {
-      if (codes.length > 0) {
-        const groups = codes.map(c => c.detailCodeName);
+    getCommonCodes().then(all => {
+      // commonCode가 'WORKOUT_'로 시작하는 고유 그룹 추출 → 접두사 제거해 근육명으로 사용
+      const seen = new Set<string>();
+      const groups: string[] = [];
+      all.forEach(c => {
+        if (c.commonCode.startsWith('WORKOUT_') && !seen.has(c.commonCode)) {
+          seen.add(c.commonCode);
+          groups.push(c.commonCode.replace('WORKOUT_', ''));
+        }
+      });
+      if (groups.length > 0) {
         setMuscleGroups(groups);
         setHMuscle(groups[0]);
       }
