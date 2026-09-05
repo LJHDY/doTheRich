@@ -608,7 +608,7 @@ const App: React.FC = () => {
                 {loading ? '' : `${complexes.length}개`}
               </span>
               {/* 활성 기능 뱃지 — 어떤 패널이 열려있는지 한눈에 표시 */}
-              <div style={{ flex: 1, display: 'flex', gap: '4px', flexWrap: 'nowrap', overflow: 'hidden' }}>
+              <div style={{ flex: 1, display: 'flex', gap: '4px', flexWrap: 'nowrap', overflow: 'hidden', alignItems: 'center' }}>
                 {compareIds.length > 0 && (
                   <span style={{ fontSize: '10px', fontWeight: 700, color: '#4BAAD4', backgroundColor: '#D4EFFC', padding: '2px 6px', borderRadius: '8px', whiteSpace: 'nowrap' }}>
                     비교 {compareIds.length}
@@ -617,6 +617,20 @@ const App: React.FC = () => {
                 {livingZoneOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#4BAAD4', backgroundColor: '#D4EFFC', padding: '2px 6px', borderRadius: '8px' }}>생활권</span>}
                 {routePanelOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#5AAF84', backgroundColor: '#e6f4ea', padding: '2px 6px', borderRadius: '8px' }}>경로</span>}
                 {affordOpen && <span style={{ fontSize: '10px', fontWeight: 700, color: '#5AAF84', backgroundColor: '#e6f4ea', padding: '2px 6px', borderRadius: '8px' }}>대출</span>}
+                {/* 동영 전용 다짐 문구 */}
+                {localStorage.getItem(BUDGET_USER_STORAGE_KEY) === 'ldy' && (
+                  <span style={{
+                    fontFamily: "'Nanum Brush Script', cursive",
+                    fontSize: '13px',
+                    color: '#1a3a5c',
+                    whiteSpace: 'nowrap',
+                    marginLeft: 'auto',
+                    opacity: 0.75,
+                    flexShrink: 0,
+                  }}>
+                    나는 해야 한다. 그러므로 할 수 있다.
+                  </span>
+                )}
               </div>
               {/* 햄버거 버튼 */}
               <button
@@ -815,6 +829,21 @@ const App: React.FC = () => {
               }}>
                 {loading ? '로딩...' : `${complexes.length}개`}
               </div>
+              {/* 동영 전용 다짐 문구 */}
+              {localStorage.getItem(BUDGET_USER_STORAGE_KEY) === 'ldy' && (
+                <span style={{
+                  fontFamily: "'Nanum Brush Script', cursive",
+                  fontSize: '15px',
+                  color: '#1a3a5c',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  marginLeft: 'auto',
+                  opacity: 0.8,
+                  letterSpacing: '0.3px',
+                }}>
+                  나는 해야 한다. 그러므로 할 수 있다.
+                </span>
+              )}
             </div>
 
             {/* 데스크탑 Row 2: 금액대 + 필터 + 5개 목적별 드롭다운 메뉴 */}
