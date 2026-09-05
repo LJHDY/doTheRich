@@ -2279,6 +2279,67 @@ export const getCollectAllStatus = async (): Promise<BatchCollectStatus> => {
   return res.data;
 };
 
+// ── 전국 시군구 갭 분석 ──────────────────────────────────────────────────────
+
+import type { NationalDistrictStat, NationalGapResponse } from '../types';
+
+/**
+ * 전국 시군구 갭 통계 조회
+ * trade_month 미지정 시 최신 월 데이터 반환
+ */
+export const getNationalGapStats = async (tradeMonth?: string): Promise<NationalGapResponse> => {
+  const params: Record<string, string> = {};
+  if (tradeMonth) params.trade_month = tradeMonth;
+  const { data } = await api.get('/api/national-stats', { params });
+
+  // snake_case → camelCase 변환
+  const stats: NationalDistrictStat[] = (data.stats || []).map((r: any) => ({
+    id: r.id,
+    tradeMonth: r.trade_month,
+    regionCode: r.region_code,
+    regionName: r.region_name,
+    province: r.province,
+    cityType: r.city_type,
+    population: r.population,
+    avgTrade15: r.avg_trade_15,
+    avgTrade18: r.avg_trade_18,
+    avgTrade21: r.avg_trade_21,
+    avgTrade24: r.avg_trade_24,
+    avgTrade26: r.avg_trade_26,
+    avgTrade33: r.avg_trade_33,
+    avgJeonse15: r.avg_jeonse_15,
+    avgJeonse18: r.avg_jeonse_18,
+    avgJeonse21: r.avg_jeonse_21,
+    avgJeonse24: r.avg_jeonse_24,
+    avgJeonse26: r.avg_jeonse_26,
+    avgJeonse33: r.avg_jeonse_33,
+    tradeCount15: r.trade_count_15,
+    tradeCount18: r.trade_count_18,
+    tradeCount21: r.trade_count_21,
+    tradeCount24: r.trade_count_24,
+    tradeCount26: r.trade_count_26,
+    tradeCount33: r.trade_count_33,
+    jeonseCount15: r.jeonse_count_15,
+    jeonseCount18: r.jeonse_count_18,
+    jeonseCount21: r.jeonse_count_21,
+    jeonseCount24: r.jeonse_count_24,
+    jeonseCount26: r.jeonse_count_26,
+    jeonseCount33: r.jeonse_count_33,
+    collectedAt: r.collected_at,
+  }));
+
+  return {
+    tradeMonth: data.trade_month,
+    availableMonths: data.available_months || [],
+    stats,
+  };
+};
+
+/** 전국 시군구 갭 통계 수집 요청 (백그라운드 202) */
+export const collectNationalGapStats = async (monthsCount: number = 1): Promise<void> => {
+  await api.post('/api/national-stats/collect', null, { params: { months_count: monthsCount } });
+};
+
 // ── 블로그 임장일지 초안 ───────────────────────────────────────────────────────
 
 export interface BlogDraft {

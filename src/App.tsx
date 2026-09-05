@@ -17,6 +17,7 @@ import AffordabilityPanel from './features/complex/AffordabilityPanel';
 import RoutePanel from './features/map/RoutePanel';
 import ChecklistTemplatePanel from './features/checklist/ChecklistTemplatePanel';
 import DistrictStatsPanel from './features/district-stats/DistrictStatsPanel';
+import NationalGapPanel from './features/district-stats/NationalGapPanel';
 import FilterPanel, { applyFilters } from './features/map/FilterPanel';
 import DistrictSelector from './features/map/DistrictSelector';
 import { useIsMobile } from './hooks/useIsMobile';
@@ -116,6 +117,9 @@ const App: React.FC = () => {
 
   // 구별 시세 현황 패널
   const [districtStatsOpen, setDistrictStatsOpen] = useState(() => sessionStorage.getItem('panel_district') === 'true');
+
+  // 전국 갭 분석 패널
+  const [nationalGapOpen, setNationalGapOpen] = useState(false);
 
   // 가계부 — 새로고침 후에도 열린 상태 복원
   const [budgetOpen, setBudgetOpen] = useState(() => sessionStorage.getItem('budget_open') === 'true');
@@ -721,6 +725,12 @@ const App: React.FC = () => {
                     onClick: () => { setDistrictStatsOpen(v => !v); setMobileMenuOpen(false); },
                   },
                   {
+                    label: '🏙 전국 갭',
+                    active: nationalGapOpen,
+                    activeColor: '#6c3483', activeBg: '#f5eef8',
+                    onClick: () => { setNationalGapOpen(v => !v); setMobileMenuOpen(false); },
+                  },
+                  {
                     label: '체크리스트',
                     active: checklistPanelOpen,
                     activeColor: '#b07d00', activeBg: '#fef9e7',
@@ -1029,7 +1039,7 @@ const App: React.FC = () => {
               {(() => {
                 const key = 'stats';
                 const isOpen = openMenu === key;
-                const isActive = districtStatsOpen || affordOpen;
+                const isActive = districtStatsOpen || affordOpen || nationalGapOpen;
                 const menuItemStyle = (active: boolean, color: string): React.CSSProperties => ({
                   padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
                   fontSize: '12px', fontWeight: active ? 700 : 500,
@@ -1065,6 +1075,11 @@ const App: React.FC = () => {
                         <div style={menuItemStyle(districtStatsOpen, '#2a6090')}
                           onClick={() => { setDistrictStatsOpen(v => !v); setOpenMenu(null); }}>
                           구별 시세 {districtStatsOpen && <span style={{ fontSize: '10px', color: '#2a6090' }}>ON</span>}
+                        </div>
+                        {/* 전국 갭 분석 패널 토글 */}
+                        <div style={menuItemStyle(nationalGapOpen, '#6c3483')}
+                          onClick={() => { setNationalGapOpen(v => !v); setOpenMenu(null); }}>
+                          🏙 전국 갭 {nationalGapOpen && <span style={{ fontSize: '10px', color: '#6c3483' }}>ON</span>}
                         </div>
                         <div style={menuItemStyle(affordOpen, '#5AAF84')}
                           onClick={() => {
@@ -1508,6 +1523,10 @@ const App: React.FC = () => {
                   isMobile={isMobile}
                 />
               </div>
+            )}
+            {/* 전국 갭 분석 패널 */}
+            {nationalGapOpen && (
+              <NationalGapPanel onClose={() => setNationalGapOpen(false)} />
             )}
           </>
         )}

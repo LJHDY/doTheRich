@@ -494,6 +494,53 @@ export interface DistrictStatHistory {
   count?: number | null;
 }
 
+/** 전국 시군구별 평형별 매매·전세 갭 통계 (월별) */
+export interface NationalDistrictStat {
+  id: number;
+  tradeMonth: string;      // YYYYMM
+  regionCode: string;      // lawd_cd 5자리
+  regionName: string;      // 구/시 이름
+  province: string;        // 시도명 (서울특별시 등)
+  cityType: string;        // 서울/수도권/광역시/세종/지방
+  population?: number;     // 주민등록인구 (명)
+  // 평균 매매가 (만원)
+  avgTrade15?: number;
+  avgTrade18?: number;
+  avgTrade21?: number;
+  avgTrade24?: number;
+  avgTrade26?: number;
+  avgTrade33?: number;
+  // 평균 전세가 (만원)
+  avgJeonse15?: number;
+  avgJeonse18?: number;
+  avgJeonse21?: number;
+  avgJeonse24?: number;
+  avgJeonse26?: number;
+  avgJeonse33?: number;
+  // 매매 거래 건수
+  tradeCount15?: number;
+  tradeCount18?: number;
+  tradeCount21?: number;
+  tradeCount24?: number;
+  tradeCount26?: number;
+  tradeCount33?: number;
+  // 전세 거래 건수
+  jeonseCount15?: number;
+  jeonseCount18?: number;
+  jeonseCount21?: number;
+  jeonseCount24?: number;
+  jeonseCount26?: number;
+  jeonseCount33?: number;
+  collectedAt?: string;
+}
+
+/** 전국 갭 분석 API 응답 */
+export interface NationalGapResponse {
+  tradeMonth: string;          // 조회 기준 월 (YYYYMM)
+  availableMonths: string[];   // 수집된 월 목록 (최신순)
+  stats: NationalDistrictStat[];
+}
+
 /** 매매가·호가 없이 전세가만 있는 평형 항목 — 단지 정리 기능용 */
 export interface PublicComplex {
   id: string;
