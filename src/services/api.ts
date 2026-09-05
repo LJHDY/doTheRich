@@ -2292,8 +2292,8 @@ export const getNationalGapStats = async (tradeMonth?: string): Promise<National
   if (tradeMonth) params.trade_month = tradeMonth;
   const { data } = await api.get('/api/national-stats', { params });
 
-  // snake_case → camelCase 변환
-  const stats: NationalDistrictStat[] = (data.stats || []).map((r: any) => ({
+  // snake_case → camelCase 변환 (백엔드 응답 키: items)
+  const stats: NationalDistrictStat[] = (data.items || []).map((r: any) => ({
     id: r.id,
     tradeMonth: r.trade_month,
     regionCode: r.region_code,
