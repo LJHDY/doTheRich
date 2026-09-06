@@ -330,6 +330,10 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
 | PATCH | `/api/complexes/:id/property-visits/:visitId/checklists/:templateId` | 매물 체크 결과 upsert — `{ rating? }` |
 | GET | `/api/district-stats` | 구별 시세 통계 조회 — `?trade_month=YYYYMM` (미지정 시 최신 월) |
 | POST | `/api/district-stats/collect` | 서울 25구 MOLIT 시세 수집 (202 백그라운드) |
+| GET | `/api/supply` | 시도별 연도별 공급 상태 조회 — `?start_year=&end_year=&province=` |
+| POST | `/api/supply/collect` | 아실 전 시도 공급 예정 세대수 수집 (202 백그라운드) |
+| GET | `/api/supply/movein` | 입주 예정 단지 목록 — `?province=경기&region=고양시&start_year=2026` |
+| POST | `/api/supply/movein/collect` | 아실 전 시도 입주 예정 단지 수집 (202 백그라운드) |
 | GET | `/api/public-complexes/gu-list` | 서울 25구 목록 (guName + sigunguCd) |
 | GET | `/api/public-complexes?sigungu_cd=` | 공공단지 목록 (좌표 있는 것만, snake_case 반환 → api.ts에서 camelCase 변환) |
 | GET | `/api/public-complexes/gu-list` | 수도권 지역 목록 — `{ guName, sigunguCd, province }[]` |
@@ -830,6 +834,27 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
   - `_to_dto()` `latest_asking_price` 파라미터 추가, `ApartmentComplexDto.asking_price` 설정
   - `get_complex_by_id()` 에서도 최신 asking_price 조회 추가
   - 프론트: `ApartmentComplex.askingPrice?: number` 타입 추가, `MapPage.tsx` `basePrice = askingPrice || price`
+- [x] 전국 갭 분석 + 아실 공급 데이터 (`NationalGapPanel`, `district-stats/` 패키지)
+  - 수도권+광역시+지방 시군구 × 5개 평형대 매매/갭/전세율 히트맵 테이블 (인구순 정렬)
+  - 필터: 서울/수도권/광역시/세종/지방 + 검색 + 정렬(인구·매매가·갭·전세율)
+  - 아실(asil.kr) 시도별 공급 상태 뱃지: `26·부족` `27·적정` `28·초과` 형식 (3년치)
+    - `PROVINCE_TO_ASIL` 매핑: 시도 전체명 → 아실 단축명 (예: "부산광역시" → "부산")
+    - `renderSupplyBadges(province)`: 전체명으로 받아 아실 키로 변환 후 배지 표시
+  - **행 클릭 → 시도 공급 그래프 패널** (420px, 좌측 고정):
+    - Recharts BarChart: 2010–2030 연도별 공급 세대수, 공급 상태별 색상 bar
+    - 적정수요 ReferenceLine (빨간 점선), 현재 연도 ★ 강조
+    - 근접 연도(현재±4년) 수치 테이블 (연도·공급·비율·상태)
+    - 하단: **시군구 입주 예정 단지 목록** — 연도별 그룹핑, 월·단지명·세대수 표시
+    - 같은 행 재클릭 시 패널 닫기
+  - 수집 버튼: "시세 수집"(MOLIT 갭 데이터) / "공급 수집"(아실 연도별 집계) / "입주 수집"(아실 단지별 입주 예정)
+  - 백엔드: `asil_supply_service.py` (regional_supply 테이블), `asil_movein_service.py` (regional_movein 테이블)
+    - `GET /api/supply?start_year=&end_year=&province=` — 시도별 공급 상태 조회
+    - `POST /api/supply/collect` — 아실 전 시도 공급 집계 수집
+    - `GET /api/supply/movein?province=경기&region=고양시&start_year=2026` — 입주 예정 단지 조회
+    - `POST /api/supply/movein/collect` — 아실 전 시도 입주 예정 단지 수집
+  - 타입: `ProvinceSupplyYear`, `RegionalSupplyResponse`, `MoveInItem` (types/index.ts)
+  - API: `getRegionalSupply`, `collectRegionalSupply`, `getProvinceSupply`, `getMoveInData`, `collectMoveInData` (api.ts)
+
 - [x] 구별 시세 현황 기능 (`DistrictStatsPanel`)
   - 서울 25개 구 × 5개 평형대(18평/21평/24평/26평/33평) × 매매/전세 평균가 테이블 표시
   - 평형 구간 (전용면적 ±3m² 공차): 18평(전용59㎡) 56~62m², 21평(전용69㎡) 66~72m², 24평(전용79㎡) 76~82m², 26평(전용85㎡) 82~88m², 33평(전용109㎡) 106~112m²

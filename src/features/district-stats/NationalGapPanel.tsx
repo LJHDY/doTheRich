@@ -5,10 +5,14 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell,
+} from 'recharts';
+import {
   getNationalGapStats, collectNationalGapStats,
-  getRegionalSupply, collectRegionalSupply,
+  getRegionalSupply, collectRegionalSupply, getProvinceSupply,
+  getMoveInData, collectMoveInData,
 } from '../../services/api';
-import type { NationalDistrictStat, NationalGapResponse, RegionalSupplyResponse, ProvinceSupplyYear } from '../../types';
+import type { NationalDistrictStat, NationalGapResponse, RegionalSupplyResponse, ProvinceSupplyYear, MoveInItem } from '../../types';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
@@ -29,6 +33,28 @@ const SUPPLY_YEARS = (() => {
   const cur = new Date().getFullYear();
   return [cur, cur + 1, cur + 2];
 })();
+
+/** 시도 전체명 → 아실(asil.kr) 저장 단축명 매핑 */
+const PROVINCE_TO_ASIL: Record<string, string> = {
+  '서울특별시': '서울',
+  '부산광역시': '부산',
+  '대구광역시': '대구',
+  '인천광역시': '인천',
+  '광주광역시': '광주',
+  '대전광역시': '대전',
+  '울산광역시': '울산',
+  '세종특별자치시': '세종',
+  '경기도': '경기',
+  '강원특별자치도': '강원',
+  '강원도': '강원',
+  '충청북도': '충북',
+  '충청남도': '충남',
+  '전라북도': '전북',
+  '전라남도': '전남',
+  '경상북도': '경북',
+  '경상남도': '경남',
+  '제주특별자치도': '제주',
+};
 
 /** 히트맵 색상: 전세가율 높을수록(갭 낮을수록) 초록, 낮을수록(갭 높을수록) 빨강 */
 function jeonseRateColor(rate: number | null): string {
@@ -99,6 +125,16 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
   const [supplyLoading, setSupplyLoading] = useState(false);
   const [supplyCollecting, setSupplyCollecting] = useState(false);
 
+  // 공급 차트 팝업 상태
+  const [chartStat, setChartStat] = useState<NationalDistrictStat | null>(null);
+  const [chartData, setChartData] = useState<RegionalSupplyResponse | null>(null);
+  const [chartLoading, setChartLoading] = useState(false);
+
+  // 입주 예정 단지 목록 상태
+  const [moveInItems, setMoveInItems] = useState<MoveInItem[]>([]);
+  const [moveInLoading, setMoveInLoading] = useState(false);
+  const [moveInCollecting, setMoveInCollecting] = useState(false);
+
   // 필터 상태
   const [cityTypeFilter, setCityTypeFilter] = useState<string>('전체');
   const [searchQuery, setSearchQuery] = useState('');
@@ -151,6 +187,74 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
   const handleMonthChange = (month: string) => {
     setSelectedMonth(month);
     loadData(month);
+  };
+
+  // ── 행 클릭 → 시도 공급 차트 팝업 ────────────────────────────────────────────
+
+  const handleRowClick = async (stat: NationalDistrictStat) => {
+    if (chartStat?.province === stat.province && chartStat?.regionName === stat.regionName && chartData) {
+      setChartStat(null); // 같은 지역 재클릭 시 닫기
+      setMoveInItems([]);
+      return;
+    }
+    setChartStat(stat);
+    setChartLoading(true);
+    setMoveInLoading(true);
+    setChartData(null);
+    setMoveInItems([]);
+
+    const asilKey = PROVINCE_TO_ASIL[stat.province] ?? stat.province;
+
+    // 시도 공급 차트 + 시군구 입주 예정 목록 병렬 조회
+    await Promise.allSettled([
+      getProvinceSupply(asilKey)
+        .then(res => setChartData(res))
+        .catch(e => console.error('[공급차트] 로드 실패', e))
+        .finally(() => setChartLoading(false)),
+
+      getMoveInData(asilKey, stat.regionName)
+        .then(items => setMoveInItems(items))
+        .catch(e => console.error('[입주목록] 로드 실패', e))
+        .finally(() => setMoveInLoading(false)),
+    ]);
+  };
+
+  // ── 입주 예정 단지 수집 ───────────────────────────────────────────────────────
+
+  const handleMoveInCollect = async () => {
+    if (moveInCollecting) return;
+    setMoveInCollecting(true);
+    setToast('아실 입주 예정 단지 수집 시작...');
+    try {
+      await collectMoveInData();
+      // 수집 완료 감지: chartStat가 있으면 재조회, 없으면 toast만
+      let ticks = 0;
+      const pollId = setInterval(async () => {
+        ticks++;
+        if (ticks > 24) {
+          clearInterval(pollId);
+          setMoveInCollecting(false);
+          setToast('수집 시간 초과. 새로고침해 주세요.');
+          return;
+        }
+        try {
+          if (chartStat) {
+            const asilKey = PROVINCE_TO_ASIL[chartStat.province] ?? chartStat.province;
+            const items = await getMoveInData(asilKey, chartStat.regionName);
+            if (items.length > 0) {
+              clearInterval(pollId);
+              setMoveInItems(items);
+              setMoveInCollecting(false);
+              setToast('입주 예정 단지 수집 완료!');
+              setTimeout(() => setToast(null), 3000);
+            }
+          }
+        } catch {/* 무시 */}
+      }, 5000);
+    } catch {
+      setMoveInCollecting(false);
+      setToast('입주 수집 요청 실패');
+    }
   };
 
   // ── 갭 수집 ─────────────────────────────────────────────────────────────────
@@ -233,7 +337,9 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
 
   const getSupplyForProvince = (province: string, year: number): ProvinceSupplyYear | null => {
     if (!supplyData) return null;
-    return supplyData.data[province]?.[year] ?? null;
+    // 시도 전체명 → 아실 단축명 변환 후 조회
+    const asilKey = PROVINCE_TO_ASIL[province] ?? province;
+    return supplyData.data[asilKey]?.[year] ?? null;
   };
 
   // ── 데이터 필터 + 정렬 ──────────────────────────────────────────────────────
@@ -380,6 +486,14 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
         >
           {supplyCollecting ? '수집 중...' : '공급 수집'}
         </button>
+        {/* 입주 예정 단지 수집 버튼 */}
+        <button
+          onClick={handleMoveInCollect}
+          disabled={moveInCollecting}
+          style={{ fontSize: 12, padding: '4px 10px', borderRadius: 4, border: 'none', background: moveInCollecting ? '#aaa' : '#4b5563', color: '#fff', cursor: moveInCollecting ? 'default' : 'pointer' }}
+        >
+          {moveInCollecting ? '수집 중...' : '입주 수집'}
+        </button>
         {/* 새로고침 */}
         <button
           onClick={() => { loadData(selectedMonth); loadSupply(); }}
@@ -521,8 +635,20 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
                         </td>
                       </tr>
                     )}
-                    {items.map((stat, idx) => (
-                      <tr key={stat.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                    {items.map((stat, idx) => {
+                      const isSelected = chartStat?.province === stat.province;
+                      return (
+                      <tr
+                        key={stat.id}
+                        onClick={() => handleRowClick(stat)}
+                        style={{
+                          background: isSelected ? '#eff6ff' : idx % 2 === 0 ? '#fff' : '#f9f9f9',
+                          borderBottom: isSelected ? '2px solid #89CFF0' : '1px solid #eee',
+                          cursor: 'pointer',
+                          outline: isSelected ? '2px solid #89CFF0' : 'none',
+                          outlineOffset: -1,
+                        }}
+                      >
                         {/* 지역명 */}
                         <td style={{ padding: '5px 8px', fontWeight: 500 }}>
                           <div style={{ fontSize: 12 }}>{stat.regionName}</div>
@@ -555,11 +681,12 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
                           );
                         })}
                         {/* 공급 예정 뱃지 */}
-                        <td style={{ padding: '5px 6px', borderLeft: '3px solid #e5e7eb', background: idx % 2 === 0 ? '#fafafa' : '#f3f4f6' }}>
+                        <td style={{ padding: '5px 6px', borderLeft: '3px solid #e5e7eb', background: isSelected ? '#dbeafe' : idx % 2 === 0 ? '#fafafa' : '#f3f4f6' }}>
                           {renderSupplyBadges(stat.province)}
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </React.Fragment>
                 ))}
               </tbody>
@@ -570,8 +697,209 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
 
       {/* 하단 안내 */}
       <div style={{ padding: '6px 12px', borderTop: '1px solid #eee', fontSize: 11, color: '#999' }}>
-        * MOLIT 실거래가 기반 | 직거래 제외 | 전용면적 기준 | 전세율 = 전세가 ÷ 매매가 × 100 | 공급: 아실(asil.kr) 입주예정 세대수 기반 — 시도 단위 | 매월 2일 자동 수집
+        * MOLIT 실거래가 기반 | 직거래 제외 | 전용면적 기준 | 전세율 = 전세가 ÷ 매매가 × 100 | 공급: 아실(asil.kr) 입주예정 세대수 — 시도 단위 | 행 클릭 시 공급 그래프
       </div>
+
+      {/* ── 시도 공급 그래프 패널 (행 클릭 시 왼쪽에 슬라이드) ─────────────────── */}
+      {chartStat && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          right: isMobile ? 0 : '900px',
+          left: isMobile ? 0 : undefined,
+          bottom: isMobile ? 0 : undefined,
+          width: isMobile ? '100%' : '420px',
+          height: isMobile ? '55vh' : '100vh',
+          background: '#fff',
+          boxShadow: '-4px 0 16px rgba(0,0,0,0.18)',
+          zIndex: 3099,
+          display: 'flex',
+          flexDirection: 'column',
+          fontFamily: 'sans-serif',
+        }}>
+          {/* 차트 패널 헤더 */}
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #e0e0e0', background: '#f0f8fd', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c', flex: 1 }}>
+              📊 {PROVINCE_TO_ASIL[chartStat.province] ?? chartStat.province} 아파트 입주 예정량
+            </span>
+            <span style={{ fontSize: 11, color: '#888' }}>(2010–2030)</span>
+            <button
+              onClick={() => setChartStat(null)}
+              style={{ fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', color: '#555', lineHeight: 1 }}
+            >×</button>
+          </div>
+
+          {/* 로딩 */}
+          {chartLoading && (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 }}>
+              데이터 조회 중...
+            </div>
+          )}
+
+          {/* 데이터 없음 */}
+          {!chartLoading && !chartData && (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: 13 }}>
+              공급 데이터가 없습니다. "공급 수집" 버튼을 먼저 누르세요.
+            </div>
+          )}
+
+          {/* 차트 본문 */}
+          {!chartLoading && chartData && (() => {
+            const asilKey = PROVINCE_TO_ASIL[chartStat.province] ?? chartStat.province;
+            const provinceYears = chartData.data[asilKey] ?? {};
+            const barData = Object.entries(provinceYears)
+              .map(([yr, d]) => ({ year: parseInt(yr, 10), ...(d as ProvinceSupplyYear) }))
+              .sort((a, b) => a.year - b.year);
+
+            if (barData.length === 0) {
+              return (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: 13 }}>
+                  "{asilKey}" 공급 데이터 없음
+                </div>
+              );
+            }
+
+            const demandLine = barData[0]?.demandLine ?? 0;
+            const currentYear = new Date().getFullYear();
+
+            return (
+              <div style={{ flex: 1, overflow: 'auto', padding: '12px 8px 8px' }}>
+                {/* 범례 */}
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {Object.entries(SUPPLY_COLORS).map(([label, clr]) => (
+                    <span key={label} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, background: clr.bg, color: clr.color, fontWeight: 700 }}>
+                      {label}
+                    </span>
+                  ))}
+                  <span style={{ fontSize: 10, color: '#dc2626', marginLeft: 4 }}>
+                    — 적정수요 {(demandLine / 1000).toFixed(0)}천세대/년
+                  </span>
+                </div>
+
+                {/* 바 차트 */}
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={barData} margin={{ top: 6, right: 20, left: 4, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis
+                      dataKey="year"
+                      tick={{ fontSize: 9 }}
+                      tickFormatter={(v: number) => v === currentYear ? `${v}★` : String(v)}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 9 }}
+                      tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+                      width={32}
+                    />
+                    <Tooltip
+                      formatter={(value: unknown) => [`${(value as number).toLocaleString()}세대`, '공급 예정']}
+                      labelFormatter={(label: unknown) => `${label}년`}
+                    />
+                    <ReferenceLine
+                      y={demandLine}
+                      stroke="#dc2626"
+                      strokeDasharray="6 3"
+                      label={{ value: '적정수요', position: 'insideTopRight', fontSize: 9, fill: '#dc2626' }}
+                    />
+                    <Bar dataKey="supplyCount" maxBarSize={24}>
+                      {barData.map(d => {
+                        const clr = SUPPLY_COLORS[d.supplyStatus] ?? { bg: '#e0e0e0', color: '#999' };
+                        return (
+                          <Cell
+                            key={d.year}
+                            fill={clr.bg}
+                            stroke={d.year === currentYear ? '#1a3a5c' : clr.color}
+                            strokeWidth={d.year === currentYear ? 2 : 1}
+                          />
+                        );
+                      })}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+
+                {/* 근접 연도 수치 테이블 (현재±4년) */}
+                <div style={{ marginTop: 10, overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: '#f5f5f5' }}>
+                        <th style={{ padding: '4px 6px', textAlign: 'center', borderBottom: '1px solid #ddd' }}>연도</th>
+                        <th style={{ padding: '4px 6px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>공급(세대)</th>
+                        <th style={{ padding: '4px 6px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>적정수요비</th>
+                        <th style={{ padding: '4px 6px', textAlign: 'center', borderBottom: '1px solid #ddd' }}>상태</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {barData.filter(d => d.year >= currentYear - 2 && d.year <= currentYear + 3).map((d, i) => {
+                        const clr = SUPPLY_COLORS[d.supplyStatus] ?? { bg: '#f0f0f0', color: '#666' };
+                        const isCur = d.year === currentYear;
+                        return (
+                          <tr key={d.year} style={{ background: isCur ? '#fffbeb' : i % 2 === 0 ? '#fff' : '#f9f9f9', fontWeight: isCur ? 700 : 400 }}>
+                            <td style={{ padding: '3px 6px', textAlign: 'center' }}>{d.year}{isCur ? ' ★' : ''}</td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right' }}>{d.supplyCount.toLocaleString()}</td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right' }}>{d.supplyRatio}%</td>
+                            <td style={{ padding: '3px 6px', textAlign: 'center' }}>
+                              <span style={{ padding: '1px 6px', borderRadius: 3, background: clr.bg, color: clr.color, fontWeight: 700 }}>
+                                {d.supplyStatus}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ fontSize: 10, color: '#bbb', marginTop: 8, textAlign: 'center' }}>
+                  출처: 아실(asil.kr) | 적정수요 {demandLine.toLocaleString()}세대/년
+                </div>
+
+                {/* 입주 예정 단지 목록 */}
+                <div style={{ marginTop: 14, borderTop: '1px solid #e5e7eb', paddingTop: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>
+                    🏗 {chartStat.regionName} 입주 예정 단지
+                    {moveInLoading && <span style={{ fontSize: 10, fontWeight: 400, color: '#888', marginLeft: 6 }}>조회 중...</span>}
+                    {!moveInLoading && <span style={{ fontSize: 10, fontWeight: 400, color: '#888', marginLeft: 6 }}>({moveInItems.length}건)</span>}
+                  </div>
+                  {!moveInLoading && moveInItems.length === 0 && (
+                    <div style={{ fontSize: 11, color: '#bbb', textAlign: 'center', padding: '8px 0' }}>
+                      입주 예정 데이터 없음 — "입주 수집" 버튼을 누르세요
+                    </div>
+                  )}
+                  {moveInItems.length > 0 && (() => {
+                    // 연도별 그룹핑
+                    const byYear: Record<number, MoveInItem[]> = {};
+                    for (const item of moveInItems) {
+                      const yr = item.moveinYear ?? 0;
+                      if (!byYear[yr]) byYear[yr] = [];
+                      byYear[yr].push(item);
+                    }
+                    return (
+                      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                        {Object.entries(byYear)
+                          .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                          .map(([yr, items]) => (
+                            <div key={yr} style={{ marginBottom: 8 }}>
+                              {/* 연도 헤더 */}
+                              <div style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', padding: '3px 8px', borderRadius: 4, marginBottom: 4 }}>
+                                {yr}년 · {items.reduce((s, i) => s + (i.household || 0), 0).toLocaleString()}세대
+                              </div>
+                              {/* 월별 단지 목록 */}
+                              {items.map(item => (
+                                <div key={item.seq} style={{ display: 'flex', gap: 6, alignItems: 'baseline', padding: '3px 8px', fontSize: 11, borderBottom: '1px solid #f3f4f6' }}>
+                                  <span style={{ color: '#6b7280', minWidth: 28, fontSize: 10 }}>{item.moveinMonth}월</span>
+                                  <span style={{ flex: 1, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.name}>{item.name}</span>
+                                  <span style={{ color: '#374151', whiteSpace: 'nowrap' }}>{(item.household || 0).toLocaleString()}세대</span>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 };

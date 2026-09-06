@@ -556,6 +556,17 @@ export interface RegionalSupplyResponse {
   data: Record<string, Record<number, ProvinceSupplyYear>>; // { province: { year: ... } }
 }
 
+/** 아실 입주 예정 단지 1건 */
+export interface MoveInItem {
+  seq:         string;   // 아실 고유 ID
+  province:    string;   // 아실 시도 단축명 (예: '경기')
+  name:        string;   // 단지명
+  addr:        string;   // 주소 (예: '경기 고양 일산동구')
+  household:   number;   // 세대수
+  moveinYear:  number;   // 입주 예정 연도
+  moveinMonth: number;   // 입주 예정 월
+}
+
 /** 매매가·호가 없이 전세가만 있는 평형 항목 — 단지 정리 기능용 */
 export interface PublicComplex {
   id: string;

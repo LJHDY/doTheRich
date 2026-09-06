@@ -2346,9 +2346,41 @@ export const getRegionalSupply = async (startYear = 2025, endYear = 2028): Promi
   return data as import('../types').RegionalSupplyResponse;
 };
 
+/** 특정 시도 전체 연도 공급 데이터 조회 (차트용, 2010~2030) */
+export const getProvinceSupply = async (province: string): Promise<import('../types').RegionalSupplyResponse> => {
+  const { data } = await api.get('/api/supply', { params: { province, start_year: 2010, end_year: 2030 } });
+  return data as import('../types').RegionalSupplyResponse;
+};
+
 /** 아실 공급 데이터 수집 요청 (백그라운드 202) */
 export const collectRegionalSupply = async (): Promise<void> => {
   await api.post('/api/supply/collect');
+};
+
+/** 입주 예정 단지 목록 조회 — province(아실 단축명) + region(시군구명) 필터 */
+export const getMoveInData = async (
+  province?: string,
+  region?: string,
+  startYear = 2026,
+): Promise<import('../types').MoveInItem[]> => {
+  const params: Record<string, string | number> = { start_year: startYear };
+  if (province) params.province = province;
+  if (region)   params.region   = region;
+  const { data } = await api.get('/api/supply/movein', { params });
+  return (data as any[]).map(d => ({
+    seq:         d.seq,
+    province:    d.province,
+    name:        d.name,
+    addr:        d.addr,
+    household:   d.household,
+    moveinYear:  d.moveinYear,
+    moveinMonth: d.moveinMonth,
+  }));
+};
+
+/** 아실 입주 예정 단지 수집 요청 (백그라운드 202) */
+export const collectMoveInData = async (): Promise<void> => {
+  await api.post('/api/supply/movein/collect');
 };
 
 // ── 블로그 임장일지 초안 ───────────────────────────────────────────────────────
