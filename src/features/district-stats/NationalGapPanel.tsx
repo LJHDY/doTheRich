@@ -1,11 +1,14 @@
 /**
  * NationalGapPanel.tsx
  * 전국 시군구 갭 분석 패널 — 인구 순 정렬, 매매/전세 갭 + 전세가율 히트맵 표시
- * 25평(전용 85㎡) · 33평(전용 109㎡) · 24평(전용 79㎡) 3개 평형 중심
+ * + 아실(asil.kr) 기반 향후 3년 아파트 공급 상태 뱃지
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getNationalGapStats, collectNationalGapStats } from '../../services/api';
-import type { NationalDistrictStat, NationalGapResponse } from '../../types';
+import {
+  getNationalGapStats, collectNationalGapStats,
+  getRegionalSupply, collectRegionalSupply,
+} from '../../services/api';
+import type { NationalDistrictStat, NationalGapResponse, RegionalSupplyResponse, ProvinceSupplyYear } from '../../types';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
@@ -13,16 +16,29 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 /** 지역 유형 표시 순서 (인구 규모 감안) */
 const CITY_TYPE_ORDER = ['서울', '수도권', '광역시', '세종', '지방'];
 
+/** 공급 상태 색상 */
+const SUPPLY_COLORS: Record<string, { bg: string; color: string }> = {
+  부족: { bg: '#dbeafe', color: '#1d4ed8' },
+  적정: { bg: '#dcfce7', color: '#15803d' },
+  초과: { bg: '#ffedd5', color: '#c2410c' },
+  과잉: { bg: '#fee2e2', color: '#b91c1c' },
+};
+
+/** 오늘 기준 표시할 공급 연도 3개 */
+const SUPPLY_YEARS = (() => {
+  const cur = new Date().getFullYear();
+  return [cur, cur + 1, cur + 2];
+})();
+
 /** 히트맵 색상: 전세가율 높을수록(갭 낮을수록) 초록, 낮을수록(갭 높을수록) 빨강 */
 function jeonseRateColor(rate: number | null): string {
   if (rate === null) return 'transparent';
-  // rate: 0~100
   const clamped = Math.max(0, Math.min(100, rate));
-  if (clamped >= 75) return '#c8f5c8'; // 짙은 초록 (전세율 높음 = 갭 낮음)
+  if (clamped >= 75) return '#c8f5c8';
   if (clamped >= 60) return '#e8f8e8';
-  if (clamped >= 50) return '#fff8e0'; // 중립
+  if (clamped >= 50) return '#fff8e0';
   if (clamped >= 40) return '#fde8e8';
-  return '#fbbaba'; // 빨강 (갭 큼)
+  return '#fbbaba';
 }
 
 /** 억 단위 포맷 (소수점 1자리) */
@@ -34,8 +50,7 @@ function fmtUk(val?: number): string {
 /** 갭(매매-전세) 억 단위 포맷 */
 function fmtGap(trade?: number, jeonse?: number): string {
   if (!trade || !jeonse) return '-';
-  const gap = trade - jeonse;
-  return (gap / 10000).toFixed(1) + '억';
+  return ((trade - jeonse) / 10000).toFixed(1) + '억';
 }
 
 /** 전세가율(%) 계산 */
@@ -44,11 +59,17 @@ function calcRate(trade?: number, jeonse?: number): number | null {
   return Math.round((jeonse / trade) * 100);
 }
 
+/** 세대수 K 단위 포맷 */
+function fmtSupply(count: number | null): string {
+  if (!count && count !== 0) return '-';
+  return count >= 1000 ? `${(count / 1000).toFixed(1)}K` : String(count);
+}
+
 // ── 평형 정의 ─────────────────────────────────────────────────────────────────
 interface AreaDef {
-  key: keyof NationalDistrictStat;    // avgTrade26 같은 매매가 키
-  jeonseKey: keyof NationalDistrictStat; // avgJeonse26
-  label: string;                      // 화면 표시 레이블
+  key: keyof NationalDistrictStat;
+  jeonseKey: keyof NationalDistrictStat;
+  label: string;
 }
 
 const AREA_DEFS: AreaDef[] = [
@@ -72,12 +93,17 @@ interface Props {
 const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
   const isMobile = useIsMobile();
 
-  // 데이터 상태
+  // 갭 데이터 상태
   const [response, setResponse] = useState<NationalGapResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [toast, setToast] = useState<string | null>(null);
+
+  // 공급 데이터 상태
+  const [supplyData, setSupplyData] = useState<RegionalSupplyResponse | null>(null);
+  const [supplyLoading, setSupplyLoading] = useState(false);
+  const [supplyCollecting, setSupplyCollecting] = useState(false);
 
   // 필터 상태
   const [cityTypeFilter, setCityTypeFilter] = useState<string>('전체');
@@ -90,7 +116,7 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
   // 폴링 ref
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ── 데이터 로드 ─────────────────────────────────────────────────────────────
+  // ── 갭 데이터 로드 ──────────────────────────────────────────────────────────
 
   const loadData = useCallback(async (month?: string) => {
     setLoading(true);
@@ -105,10 +131,27 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
     }
   }, []);
 
+  // ── 공급 데이터 로드 ─────────────────────────────────────────────────────────
+
+  const loadSupply = useCallback(async () => {
+    setSupplyLoading(true);
+    try {
+      const startYear = SUPPLY_YEARS[0];
+      const endYear   = SUPPLY_YEARS[SUPPLY_YEARS.length - 1];
+      const res = await getRegionalSupply(startYear, endYear);
+      setSupplyData(res);
+    } catch (e) {
+      console.error('[NationalGapPanel] 공급 데이터 로드 실패', e);
+    } finally {
+      setSupplyLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
+    loadSupply();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [loadData]);
+  }, [loadData, loadSupply]);
 
   // 월 변경 시 재조회
   const handleMonthChange = (month: string) => {
@@ -116,7 +159,7 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
     loadData(month);
   };
 
-  // ── 수집 ────────────────────────────────────────────────────────────────────
+  // ── 갭 수집 ─────────────────────────────────────────────────────────────────
 
   const handleCollect = async () => {
     if (collecting) return;
@@ -124,7 +167,6 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
     setToast('전국 갭 통계 수집 시작...');
     try {
       await collectNationalGapStats(1);
-      // 30초 폴링 — collected_at 갱신 감지
       const prevCollectedAt = response?.stats[0]?.collectedAt ?? '';
       let count = 0;
       pollRef.current = setInterval(async () => {
@@ -153,18 +195,43 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
     }
   };
 
+  // ── 공급 수집 ────────────────────────────────────────────────────────────────
+
+  const handleSupplyCollect = async () => {
+    if (supplyCollecting) return;
+    setSupplyCollecting(true);
+    setToast('아실 공급 데이터 수집 시작...');
+    try {
+      await collectRegionalSupply();
+      // 10초 후 자동 재조회 (아실 수집은 빠름)
+      setTimeout(async () => {
+        await loadSupply();
+        setSupplyCollecting(false);
+        setToast('공급 데이터 수집 완료!');
+        setTimeout(() => setToast(null), 3000);
+      }, 10000);
+    } catch {
+      setSupplyCollecting(false);
+      setToast('공급 수집 요청 실패');
+    }
+  };
+
+  // ── 특정 시군구의 공급 상태 조회 ────────────────────────────────────────────
+
+  const getSupplyForProvince = (province: string, year: number): ProvinceSupplyYear | null => {
+    if (!supplyData) return null;
+    return supplyData.data[province]?.[year] ?? null;
+  };
+
   // ── 데이터 필터 + 정렬 ──────────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
     if (!response) return [];
     let list = [...response.stats];
 
-    // 지역 유형 필터
     if (cityTypeFilter !== '전체') {
       list = list.filter(s => s.cityType === cityTypeFilter);
     }
-
-    // 검색어 필터 (지역명/시도명)
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       list = list.filter(s =>
@@ -173,7 +240,6 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
       );
     }
 
-    // 정렬
     list.sort((a, b) => {
       let va: number | null = null;
       let vb: number | null = null;
@@ -193,7 +259,6 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
         va = a.avgJeonse26 ?? null;
         vb = b.avgJeonse26 ?? null;
       }
-      // null 은 뒤로 보냄
       if (va === null && vb === null) return 0;
       if (va === null) return 1;
       if (vb === null) return -1;
@@ -215,10 +280,43 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
   };
 
   const sortArrow = (key: SortKey) => sortKey === key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '';
-
-  // ── 지역 유형별 그룹화 여부 판단 ────────────────────────────────────────────
-  // 전체 보기 시 지역 유형 헤더 표시
   const showCityTypeHeader = cityTypeFilter === '전체' && !searchQuery.trim();
+
+  // ── 공급 뱃지 렌더 헬퍼 ─────────────────────────────────────────────────────
+
+  const renderSupplyBadges = (province: string) => {
+    if (supplyLoading) return <span style={{ color: '#bbb', fontSize: 10 }}>-</span>;
+    return (
+      <div style={{ display: 'flex', gap: 2, flexWrap: 'nowrap' }}>
+        {SUPPLY_YEARS.map(yr => {
+          const s = getSupplyForProvince(province, yr);
+          if (!s) return (
+            <span key={yr} style={{ fontSize: 9, color: '#ccc', lineHeight: '16px' }}>-</span>
+          );
+          const clr = SUPPLY_COLORS[s.supplyStatus] ?? { bg: '#f0f0f0', color: '#666' };
+          return (
+            <span
+              key={yr}
+              title={`${yr}년 공급: ${s.supplyCount.toLocaleString()}세대 / 적정수요: ${s.demandLine.toLocaleString()}세대 (${s.supplyRatio}%)`}
+              style={{
+                display: 'inline-block',
+                fontSize: 9,
+                padding: '1px 4px',
+                borderRadius: 3,
+                background: clr.bg,
+                color: clr.color,
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                lineHeight: '16px',
+              }}
+            >
+              {String(yr).slice(2)}·{s.supplyStatus}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
 
   // ── 렌더링 ──────────────────────────────────────────────────────────────────
 
@@ -226,7 +324,7 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
     position: 'fixed',
     top: 0,
     right: 0,
-    width: isMobile ? '100%' : '780px',
+    width: isMobile ? '100%' : '900px',
     height: '100vh',
     background: '#fff',
     boxShadow: '-2px 0 12px rgba(0,0,0,0.15)',
@@ -239,8 +337,8 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
   return (
     <div style={panelStyle}>
       {/* 헤더 */}
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', gap: 8, background: '#f0f8fd' }}>
-        <span style={{ fontWeight: 700, fontSize: 15, color: '#1a3a5c', flex: 1 }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', gap: 8, background: '#f0f8fd', flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 700, fontSize: 15, color: '#1a3a5c' }}>
           🏙 전국 갭 분석
         </span>
         {/* 거래월 셀렉트 */}
@@ -253,7 +351,7 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
             <option key={m} value={m}>{m.slice(0, 4)}년 {parseInt(m.slice(4), 10)}월</option>
           ))}
         </select>
-        {/* 수집 버튼 */}
+        {/* 갭 수집 */}
         <button
           onClick={handleCollect}
           disabled={collecting}
@@ -261,16 +359,23 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
         >
           {collecting ? '수집 중...' : '시세 수집'}
         </button>
-        {/* 새로고침 버튼 */}
+        {/* 공급 수집 버튼 */}
         <button
-          onClick={() => loadData(selectedMonth)}
+          onClick={handleSupplyCollect}
+          disabled={supplyCollecting}
+          style={{ fontSize: 12, padding: '4px 10px', borderRadius: 4, border: 'none', background: supplyCollecting ? '#aaa' : '#6b7280', color: '#fff', cursor: supplyCollecting ? 'default' : 'pointer' }}
+        >
+          {supplyCollecting ? '수집 중...' : '공급 수집'}
+        </button>
+        {/* 새로고침 */}
+        <button
+          onClick={() => { loadData(selectedMonth); loadSupply(); }}
           disabled={loading}
           style={{ fontSize: 12, padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' }}
         >
           ↺
         </button>
-        {/* 닫기 */}
-        <button onClick={onClose} style={{ fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', color: '#555' }}>×</button>
+        <button onClick={onClose} style={{ fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', color: '#555', marginLeft: 'auto' }}>×</button>
       </div>
 
       {/* 토스트 */}
@@ -282,7 +387,6 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
 
       {/* 필터 바 */}
       <div style={{ padding: '8px 12px', borderBottom: '1px solid #eee', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* 지역 유형 탭 */}
         {['전체', ...CITY_TYPE_ORDER].map(ct => (
           <button
             key={ct}
@@ -298,7 +402,6 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
             {ct}
           </button>
         ))}
-        {/* 지역명 검색 */}
         <input
           type="text"
           placeholder="지역 검색..."
@@ -309,7 +412,7 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
       </div>
 
       {/* 정렬 바 */}
-      <div style={{ padding: '6px 12px', borderBottom: '1px solid #eee', fontSize: 12, color: '#666', display: 'flex', gap: 12 }}>
+      <div style={{ padding: '6px 12px', borderBottom: '1px solid #eee', fontSize: 12, color: '#666', display: 'flex', gap: 12, alignItems: 'center' }}>
         <span>정렬:</span>
         {([
           ['population', '인구'] as [SortKey, string],
@@ -324,7 +427,13 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
             {label}{sortArrow(key as SortKey)}
           </button>
         ))}
-        <span style={{ marginLeft: 'auto', color: '#999' }}>({filtered.length}개 지역)</span>
+        {/* 공급 범례 */}
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
+          {Object.entries(SUPPLY_COLORS).map(([label, clr]) => (
+            <span key={label} style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: clr.bg, color: clr.color, fontWeight: 700 }}>{label}</span>
+          ))}
+        </span>
+        <span style={{ color: '#999', fontSize: 11 }}>({filtered.length}개 지역)</span>
       </div>
 
       {/* 테이블 영역 */}
@@ -337,20 +446,20 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
         )}
 
         {!loading && filtered.length > 0 && (() => {
-          // 지역 유형별 그룹화
           const groups: { cityType: string; items: NationalDistrictStat[] }[] = [];
           if (showCityTypeHeader) {
             for (const ct of CITY_TYPE_ORDER) {
               const items = filtered.filter(s => s.cityType === ct);
               if (items.length > 0) groups.push({ cityType: ct, items });
             }
-            // 알 수 없는 유형도 포함
             const known = new Set(CITY_TYPE_ORDER);
             const etc = filtered.filter(s => !known.has(s.cityType));
             if (etc.length > 0) groups.push({ cityType: '기타', items: etc });
           } else {
             groups.push({ cityType: '', items: filtered });
           }
+
+          const colSpanTotal = 2 + AREA_DEFS.length * 3 + 1; // +1 for 공급열
 
           return (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -365,6 +474,12 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
                       </th>
                     </React.Fragment>
                   ))}
+                  {/* 공급 예정 헤더 */}
+                  <th
+                    style={{ padding: '4px 6px', textAlign: 'center', borderBottom: '1px solid #ddd', borderLeft: '3px solid #6b7280', fontSize: 11, color: '#374151', background: '#f8f9fa', minWidth: 90 }}
+                  >
+                    공급 ({SUPPLY_YEARS.map(y => String(y).slice(2)).join('/')})
+                  </th>
                 </tr>
                 <tr style={{ background: '#fafafa', position: 'sticky', top: 28, zIndex: 1 }}>
                   <th style={{ borderBottom: '1px solid #ddd' }} />
@@ -376,15 +491,18 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
                       <th style={{ padding: '3px 4px', textAlign: 'right', borderBottom: '1px solid #ddd', fontSize: 10, color: '#777' }}>전세율</th>
                     </React.Fragment>
                   ))}
+                  {/* 공급 서브헤더: 적정수요 기준 뱃지 */}
+                  <th style={{ padding: '3px 6px', textAlign: 'center', borderBottom: '1px solid #ddd', borderLeft: '3px solid #6b7280', fontSize: 10, color: '#777', background: '#f8f9fa' }}>
+                    적정수요 대비
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {groups.map(({ cityType, items }) => (
                   <React.Fragment key={cityType}>
-                    {/* 지역 유형 헤더 행 */}
                     {showCityTypeHeader && (
                       <tr>
-                        <td colSpan={2 + AREA_DEFS.length * 3}
+                        <td colSpan={colSpanTotal}
                           style={{ padding: '5px 8px', background: '#e8f4ff', fontWeight: 700, fontSize: 12, color: '#1a3a5c', borderTop: '2px solid #89CFF0' }}>
                           {cityType} ({items.length}개)
                         </td>
@@ -395,7 +513,9 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
                         {/* 지역명 */}
                         <td style={{ padding: '5px 8px', fontWeight: 500 }}>
                           <div style={{ fontSize: 12 }}>{stat.regionName}</div>
-                          <div style={{ fontSize: 10, color: '#888' }}>{stat.province.replace('특별시', '').replace('광역시', '').replace('특별자치시', '').replace('특별자치도', '')}</div>
+                          <div style={{ fontSize: 10, color: '#888' }}>
+                            {stat.province.replace('특별시', '').replace('광역시', '').replace('특별자치시', '').replace('특별자치도', '')}
+                          </div>
                         </td>
                         {/* 인구 */}
                         <td style={{ padding: '5px 4px', textAlign: 'right', color: '#555', whiteSpace: 'nowrap' }}>
@@ -421,6 +541,10 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
                             </React.Fragment>
                           );
                         })}
+                        {/* 공급 예정 뱃지 */}
+                        <td style={{ padding: '5px 6px', borderLeft: '3px solid #e5e7eb', background: idx % 2 === 0 ? '#fafafa' : '#f3f4f6' }}>
+                          {renderSupplyBadges(stat.province)}
+                        </td>
                       </tr>
                     ))}
                   </React.Fragment>
@@ -433,7 +557,7 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
 
       {/* 하단 안내 */}
       <div style={{ padding: '6px 12px', borderTop: '1px solid #eee', fontSize: 11, color: '#999' }}>
-        * MOLIT 실거래가 기반 | 직거래 제외 | 전용면적 기준 | 전세율 = 전세가 ÷ 매매가 × 100 | 매월 2일 자동 수집
+        * MOLIT 실거래가 기반 | 직거래 제외 | 전용면적 기준 | 전세율 = 전세가 ÷ 매매가 × 100 | 공급: 아실(asil.kr) 입주예정 세대수 기반 — 시도 단위 | 매월 2일 자동 수집
       </div>
     </div>
   );

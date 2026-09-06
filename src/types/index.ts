@@ -541,6 +541,21 @@ export interface NationalGapResponse {
   stats: NationalDistrictStat[];
 }
 
+/** 시도별 특정 연도 공급 상태 */
+export interface ProvinceSupplyYear {
+  supplyCount:  number;   // 공급 세대수
+  demandLine:   number;   // 적정수요 기준선 (lineS)
+  supplyRatio:  number;   // 공급 / 적정수요 × 100 (%)
+  supplyStatus: '부족' | '적정' | '초과' | '과잉';
+}
+
+/** 시도별 공급 데이터 응답 */
+export interface RegionalSupplyResponse {
+  startYear: number;
+  endYear:   number;
+  data: Record<string, Record<number, ProvinceSupplyYear>>; // { province: { year: ... } }
+}
+
 /** 매매가·호가 없이 전세가만 있는 평형 항목 — 단지 정리 기능용 */
 export interface PublicComplex {
   id: string;

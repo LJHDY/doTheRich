@@ -2340,6 +2340,17 @@ export const collectNationalGapStats = async (monthsCount: number = 1): Promise<
   await api.post('/api/national-stats/collect', null, { params: { months_count: monthsCount } });
 };
 
+/** 시도별 연도별 아파트 공급 예정 데이터 조회 (아실 기반) */
+export const getRegionalSupply = async (startYear = 2025, endYear = 2028): Promise<import('../types').RegionalSupplyResponse> => {
+  const { data } = await api.get('/api/supply', { params: { start_year: startYear, end_year: endYear } });
+  return data as import('../types').RegionalSupplyResponse;
+};
+
+/** 아실 공급 데이터 수집 요청 (백그라운드 202) */
+export const collectRegionalSupply = async (): Promise<void> => {
+  await api.post('/api/supply/collect');
+};
+
 // ── 블로그 임장일지 초안 ───────────────────────────────────────────────────────
 
 export interface BlogDraft {
