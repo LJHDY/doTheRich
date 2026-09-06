@@ -2357,15 +2357,14 @@ export const collectRegionalSupply = async (): Promise<void> => {
   await api.post('/api/supply/collect');
 };
 
-/** 입주 예정 단지 목록 조회 — province(아실 단축명) + region(시군구명) 필터 */
+/** 아실 입주 예정 단지 실시간 조회 (DB 미사용 — 아실 직접 프록시) */
 export const getMoveInData = async (
-  province?: string,
+  province: string,
   region?: string,
   startYear = 2026,
 ): Promise<import('../types').MoveInItem[]> => {
-  const params: Record<string, string | number> = { start_year: startYear };
-  if (province) params.province = province;
-  if (region)   params.region   = region;
+  const params: Record<string, string | number> = { province, start_year: startYear };
+  if (region) params.region = region;
   const { data } = await api.get('/api/supply/movein', { params });
   return (data as any[]).map(d => ({
     seq:         d.seq,
@@ -2376,11 +2375,6 @@ export const getMoveInData = async (
     moveinYear:  d.moveinYear,
     moveinMonth: d.moveinMonth,
   }));
-};
-
-/** 아실 입주 예정 단지 수집 요청 (백그라운드 202) */
-export const collectMoveInData = async (): Promise<void> => {
-  await api.post('/api/supply/movein/collect');
 };
 
 // ── 블로그 임장일지 초안 ───────────────────────────────────────────────────────

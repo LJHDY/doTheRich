@@ -10,7 +10,7 @@ import {
 import {
   getNationalGapStats, collectNationalGapStats,
   getRegionalSupply, collectRegionalSupply, getProvinceSupply,
-  getMoveInData, collectMoveInData,
+  getMoveInData,
 } from '../../services/api';
 import type { NationalDistrictStat, NationalGapResponse, RegionalSupplyResponse, ProvinceSupplyYear, MoveInItem } from '../../types';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -133,7 +133,6 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
   // 입주 예정 단지 목록 상태
   const [moveInItems, setMoveInItems] = useState<MoveInItem[]>([]);
   const [moveInLoading, setMoveInLoading] = useState(false);
-  const [moveInCollecting, setMoveInCollecting] = useState(false);
 
   // 필터 상태
   const [cityTypeFilter, setCityTypeFilter] = useState<string>('전체');
@@ -219,43 +218,6 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
     ]);
   };
 
-  // ── 입주 예정 단지 수집 ───────────────────────────────────────────────────────
-
-  const handleMoveInCollect = async () => {
-    if (moveInCollecting) return;
-    setMoveInCollecting(true);
-    setToast('아실 입주 예정 단지 수집 시작...');
-    try {
-      await collectMoveInData();
-      // 수집 완료 감지: chartStat가 있으면 재조회, 없으면 toast만
-      let ticks = 0;
-      const pollId = setInterval(async () => {
-        ticks++;
-        if (ticks > 24) {
-          clearInterval(pollId);
-          setMoveInCollecting(false);
-          setToast('수집 시간 초과. 새로고침해 주세요.');
-          return;
-        }
-        try {
-          if (chartStat) {
-            const asilKey = PROVINCE_TO_ASIL[chartStat.province] ?? chartStat.province;
-            const items = await getMoveInData(asilKey, chartStat.regionName);
-            if (items.length > 0) {
-              clearInterval(pollId);
-              setMoveInItems(items);
-              setMoveInCollecting(false);
-              setToast('입주 예정 단지 수집 완료!');
-              setTimeout(() => setToast(null), 3000);
-            }
-          }
-        } catch {/* 무시 */}
-      }, 5000);
-    } catch {
-      setMoveInCollecting(false);
-      setToast('입주 수집 요청 실패');
-    }
-  };
 
   // ── 갭 수집 ─────────────────────────────────────────────────────────────────
 
@@ -485,14 +447,6 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
           style={{ fontSize: 12, padding: '4px 10px', borderRadius: 4, border: 'none', background: supplyCollecting ? '#aaa' : '#6b7280', color: '#fff', cursor: supplyCollecting ? 'default' : 'pointer' }}
         >
           {supplyCollecting ? '수집 중...' : '공급 수집'}
-        </button>
-        {/* 입주 예정 단지 수집 버튼 */}
-        <button
-          onClick={handleMoveInCollect}
-          disabled={moveInCollecting}
-          style={{ fontSize: 12, padding: '4px 10px', borderRadius: 4, border: 'none', background: moveInCollecting ? '#aaa' : '#4b5563', color: '#fff', cursor: moveInCollecting ? 'default' : 'pointer' }}
-        >
-          {moveInCollecting ? '수집 중...' : '입주 수집'}
         </button>
         {/* 새로고침 */}
         <button
@@ -860,7 +814,7 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
                   </div>
                   {!moveInLoading && moveInItems.length === 0 && (
                     <div style={{ fontSize: 11, color: '#bbb', textAlign: 'center', padding: '8px 0' }}>
-                      입주 예정 데이터 없음 — "입주 수집" 버튼을 누르세요
+                      입주 예정 단지 없음
                     </div>
                   )}
                   {moveInItems.length > 0 && (() => {
