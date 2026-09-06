@@ -59,12 +59,6 @@ function calcRate(trade?: number, jeonse?: number): number | null {
   return Math.round((jeonse / trade) * 100);
 }
 
-/** 세대수 K 단위 포맷 */
-function fmtSupply(count: number | null): string {
-  if (!count && count !== 0) return '-';
-  return count >= 1000 ? `${(count / 1000).toFixed(1)}K` : String(count);
-}
-
 // ── 평형 정의 ─────────────────────────────────────────────────────────────────
 interface AreaDef {
   key: keyof NationalDistrictStat;
