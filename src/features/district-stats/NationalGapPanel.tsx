@@ -189,7 +189,7 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
     }
   };
 
-  // ── 공급 수집 ────────────────────────────────────────────────────────────────
+  // ── 공급 수집 — 5초 폴링으로 데이터 감지 ────────────────────────────────────
 
   const handleSupplyCollect = async () => {
     if (supplyCollecting) return;
@@ -197,13 +197,32 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
     setToast('아실 공급 데이터 수집 시작...');
     try {
       await collectRegionalSupply();
-      // 10초 후 자동 재조회 (아실 수집은 빠름)
-      setTimeout(async () => {
-        await loadSupply();
-        setSupplyCollecting(false);
-        setToast('공급 데이터 수집 완료!');
-        setTimeout(() => setToast(null), 3000);
-      }, 10000);
+      // 수집 완료 감지: 5초마다 재조회 — 데이터 건수가 생기면 완료 (최대 2분)
+      let prevCount = Object.keys(supplyData?.data ?? {}).length;
+      let ticks = 0;
+      const supplyPollId = setInterval(async () => {
+        ticks++;
+        if (ticks > 24) {
+          clearInterval(supplyPollId);
+          setSupplyCollecting(false);
+          setToast('공급 수집 시간 초과. 새로고침 버튼을 눌러주세요.');
+          return;
+        }
+        try {
+          const startYear = SUPPLY_YEARS[0];
+          const endYear   = SUPPLY_YEARS[SUPPLY_YEARS.length - 1];
+          const res = await getRegionalSupply(startYear, endYear);
+          const newCount = Object.keys(res.data ?? {}).length;
+          if (newCount > prevCount) {
+            clearInterval(supplyPollId);
+            setSupplyData(res);
+            setSupplyCollecting(false);
+            setToast('공급 데이터 수집 완료!');
+            setTimeout(() => setToast(null), 3000);
+          }
+          prevCount = newCount;
+        } catch {/* 무시 */}
+      }, 5000);
     } catch {
       setSupplyCollecting(false);
       setToast('공급 수집 요청 실패');
