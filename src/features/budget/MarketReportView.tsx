@@ -626,6 +626,8 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
   const [gainersOpen, setGainersOpen] = useState<Record<string, boolean>>({});
   // 투자자 순매수 동향 뷰 토글 (table | chart)
   const [investorFlowView, setInvestorFlowView] = useState<'table' | 'chart'>('table');
+  // 투자자 순매수 동향 페이지 (0=최신 7일, 1=그 이전 7일, ...)
+  const [investorFlowPage, setInvestorFlowPage] = useState(0);
   // 티커 이력 차트 — 선택된 티커 키 (null=닫힘), 전체 리포트 기준
   const [chartTicker, setChartTicker] = useState<{ key: string; label: string; isRate: boolean } | null>(null);
 
@@ -1333,6 +1335,10 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
               {/* 투자자별 순매수 동향 — kr_close 리포트 전용 */}
               {selected.reportType === 'kr_close' && selected.krInvestorFlow && selected.krInvestorFlow.length > 0 && (() => {
                 const flow: KrInvestorDayFlow[] = [...selected.krInvestorFlow];
+                // 7일씩 페이징 (page 0 = 최신 7일)
+                const PAGE_SIZE = 7;
+                const totalPages = Math.ceil(flow.length / PAGE_SIZE);
+                const pagedFlow = flow.slice(investorFlowPage * PAGE_SIZE, (investorFlowPage + 1) * PAGE_SIZE);
                 // 표시할 투자자 컬럼 순서 (백엔드 key 기준)
                 const COLS: { key: string; label: string }[] = [
                   { key: 'individual',    label: '개인' },
@@ -1346,7 +1352,7 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
                   { key: 'pension',       label: '연기금' },
                   { key: 'other_corp',    label: '기타법인' },
                 ];
-                // 데이터가 있는 컬럼만 필터
+                // 전체 flow 기준으로 데이터 있는 컬럼만 필터 (페이지 바뀌어도 컬럼 유지)
                 const activeCols = COLS.filter(c =>
                   flow.some(d => d.investors[c.key] !== undefined)
                 );
@@ -1362,14 +1368,13 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
                 // 날짜 포맷: YYYYMMDD → MM/DD
                 const fmtDate = (d: string) => d.length === 8 ? `${d.slice(4, 6)}/${d.slice(6, 8)}` : d;
 
-                // 그래프용 데이터: 날짜별 주요 투자자 순매수 (개인/외국인/기관계)
+                // 그래프용 데이터: 현재 페이지 기준, 과거→오늘(asc) 순서
                 const CHART_COLS = [
                   { key: 'individual', label: '개인',   color: '#4e79a7' },
                   { key: 'foreign',    label: '외국인', color: '#f28e2b' },
                   { key: 'institution', label: '기관계', color: '#59a14f' },
                 ];
-                // 그래프는 시계열 특성상 과거→오늘(asc) 순서 유지
-                const chartData = [...flow].reverse().map(day => {
+                const chartData = [...pagedFlow].reverse().map(day => {
                   const row: Record<string, string | number> = { date: fmtDate(day.date) };
                   CHART_COLS.forEach(c => {
                     row[c.key] = day.investors[c.key]?.diffHundredMillion ?? 0;
@@ -1379,9 +1384,33 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
 
                 return (
                   <div style={{ marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px', flexWrap: 'wrap' }}>
                       <div style={{ width: '3px', height: '14px', borderRadius: '2px', background: '#c0404a', flexShrink: 0 }} />
                       <span style={{ fontSize: '12px', fontWeight: 700, color: '#344054' }}>KOSPI 투자자별 순매수 동향 (억원)</span>
+                      {/* 페이지 네비게이션 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }}>
+                        <button
+                          onClick={() => setInvestorFlowPage(p => Math.min(p + 1, totalPages - 1))}
+                          disabled={investorFlowPage >= totalPages - 1}
+                          style={{
+                            fontSize: '12px', padding: '2px 7px', borderRadius: '6px', cursor: 'pointer',
+                            border: '1px solid #dde4ed', background: '#f8fafc', color: '#344054',
+                            opacity: investorFlowPage >= totalPages - 1 ? 0.35 : 1,
+                          }}
+                        >◀</button>
+                        <span style={{ fontSize: '11px', color: '#9aa0a6', minWidth: '52px', textAlign: 'center' }}>
+                          {investorFlowPage * PAGE_SIZE + 1}~{Math.min((investorFlowPage + 1) * PAGE_SIZE, flow.length)}일
+                        </span>
+                        <button
+                          onClick={() => setInvestorFlowPage(p => Math.max(p - 1, 0))}
+                          disabled={investorFlowPage <= 0}
+                          style={{
+                            fontSize: '12px', padding: '2px 7px', borderRadius: '6px', cursor: 'pointer',
+                            border: '1px solid #dde4ed', background: '#f8fafc', color: '#344054',
+                            opacity: investorFlowPage <= 0 ? 0.35 : 1,
+                          }}
+                        >▶</button>
+                      </div>
                       <button
                         onClick={() => setInvestorFlowView(v => v === 'table' ? 'chart' : 'table')}
                         style={{
@@ -1407,8 +1436,8 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
                             </tr>
                           </thead>
                           <tbody>
-                            {flow.map((day, i) => (
-                              <tr key={day.date} style={{ borderBottom: i < flow.length - 1 ? '1px solid #f0f4f8' : 'none' }}>
+                            {pagedFlow.map((day, i) => (
+                              <tr key={day.date} style={{ borderBottom: i < pagedFlow.length - 1 ? '1px solid #f0f4f8' : 'none' }}>
                                 <td style={{ padding: '6px 10px', color: '#344054', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtDate(day.date)}</td>
                                 {activeCols.map(c => {
                                   const inv = day.investors[c.key];
