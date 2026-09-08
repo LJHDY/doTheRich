@@ -2228,11 +2228,12 @@ export interface TradeRawItem {
   floor: string | null; // 층
   date: string | null;  // "YYYYMMDD"
   price: number | null; // 만원
-  isDirect: boolean;    // 직거래 여부
+  isDirect: boolean;    // 직거래 여부 (매매만)
 }
 
 export interface TradeHistoryMonth {
   yearMonth: string;      // "202308"
+  // 매매
   tradeCount: number;
   directCount: number;
   avgPrice: number | null;  // 만원 단위
@@ -2240,6 +2241,13 @@ export interface TradeHistoryMonth {
   maxPrice: number | null;
   areaBreakdown: Record<string, { count: number; avg: number | null; min: number | null }>;
   rawItems: TradeRawItem[];
+  // 전세
+  jeonseCount: number;
+  avgJeonse: number | null; // 만원 단위 평균 보증금
+  minJeonse: number | null;
+  maxJeonse: number | null;
+  jeonseAreaBreakdown: Record<string, { count: number; avg: number | null; min: number | null }>;
+  jeonseRawItems: TradeRawItem[];
   collectedAt: string | null;
 }
 

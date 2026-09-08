@@ -22,6 +22,7 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   const [histories, setHistories] = useState<Map<number, TradeHistoryMonth[]>>(new Map());
   const [statuses, setStatuses] = useState<Map<number, boolean>>(new Map());
   const [collecting, setCollecting] = useState<Set<number>>(new Set());
+  const [tradeType, setTradeType] = useState<'trade' | 'jeonse'>('trade'); // 매매/전세 탭
   const [granularity, setGranularity] = useState<'month' | 'quarter' | 'year'>('year');
   const [selectedYear, setSelectedYear] = useState('');
   const [areaFilters, setAreaFilters] = useState<Map<number, string>>(new Map());
@@ -94,10 +95,11 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   const effectiveYear = showAll ? latestYear
     : (selectedYear && availableYears.includes(selectedYear)) ? selectedYear : latestYear;
 
-  // 단지별 집계 맵 — 각 단지의 선택 평형을 독립 적용
+  // 단지별 집계 맵 — tradeType(매매/전세)과 선택 평형 독립 적용
   const getAgg = (complexId: number): Map<string, { count: number; avgPrice: number | null }> => {
     const hist = histories.get(complexId) || [];
     const area = getArea(complexId);
+    const isJeonse = tradeType === 'jeonse';
     const acc = new Map<string, { count: number; prices: number[] }>();
 
     hist.forEach(m => {
@@ -114,9 +116,15 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
         label = m.yearMonth.slice(0, 4);
       }
 
-      const bd = area === '전체' ? null : m.areaBreakdown[area];
-      const cnt = area === '전체' ? m.tradeCount : (bd?.count ?? 0);
-      const p = area === '전체' ? m.avgPrice : bd?.avg;
+      // 매매/전세 분기
+      const breakdown = isJeonse ? m.jeonseAreaBreakdown : m.areaBreakdown;
+      const totalCount = isJeonse ? m.jeonseCount : m.tradeCount;
+      const totalAvg   = isJeonse ? m.avgJeonse    : m.avgPrice;
+
+      const bd  = area === '전체' ? null : breakdown[area];
+      const cnt = area === '전체' ? totalCount : (bd?.count ?? 0);
+      const p   = area === '전체' ? totalAvg   : bd?.avg;
+
       const cur = acc.get(label) ?? { count: 0, prices: [] };
       cur.count += cnt;
       if (p != null) cur.prices.push(p);
@@ -164,8 +172,11 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
     entries.some(({ complexId }) => (row[`c${complexId}_count`] as number) > 0)
   );
 
-  const barColor = (e: TradeComplexEntry) => isSingle ? '#89CFF0' : e.color;
-  const lineColor = (e: TradeComplexEntry) => isSingle ? '#E06060' : e.color;
+  // 전세 탭: bar=연분홍, line=진빨강 / 매매 탭: bar=베이비블루, line=빨강
+  const barColor = (e: TradeComplexEntry) =>
+    isSingle ? (tradeType === 'jeonse' ? '#F4A0A0' : '#89CFF0') : e.color;
+  const lineColor = (e: TradeComplexEntry) =>
+    isSingle ? (tradeType === 'jeonse' ? '#c0392b' : '#E06060') : e.color;
 
   const xInterval = showAll && granularity === 'month' ? 11
     : granularity === 'quarter' && labels.length > 20 ? 3 : 0;
@@ -195,20 +206,20 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
     }
   };
 
-  // 클릭 레이블의 개별 거래 목록 (평형 필터 적용, 날짜 내림차순)
+  // 클릭 레이블의 개별 거래 목록 (매매/전세 분기, 평형 필터 적용, 날짜 내림차순)
   const drillDownItems: (TradeRawItem & { complexId: number })[] = clickedLabel
     ? (() => {
         const months = new Set(getLabelMonths(clickedLabel));
+        const isJeonse = tradeType === 'jeonse';
         const result: (TradeRawItem & { complexId: number })[] = [];
         entries.forEach(({ complexId }) => {
           const selectedArea = getArea(complexId);
           (histories.get(complexId) || [])
             .filter(m => months.has(m.yearMonth))
             .forEach(m => {
-              const items = (m.rawItems || []).filter(it =>
-                selectedArea === '전체' || it.area === selectedArea
-              );
-              items.forEach(it => result.push({ ...it, complexId }));
+              const rawList = isJeonse ? (m.jeonseRawItems || []) : (m.rawItems || []);
+              rawList.filter(it => selectedArea === '전체' || it.area === selectedArea)
+                .forEach(it => result.push({ ...it, complexId }));
             });
         });
         return result.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -265,6 +276,22 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                 color: '#5f6368', flexShrink: 0,
               }}
             >×</button>
+          </div>
+
+          {/* 매매 / 전세 탭 */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+            {(['trade', 'jeonse'] as const).map(t => (
+              <button key={t} onClick={() => { setTradeType(t); setClickedLabel(null); }} style={{
+                padding: '5px 18px', fontSize: '13px', fontWeight: tradeType === t ? 700 : 400,
+                border: `1.5px solid ${tradeType === t ? (t === 'trade' ? '#4BAAD4' : '#E06060') : '#dadce0'}`,
+                borderRadius: '20px',
+                background: tradeType === t ? (t === 'trade' ? '#4BAAD4' : '#E06060') : '#fff',
+                color: tradeType === t ? '#fff' : '#5f6368',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}>
+                {t === 'trade' ? '매매' : '전세'}
+              </button>
+            ))}
           </div>
 
           {/* 단위 토글 */}
@@ -467,8 +494,10 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                     const selectedArea = getArea(cid);
                     const areaSuffix = selectedArea !== '전체' ? ` (${parseFloat(selectedArea).toFixed(0)}㎡)` : '';
                     const label = isSingle ? '' : `${entry?.complexName ?? ''}${areaSuffix} `;
-                    if (type === 'count') return [`${value}건`, `${label}거래량`];
-                    return [`${value?.toFixed ? value.toFixed(2) : '-'}억`, `${label}평균가`];
+                    const countLabel = tradeType === 'jeonse' ? '전세 거래량' : '매매 거래량';
+                    const priceLabel = tradeType === 'jeonse' ? '평균 보증금' : '평균 매매가';
+                    if (type === 'count') return [`${value}건`, `${label}${countLabel}`];
+                    return [`${value?.toFixed ? value.toFixed(2) : '-'}억`, `${label}${priceLabel}`];
                   }}
                 />
                 {/* 거래량 — 단일: 단색 bar, 다중: 스택 bar */}
@@ -551,8 +580,8 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                         <th style={thStyle}>거래일</th>
                         <th style={thStyle}>평형(㎡)</th>
                         <th style={thStyle}>층</th>
-                        <th style={{ ...thStyle, textAlign: 'right' }}>실거래가</th>
-                        <th style={thStyle}>구분</th>
+                        <th style={{ ...thStyle, textAlign: 'right' }}>{tradeType === 'jeonse' ? '보증금' : '실거래가'}</th>
+                        {tradeType === 'trade' && <th style={thStyle}>구분</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -583,11 +612,13 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                             </td>
                             <td style={tdStyle}>{it.floor ? `${it.floor}층` : '-'}</td>
                             <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#1a1a2e' }}>{priceStr}</td>
-                            <td style={tdStyle}>
-                              {it.isDirect
-                                ? <span style={{ color: '#E06060', fontWeight: 600 }}>직거래</span>
-                                : <span style={{ color: '#9aa0a6' }}>중개</span>}
-                            </td>
+                            {tradeType === 'trade' && (
+                              <td style={tdStyle}>
+                                {it.isDirect
+                                  ? <span style={{ color: '#E06060', fontWeight: 600 }}>직거래</span>
+                                  : <span style={{ color: '#9aa0a6' }}>중개</span>}
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
