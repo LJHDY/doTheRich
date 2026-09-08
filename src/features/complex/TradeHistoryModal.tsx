@@ -44,15 +44,31 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 개별 단지 수집 트리거 + 폴링
+  // collect 엔드포인트는 202 즉시 반환 → 백그라운드 실행. 따라서 수집 전 lastUpdated를
+  // 기록해두고, 해당 값이 바뀔 때까지 폴링해야 새 데이터를 올바르게 로드할 수 있다.
   const handleCollect = useCallback(async (complexId: number) => {
     setCollecting(prev => new Set(prev).add(complexId));
+
+    // 수집 시작 전 현재 lastUpdated 스냅샷 (기존 데이터가 있으면 해당 값, 없으면 null)
+    let prevLastUpdated: string | null = null;
+    try {
+      const prevStatus = await getTradeHistoryStatus(complexId);
+      prevLastUpdated = prevStatus.lastUpdated ?? null;
+    } catch { /* ignore */ }
+
     try { await collectTradeHistory(complexId); } catch { /* ignore */ }
+
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;
       try {
         const s = await getTradeHistoryStatus(complexId);
-        if (s.collected) {
+        // lastUpdated가 수집 전과 달라졌을 때만 완료로 판단 (새 데이터 확인)
+        const isNewlyCollected =
+          s.collected && s.lastUpdated != null && s.lastUpdated !== prevLastUpdated;
+        // 미수집 → 수집됨 경우도 처리
+        const wasUncollected = !prevLastUpdated && s.collected;
+        if (isNewlyCollected || wasUncollected) {
           clearInterval(poll);
           setCollecting(prev => { const n = new Set(prev); n.delete(complexId); return n; });
           setStatuses(prev => new Map(prev).set(complexId, true));
