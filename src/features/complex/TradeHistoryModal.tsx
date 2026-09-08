@@ -69,11 +69,13 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
 
   const isSingle = entries.length === 1;
 
-  // 단지별 보유 평형 목록 (area_breakdown 키 합집합, 숫자 오름차순)
+  // 단지별 보유 평형 목록 — 현재 탭(매매/전세) 기준 breakdown 키
   const areasPerComplex = new Map<number, string[]>(
     entries.map(({ complexId }) => {
       const areas = Array.from(new Set(
-        (histories.get(complexId) || []).flatMap(m => Object.keys(m.areaBreakdown))
+        (histories.get(complexId) || []).flatMap(m =>
+          Object.keys(tradeType === 'jeonse' ? (m.jeonseAreaBreakdown ?? {}) : m.areaBreakdown)
+        )
       )).sort((a, b) => (parseFloat(a) || 999) - (parseFloat(b) || 999));
       return [complexId, areas];
     })
@@ -538,8 +540,33 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
           )}
 
           {!hasAnyData && entries.some(e => statuses.get(e.complexId)) && (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9aa0a6', fontSize: '14px' }}>
-              거래 데이터가 없습니다.
+            <div style={{ textAlign: 'center', padding: '50px 20px' }}>
+              {tradeType === 'jeonse' ? (
+                <div>
+                  <div style={{ fontSize: '14px', color: '#9aa0a6', marginBottom: '10px' }}>
+                    전세 데이터가 없습니다.
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#bbb', marginBottom: '16px' }}>
+                    기존 수집 데이터에는 전세 정보가 포함되지 않았습니다.<br />
+                    삭제 후 재수집하면 매매·전세 데이터를 함께 수집합니다.
+                  </div>
+                  {isSingle && (
+                    <button
+                      onClick={() => handleCollect(entries[0].complexId)}
+                      disabled={collecting.has(entries[0].complexId)}
+                      style={{
+                        padding: '7px 20px', fontSize: '13px', fontWeight: 600,
+                        border: '1.5px solid #E06060', borderRadius: '18px',
+                        background: '#fff', color: '#E06060', cursor: 'pointer',
+                      }}
+                    >
+                      {collecting.has(entries[0].complexId) ? '수집 중...' : '↺ 재수집'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: '14px', color: '#9aa0a6' }}>거래 데이터가 없습니다.</div>
+              )}
             </div>
           )}
 
