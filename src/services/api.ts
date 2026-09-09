@@ -2348,6 +2348,32 @@ export const collectNationalGapStats = async (monthsCount: number = 1): Promise<
   await api.post('/api/national-stats/collect', null, { params: { months_count: monthsCount } });
 };
 
+export interface ComplexGapItem {
+  name: string;
+  areaKey: string;   // '18'|'21'|'24'|'26'|'33'
+  medTrade: number | null;
+  medJeonse: number | null;
+  gap: number | null;
+  jeonseRate: number | null;
+  tradeCount: number;
+  jeonseCount: number;
+}
+
+/** 특정 시군구의 단지별 매매·전세 갭 on-demand 조회 */
+export const getDistrictComplexGaps = async (regionCode: string, months = 3): Promise<ComplexGapItem[]> => {
+  const { data } = await api.get(`/api/national-stats/${regionCode}/complexes`, { params: { months } });
+  return (data as any[]).map(d => ({
+    name:        d.name,
+    areaKey:     d.areaKey,
+    medTrade:    d.medTrade,
+    medJeonse:   d.medJeonse,
+    gap:         d.gap,
+    jeonseRate:  d.jeonseRate,
+    tradeCount:  d.tradeCount,
+    jeonseCount: d.jeonseCount,
+  }));
+};
+
 /** 시도별 연도별 아파트 공급 예정 데이터 조회 (아실 기반) */
 export const getRegionalSupply = async (startYear = 2025, endYear = 2028): Promise<import('../types').RegionalSupplyResponse> => {
   const { data } = await api.get('/api/supply', { params: { start_year: startYear, end_year: endYear } });

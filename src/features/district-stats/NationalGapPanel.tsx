@@ -10,7 +10,7 @@ import {
 import {
   getNationalGapStats, collectNationalGapStats,
   getRegionalSupply, collectRegionalSupply, getProvinceSupply,
-  getMoveInData,
+  getMoveInData, getDistrictComplexGaps, ComplexGapItem,
 } from '../../services/api';
 import type { NationalDistrictStat, NationalGapResponse, RegionalSupplyResponse, ProvinceSupplyYear, MoveInItem } from '../../types';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -134,6 +134,14 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
   const [moveInItems, setMoveInItems] = useState<MoveInItem[]>([]);
   const [moveInLoading, setMoveInLoading] = useState(false);
 
+  // 단지별 갭 탭 상태
+  const [sideTab, setSideTab] = useState<'supply' | 'complexes'>('supply');
+  const [complexGaps, setComplexGaps] = useState<ComplexGapItem[]>([]);
+  const [complexGapLoading, setComplexGapLoading] = useState(false);
+  // 단지별 갭 정렬 (기본: 갭 오름차순)
+  const [cgSort, setCgSort] = useState<'gap' | 'jeonseRate' | 'trade'>('gap');
+  const [cgSortDir, setCgSortDir] = useState<'asc' | 'desc'>('asc');
+
   // 필터 상태
   const [cityTypeFilter, setCityTypeFilter] = useState<string>('전체');
   const [searchQuery, setSearchQuery] = useState('');
@@ -192,19 +200,21 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
 
   const handleRowClick = async (stat: NationalDistrictStat) => {
     if (chartStat?.province === stat.province && chartStat?.regionName === stat.regionName && chartData) {
-      setChartStat(null); // 같은 지역 재클릭 시 닫기
+      setChartStat(null);
       setMoveInItems([]);
+      setComplexGaps([]);
       return;
     }
     setChartStat(stat);
     setChartLoading(true);
     setMoveInLoading(true);
+    setComplexGapLoading(true);
     setChartData(null);
     setMoveInItems([]);
+    setComplexGaps([]);
 
     const asilKey = PROVINCE_TO_ASIL[stat.province] ?? stat.province;
 
-    // 시도 공급 차트 + 시군구 입주 예정 목록 병렬 조회
     await Promise.allSettled([
       getProvinceSupply(asilKey)
         .then(res => setChartData(res))
@@ -215,6 +225,12 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
         .then(items => setMoveInItems(items))
         .catch(e => console.error('[입주목록] 로드 실패', e))
         .finally(() => setMoveInLoading(false)),
+
+      // 단지별 갭 on-demand 조회 (최근 3개월)
+      getDistrictComplexGaps(stat.regionCode, 3)
+        .then(items => setComplexGaps(items))
+        .catch(e => console.error('[단지갭] 로드 실패', e))
+        .finally(() => setComplexGapLoading(false)),
     ]);
   };
 
@@ -672,17 +688,39 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
           fontFamily: 'sans-serif',
         }}>
           {/* 차트 패널 헤더 */}
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #e0e0e0', background: '#f0f8fd', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c', flex: 1 }}>
-              📊 {PROVINCE_TO_ASIL[chartStat.province] ?? chartStat.province} 아파트 입주 예정량
-            </span>
-            <span style={{ fontSize: 11, color: '#888' }}>(2010–2030)</span>
-            <button
-              onClick={() => setChartStat(null)}
-              style={{ fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', color: '#555', lineHeight: 1 }}
-            >×</button>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid #e0e0e0', background: '#f0f8fd' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#1a3a5c', flex: 1 }}>
+                {chartStat.regionName}
+              </span>
+              <button
+                onClick={() => { setChartStat(null); setMoveInItems([]); setComplexGaps([]); }}
+                style={{ fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', color: '#555', lineHeight: 1 }}
+              >×</button>
+            </div>
+            {/* 탭 */}
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['supply', 'complexes'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setSideTab(tab)}
+                  style={{
+                    padding: '4px 12px', fontSize: 11, fontWeight: sideTab === tab ? 700 : 400,
+                    border: `1.5px solid ${sideTab === tab ? '#4BAAD4' : '#dadce0'}`,
+                    borderRadius: 16,
+                    background: sideTab === tab ? '#4BAAD4' : '#fff',
+                    color: sideTab === tab ? '#fff' : '#5f6368',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {tab === 'supply' ? '📊 공급 현황' : `🏠 단지별 갭${complexGaps.length > 0 ? ` (${complexGaps.length})` : ''}`}
+                </button>
+              ))}
+            </div>
           </div>
 
+          {/* ── 공급 현황 탭 ── */}
+          {sideTab === 'supply' && <>
           {/* 로딩 */}
           {chartLoading && (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 }}>
@@ -852,6 +890,103 @@ const NationalGapPanel: React.FC<Props> = ({ onClose }) => {
               </div>
             );
           })()}
+          </>}
+
+          {/* ── 단지별 갭 탭 ── */}
+          {sideTab === 'complexes' && (
+            <div style={{ flex: 1, overflow: 'auto', padding: '10px 8px' }}>
+              {complexGapLoading && (
+                <div style={{ textAlign: 'center', color: '#888', fontSize: 13, padding: '24px 0' }}>
+                  단지별 갭 조회 중... (최근 3개월 거래 분석)
+                </div>
+              )}
+              {!complexGapLoading && complexGaps.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#bbb', fontSize: 12, padding: '24px 0' }}>
+                  최근 3개월 거래 데이터가 없습니다.
+                </div>
+              )}
+              {!complexGapLoading && complexGaps.length > 0 && (() => {
+                // 정렬 적용
+                const sorted = [...complexGaps].sort((a, b) => {
+                  const va = cgSort === 'gap' ? (a.gap ?? Infinity) : cgSort === 'jeonseRate' ? (a.jeonseRate ?? -Infinity) : (a.medTrade ?? -Infinity);
+                  const vb = cgSort === 'gap' ? (b.gap ?? Infinity) : cgSort === 'jeonseRate' ? (b.jeonseRate ?? -Infinity) : (b.medTrade ?? -Infinity);
+                  return cgSortDir === 'asc' ? va - vb : vb - va;
+                });
+                const areaLabel: Record<string, string> = { '15':'15평', '18':'18평', '21':'21평', '24':'24평', '26':'26평', '33':'33평' };
+                const toggleSort = (key: typeof cgSort) => {
+                  if (cgSort === key) setCgSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                  else { setCgSort(key); setCgSortDir('asc'); }
+                };
+                const sortIcon = (key: typeof cgSort) => cgSort === key ? (cgSortDir === 'asc' ? ' ▲' : ' ▼') : '';
+
+                return (
+                  <>
+                    <div style={{ fontSize: 10, color: '#9aa0a6', marginBottom: 6, textAlign: 'right' }}>
+                      직거래 제외 · 중앙값 기준 · 최근 3개월
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: '#f5f5f5', position: 'sticky', top: 0 }}>
+                          <th style={{ padding: '5px 6px', textAlign: 'left', color: '#5f6368', fontWeight: 600, minWidth: 80 }}>단지명</th>
+                          <th style={{ padding: '5px 4px', textAlign: 'center', color: '#5f6368', fontWeight: 600 }}>평형</th>
+                          <th
+                            onClick={() => toggleSort('trade')}
+                            style={{ padding: '5px 4px', textAlign: 'right', color: '#5f6368', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >매매{sortIcon('trade')}</th>
+                          <th style={{ padding: '5px 4px', textAlign: 'right', color: '#5f6368', fontWeight: 600, whiteSpace: 'nowrap' }}>전세</th>
+                          <th
+                            onClick={() => toggleSort('gap')}
+                            style={{ padding: '5px 4px', textAlign: 'right', color: '#5f6368', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >갭{sortIcon('gap')}</th>
+                          <th
+                            onClick={() => toggleSort('jeonseRate')}
+                            style={{ padding: '5px 4px', textAlign: 'right', color: '#5f6368', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >전세율{sortIcon('jeonseRate')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map((item, i) => {
+                          const trade = item.medTrade != null ? (item.medTrade / 10000).toFixed(1) : '-';
+                          const jeonse = item.medJeonse != null ? (item.medJeonse / 10000).toFixed(1) : '-';
+                          const gap = item.gap != null ? (item.gap / 10000).toFixed(1) : '-';
+                          // 전세율 색상 — 높을수록 초록(안전), 낮을수록 빨강(위험)
+                          const rateColor = item.jeonseRate == null ? '#888'
+                            : item.jeonseRate >= 75 ? '#15803d'
+                            : item.jeonseRate >= 60 ? '#4BAAD4'
+                            : item.jeonseRate >= 45 ? '#e65100'
+                            : '#b91c1c';
+                          return (
+                            <tr key={i} style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                              <td style={{ padding: '4px 6px', fontWeight: 600, color: '#111827', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.name}>
+                                {item.name}
+                              </td>
+                              <td style={{ padding: '4px 4px', textAlign: 'center', color: '#6b7280' }}>
+                                {areaLabel[item.areaKey] ?? item.areaKey}
+                              </td>
+                              <td style={{ padding: '4px 4px', textAlign: 'right', color: '#1a3a5c', fontWeight: 600 }}>
+                                {trade !== '-' ? `${trade}억` : '-'}
+                                {item.tradeCount > 0 && <span style={{ fontSize: 9, color: '#9aa0a6', marginLeft: 2 }}>({item.tradeCount})</span>}
+                              </td>
+                              <td style={{ padding: '4px 4px', textAlign: 'right', color: '#5f6368' }}>
+                                {jeonse !== '-' ? `${jeonse}억` : '-'}
+                                {item.jeonseCount > 0 && <span style={{ fontSize: 9, color: '#9aa0a6', marginLeft: 2 }}>({item.jeonseCount})</span>}
+                              </td>
+                              <td style={{ padding: '4px 4px', textAlign: 'right', fontWeight: 700, color: item.gap != null && item.gap < 30000 ? '#15803d' : '#b91c1c' }}>
+                                {gap !== '-' ? `${gap}억` : '-'}
+                              </td>
+                              <td style={{ padding: '4px 4px', textAlign: 'right', fontWeight: 700, color: rateColor }}>
+                                {item.jeonseRate != null ? `${item.jeonseRate}%` : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </>
+                );
+              })()}
+            </div>
+          )}
         </div>
       )}
     </div>
