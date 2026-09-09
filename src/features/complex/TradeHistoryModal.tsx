@@ -18,16 +18,24 @@ interface Props {
   onClose: () => void;
 }
 
+// 레이블별 매매+전세 집계 결과
+interface LabelAgg {
+  tradeCount: number;
+  tradeAvg: number | null;
+  jeonseCount: number;
+  jeonseAvg: number | null;
+}
+
 const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   const [histories, setHistories] = useState<Map<number, TradeHistoryMonth[]>>(new Map());
   const [statuses, setStatuses] = useState<Map<number, boolean>>(new Map());
   const [collecting, setCollecting] = useState<Set<number>>(new Set());
-  const [tradeType, setTradeType] = useState<'trade' | 'jeonse'>('trade'); // 매매/전세 탭
   const [granularity, setGranularity] = useState<'month' | 'quarter' | 'year'>('year');
   const [selectedYear, setSelectedYear] = useState('');
   const [areaFilters, setAreaFilters] = useState<Map<number, string>>(new Map());
-  // 클릭한 레이블 → 드릴다운 표시
+  // 드릴다운: 클릭한 레이블 + 매매/전세 선택
   const [clickedLabel, setClickedLabel] = useState<string | null>(null);
+  const [drillType, setDrillType] = useState<'trade' | 'jeonse'>('trade');
 
   // 모달 오픈 시 각 단지 수집 상태 + 이력 로드
   useEffect(() => {
@@ -49,7 +57,6 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   const handleCollect = useCallback(async (complexId: number) => {
     setCollecting(prev => new Set(prev).add(complexId));
 
-    // 수집 시작 전 현재 lastUpdated 스냅샷 (기존 데이터가 있으면 해당 값, 없으면 null)
     let prevLastUpdated: string | null = null;
     try {
       const prevStatus = await getTradeHistoryStatus(complexId);
@@ -63,10 +70,8 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
       attempts++;
       try {
         const s = await getTradeHistoryStatus(complexId);
-        // lastUpdated가 수집 전과 달라졌을 때만 완료로 판단 (새 데이터 확인)
         const isNewlyCollected =
           s.collected && s.lastUpdated != null && s.lastUpdated !== prevLastUpdated;
-        // 미수집 → 수집됨 경우도 처리
         const wasUncollected = !prevLastUpdated && s.collected;
         if (isNewlyCollected || wasUncollected) {
           clearInterval(poll);
@@ -85,24 +90,23 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
 
   const isSingle = entries.length === 1;
 
-  // 단지별 보유 평형 목록 — 현재 탭(매매/전세) 기준 breakdown 키
+  // 단지별 보유 평형 목록 — 매매 + 전세 합집합
   const areasPerComplex = new Map<number, string[]>(
     entries.map(({ complexId }) => {
       const areas = Array.from(new Set(
-        (histories.get(complexId) || []).flatMap(m =>
-          Object.keys(tradeType === 'jeonse' ? (m.jeonseAreaBreakdown ?? {}) : m.areaBreakdown)
-        )
+        (histories.get(complexId) || []).flatMap(m => [
+          ...Object.keys(m.areaBreakdown),
+          ...Object.keys(m.jeonseAreaBreakdown ?? {}),
+        ])
       )).sort((a, b) => (parseFloat(a) || 999) - (parseFloat(b) || 999));
       return [complexId, areas];
     })
   );
 
-  // 단지별 현재 선택 평형
   const getArea = (complexId: number) => areaFilters.get(complexId) ?? '전체';
   const setArea = (complexId: number, area: string) =>
     setAreaFilters(prev => new Map(prev).set(complexId, area));
 
-  // 연도 합집합
   const availableYears = Array.from(new Set(
     entries.flatMap(({ complexId }) =>
       (histories.get(complexId) || []).map(m => m.yearMonth.slice(0, 4))
@@ -113,12 +117,11 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   const effectiveYear = showAll ? latestYear
     : (selectedYear && availableYears.includes(selectedYear)) ? selectedYear : latestYear;
 
-  // 단지별 집계 맵 — tradeType(매매/전세)과 선택 평형 독립 적용
-  const getAgg = (complexId: number): Map<string, { count: number; avgPrice: number | null }> => {
+  // 매매+전세 동시 집계
+  const getAgg = (complexId: number): Map<string, LabelAgg> => {
     const hist = histories.get(complexId) || [];
     const area = getArea(complexId);
-    const isJeonse = tradeType === 'jeonse';
-    const acc = new Map<string, { count: number; prices: number[] }>();
+    const acc = new Map<string, { tc: number; tp: number[]; jc: number; jp: number[] }>();
 
     hist.forEach(m => {
       let label: string;
@@ -134,30 +137,33 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
         label = m.yearMonth.slice(0, 4);
       }
 
-      // 매매/전세 분기
-      const breakdown = isJeonse ? m.jeonseAreaBreakdown : m.areaBreakdown;
-      const totalCount = isJeonse ? m.jeonseCount : m.tradeCount;
-      const totalAvg   = isJeonse ? m.avgJeonse    : m.avgPrice;
+      const cur = acc.get(label) ?? { tc: 0, tp: [], jc: 0, jp: [] };
 
-      const bd  = area === '전체' ? null : breakdown[area];
-      const cnt = area === '전체' ? totalCount : (bd?.count ?? 0);
-      const p   = area === '전체' ? totalAvg   : bd?.avg;
+      // 매매
+      const tradeBd = area === '전체' ? null : m.areaBreakdown[area];
+      cur.tc += area === '전체' ? m.tradeCount : (tradeBd?.count ?? 0);
+      const tp = area === '전체' ? m.avgPrice : tradeBd?.avg;
+      if (tp != null) cur.tp.push(tp);
 
-      const cur = acc.get(label) ?? { count: 0, prices: [] };
-      cur.count += cnt;
-      if (p != null) cur.prices.push(p);
+      // 전세
+      const jeonseBd = area === '전체' ? null : (m.jeonseAreaBreakdown ?? {})[area];
+      cur.jc += area === '전체' ? m.jeonseCount : (jeonseBd?.count ?? 0);
+      const jp = area === '전체' ? m.avgJeonse : jeonseBd?.avg;
+      if (jp != null) cur.jp.push(jp);
+
       acc.set(label, cur);
     });
 
     return new Map(Array.from(acc.entries()).map(([k, v]) => [k, {
-      count: v.count,
-      avgPrice: v.prices.length ? v.prices.reduce((a, b) => a + b, 0) / v.prices.length : null,
+      tradeCount: v.tc,
+      tradeAvg: v.tp.length ? v.tp.reduce((a, b) => a + b, 0) / v.tp.length : null,
+      jeonseCount: v.jc,
+      jeonseAvg: v.jp.length ? v.jp.reduce((a, b) => a + b, 0) / v.jp.length : null,
     }]));
   };
 
   const allAggs = new Map(entries.map(e => [e.complexId, getAgg(e.complexId)]));
 
-  // 레이블 합집합 (정렬)
   let labels = Array.from(new Set(
     Array.from(allAggs.values()).flatMap(agg => Array.from(agg.keys()))
   )).sort();
@@ -166,76 +172,92 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
     labels = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
   }
 
+  // 차트 데이터 — 매매 거래량(_tc), 전세 거래량(_jc), 매매 평균가(_tp), 전세 평균가(_jp)
   const chartData = labels.map(label => {
     const row: Record<string, string | number | null> = { label };
     entries.forEach(({ complexId }) => {
       const val = allAggs.get(complexId)?.get(label);
-      row[`c${complexId}_count`] = val?.count ?? 0;
-      row[`c${complexId}_price`] = val?.avgPrice != null
-        ? parseFloat((val.avgPrice / 10000).toFixed(2)) : null;
+      row[`c${complexId}_tc`] = val?.tradeCount ?? 0;
+      row[`c${complexId}_jc`] = val?.jeonseCount ?? 0;
+      row[`c${complexId}_tp`] = val?.tradeAvg != null
+        ? parseFloat((val.tradeAvg / 10000).toFixed(2)) : null;
+      row[`c${complexId}_jp`] = val?.jeonseAvg != null
+        ? parseFloat((val.jeonseAvg / 10000).toFixed(2)) : null;
     });
     return row;
   });
 
-  // 가격 Y축 범위
+  // 가격 Y축 범위 — 매매 + 전세 모두 포함
   const allPrices = entries.flatMap(({ complexId }) =>
-    Array.from(allAggs.get(complexId)?.values() || [])
-      .map(v => v.avgPrice != null ? v.avgPrice / 10000 : null)
-      .filter((p): p is number => p != null)
+    Array.from(allAggs.get(complexId)?.values() || []).flatMap(v => {
+      const prices: number[] = [];
+      if (v.tradeAvg != null) prices.push(v.tradeAvg / 10000);
+      if (v.jeonseAvg != null) prices.push(v.jeonseAvg / 10000);
+      return prices;
+    })
   );
-  const minP = allPrices.length ? Math.floor(Math.min(...allPrices) * 0.95 * 10) / 10 : 0;
+  const minP = allPrices.length ? Math.floor(Math.min(...allPrices) * 0.92 * 10) / 10 : 0;
   const maxP = allPrices.length ? Math.ceil(Math.max(...allPrices) * 1.05 * 10) / 10 : 10;
 
-  const hasAnyData = chartData.some(row =>
-    entries.some(({ complexId }) => (row[`c${complexId}_count`] as number) > 0)
+  // 매매 또는 전세 데이터가 있으면 차트 표시
+  const hasTradeData = chartData.some(row =>
+    entries.some(({ complexId }) => (row[`c${complexId}_tc`] as number) > 0)
+  );
+  const hasJeonseData = chartData.some(row =>
+    entries.some(({ complexId }) => (row[`c${complexId}_jc`] as number) > 0)
+  );
+  const hasAnyData = hasTradeData || hasJeonseData;
+
+  // 전세 데이터가 없는 수집된 단지 — 재수집 안내 표시
+  const jeonseNoDataIds = entries.filter(e =>
+    statuses.get(e.complexId) &&
+    !collecting.has(e.complexId) &&
+    !hasJeonseData &&
+    (histories.get(e.complexId) || []).every(m => m.jeonseCount === 0)
   );
 
-  // 전세 탭: bar=연분홍, line=진빨강 / 매매 탭: bar=베이비블루, line=빨강
-  const barColor = (e: TradeComplexEntry) =>
-    isSingle ? (tradeType === 'jeonse' ? '#F4A0A0' : '#89CFF0') : e.color;
-  const lineColor = (e: TradeComplexEntry) =>
-    isSingle ? (tradeType === 'jeonse' ? '#c0392b' : '#E06060') : e.color;
+  // 색상
+  const tradeBarColor = (e: TradeComplexEntry) =>
+    isSingle ? '#89CFF0' : e.color;
+  const jeonseBarColor = (e: TradeComplexEntry) =>
+    isSingle ? '#F4A0A0' : `${e.color}99`;
+  const tradeLineColor = (e: TradeComplexEntry) =>
+    isSingle ? '#1565C0' : e.color;
+  const jeonseLineColor = (e: TradeComplexEntry) =>
+    isSingle ? '#C0392B' : `${e.color}CC`;
 
   const xInterval = showAll && granularity === 'month' ? 11
     : granularity === 'quarter' && labels.length > 20 ? 3 : 0;
   const xFormatter = showAll && granularity === 'month'
     ? (v: string) => v.slice(0, 4) : undefined;
 
-  // 레이블 → 해당하는 yearMonth 목록 변환
+  // 레이블 → yearMonth 목록
   const getLabelMonths = (label: string): string[] => {
     if (granularity === 'month') {
-      if (showAll) {
-        // "2024.01" → "202401"
-        return [label.replace('.', '')];
-      } else {
-        // "1월" → effectiveYear + "01"
-        const mo = String(parseInt(label)).padStart(2, '0');
-        return [`${effectiveYear}${mo}`];
-      }
+      if (showAll) return [label.replace('.', '')];
+      const mo = String(parseInt(label)).padStart(2, '0');
+      return [`${effectiveYear}${mo}`];
     } else if (granularity === 'quarter') {
-      // "2024Q1" → ["202401", "202402", "202403"]
       const [yearPart, qPart] = label.split('Q');
       const q = parseInt(qPart);
       const startMo = (q - 1) * 3 + 1;
       return Array.from({ length: 3 }, (_, i) => `${yearPart}${String(startMo + i).padStart(2, '0')}`);
     } else {
-      // "2024" → ["202401", ..., "202412"]
       return Array.from({ length: 12 }, (_, i) => `${label}${String(i + 1).padStart(2, '0')}`);
     }
   };
 
-  // 클릭 레이블의 개별 거래 목록 (매매/전세 분기, 평형 필터 적용, 날짜 내림차순)
+  // 드릴다운 개별 거래 목록 (drillType 기준, 평형 필터 적용, 날짜 내림차순)
   const drillDownItems: (TradeRawItem & { complexId: number })[] = clickedLabel
     ? (() => {
         const months = new Set(getLabelMonths(clickedLabel));
-        const isJeonse = tradeType === 'jeonse';
         const result: (TradeRawItem & { complexId: number })[] = [];
         entries.forEach(({ complexId }) => {
           const selectedArea = getArea(complexId);
           (histories.get(complexId) || [])
             .filter(m => months.has(m.yearMonth))
             .forEach(m => {
-              const rawList = isJeonse ? (m.jeonseRawItems || []) : (m.rawItems || []);
+              const rawList = drillType === 'jeonse' ? (m.jeonseRawItems || []) : (m.rawItems || []);
               rawList.filter(it => selectedArea === '전체' || it.area === selectedArea)
                 .forEach(it => result.push({ ...it, complexId }));
             });
@@ -296,22 +318,6 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
             >×</button>
           </div>
 
-          {/* 매매 / 전세 탭 */}
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-            {(['trade', 'jeonse'] as const).map(t => (
-              <button key={t} onClick={() => { setTradeType(t); setClickedLabel(null); }} style={{
-                padding: '5px 18px', fontSize: '13px', fontWeight: tradeType === t ? 700 : 400,
-                border: `1.5px solid ${tradeType === t ? (t === 'trade' ? '#4BAAD4' : '#E06060') : '#dadce0'}`,
-                borderRadius: '20px',
-                background: tradeType === t ? (t === 'trade' ? '#4BAAD4' : '#E06060') : '#fff',
-                color: tradeType === t ? '#fff' : '#5f6368',
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}>
-                {t === 'trade' ? '매매' : '전세'}
-              </button>
-            ))}
-          </div>
-
           {/* 단위 토글 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             {(['year', 'quarter', 'month'] as const).map(g => (
@@ -327,7 +333,6 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
               </button>
             ))}
 
-            {/* 월별 — 연도 네비게이터 */}
             {granularity === 'month' && availableYears.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '10px' }}>
                 <button
@@ -367,9 +372,8 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
             )}
           </div>
 
-          {/* 평형 선택 — 단일 모드: 가로 버튼 / 비교 모드: 단지별 행 */}
+          {/* 평형 선택 */}
           {isSingle ? (
-            /* 단일: 기존 방식 — 전체 면적의 가로 탭 */
             (() => {
               const areas = areasPerComplex.get(entries[0].complexId) ?? [];
               const cur = getArea(entries[0].complexId);
@@ -397,7 +401,6 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
               ) : null;
             })()
           ) : (
-            /* 비교 모드: 단지마다 독립 평형 선택 행 */
             (() => {
               const collectedEntries = entries.filter(e => statuses.get(e.complexId));
               if (collectedEntries.length === 0) return null;
@@ -408,7 +411,6 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                     const cur = getArea(e.complexId);
                     return (
                       <div key={e.complexId} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        {/* 단지 색상 + 이름 */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '80px' }}>
                           <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: e.color, flexShrink: 0 }} />
                           <span style={{
@@ -416,7 +418,6 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                             maxWidth: '70px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }} title={e.complexName}>{e.complexName}</span>
                         </div>
-                        {/* 평형 버튼 */}
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                           {areas.length > 1 && (
                             <button onClick={() => setArea(e.complexId, '전체')} style={{
@@ -479,10 +480,37 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
             );
           })}
 
+          {/* 전세 데이터 없음 안내 배너 */}
+          {jeonseNoDataIds.length > 0 && hasTradeData && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '12px',
+              padding: '10px 16px', marginBottom: '12px',
+              background: '#fff5f5', borderRadius: '10px',
+              border: '1px solid #f4a0a0',
+            }}>
+              <span style={{ fontSize: '13px', color: '#C0392B', flex: 1 }}>
+                전세 데이터 없음 — 재수집하면 매매·전세를 함께 표시합니다
+              </span>
+              {isSingle && (
+                <button
+                  onClick={() => handleCollect(entries[0].complexId)}
+                  disabled={collecting.has(entries[0].complexId)}
+                  style={{
+                    padding: '5px 14px', fontSize: '12px', fontWeight: 600,
+                    border: '1.5px solid #C0392B', borderRadius: '16px',
+                    background: '#fff', color: '#C0392B', cursor: 'pointer', flexShrink: 0,
+                  }}
+                >
+                  {collecting.has(entries[0].complexId) ? '수집 중...' : '↺ 재수집'}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* 차트 */}
           {hasAnyData && (
             <ResponsiveContainer width="100%" height={340}>
-              <ComposedChart data={chartData} margin={{ top: 8, right: 48, left: 0, bottom: 0 }}>
+              <ComposedChart data={chartData} margin={{ top: 8, right: 54, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -505,50 +533,88 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                 />
                 <Tooltip
                   contentStyle={{ fontSize: '12px', borderRadius: '10px', border: '1px solid #e0e0e0', boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}
-                  formatter={(value: number, name: string) => {
+                  formatter={(value: number, name: string, props) => {
                     const [prefix, type] = (name as string).split('_');
                     const cid = parseInt(prefix.slice(1));
                     const entry = entries.find(e => e.complexId === cid);
                     const selectedArea = getArea(cid);
                     const areaSuffix = selectedArea !== '전체' ? ` (${parseFloat(selectedArea).toFixed(0)}㎡)` : '';
-                    const label = isSingle ? '' : `${entry?.complexName ?? ''}${areaSuffix} `;
-                    const countLabel = tradeType === 'jeonse' ? '전세 거래량' : '매매 거래량';
-                    const priceLabel = tradeType === 'jeonse' ? '평균 보증금' : '평균 매매가';
-                    if (type === 'count') return [`${value}건`, `${label}${countLabel}`];
-                    return [`${value?.toFixed ? value.toFixed(2) : '-'}억`, `${label}${priceLabel}`];
+                    const cname = isSingle ? '' : `${entry?.complexName ?? ''}${areaSuffix} `;
+                    if (type === 'tc') return [`${value}건`, `${cname}매매 거래량`];
+                    if (type === 'jc') return [`${value}건`, `${cname}전세 거래량`];
+                    if (type === 'tp') return [`${(value as number)?.toFixed?.(2) ?? '-'}억`, `${cname}매매 평균가`];
+                    if (type === 'jp') {
+                      // 갭 계산 — 같은 레이블의 매매가와 비교
+                      const label = props.payload?.label as string;
+                      const tp = chartData.find(r => r.label === label)?.[`c${cid}_tp`] as number | null;
+                      const gap = tp != null && value != null ? (tp - value).toFixed(2) : null;
+                      const gapStr = gap != null ? ` (갭 ${gap}억)` : '';
+                      return [`${(value as number)?.toFixed?.(2) ?? '-'}억${gapStr}`, `${cname}전세 평균가`];
+                    }
+                    return [value, name];
                   }}
                 />
-                {/* 거래량 — 단일: 단색 bar, 다중: 스택 bar */}
+                {/* 매매 거래량 bar */}
                 {entries.map(e => (
                   <Bar
-                    key={`bar-${e.complexId}`}
+                    key={`bar-trade-${e.complexId}`}
                     yAxisId="left"
-                    dataKey={`c${e.complexId}_count`}
-                    fill={barColor(e)}
-                    opacity={isSingle ? 0.7 : 0.45}
-                    stackId={isSingle ? undefined : 'vol'}
-                    maxBarSize={isSingle ? 28 : 36}
+                    dataKey={`c${e.complexId}_tc`}
+                    fill={tradeBarColor(e)}
+                    opacity={isSingle ? 0.7 : 0.5}
+                    maxBarSize={isSingle ? 20 : 28}
                     radius={[3, 3, 0, 0]}
-                    name={`c${e.complexId}_count`}
+                    name={`c${e.complexId}_tc`}
                     style={{ cursor: 'pointer' }}
                     onClick={(data) => {
-                      // Recharts Bar onClick: data = chartData 행 (label 포함)
                       const l = data?.label as string | undefined;
-                      if (l) setClickedLabel(prev => prev === l ? null : l);
+                      if (l) { setClickedLabel(prev => prev === l ? null : l); setDrillType('trade'); }
                     }}
                   />
                 ))}
-                {/* 평균가 라인 */}
+                {/* 전세 거래량 bar */}
+                {entries.map(e => (
+                  <Bar
+                    key={`bar-jeonse-${e.complexId}`}
+                    yAxisId="left"
+                    dataKey={`c${e.complexId}_jc`}
+                    fill={jeonseBarColor(e)}
+                    opacity={isSingle ? 0.65 : 0.45}
+                    maxBarSize={isSingle ? 20 : 28}
+                    radius={[3, 3, 0, 0]}
+                    name={`c${e.complexId}_jc`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(data) => {
+                      const l = data?.label as string | undefined;
+                      if (l) { setClickedLabel(prev => prev === l ? null : l); setDrillType('jeonse'); }
+                    }}
+                  />
+                ))}
+                {/* 매매 평균가 line (실선) */}
                 {entries.map(e => (
                   <Line
-                    key={`line-${e.complexId}`}
+                    key={`line-trade-${e.complexId}`}
                     yAxisId="right"
-                    dataKey={`c${e.complexId}_price`}
-                    stroke={lineColor(e)}
+                    dataKey={`c${e.complexId}_tp`}
+                    stroke={tradeLineColor(e)}
                     strokeWidth={2.5}
                     dot={false}
                     connectNulls
-                    name={`c${e.complexId}_price`}
+                    name={`c${e.complexId}_tp`}
+                  />
+                ))}
+                {/* 전세 평균가 line (점선) */}
+                {entries.map(e => (
+                  <Line
+                    key={`line-jeonse-${e.complexId}`}
+                    yAxisId="right"
+                    dataKey={`c${e.complexId}_jp`}
+                    stroke={jeonseLineColor(e)}
+                    strokeWidth={2.5}
+                    strokeDasharray="5 3"
+                    dot={false}
+                    connectNulls
+                    name={`c${e.complexId}_jp`}
                   />
                 ))}
               </ComposedChart>
@@ -557,36 +623,11 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
 
           {!hasAnyData && entries.some(e => statuses.get(e.complexId)) && (
             <div style={{ textAlign: 'center', padding: '50px 20px' }}>
-              {tradeType === 'jeonse' ? (
-                <div>
-                  <div style={{ fontSize: '14px', color: '#9aa0a6', marginBottom: '10px' }}>
-                    전세 데이터가 없습니다.
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#bbb', marginBottom: '16px' }}>
-                    기존 수집 데이터에는 전세 정보가 포함되지 않았습니다.<br />
-                    삭제 후 재수집하면 매매·전세 데이터를 함께 수집합니다.
-                  </div>
-                  {isSingle && (
-                    <button
-                      onClick={() => handleCollect(entries[0].complexId)}
-                      disabled={collecting.has(entries[0].complexId)}
-                      style={{
-                        padding: '7px 20px', fontSize: '13px', fontWeight: 600,
-                        border: '1.5px solid #E06060', borderRadius: '18px',
-                        background: '#fff', color: '#E06060', cursor: 'pointer',
-                      }}
-                    >
-                      {collecting.has(entries[0].complexId) ? '수집 중...' : '↺ 재수집'}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div style={{ fontSize: '14px', color: '#9aa0a6' }}>거래 데이터가 없습니다.</div>
-              )}
+              <div style={{ fontSize: '14px', color: '#9aa0a6' }}>거래 데이터가 없습니다.</div>
             </div>
           )}
 
-          {/* 드릴다운 — 클릭한 기간 개별 거래 목록 */}
+          {/* 드릴다운 */}
           {clickedLabel && (
             <div style={{
               marginTop: '16px',
@@ -594,16 +635,31 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
               borderRadius: '12px',
               overflow: 'hidden',
             }}>
-              {/* 드릴다운 헤더 */}
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '10px 16px',
                 background: '#f0f8fd',
                 borderBottom: '1px solid #e0f4fb',
               }}>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>
-                  {clickedLabel} 개별 거래 ({drillDownItems.length}건)
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a3a5c' }}>
+                    {clickedLabel} 개별 거래
+                  </span>
+                  {/* 매매/전세 드릴다운 선택 */}
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {(['trade', 'jeonse'] as const).map(t => (
+                      <button key={t} onClick={() => setDrillType(t)} style={{
+                        padding: '3px 12px', fontSize: '11px', fontWeight: drillType === t ? 700 : 400,
+                        border: `1.5px solid ${drillType === t ? (t === 'trade' ? '#4BAAD4' : '#E06060') : '#dadce0'}`,
+                        borderRadius: '16px',
+                        background: drillType === t ? (t === 'trade' ? '#4BAAD4' : '#E06060') : '#fff',
+                        color: drillType === t ? '#fff' : '#5f6368',
+                        cursor: 'pointer',
+                      }}>{t === 'trade' ? '매매' : '전세'} {drillDownItems.length > 0 ? '' : ''}</button>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#9aa0a6' }}>({drillDownItems.length}건)</span>
+                </div>
                 <button
                   onClick={() => setClickedLabel(null)}
                   style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', color: '#9aa0a6', lineHeight: 1 }}
@@ -623,8 +679,8 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                         <th style={thStyle}>거래일</th>
                         <th style={thStyle}>평형(㎡)</th>
                         <th style={thStyle}>층</th>
-                        <th style={{ ...thStyle, textAlign: 'right' }}>{tradeType === 'jeonse' ? '보증금' : '실거래가'}</th>
-                        {tradeType === 'trade' && <th style={thStyle}>구분</th>}
+                        <th style={{ ...thStyle, textAlign: 'right' }}>{drillType === 'jeonse' ? '보증금' : '실거래가'}</th>
+                        {drillType === 'trade' && <th style={thStyle}>구분</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -655,7 +711,7 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                             </td>
                             <td style={tdStyle}>{it.floor ? `${it.floor}층` : '-'}</td>
                             <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#1a1a2e' }}>{priceStr}</td>
-                            {tradeType === 'trade' && (
+                            {drillType === 'trade' && (
                               <td style={tdStyle}>
                                 {it.isDirect
                                   ? <span style={{ color: '#E06060', fontWeight: 600 }}>직거래</span>
@@ -675,33 +731,81 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
           {/* 범례 + 요약 */}
           {entries.some(e => statuses.get(e.complexId)) && (
             <div style={{
-              display: 'flex', gap: '20px', flexWrap: 'wrap',
-              marginTop: '18px', justifyContent: 'center',
-              padding: '14px 20px', background: '#f8f9fa', borderRadius: '12px',
+              marginTop: '18px', padding: '14px 20px',
+              background: '#f8f9fa', borderRadius: '12px',
             }}>
               {entries.filter(e => statuses.get(e.complexId)).map(e => {
                 const agg = allAggs.get(e.complexId);
-                const totalCount = Array.from(agg?.values() || []).reduce((s, v) => s + v.count, 0);
-                const prices = Array.from(agg?.values() || [])
-                  .map(v => v.avgPrice != null ? v.avgPrice / 10000 : null)
+                const totalTrade = Array.from(agg?.values() || []).reduce((s, v) => s + v.tradeCount, 0);
+                const totalJeonse = Array.from(agg?.values() || []).reduce((s, v) => s + v.jeonseCount, 0);
+                const tradePrices = Array.from(agg?.values() || [])
+                  .map(v => v.tradeAvg != null ? v.tradeAvg / 10000 : null)
+                  .filter((p): p is number => p != null);
+                const jeonsePrices = Array.from(agg?.values() || [])
+                  .map(v => v.jeonseAvg != null ? v.jeonseAvg / 10000 : null)
                   .filter((p): p is number => p != null);
                 const selectedArea = getArea(e.complexId);
                 const areaLabel = selectedArea !== '전체' ? ` · ${parseFloat(selectedArea).toFixed(0)}㎡` : '';
+
+                // 최신 시점 갭 계산 — 마지막 라벨 기준
+                const lastLabelAgg = agg?.get(labels[labels.length - 1]);
+                const gap = lastLabelAgg?.tradeAvg != null && lastLabelAgg?.jeonseAvg != null
+                  ? ((lastLabelAgg.tradeAvg - lastLabelAgg.jeonseAvg) / 10000).toFixed(2)
+                  : null;
+
                 return (
-                  <div key={e.complexId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        <div style={{ width: '14px', height: '14px', borderRadius: '3px', background: barColor(e), opacity: isSingle ? 0.7 : 0.5 }} />
-                        <div style={{ width: '22px', height: '3px', borderRadius: '2px', background: lineColor(e) }} />
-                      </div>
+                  <div key={e.complexId} style={{ marginBottom: entries.filter(ee => statuses.get(ee.complexId)).length > 1 ? '12px' : 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                      {!isSingle && <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: e.color }} />}
                       <span style={{ fontSize: '13px', fontWeight: 700, color: '#344054' }}>
                         {e.complexName}{areaLabel}
                       </span>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#9aa0a6' }}>
-                      총 <b style={{ color: '#344054' }}>{totalCount.toLocaleString()}건</b>
-                      {prices.length > 0 && (
-                        <span> · {Math.min(...prices).toFixed(1)}~{Math.max(...prices).toFixed(1)}억</span>
+                    <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', paddingLeft: isSingle ? 0 : '18px' }}>
+                      {/* 매매 요약 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: tradeBarColor(e), opacity: 0.7 }} />
+                          <div style={{ width: '20px', height: '3px', background: tradeLineColor(e), borderRadius: '2px' }} />
+                        </div>
+                        <span style={{ fontSize: '12px', color: '#344054' }}>
+                          매매 <b>{totalTrade.toLocaleString()}건</b>
+                          {tradePrices.length > 0 && (
+                            <span style={{ color: '#9aa0a6' }}>
+                              {' '}· {Math.min(...tradePrices).toFixed(1)}~{Math.max(...tradePrices).toFixed(1)}억
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      {/* 전세 요약 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: jeonseBarColor(e), opacity: 0.7 }} />
+                          <div style={{ width: '20px', height: '0px', borderTop: `2px dashed ${jeonseLineColor(e)}`, borderRadius: '2px' }} />
+                        </div>
+                        <span style={{ fontSize: '12px', color: '#344054' }}>
+                          전세 {totalJeonse > 0 ? <b>{totalJeonse.toLocaleString()}건</b> : <span style={{ color: '#9aa0a6' }}>0건</span>}
+                          {jeonsePrices.length > 0 && (
+                            <span style={{ color: '#9aa0a6' }}>
+                              {' '}· {Math.min(...jeonsePrices).toFixed(1)}~{Math.max(...jeonsePrices).toFixed(1)}억
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      {/* 갭 */}
+                      {gap != null && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: '4px',
+                          padding: '2px 10px', background: '#fff3cd', borderRadius: '12px',
+                          border: '1px solid #ffc107',
+                        }}>
+                          <span style={{ fontSize: '11px', color: '#856404', fontWeight: 700 }}>
+                            갭 {gap}억
+                          </span>
+                          <span style={{ fontSize: '10px', color: '#9aa0a6' }}>
+                            ({labels[labels.length - 1]} 기준)
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -710,9 +814,8 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
             </div>
           )}
 
-          {/* 출처 */}
           <p style={{ fontSize: '10px', color: '#bdbdbd', textAlign: 'center', margin: '12px 0 0' }}>
-            국토교통부 실거래가 공개시스템 기준 · 해제 거래 제외
+            국토교통부 실거래가 공개시스템 기준 · 해제 거래 제외 · 막대 클릭 시 개별 거래 조회
           </p>
         </div>
       </div>
