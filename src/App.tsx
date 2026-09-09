@@ -1812,7 +1812,7 @@ const App: React.FC = () => {
         <TradeHistoryModal
           entries={compareIds.map((id, idx) => {
             const c = complexes.find(x => x.id === id);
-            return { complexId: id, complexName: c?.complexName ?? String(id), color: TRADE_COMPARE_COLORS[idx % TRADE_COMPARE_COLORS.length] };
+            return { complexId: id, complexName: c?.complexName ?? String(id), color: TRADE_COMPARE_COLORS[idx % TRADE_COMPARE_COLORS.length], region: c?.region };
           })}
           onClose={() => setTradeCompareOpen(false)}
         />

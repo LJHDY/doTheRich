@@ -1,16 +1,62 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   getTradeHistory, getTradeHistoryStatus, collectTradeHistory, TradeHistoryMonth, TradeRawItem,
+  getProvinceSupply, getMoveInData,
 } from '../../services/api';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
+  BarChart, Cell, ReferenceLine,
 } from 'recharts';
+import { ProvinceSupplyYear, MoveInItem, RegionalSupplyResponse } from '../../types';
 
 export interface TradeComplexEntry {
   complexId: number;
   complexName: string;
-  color: string; // 비교 시 단지별 고유 색상
+  color: string;
+  region?: string; // "서울특별시 강남구" 형태 — 공급 현황 표시에 사용
+}
+
+// 공급 현황 색상 — NationalGapPanel과 동일 팔레트
+const SUPPLY_COLORS: Record<string, { bg: string; color: string }> = {
+  부족: { bg: '#dbeafe', color: '#1d4ed8' },
+  적정: { bg: '#dcfce7', color: '#15803d' },
+  초과: { bg: '#ffedd5', color: '#c2410c' },
+  과잉: { bg: '#fee2e2', color: '#b91c1c' },
+};
+
+// "서울특별시 강남구" → "서울"
+function toProvinceKey(region?: string): string | null {
+  if (!region) return null;
+  const f = region.trim().split(/\s+/)[0];
+  if (f.startsWith('서울')) return '서울';
+  if (f.startsWith('경기')) return '경기';
+  if (f.startsWith('인천')) return '인천';
+  if (f.startsWith('부산')) return '부산';
+  if (f.startsWith('대구')) return '대구';
+  if (f.startsWith('광주')) return '광주';
+  if (f.startsWith('대전')) return '대전';
+  if (f.startsWith('울산')) return '울산';
+  if (f.startsWith('세종')) return '세종';
+  if (f.startsWith('강원')) return '강원';
+  if (f.startsWith('충북') || f.startsWith('충청북')) return '충북';
+  if (f.startsWith('충남') || f.startsWith('충청남')) return '충남';
+  if (f.startsWith('전북') || f.startsWith('전라북')) return '전북';
+  if (f.startsWith('전남') || f.startsWith('전라남')) return '전남';
+  if (f.startsWith('경북') || f.startsWith('경상북')) return '경북';
+  if (f.startsWith('경남') || f.startsWith('경상남')) return '경남';
+  if (f.startsWith('제주')) return '제주';
+  return null;
+}
+
+// "서울특별시 강남구" → "강남구" / "경기도 성남시 분당구" → "성남시"
+function toGuName(region?: string): string | null {
+  if (!region) return null;
+  const parts = region.trim().split(/\s+/).slice(1); // 도/시 레벨 제외
+  for (const p of parts) {
+    if (p.endsWith('시') || p.endsWith('군') || p.endsWith('구')) return p;
+  }
+  return parts[parts.length - 1] ?? null;
 }
 
 interface Props {
@@ -36,6 +82,10 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
   // 드릴다운: 클릭한 레이블 + 매매/전세 선택
   const [clickedLabel, setClickedLabel] = useState<string | null>(null);
   const [drillType, setDrillType] = useState<'trade' | 'jeonse'>('trade');
+  // 공급 현황 (단일 단지 + region 있을 때만 로드)
+  const [supplyData, setSupplyData] = useState<RegionalSupplyResponse | null>(null);
+  const [moveInItems, setMoveInItems] = useState<MoveInItem[]>([]);
+  const [supplyLoading, setSupplyLoading] = useState(false);
 
   // 모달 오픈 시 각 단지 수집 상태 + 이력 로드
   useEffect(() => {
@@ -49,6 +99,21 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
         }
       } catch { /* ignore */ }
     });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 단일 단지 + region 있을 때 시도 공급 차트 + 구 입주 예정 단지 로드
+  useEffect(() => {
+    if (entries.length !== 1) return;
+    const region = entries[0].region;
+    const province = toProvinceKey(region);
+    const gu = toGuName(region);
+    if (!province) return;
+    setSupplyLoading(true);
+    const currentYear = new Date().getFullYear();
+    Promise.allSettled([
+      getProvinceSupply(province).then(r => setSupplyData(r)).catch(() => {}),
+      getMoveInData(province, gu ?? undefined, currentYear).then(r => setMoveInItems(r)).catch(() => {}),
+    ]).finally(() => setSupplyLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 개별 단지 수집 트리거 + 폴링
@@ -817,6 +882,183 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
           <p style={{ fontSize: '10px', color: '#bdbdbd', textAlign: 'center', margin: '12px 0 0' }}>
             국토교통부 실거래가 공개시스템 기준 · 해제 거래 제외 · 막대 클릭 시 개별 거래 조회
           </p>
+
+          {/* ── 공급 현황 섹션 (단일 단지 + region 있을 때만) ── */}
+          {isSingle && entries[0].region && (() => {
+            const province = toProvinceKey(entries[0].region);
+            const gu = toGuName(entries[0].region);
+            if (!province) return null;
+
+            const provinceYears = supplyData?.data[province] ?? {};
+            const barData = Object.entries(provinceYears)
+              .map(([yr, d]) => ({ year: parseInt(yr, 10), ...(d as ProvinceSupplyYear) }))
+              .sort((a, b) => a.year - b.year)
+              .filter(d => d.year >= 2020); // 2020년 이후만 표시
+
+            const demandLine = barData[0]?.demandLine ?? 0;
+            const currentYear = new Date().getFullYear();
+
+            // 연도별 그룹핑
+            const moveInByYear: Record<number, MoveInItem[]> = {};
+            for (const item of moveInItems) {
+              const yr = item.moveinYear ?? 0;
+              if (!moveInByYear[yr]) moveInByYear[yr] = [];
+              moveInByYear[yr].push(item);
+            }
+
+            return (
+              <div style={{ marginTop: '20px', borderTop: '1.5px solid #e0f4fb', paddingTop: '18px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#344054', margin: '0 0 14px' }}>
+                  📊 {province} 아파트 공급 현황
+                </h3>
+
+                {supplyLoading && (
+                  <div style={{ textAlign: 'center', color: '#9aa0a6', fontSize: '12px', padding: '16px 0' }}>
+                    공급 데이터 조회 중...
+                  </div>
+                )}
+
+                {!supplyLoading && barData.length === 0 && (
+                  <div style={{ textAlign: 'center', color: '#bdbdbd', fontSize: '12px', padding: '12px 0' }}>
+                    공급 데이터 없음 — "공급 수집" 버튼으로 먼저 수집해주세요
+                  </div>
+                )}
+
+                {!supplyLoading && barData.length > 0 && (
+                  <>
+                    {/* 범례 */}
+                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '8px', alignItems: 'center' }}>
+                      {Object.entries(SUPPLY_COLORS).map(([label, clr]) => (
+                        <span key={label} style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '3px', background: clr.bg, color: clr.color, fontWeight: 700 }}>
+                          {label}
+                        </span>
+                      ))}
+                      {demandLine > 0 && (
+                        <span style={{ fontSize: '10px', color: '#dc2626', marginLeft: '4px' }}>
+                          — 적정수요 {(demandLine / 1000).toFixed(0)}천세대/년
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 바 차트 */}
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={barData} margin={{ top: 4, right: 20, left: 4, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis
+                          dataKey="year"
+                          tick={{ fontSize: 9 }}
+                          tickFormatter={(v: number) => v === currentYear ? `${v}★` : String(v)}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 9 }}
+                          tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+                          width={32}
+                        />
+                        <Tooltip
+                          formatter={(value: unknown) => [`${(value as number).toLocaleString()}세대`, '공급 예정']}
+                          labelFormatter={(label: unknown) => `${label}년`}
+                          contentStyle={{ fontSize: '11px', borderRadius: '8px' }}
+                        />
+                        {demandLine > 0 && (
+                          <ReferenceLine
+                            y={demandLine}
+                            stroke="#dc2626"
+                            strokeDasharray="6 3"
+                            label={{ value: '적정수요', position: 'insideTopRight', fontSize: 9, fill: '#dc2626' }}
+                          />
+                        )}
+                        <Bar dataKey="supplyCount" maxBarSize={28}>
+                          {barData.map(d => {
+                            const clr = SUPPLY_COLORS[d.supplyStatus] ?? { bg: '#e0e0e0', color: '#999' };
+                            return (
+                              <Cell
+                                key={d.year}
+                                fill={clr.bg}
+                                stroke={d.year === currentYear ? '#1a3a5c' : clr.color}
+                                strokeWidth={d.year === currentYear ? 2 : 1}
+                              />
+                            );
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+
+                    {/* 근접 연도 수치 테이블 */}
+                    <div style={{ marginTop: '8px', overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                        <thead>
+                          <tr style={{ background: '#f5f5f5' }}>
+                            <th style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #ddd', color: '#5f6368' }}>연도</th>
+                            <th style={{ padding: '4px 8px', textAlign: 'right', borderBottom: '1px solid #ddd', color: '#5f6368' }}>공급(세대)</th>
+                            <th style={{ padding: '4px 8px', textAlign: 'right', borderBottom: '1px solid #ddd', color: '#5f6368' }}>적정수요비</th>
+                            <th style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #ddd', color: '#5f6368' }}>상태</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {barData.filter(d => d.year >= currentYear - 1 && d.year <= currentYear + 3).map((d, i) => {
+                            const clr = SUPPLY_COLORS[d.supplyStatus] ?? { bg: '#f0f0f0', color: '#666' };
+                            const isCur = d.year === currentYear;
+                            return (
+                              <tr key={d.year} style={{ background: isCur ? '#fffbeb' : i % 2 === 0 ? '#fff' : '#f9f9f9', fontWeight: isCur ? 700 : 400 }}>
+                                <td style={{ padding: '3px 8px', textAlign: 'center' }}>{d.year}{isCur ? ' ★' : ''}</td>
+                                <td style={{ padding: '3px 8px', textAlign: 'right' }}>{d.supplyCount.toLocaleString()}</td>
+                                <td style={{ padding: '3px 8px', textAlign: 'right' }}>{d.supplyRatio}%</td>
+                                <td style={{ padding: '3px 8px', textAlign: 'center' }}>
+                                  <span style={{ padding: '1px 6px', borderRadius: '3px', background: clr.bg, color: clr.color, fontWeight: 700 }}>
+                                    {d.supplyStatus}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+
+                {/* 구 입주 예정 단지 목록 */}
+                {gu && (
+                  <div style={{ marginTop: '16px', borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#344054', marginBottom: '8px' }}>
+                      🏗 {gu} 입주 예정 단지
+                      {supplyLoading && <span style={{ fontSize: '11px', fontWeight: 400, color: '#9aa0a6', marginLeft: '6px' }}>조회 중...</span>}
+                      {!supplyLoading && <span style={{ fontSize: '11px', fontWeight: 400, color: '#9aa0a6', marginLeft: '6px' }}>({moveInItems.length}건)</span>}
+                    </div>
+                    {!supplyLoading && moveInItems.length === 0 && (
+                      <div style={{ fontSize: '12px', color: '#bdbdbd', textAlign: 'center', padding: '8px 0' }}>
+                        입주 예정 단지 없음
+                      </div>
+                    )}
+                    {moveInItems.length > 0 && (
+                      <div>
+                        {Object.entries(moveInByYear)
+                          .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                          .map(([yr, items]) => (
+                            <div key={yr} style={{ marginBottom: '8px' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', padding: '3px 10px', borderRadius: '5px', marginBottom: '4px' }}>
+                                {yr}년 · {items.reduce((s, i) => s + (i.household || 0), 0).toLocaleString()}세대
+                              </div>
+                              {items.map(item => (
+                                <div key={item.seq} style={{ display: 'flex', gap: '8px', alignItems: 'baseline', padding: '3px 10px', fontSize: '12px', borderBottom: '1px solid #f3f4f6' }}>
+                                  <span style={{ color: '#6b7280', minWidth: '28px', fontSize: '11px' }}>{item.moveinMonth}월</span>
+                                  <span style={{ flex: 1, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.name}>{item.name}</span>
+                                  <span style={{ color: '#374151', whiteSpace: 'nowrap', fontSize: '11px' }}>{(item.household || 0).toLocaleString()}세대</span>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ fontSize: '10px', color: '#bdbdbd', textAlign: 'right', marginTop: '8px' }}>
+                  출처: 아실(asil.kr)
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

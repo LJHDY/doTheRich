@@ -4045,7 +4045,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         </div>
         {tradeModalOpen && (
           <TradeHistoryModal
-            entries={[{ complexId: complex.id, complexName: complex.complexName, color: '#4BAAD4' }]}
+            entries={[{ complexId: complex.id, complexName: complex.complexName, color: '#4BAAD4', region: complex.region }]}
             onClose={() => setTradeModalOpen(false)}
           />
         )}
