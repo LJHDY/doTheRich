@@ -510,7 +510,17 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
           {/* 차트 */}
           {hasAnyData && (
             <ResponsiveContainer width="100%" height={340}>
-              <ComposedChart data={chartData} margin={{ top: 8, right: 54, left: 0, bottom: 0 }}>
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 8, right: 54, left: 0, bottom: 0 }}
+                style={{ cursor: 'pointer' }}
+                onClick={(data) => {
+                  // ComposedChart 레벨 onClick — Bar 위에 Line이 그려져 Bar onClick이
+                  // 가로막히는 문제를 방지. activeLabel로 클릭한 X축 레이블을 가져온다.
+                  const l = (data as any)?.activeLabel as string | undefined;
+                  if (l) setClickedLabel(prev => prev === l ? null : l);
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -565,11 +575,6 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                     maxBarSize={isSingle ? 20 : 28}
                     radius={[3, 3, 0, 0]}
                     name={`c${e.complexId}_tc`}
-                    style={{ cursor: 'pointer' }}
-                    onClick={(data) => {
-                      const l = data?.label as string | undefined;
-                      if (l) { setClickedLabel(prev => prev === l ? null : l); setDrillType('trade'); }
-                    }}
                   />
                 ))}
                 {/* 전세 거래량 bar */}
@@ -583,11 +588,6 @@ const TradeHistoryModal: React.FC<Props> = ({ entries, onClose }) => {
                     maxBarSize={isSingle ? 20 : 28}
                     radius={[3, 3, 0, 0]}
                     name={`c${e.complexId}_jc`}
-                    style={{ cursor: 'pointer' }}
-                    onClick={(data) => {
-                      const l = data?.label as string | undefined;
-                      if (l) { setClickedLabel(prev => prev === l ? null : l); setDrillType('jeonse'); }
-                    }}
                   />
                 ))}
                 {/* 매매 평균가 line (실선) */}
