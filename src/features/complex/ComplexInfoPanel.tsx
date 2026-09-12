@@ -386,6 +386,9 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   const [editingInfra, setEditingInfra] = useState<InfraEditState | null>(null);
   const [newInfraRows, setNewInfraRows] = useState<InfraAddRow[]>([]);
   const [savingNewInfras, setSavingNewInfras] = useState(false);
+  // 자동탐지 제안 목록 — 저장 전 읽기 전용 표시
+  const [infraSuggestions, setInfraSuggestions] = useState<InfraAddRow[]>([]);
+  const [savingInfraSuggestions, setSavingInfraSuggestions] = useState(false);
   // 유해시설 편집 상태
   const [editingHazard, setEditingHazard] = useState<HazardEditState | null>(null);
   const [newHazardRows, setNewHazardRows] = useState<HazardAddRow[]>([]);
@@ -485,8 +488,17 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         });
       }
     });
-    // 전국 학교 DB에서 조회한 근처 학교도 오버레이 마커로 추가 (이미 등록된 학교와 별개)
+    // 전국 학교 DB에서 조회한 근처 학교도 마커 추가 — 이미 등록된 학교명과 중복되면 제외
+    const _normName = (n: string) => {
+      const prefixes = ['서울', '경기', '인천', '부산', '대구', '대전', '광주', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
+      for (const p of prefixes) { if (n.startsWith(p)) return n.slice(p.length); }
+      return n;
+    };
+    const registeredNames = new Set(
+      (complex?.schoolInfos ?? []).map(s => _normName(s.schoolName ?? ''))
+    );
     dbSchools.forEach(s => {
+      if (registeredNames.has(s.schoolName) || registeredNames.has(_normName(s.schoolName))) return;
       markers.push({
         id: `db-school-${s.id}`,
         name: s.schoolName,
@@ -1124,6 +1136,31 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
     }
   };
 
+  // 자동탐지 제안 일괄 저장
+  const saveInfraSuggestions = async () => {
+    if (!complex || infraSuggestions.length === 0) return;
+    setSavingInfraSuggestions(true);
+    const items = infraSuggestions
+      .filter(r => r.infraName.trim())
+      .map(r => ({
+        infraName: r.infraName,
+        infraType: r.infraType,
+        distance: r.distance ? parseInt(r.distance) : undefined,
+        infraAddress: r.infraAddress || undefined,
+        latitude: r.latitude ?? undefined,
+        longitude: r.longitude ?? undefined,
+      }));
+    try {
+      await addInfraInfos(complex.id, items as any);
+      setInfraSuggestions([]);
+      await refreshComplex();
+    } catch {
+      /* 실패 시 제안 목록 유지 */
+    } finally {
+      setSavingInfraSuggestions(false);
+    }
+  };
+
   // 기존 항목 수정 폼 열기
   const startEditInfra = (inf: InfraInfo) => {
     setEditingInfra({
@@ -1262,6 +1299,7 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   // 인프라 자동탐지 — 저장된 인프라 없을 때 카카오 API로 주변 마트/병원/백화점 조회
   useEffect(() => {
     setNewInfraRows([]);
+    setInfraSuggestions([]);
     if (!complex?.id || !complex.latitude || !complex.longitude) return;
     if ((complex.infraInfos ?? []).length > 0) return;
 
@@ -1296,7 +1334,8 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
         });
       });
       infraRowCounter.current = cnt;
-      setNewInfraRows(rows);
+      // newInfraRows 대신 별도 제안 목록에 저장 — 읽기 전용으로 표시 후 저장 유도
+      setInfraSuggestions(rows);
     }).finally(() => setLoadingInfraSuggestions(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complex?.id]);
@@ -3252,9 +3291,35 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
           )}
 
           {/* 데이터 없을 때 안내 / 자동탐지 로딩 */}
-          {(complex.infraInfos ?? []).length === 0 && newInfraRows.length === 0 && (
+          {(complex.infraInfos ?? []).length === 0 && infraSuggestions.length === 0 && newInfraRows.length === 0 && (
             <div style={{ fontSize: '12px', color: '#9e9e9e', paddingBottom: '4px' }}>
               {loadingInfraSuggestions ? '주변 인프라 조회 중...' : '등록된 인프라 없음'}
+            </div>
+          )}
+
+          {/* 자동탐지 제안 — 읽기 전용 목록 + 전체 저장 버튼 */}
+          {infraSuggestions.length > 0 && (
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: '#80868b', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>📍 인근 시설 자동탐지 결과</span>
+                <span style={{ fontSize: '10px', color: '#bdbdbd' }}>저장하면 항목에 등록됩니다</span>
+              </div>
+              {infraSuggestions.map(row => (
+                <div key={row.localId} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <Tag label={INFRA_TYPE_LABELS[row.infraType] ?? row.infraType} color='#FFD97D' />
+                  <span style={{ fontSize: '13px', color: '#202124', flex: 1 }}>{row.infraName}</span>
+                  {row.distance && (
+                    <span style={{ fontSize: '12px', color: '#80868b', flexShrink: 0 }}>도보 {row.distance}분</span>
+                  )}
+                  <button onClick={() => setInfraSuggestions(prev => prev.filter(r => r.localId !== row.localId))}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#bdbdbd', padding: '0 2px', flexShrink: 0 }}
+                    title="제외">×</button>
+                </div>
+              ))}
+              <button onClick={saveInfraSuggestions} disabled={savingInfraSuggestions}
+                style={{ marginTop: '8px', width: '100%', padding: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: savingInfraSuggestions ? '#9e9e9e' : '#4BAAD4', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                {savingInfraSuggestions ? '저장 중...' : `${infraSuggestions.length}건 저장`}
+              </button>
             </div>
           )}
 

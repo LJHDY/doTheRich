@@ -31,6 +31,7 @@
 - 구별 시세 현황 — 서울 25구 × 5개 평형대 히트맵 테이블
 - 공공단지 지도 표시 — 수도권 150세대↑ 건축물대장 기반
 - 지도 경로 그리기·저장·수정
+- 단지 실거래 이력 — 매매·전세 거래량/평균가 차트 + 시도 공급 현황 + 구 입주 예정 단지
 
 **가계부 / 자산 기능**
 - 월별 가계부 — 수입/지출/고정비/투자/이체 분류, 통장별 잔액
@@ -1105,6 +1106,30 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
   - 새 API 함수: `getTravelLogs`, `createTravelLog`, `updateTravelLog`, `deleteTravelLog`, `createTravelPlace`, `updateTravelPlace`, `deleteTravelPlace`, `reorderTravelPlaces`, `uploadTravelPlacePhotos`, `deleteTravelPlacePhoto`, `generateTravelDraft` (`src/services/api.ts`)
   - MapPage: `travelPlaces` prop 추가, `travelMarkersRef`/`travelPolylineRef`로 마커·폴리라인 수명 관리
   - 백엔드 필요: `travel_log`, `travel_place`, `travel_place_photo` 테이블 + API 11종 (위 API 테이블 참조)
+
+- [x] 단지 실거래 이력 모달 (`TradeHistoryModal`) — 매매·전세 통합 차트 + 시도 공급 현황 + 구 입주 예정 단지
+  - **매매+전세 동시 표시**: `ComposedChart` — 매매 거래량(파랑 Bar) + 전세 거래량(분홍 Bar) + 매매 평균가(진파랑 실선) + 전세 평균가(빨강 점선) 4계열
+  - **갭 배지**: 요약 섹션에 최신 시점 매매-전세 갭(억) 표시
+  - **드릴다운**: 차트 클릭 시 해당 기간 개별 거래 테이블 + 매매/전세 토글 (`ComposedChart onClick`으로 SVG 레이어 충돌 우회)
+  - **202 폴링**: `/collect` 호출 전 `lastUpdated` 캡처 → 타임스탬프 변경 시 완료 감지 (즉시반환 202 엔드포인트 대응)
+  - **시도 공급 현황 섹션** (단일 단지 + region 있을 때): `getProvinceSupply(province)` → BarChart(2020-2030, 상태별 색상) + 근접 연도 수치 테이블
+  - **구 입주 예정 단지**: `getMoveInData(province, gu)` → 연도별 그룹핑 목록 (단지명·세대수·입주월)
+  - `toProvinceKey(region)` — "서울특별시 강남구" → "서울" 변환 헬퍼
+  - `toGuName(region)` — "서울특별시 강남구" → "강남구", "경기도 성남시 분당구" → "성남시" 변환 헬퍼
+  - `TradeComplexEntry.region?: string` 필드 추가 → ComplexInfoPanel·App.tsx 칼러에 region 전달
+
+- [x] 전국 갭 분석 단지별 갭 탭 (`NationalGapPanel` 사이드 패널)
+  - 시군구 행 클릭 시 "📊 공급 현황" / "🏠 단지별 갭" 탭 분리
+  - `GET /api/national-stats/{region_code}/complexes` — MOLIT 최근 3개월 거래 on-demand 조회
+    - `apt_nm` + 평형버킷 단위로 그룹핑 → 매매·전세 중앙값 + 갭 + 전세율 계산
+    - 직거래 제외, 병렬 수집(`ThreadPoolExecutor`), 갭 오름차순 반환
+  - 테이블: 단지명·평형·매매중앙값·전세중앙값·갭·전세율 + 열 클릭 정렬
+  - 색상: 갭 3억 미만=초록/이상=빨강, 전세율 75%↑=초록 ~ 45%↓=빨강
+  - `getDistrictComplexGaps(regionCode, months)` API 함수 추가 (`ComplexGapItem` 타입)
+- [x] 전국 갭 분석 집계 평균 → 중앙값 전환
+  - `district_stats_service._avg` → `_median` (이상치 왜곡 방지)
+  - `national_gap_service`도 동일 함수 사용 (import 경로 통일)
+  - DB 스키마(`avg_trade_*` 컬럼명) 변경 없음 — 재수집 시 중앙값으로 덮어씀
 
 ## 미완성 / TODO
 
