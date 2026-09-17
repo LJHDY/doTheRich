@@ -1829,13 +1829,12 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
               </div>
             )}
             {!loading && (() => {
-              const myAccountNames = new Set(paymentMethods.map(p => p.name));
               const otherUserName = BUDGET_USERS.find(u => u.id !== userId)?.name;
               const cardNameSet = new Set(paymentMethods.filter(p => p.type === '카드').map(p => p.name));
               const bankNameSet = new Set(paymentMethods.filter(p => p.type === '통장').map(p => p.name));
               return filtered.map(entry => (
                 <EntryRow key={entry.id} entry={entry} onEdit={openEdit} onDelete={handleDelete}
-                  myAccountNames={myAccountNames} otherUserName={otherUserName}
+                  currentUserId={userId} otherUserName={otherUserName}
                   cardNameSet={cardNameSet} bankNameSet={bankNameSet}
                   paidCardNames={paidCardNames}
                   isBoundary={boundaryEntryIds.has(entry.id)} />
@@ -2741,7 +2740,7 @@ const CalendarView: React.FC<{
           ) : (
             selectedEntries.map(e => (
               <EntryRow key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete}
-                myAccountNames={new Set(paymentMethods.map(p => p.name))}
+                currentUserId={userId}
                 otherUserName={BUDGET_USERS.find(u => u.id !== userId)?.name}
                 cardNameSet={new Set(paymentMethods.filter(p => p.type === '카드').map(p => p.name))}
                 bankNameSet={new Set(paymentMethods.filter(p => p.type === '통장').map(p => p.name))}
@@ -2758,13 +2757,14 @@ const EntryRow: React.FC<{
   entry: BudgetEntry;
   onEdit: (e: BudgetEntry) => void;
   onDelete: (e: BudgetEntry) => void;
-  myAccountNames?: Set<string>; // 내 결제수단 이름 Set — 미포함 시 상대방 결제수단으로 표시
+  currentUserId?: string;        // 현재 로그인 유저 ID — entry.userId와 비교해 상대방 배지 표시
+  myAccountNames?: Set<string>; // (미사용, 하위 호환용 유지)
   otherUserName?: string;       // 상대방 이름 (예: '주해')
   cardNameSet?: Set<string>;    // 카드명 Set — accountMain이 카드명이면 카드 배지로 표시
   bankNameSet?: Set<string>;    // 통장명 Set — accountMain이 통장명이면 통장 배지로 표시
   paidCardNames?: Set<string>;  // 납부 완료된 카드명 Set — 카드 구매 항목에 납부완료 배지 표시
   isBoundary?: boolean;         // 이번달 달력 날짜지만 다음달 정산에 속하는 항목 (day >= 25)
-}> = ({ entry, onEdit, onDelete, myAccountNames, otherUserName, cardNameSet, bankNameSet, paidCardNames, isBoundary }) => {
+}> = ({ entry, onEdit, onDelete, currentUserId, otherUserName, cardNameSet, bankNameSet, paidCardNames, isBoundary }) => {
   const isIncome = entry.entryType === 'INCOME';
   const dateStr = entry.entryDate.slice(5); // "08-12"
 
@@ -2846,7 +2846,7 @@ const EntryRow: React.FC<{
               return (
                 <>
                   {(isCard || isBank) ? <span style={{ marginLeft: '4px' }}>{badge}</span> : badge}
-                  {myAccountNames && !myAccountNames.has(entry.account) && otherUserName && (
+                  {currentUserId && entry.userId && entry.userId !== currentUserId && otherUserName && (
                     <span style={{ marginLeft: '4px', fontSize: '10px', background: '#f0f0f0', color: '#344054', border: '1px solid #d0d0d0', borderRadius: '4px', padding: '1px 5px' }}>
                       {otherUserName}
                     </span>
@@ -2863,7 +2863,7 @@ const EntryRow: React.FC<{
                 }}>
                   💳 {entry.cardName}
                 </span>
-                {myAccountNames && !myAccountNames.has(entry.cardName) && otherUserName && (
+                {currentUserId && entry.userId && entry.userId !== currentUserId && otherUserName && (
                   <span style={{ marginLeft: '3px', fontSize: '10px', background: '#f0f0f0', color: '#344054', border: '1px solid #d0d0d0', borderRadius: '4px', padding: '1px 5px' }}>
                     {otherUserName}
                   </span>
