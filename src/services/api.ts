@@ -51,6 +51,7 @@ import {
   TravelPlacePhoto,
   NationalDistrictStat,
   NationalGapResponse,
+  StockWatchlist,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -2427,8 +2428,6 @@ export const generateBlogDraft = async (complexId: number): Promise<BlogDraft> =
 };
 
 // ── 주가 알림 감시 종목 API ────────────────────────────────────────────────────
-
-import { StockWatchlist } from '../types';
 
 const toStockWatchlist = (d: any): StockWatchlist => ({
   id: d.id,
