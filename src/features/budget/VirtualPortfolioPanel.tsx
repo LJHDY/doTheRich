@@ -12,7 +12,6 @@ import { VirtualPortfolio, VirtualPosition, VirtualTrade } from '../../types';
 
 // ── 스타일 상수 ─────────────────────────────────────────────────────────────
 const DARK_BLUE = '#1a3a5c';
-const BABY_BLUE = '#89CFF0';
 
 const cardStyle: React.CSSProperties = {
   background: '#fff',
