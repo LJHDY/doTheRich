@@ -52,6 +52,7 @@ import {
   NationalDistrictStat,
   NationalGapResponse,
   StockWatchlist,
+  VirtualPortfolio,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -2468,6 +2469,50 @@ export const deleteStockWatchlist = async (id: number): Promise<void> => {
 
 export const checkStockWatchlistNow = async (): Promise<void> => {
   await api.post('/api/stock-watchlist/check-now');
+};
+
+// ── 가상 투자 API ─────────────────────────────────────────────────────────────
+
+export const getVirtualPortfolio = async (): Promise<VirtualPortfolio> => {
+  const { data } = await api.get('/api/virtual-trading/portfolio');
+  return {
+    account: {
+      balance: data.account.balance,
+      initialBalance: data.account.initial_balance,
+      totalInvested: data.account.total_invested,
+      totalCurrentValue: data.account.total_current_value,
+      totalPnl: data.account.total_pnl,
+    },
+    positions: (data.positions as any[]).map(p => ({
+      id: p.id,
+      stockCode: p.stock_code,
+      stockName: p.stock_name,
+      shares: p.shares,
+      avgPrice: p.avg_price,
+      totalInvested: p.total_invested,
+      currentPrice: p.current_price,
+      currentValue: p.current_value,
+      pnl: p.pnl,
+      pnlPct: p.pnl_pct,
+    })),
+    trades: (data.trades as any[]).map(t => ({
+      id: t.id,
+      stockCode: t.stock_code,
+      stockName: t.stock_name,
+      action: t.action,
+      price: t.price,
+      shares: t.shares,
+      amount: t.amount,
+      signalForeign: t.signal_foreign,
+      signalInst: t.signal_inst,
+      pnl: t.pnl,
+      createdAt: t.created_at,
+    })),
+  };
+};
+
+export const resetVirtualPortfolio = async (): Promise<void> => {
+  await api.post('/api/virtual-trading/reset');
 };
 
 export default api;

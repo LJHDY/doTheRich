@@ -18,6 +18,9 @@ import {
   checkStockWatchlistNow,
 } from '../../services/api';
 import { StockWatchlist } from '../../types';
+import VirtualPortfolioPanel from './VirtualPortfolioPanel';
+
+type SubTab = 'WATCHLIST' | 'PORTFOLIO';
 
 // ── 인라인 편집 셀 상태 타입 ─────────────────────────────────────────────────
 type EditingCell = {
@@ -98,6 +101,9 @@ const tdStyle: React.CSSProperties = {
 
 // ── 컴포넌트 ─────────────────────────────────────────────────────────────────
 const StockWatchlistPanel: React.FC = () => {
+  // 서브탭
+  const [subTab, setSubTab] = useState<SubTab>('WATCHLIST');
+
   // 목록 상태
   const [list, setList] = useState<StockWatchlist[]>([]);
   const [loading, setLoading] = useState(false);
@@ -283,7 +289,25 @@ const StockWatchlistPanel: React.FC = () => {
 
   // ── 렌더 ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '16px', maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ padding: '16px', maxWidth: '960px', margin: '0 auto' }}>
+      {/* 서브탭 */}
+      <div style={{ display: 'flex', gap: '4px', background: '#f0f4f8', borderRadius: '10px', padding: '4px', marginBottom: '16px', width: 'fit-content' }}>
+        {([['WATCHLIST', '📋 종목 관리'], ['PORTFOLIO', '💹 가상 포트폴리오']] as [SubTab, string][]).map(([t, label]) => (
+          <button key={t} onClick={() => setSubTab(t)} style={{
+            padding: '6px 16px', fontSize: '13px', fontWeight: subTab === t ? 700 : 400,
+            borderRadius: '8px', border: 'none', cursor: 'pointer',
+            background: subTab === t ? '#fff' : 'transparent',
+            color: subTab === t ? DARK_BLUE : '#5f6368',
+            boxShadow: subTab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {/* 가상 포트폴리오 서브탭 */}
+      {subTab === 'PORTFOLIO' && <VirtualPortfolioPanel />}
+
+      {/* 종목 관리 서브탭 */}
+      {subTab === 'WATCHLIST' && <>
       {/* 제목 */}
       <div style={{ marginBottom: '16px' }}>
         <h2 style={{ fontSize: '18px', fontWeight: 700, color: DARK_BLUE, margin: 0 }}>
@@ -492,6 +516,7 @@ const StockWatchlistPanel: React.FC = () => {
           {checking ? '체크 중...' : '📡 지금 체크'}
         </button>
       </div>
+      </>}
     </div>
   );
 };

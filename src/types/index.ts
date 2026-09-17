@@ -1134,3 +1134,48 @@ export interface StockWatchlist {
   isActive: boolean;        // 알림 활성 여부
   createdAt: string;
 }
+
+/** 가상 투자 계좌 요약 */
+export interface VirtualAccount {
+  balance: number;           // 현금 잔고 (원)
+  initialBalance: number;    // 초기 잔고 (5천만원)
+  totalInvested: number;     // 보유 포지션 총 투자금 (원)
+  totalCurrentValue: number | null; // 보유 포지션 현재가 합산 (원)
+  totalPnl: number | null;   // 미실현 손익 합계 (원)
+}
+
+/** 가상 투자 보유 포지션 */
+export interface VirtualPosition {
+  id: number;
+  stockCode: string;
+  stockName: string;
+  shares: number;           // 보유 주수
+  avgPrice: number;         // 평균 매수가 (원)
+  totalInvested: number;    // 총 투자금 (원)
+  currentPrice: number | null;
+  currentValue: number | null;
+  pnl: number | null;       // 미실현 손익 (원)
+  pnlPct: number | null;    // 미실현 손익률 (%)
+}
+
+/** 가상 투자 거래 이력 1건 */
+export interface VirtualTrade {
+  id: number;
+  stockCode: string;
+  stockName: string;
+  action: 'BUY' | 'SELL';
+  price: number;            // 체결가 (원)
+  shares: number;           // 체결 주수
+  amount: number;           // 거래 금액 (원)
+  signalForeign: number | null; // 외국인 순매수 (억)
+  signalInst: number | null;    // 기관 순매수 (억)
+  pnl: number | null;           // 실현 손익 (SELL 시, 원)
+  createdAt: string;
+}
+
+/** 가상 투자 포트폴리오 전체 응답 */
+export interface VirtualPortfolio {
+  account: VirtualAccount;
+  positions: VirtualPosition[];
+  trades: VirtualTrade[];
+}
