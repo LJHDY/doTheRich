@@ -38,6 +38,8 @@
 - 자산 스냅샷 — 날짜별 자산 현황 테이블, 세부 내역, 이력 그래프
 - AI 재무 분석 리포트 (Gemini) — 월별 소비패턴·투자·통장쪼개기 분석
 - 시장 리포트 (Gemini + yfinance) — 미국/한국/원자재/환율 지표 + AI 분석
+- 주가 알림 감시 종목 — 장중 5분 가격 알림 + 매일 15:40 외국인/기관 수급 알림 (텔레그램)
+- 가상 투자 포트폴리오 — 수급 신호 기반 자동 페이퍼 트레이딩, 포지션·손익 추적
 
 **기타**
 - 캘린더 — 일정 추가, 할일 관리, 네이버 캘린더 OAuth 연동
@@ -138,6 +140,8 @@ src/
 │   │   ├── IntegratedReportView.tsx # 통합리포트 탭 + RankingTable 헬퍼
 │   │   ├── ScreeningReportView.tsx  # 우량주 스크리닝 탭
 │   │   ├── CompanyAnalysisView.tsx  # 기업분석 탭
+│   │   ├── StockWatchlistPanel.tsx  # 주가 알림 탭 — 종목 관리 / 가상 포트폴리오 서브탭
+│   │   ├── VirtualPortfolioPanel.tsx # 가상 투자 포트폴리오 — 계좌요약·포지션·거래이력
 │   │   ├── UserSelectModal.tsx     # 유저 선택 모달
 │   │   └── budgetConstants.ts      # ASSET_COLUMNS, ACCOUNT_GROUPS 등 상수
 │   ├── schedule/                   # 캘린더 / 일정
@@ -263,6 +267,21 @@ CommonCode { id, commonCode, commonCodeName, detailCode, detailCodeName, sortOrd
 // 하루 스케줄 블록 (원형 시간표 한 조각)
 DayScheduleBlock { id, startMin: number, endMin: number, label, color }
 // startMin/endMin: 0~1440, 10분 단위. UNIQUE(user_id, schedule_date) DB 저장
+
+// 주가 알림 감시 종목
+StockWatchlist { id, stockCode, stockName, priceAlertPct, investorAlertAmt, isActive, createdAt }
+
+// 가상 투자 계좌 (id=1 단일 행, 초기잔고 5천만원)
+VirtualAccount { balance, initialBalance, totalInvested, totalCurrentValue, totalPnl }
+
+// 가상 투자 보유 포지션 (종목별 1행, 매도 시 삭제)
+VirtualPosition { id, stockCode, stockName, shares, avgPrice, totalInvested, currentPrice?, currentValue?, pnl?, pnlPct? }
+
+// 가상 투자 거래 이력 (BUY/SELL)
+VirtualTrade { id, stockCode, stockName, action: 'BUY'|'SELL', price, shares, amount, signalForeign?, signalInst?, pnl?, createdAt }
+
+// 가상 투자 포트폴리오 응답
+VirtualPortfolio { account: VirtualAccount, positions: VirtualPosition[], trades: VirtualTrade[] }
 ```
 
 ### 유틸 함수
@@ -378,6 +397,13 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
 | POST | `/api/travel-logs/:id/places/:placeId/photos` | 방문지 사진 업로드 (multipart, 201) |
 | DELETE | `/api/travel-logs/:id/places/:placeId/photos/:photoId` | 방문지 사진 삭제 (204) |
 | POST | `/api/travel-logs/:id/generate-draft` | AI 블로그 초안 생성 — Gemini API, `{ content: string }` 반환 |
+| GET | `/api/stock-watchlist` | 감시 종목 목록 조회 |
+| POST | `/api/stock-watchlist` | 감시 종목 추가 (201), 중복 코드 → 400 |
+| PATCH | `/api/stock-watchlist/:id` | 감시 종목 조건 수정 (`price_alert_pct` / `investor_alert_amt` / `is_active`) |
+| DELETE | `/api/stock-watchlist/:id` | 감시 종목 삭제 (204) |
+| POST | `/api/stock-watchlist/check-now` | 즉시 알림 체크 트리거 (202) |
+| GET | `/api/virtual-trading/portfolio` | 가상 포트폴리오 조회 — 계좌·포지션(현재가·손익 포함)·거래이력 50건 |
+| POST | `/api/virtual-trading/reset` | 가상 계좌 초기화 (5천만원 리셋, 포지션·이력 전체 삭제) |
 
 ---
 
@@ -1130,6 +1156,30 @@ DayScheduleBlock { id, startMin: number, endMin: number, label, color }
   - `district_stats_service._avg` → `_median` (이상치 왜곡 방지)
   - `national_gap_service`도 동일 함수 사용 (import 경로 통일)
   - DB 스키마(`avg_trade_*` 컬럼명) 변경 없음 — 재수집 시 중앙값으로 덮어씀
+
+- [x] 주가 알림 감시 종목 기능 (`StockWatchlistPanel`, `stock_watchlist` 테이블)
+  - 가계부 "📡 주가 알림" 탭 → **종목 관리 / 가상 포트폴리오** 서브탭
+  - **가격 알림** (장중 5분 인터벌): 당일 시가 대비 ±price_alert_pct% 이상 변동 시 텔레그램 알림 (동영에게만)
+    - 60분 쿨다운 (동일 종목+방향), 장 시간(09:00~15:30 KST, 평일만) 외 자동 건너뜀
+  - **수급 알림** (매일 15:40 KST): 외국인/기관 순매수·순매도가 investor_alert_amt(억) 초과 시 알림
+    - 당일 1회 쿨다운, 전날 방향과 비교해 방향 전환 시 ⚡ 표시
+  - 종목 CRUD (코드·명·가격알림%·수급알림억·활성토글), 셀 클릭 인라인 편집, 즉시 체크 버튼
+  - 백엔드: `StockWatchlist`, `StockAlertLog` 모델, `stock_watchlist_service.py`, `stock_watchlist_router.py`
+    - APScheduler: IntervalTrigger(5분) + CronTrigger(15:40 KST 평일)
+    - 텔레그램: `send_telegram_to(_ADMIN_CHAT_ID, msg)` — 동영 전용
+
+- [x] 가상 투자 포트폴리오 (`VirtualPortfolioPanel`, `virtual_account/position/trade_log` 테이블)
+  - **자동 거래 조건**: 외국인 + 기관 **둘 다** 같은 방향 + 각각 임계값 초과 시 수급 알림과 동시에 자동 체결
+    - 매수: 합산 신호 강도 기반 금액 결정 — `(|외국인|+|기관|)/임계값 × 200만원`, 최대 1,000만원, 100만원 단위
+    - 매도: 보유 포지션 전량 매도 (공매도 없음), 실현손익 계산
+    - 텔레그램 알림 메시지에 💹 가상 체결 내용 포함
+  - **초기 잔고**: 5,000만원 (계좌 초기화 버튼으로 리셋 가능)
+  - **UI**: 계좌 요약(현금/포지션평가/총자산/미실현손익), 보유 포지션(수익률·손익), 거래 이력(수급신호·실현손익)
+  - 타입: `VirtualAccount`, `VirtualPosition`, `VirtualTrade`, `VirtualPortfolio` (`src/types/index.ts`)
+  - API: `getVirtualPortfolio`, `resetVirtualPortfolio` (`src/services/api.ts`)
+  - 백엔드: `virtual_trading_service.py`, `virtual_trading_router.py`
+    - `GET /api/virtual-trading/portfolio` — 현재가 실시간 조회 포함
+    - `POST /api/virtual-trading/reset` — 전체 초기화
 
 ## 미완성 / TODO
 
