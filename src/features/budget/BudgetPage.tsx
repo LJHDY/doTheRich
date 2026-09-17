@@ -47,6 +47,7 @@ import AccountManagementView, { SharedAccountSection } from './AccountManagement
 import OverviewView from './OverviewView';
 import AssetView from './AssetView';
 import AIReportView from './AIReportView';
+import StockWatchlistPanel from './StockWatchlistPanel';
 
 interface Props {
   onClose: () => void;
@@ -145,7 +146,7 @@ const initialForm = (): Partial<BudgetEntry> & { amountStr: string } => ({
 });
 
 type Filter = 'ALL' | 'INCOME' | 'EXPENSE' | 'FIXED' | 'INVEST' | 'TRANSFER' | 'BANK_EXP' | 'CARD_SPEND';
-type Tab = 'ENTRIES' | 'ACCOUNTS' | 'ASSETS' | 'OVERVIEW' | 'WORKOUT' | 'AI'; // 가계부 내역 / 통장 관리 / 자산 관리 / 통합 보기 / 운동 / AI 분석
+type Tab = 'ENTRIES' | 'ACCOUNTS' | 'ASSETS' | 'OVERVIEW' | 'WORKOUT' | 'AI' | 'WATCHLIST'; // 가계부 내역 / 통장 관리 / 자산 관리 / 통합 보기 / 운동 / AI 분석 / 주가 알림
 
 // 파이차트 범례 항목 — 모듈 레벨 정의로 IIFE 내 재마운트 방지
 // hover 시 즉시 금액/건수 툴팁 표시 (title 속성의 브라우저 딜레이 없음)
@@ -874,7 +875,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             {/* 행 2: 탭 전환 */}
             <div style={{ padding: '0 14px 6px' }}>
               <div style={{ display: 'flex', gap: '3px', background: '#f0f4f8', borderRadius: '8px', padding: '3px' }}>
-                {([['ENTRIES', '내역'], ['ACCOUNTS', '통장'], ['ASSETS', '자산'], ['OVERVIEW', '통합'], ['WORKOUT', '💪'], ['AI', '🤖']] as [Tab, string][]).map(([t, label]) => (
+                {([['ENTRIES', '내역'], ['ACCOUNTS', '통장'], ['ASSETS', '자산'], ['OVERVIEW', '통합'], ['WORKOUT', '💪'], ['AI', '🤖'], ['WATCHLIST', '📡']] as [Tab, string][]).map(([t, label]) => (
                   <button key={t} onClick={() => setTab(t)} style={{
                     flex: 1, padding: '6px 4px', fontSize: '12px', fontWeight: tab === t ? 700 : 400,
                     borderRadius: '6px', border: 'none', cursor: 'pointer',
@@ -915,7 +916,7 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
             <button onClick={onClose} style={btnStyle('#e0f0ff', '#1a3a5c')}>← 닫기</button>
             <span style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a5c', flexGrow: 1 }}>💰 가계부</span>
             <div style={{ display: 'flex', gap: '4px', background: '#f0f4f8', borderRadius: '8px', padding: '3px' }}>
-              {([['ENTRIES', '내역'], ['ACCOUNTS', '통장 관리'], ['ASSETS', '자산'], ['OVERVIEW', '통합 보기'], ['WORKOUT', '💪 운동'], ['AI', '🤖 AI 분석']] as [Tab, string][]).map(([t, label]) => (
+              {([['ENTRIES', '내역'], ['ACCOUNTS', '통장 관리'], ['ASSETS', '자산'], ['OVERVIEW', '통합 보기'], ['WORKOUT', '💪 운동'], ['AI', '🤖 AI 분석'], ['WATCHLIST', '📡 주가 알림']] as [Tab, string][]).map(([t, label]) => (
                 <button key={t} onClick={() => setTab(t)} style={{
                   padding: '4px 10px', fontSize: '12px', fontWeight: tab === t ? 700 : 400,
                   borderRadius: '6px', border: 'none', cursor: 'pointer',
@@ -1895,6 +1896,13 @@ const BudgetPage: React.FC<Props> = ({ onClose }) => {
       {/* ══ AI 재무 분석 탭 ══════════════════════════════════ */}
       {tab === 'AI' && (
         <AIReportView />
+      )}
+
+      {/* ══ 주가 알림 탭 ══════════════════════════════════════ */}
+      {tab === 'WATCHLIST' && (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <StockWatchlistPanel />
+        </div>
       )}
 
       {/* ── 사용자 선택 모달 ─────────────────────────────────── */}

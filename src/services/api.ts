@@ -2426,4 +2426,49 @@ export const generateBlogDraft = async (complexId: number): Promise<BlogDraft> =
   return data;
 };
 
+// ── 주가 알림 감시 종목 API ────────────────────────────────────────────────────
+
+import { StockWatchlist } from '../types';
+
+const toStockWatchlist = (d: any): StockWatchlist => ({
+  id: d.id,
+  stockCode: d.stockCode,
+  stockName: d.stockName,
+  priceAlertPct: d.priceAlertPct,
+  investorAlertAmt: d.investorAlertAmt,
+  isActive: d.isActive,
+  createdAt: d.createdAt,
+});
+
+export const getStockWatchlist = async (): Promise<StockWatchlist[]> => {
+  const { data } = await api.get('/api/stock-watchlist');
+  return (data as any[]).map(toStockWatchlist);
+};
+
+export const addStockWatchlist = async (params: {
+  stock_code: string;
+  stock_name: string;
+  price_alert_pct?: number;
+  investor_alert_amt?: number;
+}): Promise<StockWatchlist> => {
+  const { data } = await api.post('/api/stock-watchlist', params);
+  return toStockWatchlist(data);
+};
+
+export const updateStockWatchlist = async (
+  id: number,
+  params: { price_alert_pct?: number; investor_alert_amt?: number; is_active?: boolean }
+): Promise<StockWatchlist> => {
+  const { data } = await api.patch(`/api/stock-watchlist/${id}`, params);
+  return toStockWatchlist(data);
+};
+
+export const deleteStockWatchlist = async (id: number): Promise<void> => {
+  await api.delete(`/api/stock-watchlist/${id}`);
+};
+
+export const checkStockWatchlistNow = async (): Promise<void> => {
+  await api.post('/api/stock-watchlist/check-now');
+};
+
 export default api;

@@ -1123,3 +1123,14 @@ export interface IntegratedReport {
   createdAt: string;
   updatedAt: string;
 }
+
+/** 주가 알림 감시 종목 — 백엔드 StockWatchlist 모델과 1:1 매핑 */
+export interface StockWatchlist {
+  id: number;
+  stockCode: string;        // 종목코드 (예: 005930)
+  stockName: string;        // 종목명 (예: 삼성전자)
+  priceAlertPct: number;    // 당일 시가 대비 가격 변동 알림 기준 (%)
+  investorAlertAmt: number; // 외국인/기관 순매수 알림 기준 (억원)
+  isActive: boolean;        // 알림 활성 여부
+  createdAt: string;
+}
