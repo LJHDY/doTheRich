@@ -290,7 +290,7 @@ const StockWatchlistPanel: React.FC = () => {
           📡 주가 알림 감시 종목
         </h2>
         <p style={{ fontSize: '12px', color: '#8a9ab8', marginTop: '4px' }}>
-          장중 5분마다 가격 알림, 매일 15:40 수급 알림을 텔레그램으로 발송합니다.
+          장중 5분마다 가격 알림 (시가 대비 ±%), 매일 15:40 수급 알림 (외국인/기관 순매수·순매도)을 텔레그램으로 발송합니다.
         </p>
       </div>
 
@@ -390,7 +390,7 @@ const StockWatchlistPanel: React.FC = () => {
                     수급알림
                     <br />
                     <span style={{ fontSize: '10px', fontWeight: 400, color: '#9ab0c4' }}>
-                      순매수 억원
+                      외국인/기관 순매수·순매도 억원
                     </span>
                   </th>
                   <th style={{ ...theadTh, textAlign: 'center' }}>활성</th>
