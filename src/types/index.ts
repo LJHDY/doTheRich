@@ -1113,6 +1113,35 @@ export interface ScreeningReport {
   updatedAt: string;
 }
 
+/** SEC EDGAR XBRL 기반 미국 우량주 스크리닝 — TOP 40 종목 1건 */
+export interface UsScreeningTopPick {
+  ticker: string;           // 티커 (예: AAPL)
+  name: string;             // 회사명 (예: Apple Inc.)
+  sector: string;           // 섹터 (예: Technology)
+  marketCap: number | null; // 시총 (USD)
+  roe: number | null;       // ROE (%)
+  opMargin: number | null;  // 영업이익률 (%)
+  revGrowth: number | null; // 매출성장률 (%)
+  debtRatio: number | null; // 부채비율 (%)
+  epsGrowth: number | null; // EPS 성장률 (%)
+  per: number | null;       // PER (배)
+  pbr: number | null;       // PBR (배)
+  score: number;            // 종합 스코어 (0~100)
+  rank: number;             // 순위 (1~40)
+}
+
+/** SEC EDGAR XBRL 기반 미국 우량주 스크리닝 리포트 1건 */
+export interface UsScreeningReport {
+  id: number;
+  reportDate: string;                    // YYYY-MM-DD
+  universeCount: number | null;          // 분석 대상 종목 수
+  screenedCount: number | null;          // 1차 필터 통과 종목 수
+  topPicks: UsScreeningTopPick[];        // JSON 파싱된 TOP 40 종목
+  content: string | null;               // Gemini 마크다운 분석
+  createdAt: string;
+  updatedAt: string;
+}
+
 // 시장 리포트 × 스크리닝 통합 투자 의견 리포트
 export interface IntegratedReport {
   id: number;

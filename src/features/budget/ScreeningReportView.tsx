@@ -1,12 +1,15 @@
 // ─── DART 우량주 스크리닝 리포트 뷰 ─────────────────────────────────────────
 // AIReportView의 'screening' 서브탭에서 렌더링
 // DART 사업보고서 기반 재무 스크리닝 — ROE/영업이익률/부채비율/매출성장률/PBR 종합 스코어 TOP40
+// 최상위에 🇰🇷 한국 / 🇺🇸 미국 국가 탭이 있으며, 미국 탭은 UsScreeningView로 위임
 import React, { useEffect, useState } from 'react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { getScreeningReports, generateScreeningReport } from '../../services/api';
 import { ScreeningReport, ScreeningTopPick } from '../../types';
 // IntegratedReportView에서 공유 유틸·컴포넌트 임포트
 import { _numColor, _fmtNum, _fmtMC, RankingTable } from './IntegratedReportView';
+// 미국 스크리닝 뷰 (SEC EDGAR 기반)
+import UsScreeningView from './UsScreeningView';
 
 interface ScreeningReportViewProps {
   onCompanyClick?: (query: string) => void;
@@ -14,6 +17,8 @@ interface ScreeningReportViewProps {
 
 const ScreeningReportView: React.FC<ScreeningReportViewProps> = ({ onCompanyClick }) => {
   const isMobile = useIsMobile();
+  // 최상위 국가 탭 — 🇰🇷 한국(DART) / 🇺🇸 미국(SEC)
+  const [countryTab, setCountryTab] = useState<'KR' | 'US'>('KR');
   // 시장 유형 탭 — 생성 시 어떤 market_type을 생성할지 결정하고, 목록도 해당 유형만 표시
   const [activeMarket, setActiveMarket] = useState<'ALL' | 'KOSPI' | 'KOSDAQ'>('ALL');
   // 리포트 목록·선택 상태
@@ -300,6 +305,30 @@ const ScreeningReportView: React.FC<ScreeningReportViewProps> = ({ onCompanyClic
 
   return (
     <div style={{ flex: 1, overflowY: 'auto' }}>
+      {/* ── 국가 탭 (한국/미국) */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
+        {[
+          { key: 'KR', label: '🇰🇷 한국 (DART)' },
+          { key: 'US', label: '🇺🇸 미국 (SEC)' },
+        ].map(({ key, label }) => (
+          <button key={key} onClick={() => setCountryTab(key as 'KR' | 'US')} style={{
+            padding: '6px 16px', fontSize: '13px', borderRadius: '7px',
+            border: countryTab === key ? '2px solid #89CFF0' : '1px solid #dadce0',
+            background: countryTab === key ? '#e8f4fd' : '#fff',
+            color: countryTab === key ? '#1565c0' : '#5f6368',
+            fontWeight: countryTab === key ? 700 : 400,
+            cursor: 'pointer',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {/* ── 미국 탭 — UsScreeningView로 위임 */}
+      {countryTab === 'US' && (
+        <UsScreeningView onCompanyClick={onCompanyClick} />
+      )}
+
+      {/* ── 한국 탭 — 기존 DART 스크리닝 내용 */}
+      {countryTab === 'KR' && <>
       {/* ── 시장 유형 탭 */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', borderBottom: '2px solid #e0e4e8', paddingBottom: '8px' }}>
         {(['ALL', 'KOSPI', 'KOSDAQ'] as const).map(mkt => (
@@ -746,6 +775,8 @@ const ScreeningReportView: React.FC<ScreeningReportViewProps> = ({ onCompanyClic
           </div>
         </div>
       )}
+      {/* 한국 탭 닫기 */}
+      </>}
     </div>
   );
 };

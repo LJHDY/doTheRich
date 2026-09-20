@@ -53,6 +53,8 @@ import {
   NationalGapResponse,
   StockWatchlist,
   VirtualPortfolio,
+  UsScreeningReport,
+  UsScreeningTopPick,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -2037,6 +2039,54 @@ export const generateScreeningReport = async (reportDate?: string, marketType?: 
       ...(reportDate ? { report_date: reportDate } : {}),
       ...(marketType ? { market_type: marketType } : {}),
     },
+  });
+};
+
+// ── 미국 우량주 스크리닝 (SEC EDGAR XBRL) ────────────────────────────────────
+const _toUsScreeningReport = (item: Record<string, unknown>): UsScreeningReport => {
+  let topPicks: UsScreeningTopPick[] = [];
+  if (item.topPicks) {
+    try {
+      const raw = typeof item.topPicks === 'string' ? JSON.parse(item.topPicks) : item.topPicks;
+      topPicks = (raw as any[]).map(p => ({
+        ticker: p.ticker,
+        name: p.name,
+        sector: p.sector ?? 'Unknown',
+        marketCap: p.marketCap ?? null,
+        roe: p.roe ?? null,
+        opMargin: p.opMargin ?? null,
+        revGrowth: p.revGrowth ?? null,
+        debtRatio: p.debtRatio ?? null,
+        epsGrowth: p.epsGrowth ?? null,
+        per: p.per ?? null,
+        pbr: p.pbr ?? null,
+        score: p.score ?? 0,
+        rank: p.rank ?? 0,
+      }));
+    } catch { /* JSON 파싱 실패 시 빈 배열 유지 */ }
+  }
+  return {
+    id: item.id as number,
+    reportDate: item.reportDate as string,
+    universeCount: (item.universeCount as number) ?? null,
+    screenedCount: (item.screenedCount as number) ?? null,
+    topPicks,
+    content: (item.content as string) ?? null,
+    createdAt: item.createdAt as string,
+    updatedAt: item.updatedAt as string,
+  };
+};
+
+/** 미국 우량주 스크리닝 리포트 목록 조회 (최신순) */
+export const getUsScreeningReports = async (): Promise<UsScreeningReport[]> => {
+  const { data } = await api.get<Record<string, unknown>[]>('/api/us-screening/reports');
+  return data.map(_toUsScreeningReport);
+};
+
+/** 미국 스크리닝 리포트 즉시 생성 요청 (202 Accepted) */
+export const generateUsScreeningReport = async (reportDate?: string): Promise<void> => {
+  await api.post('/api/us-screening/reports/generate', null, {
+    params: reportDate ? { report_date: reportDate } : {},
   });
 };
 

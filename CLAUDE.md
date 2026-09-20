@@ -282,6 +282,12 @@ VirtualTrade { id, stockCode, stockName, action: 'BUY'|'SELL', price, shares, am
 
 // 가상 투자 포트폴리오 응답
 VirtualPortfolio { account: VirtualAccount, positions: VirtualPosition[], trades: VirtualTrade[] }
+
+// 미국 우량주 스크리닝 — TOP 40 종목 1건 (SEC EDGAR XBRL)
+UsScreeningTopPick { ticker, name, sector, marketCap?, roe?, opMargin?, revGrowth?, debtRatio?, epsGrowth?, per?, pbr?, score, rank }
+
+// 미국 우량주 스크리닝 리포트 1건
+UsScreeningReport { id, reportDate, universeCount?, screenedCount?, topPicks: UsScreeningTopPick[], content?, createdAt, updatedAt }
 ```
 
 ### 유틸 함수
@@ -404,6 +410,9 @@ VirtualPortfolio { account: VirtualAccount, positions: VirtualPosition[], trades
 | POST | `/api/stock-watchlist/check-now` | 즉시 알림 체크 트리거 (202) |
 | GET | `/api/virtual-trading/portfolio` | 가상 포트폴리오 조회 — 계좌·포지션(현재가·손익 포함)·거래이력 50건 |
 | POST | `/api/virtual-trading/reset` | 가상 계좌 초기화 (5천만원 리셋, 포지션·이력 전체 삭제) |
+| GET | `/api/us-screening/reports` | 미국 우량주 스크리닝 리포트 목록 (최신순) |
+| GET | `/api/us-screening/reports/latest` | 최신 미국 스크리닝 리포트 1건 |
+| POST | `/api/us-screening/reports/generate` | 즉시 생성 요청 (202 백그라운드) — SEC EDGAR XBRL 수집 + yfinance + Gemini |
 
 ---
 
@@ -1167,6 +1176,22 @@ VirtualPortfolio { account: VirtualAccount, positions: VirtualPosition[], trades
   - 백엔드: `StockWatchlist`, `StockAlertLog` 모델, `stock_watchlist_service.py`, `stock_watchlist_router.py`
     - APScheduler: IntervalTrigger(5분) + CronTrigger(15:40 KST 평일)
     - 텔레그램: `send_telegram_to(_ADMIN_CHAT_ID, msg)` — 동영 전용
+
+- [x] 미국 우량주 스크리닝 (`UsScreeningView`, `us_screening_report` 테이블)
+  - SEC EDGAR XBRL API (data.sec.gov) — S&P 500 + NASDAQ 100 유니버스, API 키 불필요
+  - Wikipedia pandas.read_html로 유니버스 수집, SEC company_tickers.json으로 CIK 매핑
+  - httpx.AsyncClient + Semaphore(8)로 ~530개 companyfacts 병렬 수집 (User-Agent 필수: "DoTheRich dylee0568@gmail.com")
+  - XBRL concept 우선순위 목록으로 매출/영업이익/순이익/자기자본/부채/EPS 추출 (10-K FY 연간 기준)
+  - 스코어링: ROE 25% + 영업이익률 25% + 매출성장률 20% + 부채안전성 15% + PBR역수 15% → TOP 40
+  - yfinance로 TOP 60 시총/PBR/섹터/회사명 보완, 시총 $1B 미만 제외
+  - Gemini 분석 5개 섹션 (총평/TOP10심층분석/섹터패턴/숨은강자/주의사항)
+  - 매주 월요일 08:00 KST (일요일 23:00 UTC) APScheduler 자동 생성
+  - ScreeningReportView에 🇰🇷/🇺🇸 최상위 탭 추가 — 한국(DART) / 미국(SEC) 전환
+  - 타입: `UsScreeningTopPick`, `UsScreeningReport` (types/index.ts)
+  - API: `getUsScreeningReports`, `generateUsScreeningReport` (api.ts)
+  - 백엔드: `us_screening_service.py`, `us_screening_router` (router.py에 추가), `UsScreeningReport` 모델
+  - requirements.txt: pandas, lxml 추가 (Wikipedia 파싱용)
+  - 엔드포인트: `GET /api/us-screening/reports`, `POST /api/us-screening/reports/generate`
 
 - [x] 가상 투자 포트폴리오 (`VirtualPortfolioPanel`, `virtual_account/position/trade_log` 테이블)
   - **자동 거래 조건**: 외국인 + 기관 **둘 다** 같은 방향 + 각각 임계값 초과 시 수급 알림과 동시에 자동 체결
