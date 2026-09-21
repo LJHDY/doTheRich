@@ -21,6 +21,7 @@ import {
   updateCommonCode,
   deleteCommonCode,
   invalidateCommonCodeCache,
+  getSectorTrends,
 } from '../../services/api';
 import {
   MarketReport,
@@ -28,6 +29,7 @@ import {
   KrTopGainer,
   KrInvestorDayFlow,
   CommonCode,
+  SectorTrend,
 } from '../../types';
 
 // ─── 공통코드 관리 모달 ─────────────────────────────────────────────────────
@@ -606,6 +608,145 @@ const UsaSectorsPanel: React.FC<{ daily: UsaSector[]; weekly: UsaSector[] }> = (
   );
 };
 
+// ─── 섹터 주도 트래킹 패널 ─────────────────────────────────────────────────
+const SectorTrendPanel: React.FC = () => {
+  const isMobile = useIsMobile();
+  const [marketTab, setMarketTab] = useState<'US' | 'KOSPI' | 'KOSDAQ'>('US');
+  const [days, setDays] = useState(30);
+  const [data, setData] = useState<SectorTrend[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = async (m: 'US' | 'KOSPI' | 'KOSDAQ', d: number) => {
+    setLoading(true);
+    try {
+      const res = await getSectorTrends(m, d);
+      setData(res);
+    } catch { setData([]); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(marketTab, days); }, [marketTab, days]); // eslint-disable-line
+
+  const fmtPct = (v: number | null) => v == null ? '-' : `${v > 0 ? '+' : ''}${v.toFixed(2)}%`;
+  const pctColor = (v: number | null) => v == null ? '#888' : v > 0 ? '#e53935' : v < 0 ? '#1565c0' : '#888';
+
+  // 상위 10위 출현 비율에 따른 배경색 (낮=흰색 → 높=연파랑)
+  const barBg = (count: number, maxCount: number) => {
+    if (maxCount === 0) return '#fff';
+    const ratio = count / maxCount;
+    const r = Math.round(255 - ratio * 50);
+    const g = Math.round(255 - ratio * 30);
+    const b = 255;
+    return `rgb(${r},${g},${b})`;
+  };
+  const maxCount = data.length > 0 ? Math.max(...data.map(d => d.appearanceCount)) : 0;
+
+  return (
+    <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e0f0ff', padding: '16px', marginBottom: '16px' }}>
+      <div style={{ fontSize: '14px', fontWeight: 700, color: '#1a3a5c', marginBottom: '12px' }}>
+        📊 섹터 주도 트래킹
+        <span style={{ fontSize: '11px', fontWeight: 400, color: '#9aa0a6', marginLeft: '8px' }}>
+          상위 10위 진입 횟수 기준
+        </span>
+      </div>
+
+      {/* 시장 탭 + 기간 선택 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+        {(['US', 'KOSPI', 'KOSDAQ'] as const).map(m => (
+          <button key={m} onClick={() => setMarketTab(m)} style={{
+            padding: '4px 12px', fontSize: '12px', fontWeight: marketTab === m ? 700 : 400,
+            border: marketTab === m ? '2px solid #89CFF0' : '2px solid #e0e0e0',
+            borderRadius: '14px', cursor: 'pointer',
+            background: marketTab === m ? '#e8f7ff' : '#fff',
+            color: marketTab === m ? '#1a3a5c' : '#7a8fa6',
+          }}>
+            {m === 'US' ? '🇺🇸 미국' : m === 'KOSPI' ? '📈 KOSPI' : '📉 KOSDAQ'}
+          </button>
+        ))}
+        <select value={days} onChange={e => setDays(Number(e.target.value))} style={{
+          padding: '4px 8px', fontSize: '12px', border: '1px solid #e0e0e0', borderRadius: '6px',
+          background: '#fafafa', color: '#344054', marginLeft: 'auto',
+        }}>
+          <option value={7}>7일</option>
+          <option value={14}>14일</option>
+          <option value={30}>30일</option>
+          <option value={60}>60일</option>
+          <option value={90}>90일</option>
+        </select>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', color: '#9aa0a6', fontSize: '13px', padding: '24px' }}>데이터 로드 중…</div>
+      ) : data.length === 0 ? (
+        <div style={{ textAlign: 'center', color: '#9aa0a6', fontSize: '13px', padding: '24px' }}>
+          아직 데이터가 없습니다.<br />
+          <span style={{ fontSize: '11px' }}>시장 리포트 생성 시 자동으로 수집됩니다.</span>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <thead>
+              <tr style={{ background: '#f0f8fd', borderBottom: '2px solid #d0eafb' }}>
+                <th style={{ padding: '7px 8px', textAlign: 'left', color: '#344054', fontWeight: 600 }}>섹터명</th>
+                <th style={{ padding: '7px 8px', textAlign: 'center', color: '#344054', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  상위10<br />
+                  <span style={{ fontSize: '10px', fontWeight: 400, color: '#7a8fa6' }}>/{days}일</span>
+                </th>
+                <th style={{ padding: '7px 8px', textAlign: 'center', color: '#344054', fontWeight: 600 }}>평균순위</th>
+                <th style={{ padding: '7px 8px', textAlign: 'center', color: '#344054', fontWeight: 600, whiteSpace: 'nowrap' }}>평균등락률</th>
+                {!isMobile && (
+                  <>
+                    <th style={{ padding: '7px 8px', textAlign: 'center', color: '#344054', fontWeight: 600, whiteSpace: 'nowrap' }}>최근등락률</th>
+                    <th style={{ padding: '7px 8px', textAlign: 'center', color: '#344054', fontWeight: 600, whiteSpace: 'nowrap' }}>최근순위</th>
+                    <th style={{ padding: '7px 8px', textAlign: 'center', color: '#344054', fontWeight: 600 }}>기준일</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, i) => (
+                <tr key={row.sectorName + row.market}
+                  style={{ borderBottom: '1px solid #f0f4f8', background: i % 2 === 0 ? '#fff' : '#fafcff' }}>
+                  <td style={{ padding: '7px 8px', color: '#1a3a5c', fontWeight: 500 }}>
+                    {i < 3 && <span style={{ fontSize: '11px', marginRight: '4px' }}>{['🥇','🥈','🥉'][i]}</span>}
+                    {row.sectorName}
+                  </td>
+                  <td style={{
+                    padding: '7px 8px', textAlign: 'center', fontWeight: 700,
+                    color: '#1a3a5c', background: barBg(row.appearanceCount, maxCount),
+                  }}>
+                    {row.appearanceCount}
+                    <span style={{ fontSize: '10px', color: '#7a8fa6', marginLeft: '2px' }}>회</span>
+                  </td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', color: '#344054' }}>
+                    {row.avgRank.toFixed(1)}위
+                  </td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', color: pctColor(row.avgChangePct), fontWeight: 600 }}>
+                    {fmtPct(row.avgChangePct)}
+                  </td>
+                  {!isMobile && (
+                    <>
+                      <td style={{ padding: '7px 8px', textAlign: 'center', color: pctColor(row.lastChangePct), fontWeight: 600 }}>
+                        {fmtPct(row.lastChangePct)}
+                      </td>
+                      <td style={{ padding: '7px 8px', textAlign: 'center', color: '#344054' }}>
+                        {row.lastRank != null ? `${row.lastRank}위` : '-'}
+                      </td>
+                      <td style={{ padding: '7px 8px', textAlign: 'center', color: '#9aa0a6', fontSize: '11px' }}>
+                        {row.lastDate ?? '-'}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface MarketReportViewProps {
   onCompanyClick?: (query: string) => void;
 }
@@ -619,7 +760,7 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
   const [generatingKr, setGeneratingKr] = useState(false);
   const [generatingPremarket, setGeneratingPremarket] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [activeType, setActiveType] = useState<'global' | 'kr_close' | 'premarket'>('global');
+  const [activeType, setActiveType] = useState<'global' | 'kr_close' | 'premarket' | 'sector_trend'>('global');
   const [toast, setToast] = useState('');
   const [vixTipOpen, setVixTipOpen] = useState(false);
   // 상승 종목 테이블 접기/펼치기 (기본 접힘)
@@ -651,9 +792,10 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 탭 전환 시 해당 타입의 가장 최신 리포트 자동 선택
-  const switchType = (type: 'global' | 'kr_close' | 'premarket') => {
+  // 탭 전환 시 해당 타입의 가장 최신 리포트 자동 선택 (sector_trend 탭은 별도 패널 표시)
+  const switchType = (type: 'global' | 'kr_close' | 'premarket' | 'sector_trend') => {
     setActiveType(type);
+    if (type === 'sector_trend') return;
     const first = reports.find(r => r.reportType === type);
     if (first) setSelectedId(first.id);
   };
@@ -843,8 +985,10 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
   };
 
   const selected = reports.find(r => r.id === selectedId);
-  // 현재 탭의 리포트만 필터링
-  const filteredReports = reports.filter(r => r.reportType === activeType);
+  // 현재 탭의 리포트만 필터링 (sector_trend 탭은 별도 패널이므로 빈 배열)
+  const filteredReports = activeType === 'sector_trend'
+    ? []
+    : reports.filter(r => r.reportType === activeType);
 
   const formatKST = (iso: string | null) => {
     if (!iso) return '';
@@ -858,10 +1002,11 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
   const changeColor = (v: number | null) => v == null ? '#9aa0a6' : v > 0 ? '#2e7d32' : v < 0 ? '#c62828' : '#9aa0a6';
   const changeSign = (v: number | null) => v == null ? '' : v > 0 ? '+' : '';
 
-  const TYPE_TABS: { key: 'global' | 'kr_close' | 'premarket'; label: string; desc: string }[] = [
-    { key: 'global',     label: '🌏 글로벌',      desc: '오전 7시 자동' },
-    { key: 'kr_close',  label: '🇰🇷 국내장마감',  desc: '오후 4시 자동' },
-    { key: 'premarket', label: '🌙 프리마켓',     desc: '오후 9시 자동' },
+  const TYPE_TABS: { key: 'global' | 'kr_close' | 'premarket' | 'sector_trend'; label: string; desc: string }[] = [
+    { key: 'global',       label: '🌏 글로벌',      desc: '오전 7시 자동' },
+    { key: 'kr_close',     label: '🇰🇷 국내장마감',  desc: '오후 4시 자동' },
+    { key: 'premarket',    label: '🌙 프리마켓',     desc: '오후 9시 자동' },
+    { key: 'sector_trend', label: '📊 섹터 트렌드',  desc: '1개월 주도 섹터' },
   ];
 
   return (
@@ -881,7 +1026,7 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
       <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
         {TYPE_TABS.map(tab => {
           const isActive = activeType === tab.key;
-          const cnt = reports.filter(r => r.reportType === tab.key).length;
+          const cnt = tab.key !== 'sector_trend' ? reports.filter(r => r.reportType === tab.key).length : 0;
           return (
             <button
               key={tab.key}
@@ -908,6 +1053,12 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
           );
         })}
       </div>
+
+      {/* 섹터 트렌드 탭 선택 시 SectorTrendPanel 렌더링 */}
+      {activeType === 'sector_trend' && <SectorTrendPanel />}
+
+      {/* 섹터 트렌드 탭이 아닐 때만 컨트롤 바 + 리포트 내용 표시 */}
+      {activeType !== 'sector_trend' && <>
 
       {/* 컨트롤 바 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
@@ -1650,6 +1801,8 @@ const MarketReportView: React.FC<MarketReportViewProps> = ({ onCompanyClick }) =
             </div>
           ) : null}
       </div>
+
+      </> /* end activeType !== 'sector_trend' */}
     </div>
   );
 };

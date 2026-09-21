@@ -413,6 +413,7 @@ UsScreeningReport { id, reportDate, universeCount?, screenedCount?, topPicks: Us
 | GET | `/api/us-screening/reports` | 미국 우량주 스크리닝 리포트 목록 (최신순) |
 | GET | `/api/us-screening/reports/latest` | 최신 미국 스크리닝 리포트 1건 |
 | POST | `/api/us-screening/reports/generate` | 즉시 생성 요청 (202 백그라운드) — SEC EDGAR XBRL 수집 + yfinance + Gemini |
+| GET | `/api/sector-trends` | 섹터 주도 트래킹 집계 — `?market=US|KOSPI|KOSDAQ&days=30` 상위 10위 진입 횟수·평균 순위·평균 등락률 |
 
 ---
 
@@ -1192,6 +1193,14 @@ UsScreeningReport { id, reportDate, universeCount?, screenedCount?, topPicks: Us
   - 백엔드: `us_screening_service.py`, `us_screening_router` (router.py에 추가), `UsScreeningReport` 모델
   - requirements.txt: pandas, lxml 추가 (Wikipedia 파싱용)
   - 엔드포인트: `GET /api/us-screening/reports`, `POST /api/us-screening/reports/generate`
+
+- [x] 섹터 주도 트래킹 (`SectorTrendPanel`, `sector_daily_rank` 테이블)
+  - 시장 리포트 생성 시 당일 섹터 등락률 순위를 자동 저장 (US/KOSPI/KOSDAQ)
+  - MarketReportView "📊 섹터 트렌드" 탭: 최근 N일 기준 상위 10위 진입 횟수·평균 순위·평균 등락률 테이블
+  - 시장 탭(US/KOSPI/KOSDAQ) + 기간 선택(7/14/30/60/90일) 필터
+  - 히트맵 배경색: 출현 횟수 많을수록 파란 배경, 상위 3개 메달 이모지(🥇🥈🥉) 표시
+  - 백엔드: `SectorDailyRank` 모델, `sector_trend_service.py`, `GET /api/sector-trends?market=&days=`
+  - 타입: `SectorTrend` (`src/types/index.ts`), API: `getSectorTrends(market?, days?)` (`src/services/api.ts`)
 
 - [x] 가상 투자 포트폴리오 (`VirtualPortfolioPanel`, `virtual_account/position/trade_log` 테이블)
   - **자동 거래 조건**: 외국인 + 기관 **둘 다** 같은 방향 + 각각 임계값 초과 시 수급 알림과 동시에 자동 체결

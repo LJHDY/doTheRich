@@ -163,15 +163,15 @@ const UsScreeningView: React.FC<UsScreeningViewProps> = ({ onCompanyClick }) => 
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState('');
 
-  // 상위 40개 테이블 — 기본 TOP 30만 표시, 전체 펼치기 토글
+  // TOP 100 테이블 — 기본 40개 표시, 전체 펼치기 토글
   const [showAll, setShowAll] = useState(false);
 
   // 주 테이블 정렬 상태 — null이면 종합 스코어 기준(기본)
   const [usSortKey, setUsSortKey] = useState<keyof UsScreeningTopPick | null>(null);
   const [usSortDir, setUsSortDir] = useState<'asc' | 'desc'>('desc');
 
-  // TOP 30 기본 표시 개수
-  const DEFAULT_TOP = 30;
+  // 기본 표시 개수
+  const DEFAULT_TOP = 40;
 
   /** 리포트 목록 로드 */
   const load = async () => {

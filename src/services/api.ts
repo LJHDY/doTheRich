@@ -55,6 +55,7 @@ import {
   VirtualPortfolio,
   UsScreeningReport,
   UsScreeningTopPick,
+  SectorTrend,
 } from '../types';
 
 // 환경변수로 백엔드 URL 설정, 없으면 로컬 기본값 사용
@@ -2563,6 +2564,18 @@ export const getVirtualPortfolio = async (): Promise<VirtualPortfolio> => {
 
 export const resetVirtualPortfolio = async (): Promise<void> => {
   await api.post('/api/virtual-trading/reset');
+};
+
+// ─── 섹터 주도 트래킹 ────────────────────────────────────────────────────────
+
+export const getSectorTrends = async (
+  market?: 'US' | 'KOSPI' | 'KOSDAQ',
+  days: number = 30,
+): Promise<SectorTrend[]> => {
+  const params: Record<string, string | number> = { days };
+  if (market) params.market = market;
+  const { data } = await api.get<SectorTrend[]>('/api/sector-trends', { params });
+  return data;
 };
 
 export default api;

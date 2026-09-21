@@ -1208,3 +1208,16 @@ export interface VirtualPortfolio {
   positions: VirtualPosition[];
   trades: VirtualTrade[];
 }
+
+/** 1개월 섹터 주도 트래킹 집계 — GET /api/sector-trends 응답 항목 */
+export interface SectorTrend {
+  sectorName: string;
+  market: 'US' | 'KOSPI' | 'KOSDAQ';
+  appearanceCount: number;  // 최근 N일 중 상위 10위 안에 든 횟수
+  totalDays: number;        // 조회 기간 내 데이터가 있는 날 수
+  avgRank: number;          // 평균 순위 (1위 = 가장 많이 오른 섹터)
+  avgChangePct: number;     // 평균 등락률 (%)
+  lastChangePct: number | null;  // 가장 최근 등락률
+  lastRank: number | null;       // 가장 최근 순위
+  lastDate: string | null;       // 가장 최근 기록 날짜 (YYYY-MM-DD)
+}
