@@ -690,14 +690,34 @@ const ComplexInfoPanel: React.FC<ComplexInfoPanelProps> = ({ complex, onClose, o
   };
 
   // 전체 히스토리를 순서대로 순회해 areaType별 최신 item을 Map으로 구성
+  // 배치 수집 item(price만 있고 나머지 null)이 더 최신 날짜여도, 참고가 데이터가 있는
+  // 이전 item을 우선 반환 — 배치 데이터가 수동 입력 데이터를 덮어쓰는 버그 방지
   const latestItemPerAreaType = (() => {
-    const map = new Map<string, PriceHistoryItem>();
+    // 순 최신 item (날짜 기준 마지막)
+    const latestMap = new Map<string, PriceHistoryItem>();
+    // 참고가 필드(kbPrice·askingPrice·highestPrice·lowestPrice·tenYearChangeAmount) 중
+    // 하나라도 있는 item 중 가장 최신 — 배치 생성 item은 이 필드들이 null이므로 포함 안 됨
+    const refMap = new Map<string, PriceHistoryItem>();
+
     priceHistories.forEach(h => {
       h.items.forEach(item => {
-        if (item.areaType) map.set(item.areaType, item);
+        if (!item.areaType) return;
+        latestMap.set(item.areaType, item);
+        const hasRefData = !!(
+          item.kbPrice || item.askingPrice ||
+          item.highestPrice || item.lowestPrice ||
+          item.tenYearChangeAmount != null
+        );
+        if (hasRefData) refMap.set(item.areaType, item);
       });
     });
-    return map;
+
+    // 참고가 데이터가 있는 item 우선, 없으면 순 최신 item
+    const merged = new Map<string, PriceHistoryItem>();
+    latestMap.forEach((item, at) => {
+      merged.set(at, refMap.get(at) ?? item);
+    });
+    return merged;
   })();
 
   // 현재 선택된 탭에 해당하는 최신 시세 아이템 반환 헬퍼
