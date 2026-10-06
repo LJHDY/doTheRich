@@ -267,25 +267,22 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
       return { amountWon: aw, rate: cr, years: cy, monthly, interest: Math.max(monthly * cy * 12 - aw, 0) };
     });
 
-    // 전세자금대출 — 실납입=이자만, DSR=원리금균등 환산 (금감원 기준)
+    // 전세자금대출 — 만기일시상환, 실납입=이자만, DSR도 이자만 (금감원 기준)
     const jeonseDetails = s.jeonseLoans.map(jl => {
       const aw = (parseFloat(jl.amount) || 0) * 10_000;
       const jr = parseFloat(jl.rate) || 0;
       const jy = parseInt(jl.years) || 2;
-      const actualMonthly = aw * jr / 100 / 12;           // 실납입(이자만)
-      const dsrMonthly = calcMonthlyPayment(aw, jr, jy);  // DSR 환산(원리금균등)
-      return { amountWon: aw, rate: jr, years: jy, actualMonthly, dsrMonthly };
+      const actualMonthly = aw * jr / 100 / 12; // 이자만 납입 (DSR 기준도 동일)
+      return { amountWon: aw, rate: jr, years: jy, actualMonthly };
     });
 
-    // 실납입 합계 (전세=이자만)
+    // 월 납입 합계 (주담대 + 신용대출 + 전세이자)
     const actualTotalMonthly = mortgageMonthly
       + creditDetails.reduce((sum, d) => sum + d.monthly, 0)
       + jeonseDetails.reduce((sum, d) => sum + d.actualMonthly, 0);
 
-    // DSR 산정 합계 (전세=원리금균등 환산)
-    const dsrMonthlyTotal = mortgageMonthly
-      + creditDetails.reduce((sum, d) => sum + d.monthly, 0)
-      + jeonseDetails.reduce((sum, d) => sum + d.dsrMonthly, 0);
+    // DSR 산정 합계 = 실납입과 동일 (전세=이자만이 금감원 기준)
+    const dsrMonthlyTotal = actualTotalMonthly;
 
     const totalLoanAmt = loanWon + creditDetails.reduce((sum, d) => sum + d.amountWon, 0)
       + jeonseDetails.reduce((sum, d) => sum + d.amountWon, 0);
@@ -414,7 +411,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
                       <button onClick={() => removeJeonseLoan(i, li)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#bdbdbd', padding: 0 }}>×</button>
                     </div>
                     <div style={{ fontSize: '9px', color: '#b08000', marginBottom: '5px' }}>
-                      실납입=이자만 / DSR=원리금균등 환산 (금감원 기준)
+                      만기일시상환 · DSR=이자만 (금감원 기준)
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                       <div><label style={smLabelStyle}>금액 (만원)</label>
@@ -517,15 +514,9 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
                           </div>
                         ))}
                         {r.jeonseDetails.map((jd, li) => jd.amountWon > 0 && (
-                          <div key={li} style={{ marginBottom: '2px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9e9e9e' }}>
-                              <span>└ 전세{li + 1} 실납입(이자)</span>
-                              <span>{fmtMan(jd.actualMonthly)}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#b08000' }}>
-                              <span style={{ paddingLeft: '8px' }}>└ DSR 환산</span>
-                              <span>{fmtMan(jd.dsrMonthly)}</span>
-                            </div>
+                          <div key={li} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9e9e9e', marginBottom: '2px' }}>
+                            <span>└ 전세{li + 1} {jd.rate}% (이자)</span>
+                            <span>{fmtMan(jd.actualMonthly)}</span>
                           </div>
                         ))}
                       </div>
@@ -549,7 +540,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
                       <div style={{ height: '1px', backgroundColor: '#f0f0f0', margin: '6px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '10px', color: '#9e9e9e' }}>
-                          DSR{hasJeonse ? ' (전세 환산 포함)' : ''}
+                          DSR{hasJeonse ? ' (전세 이자 포함)' : ''}
                         </span>
                         <span style={{
                           fontSize: '13px', fontWeight: 700,
