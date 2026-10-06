@@ -87,17 +87,25 @@ const AnalysisBlock: React.FC<{ label: string; a: Analysis }> = ({ label, a }) =
 // ─── 대출 계산 탭 ────────────────────────────────────────────────────────────
 
 interface CreditLoan {
-  amount: string; // 억 단위
+  amount: string; // 만원
   rate: string;   // 연 금리 %
   years: string;  // 상환기간 년
 }
 
-interface LoanScenario {
-  rate: string;
-  creditLoans: CreditLoan[];
+interface JeonseLoan {
+  amount: string; // 만원 (전세보증금 중 대출 부분)
+  rate: string;   // 연 금리 %
+  years: string;  // 만기 년 (보통 2년)
 }
 
-// 원리금균등상환 월 납입액 계산
+interface LoanScenario {
+  rate: string;
+  repaymentType: 'equal_total' | 'equal_principal'; // 원리금균등 | 원금균등
+  creditLoans: CreditLoan[];
+  jeonseLoans: JeonseLoan[];
+}
+
+// 원리금균등상환 월 납입액
 function calcMonthlyPayment(loanWon: number, annualRatePct: number, years: number): number {
   if (loanWon <= 0 || annualRatePct <= 0 || years <= 0) return 0;
   const r = annualRatePct / 100 / 12;
@@ -105,7 +113,7 @@ function calcMonthlyPayment(loanWon: number, annualRatePct: number, years: numbe
   return loanWon * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
 }
 
-// 연 단위 상환 스케줄 (원금·이자 합계)
+// 원리금균등 연 단위 스케줄
 function buildYearlySchedule(loanWon: number, annualRatePct: number, years: number) {
   if (loanWon <= 0 || annualRatePct <= 0 || years <= 0) return [];
   const r = annualRatePct / 100 / 12;
@@ -113,24 +121,41 @@ function buildYearlySchedule(loanWon: number, annualRatePct: number, years: numb
   const monthly = loanWon * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
   let balance = loanWon;
   const result: { year: number; principal: number; interest: number; balance: number }[] = [];
-
   for (let y = 1; y <= years; y++) {
-    let yearPrincipal = 0;
-    let yearInterest = 0;
+    let yp = 0, yi = 0;
     for (let m = 0; m < 12; m++) {
       if (balance <= 0) break;
-      const interestPart = balance * r;
-      const principalPart = Math.min(monthly - interestPart, balance);
-      yearInterest += interestPart;
-      yearPrincipal += principalPart;
-      balance -= principalPart;
+      const ip = balance * r;
+      const pp = Math.min(monthly - ip, balance);
+      yi += ip; yp += pp; balance -= pp;
     }
-    result.push({ year: y, principal: yearPrincipal, interest: yearInterest, balance: Math.max(balance, 0) });
+    result.push({ year: y, principal: yp, interest: yi, balance: Math.max(balance, 0) });
   }
   return result;
 }
 
-// 억 단위 포맷 (LoanCalc 전용, 소수점 1자리)
+// 원금균등 연 단위 스케줄 (매달 원금 고정, 이자 감소)
+function buildYearlyScheduleEP(loanWon: number, annualRatePct: number, years: number) {
+  if (loanWon <= 0 || years <= 0) return [];
+  const r = annualRatePct / 100 / 12;
+  const n = years * 12;
+  const mp = loanWon / n; // 매달 고정 원금
+  let balance = loanWon;
+  const result: { year: number; principal: number; interest: number; balance: number }[] = [];
+  for (let y = 1; y <= years; y++) {
+    let yp = 0, yi = 0;
+    for (let m = 0; m < 12; m++) {
+      if (balance <= 0) break;
+      const ip = balance * r;
+      const pp = Math.min(mp, balance);
+      yi += ip; yp += pp; balance -= pp;
+    }
+    result.push({ year: y, principal: yp, interest: yi, balance: Math.max(balance, 0) });
+  }
+  return result;
+}
+
+// 억 단위 포맷
 function fmtUk(won: number): string {
   if (won <= 0) return '0원';
   const uk = won / 100_000_000;
@@ -138,7 +163,7 @@ function fmtUk(won: number): string {
   return `${Math.round(won / 10_000).toLocaleString()}만`;
 }
 
-// 만원 단위 포맷 (월 납입액용)
+// 만원 단위 포맷
 function fmtMan(won: number): string {
   return `${Math.round(won / 10_000).toLocaleString()}만원`;
 }
@@ -152,11 +177,19 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
       const saved = localStorage.getItem('loan_calc_scenarios');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // 기존 저장값에 creditLoans 없으면 기본값 추가 (마이그레이션)
-        return parsed.map((s: LoanScenario) => ({ ...s, creditLoans: s.creditLoans || [] }));
+        // 기존 저장값 마이그레이션 (repaymentType, jeonseLoans 필드 추가)
+        return parsed.map((s: LoanScenario) => ({
+          rate: s.rate || '3.5',
+          repaymentType: s.repaymentType || 'equal_total',
+          creditLoans: s.creditLoans || [],
+          jeonseLoans: s.jeonseLoans || [],
+        }));
       }
     } catch {}
-    return [{ rate: '3.5', creditLoans: [] }, { rate: '4.0', creditLoans: [] }];
+    return [
+      { rate: '3.5', repaymentType: 'equal_total', creditLoans: [], jeonseLoans: [] },
+      { rate: '4.0', repaymentType: 'equal_total', creditLoans: [], jeonseLoans: [] },
+    ];
   });
   const [showSchedule, setShowSchedule] = useState(false);
 
@@ -169,68 +202,115 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
     setScenarios(prev => prev.map((s, i) => i === idx ? { ...s, rate: val } : s));
   }, []);
 
+  const updateRepaymentType = useCallback((idx: number, val: 'equal_total' | 'equal_principal') => {
+    setScenarios(prev => prev.map((s, i) => i === idx ? { ...s, repaymentType: val } : s));
+  }, []);
+
   const addCreditLoan = useCallback((idx: number) => {
     setScenarios(prev => prev.map((s, i) =>
       i === idx && s.creditLoans.length < 2
-        ? { ...s, creditLoans: [...s.creditLoans, { amount: '', rate: '', years: '5' }] }
-        : s
-    ));
+        ? { ...s, creditLoans: [...s.creditLoans, { amount: '', rate: '', years: '5' }] } : s));
+  }, []);
+  const removeCreditLoan = useCallback((si: number, li: number) => {
+    setScenarios(prev => prev.map((s, i) =>
+      i === si ? { ...s, creditLoans: s.creditLoans.filter((_, j) => j !== li) } : s));
+  }, []);
+  const updateCreditLoan = useCallback((si: number, li: number, field: keyof CreditLoan, val: string) => {
+    setScenarios(prev => prev.map((s, i) =>
+      i === si ? { ...s, creditLoans: s.creditLoans.map((cl, j) => j === li ? { ...cl, [field]: val } : cl) } : s));
   }, []);
 
-  const removeCreditLoan = useCallback((sIdx: number, lIdx: number) => {
+  const addJeonseLoan = useCallback((idx: number) => {
     setScenarios(prev => prev.map((s, i) =>
-      i === sIdx ? { ...s, creditLoans: s.creditLoans.filter((_, li) => li !== lIdx) } : s
-    ));
+      i === idx && s.jeonseLoans.length < 2
+        ? { ...s, jeonseLoans: [...s.jeonseLoans, { amount: '', rate: '', years: '2' }] } : s));
   }, []);
-
-  const updateCreditLoan = useCallback((sIdx: number, lIdx: number, field: keyof CreditLoan, val: string) => {
+  const removeJeonseLoan = useCallback((si: number, li: number) => {
     setScenarios(prev => prev.map((s, i) =>
-      i === sIdx
-        ? { ...s, creditLoans: s.creditLoans.map((cl, li) => li === lIdx ? { ...cl, [field]: val } : cl) }
-        : s
-    ));
+      i === si ? { ...s, jeonseLoans: s.jeonseLoans.filter((_, j) => j !== li) } : s));
+  }, []);
+  const updateJeonseLoan = useCallback((si: number, li: number, field: keyof JeonseLoan, val: string) => {
+    setScenarios(prev => prev.map((s, i) =>
+      i === si ? { ...s, jeonseLoans: s.jeonseLoans.map((jl, j) => j === li ? { ...jl, [field]: val } : jl) } : s));
   }, []);
 
   const loanWon = (parseFloat(loanUk) || 0) * 100_000_000;
   const incomeWon = (parseFloat(loanCalcIncome) || 0) * 10_000;
 
-  // 시나리오별 계산 결과 (주담대 + 신용대출 합산)
   const results = useMemo(() => scenarios.map(s => {
     const rate = parseFloat(s.rate) || 0;
-    const mortgageMonthly = calcMonthlyPayment(loanWon, rate, loanYears);
-    const mortgageTotal = mortgageMonthly * loanYears * 12;
-    const mortgageInterest = Math.max(mortgageTotal - loanWon, 0);
+    const isEP = s.repaymentType === 'equal_principal';
+    const r = rate / 100 / 12;
+    const n = loanYears * 12;
 
+    // 주담대 — 원리금균등: 고정 월납입 / 원금균등: 첫달(최대)을 DSR 기준으로 사용
+    let mortgageMonthly: number; // DSR 산정 기준값
+    let mortgageLastMonthly: number;
+    let mortgageTotalInterest: number;
+    if (isEP && loanWon > 0 && n > 0) {
+      const mp = loanWon / n;
+      mortgageMonthly = mp + loanWon * r;             // 첫달 납입 (최대)
+      mortgageLastMonthly = mp * (1 + r);              // 마지막달 납입 (최소)
+      mortgageTotalInterest = loanWon * r * (n + 1) / 2; // 원금균등 총이자 공식
+    } else {
+      mortgageMonthly = calcMonthlyPayment(loanWon, rate, loanYears);
+      mortgageLastMonthly = mortgageMonthly;
+      mortgageTotalInterest = Math.max(mortgageMonthly * loanYears * 12 - loanWon, 0);
+    }
+
+    // 신용대출 — 원리금균등 고정
     const creditDetails = s.creditLoans.map(cl => {
-      const amountWon = (parseFloat(cl.amount) || 0) * 10_000;
-      const clRate = parseFloat(cl.rate) || 0;
-      const clYears = parseInt(cl.years) || 5;
-      const monthly = calcMonthlyPayment(amountWon, clRate, clYears);
-      const total = monthly * clYears * 12;
-      return { amountWon, rate: clRate, years: clYears, monthly, total, interest: Math.max(total - amountWon, 0) };
+      const aw = (parseFloat(cl.amount) || 0) * 10_000;
+      const cr = parseFloat(cl.rate) || 0;
+      const cy = parseInt(cl.years) || 5;
+      const monthly = calcMonthlyPayment(aw, cr, cy);
+      return { amountWon: aw, rate: cr, years: cy, monthly, interest: Math.max(monthly * cy * 12 - aw, 0) };
     });
 
-    const totalMonthly = mortgageMonthly + creditDetails.reduce((sum, d) => sum + d.monthly, 0);
-    const totalLoanAmt = loanWon + creditDetails.reduce((sum, d) => sum + d.amountWon, 0);
-    const totalInterest = mortgageInterest + creditDetails.reduce((sum, d) => sum + d.interest, 0);
-    const interestRatio = totalLoanAmt > 0 ? (totalInterest / totalLoanAmt) * 100 : 0;
-    // DSR = 연간 원리금 상환액 / 연소득 × 100 (소득 미입력 시 null)
-    const dsr = incomeWon > 0 ? (totalMonthly * 12) / incomeWon * 100 : null;
+    // 전세자금대출 — 실납입=이자만, DSR=원리금균등 환산 (금감원 기준)
+    const jeonseDetails = s.jeonseLoans.map(jl => {
+      const aw = (parseFloat(jl.amount) || 0) * 10_000;
+      const jr = parseFloat(jl.rate) || 0;
+      const jy = parseInt(jl.years) || 2;
+      const actualMonthly = aw * jr / 100 / 12;           // 실납입(이자만)
+      const dsrMonthly = calcMonthlyPayment(aw, jr, jy);  // DSR 환산(원리금균등)
+      return { amountWon: aw, rate: jr, years: jy, actualMonthly, dsrMonthly };
+    });
 
-    return { mortgageMonthly, mortgageInterest, creditDetails, totalMonthly, totalLoanAmt, totalInterest, interestRatio, dsr };
+    // 실납입 합계 (전세=이자만)
+    const actualTotalMonthly = mortgageMonthly
+      + creditDetails.reduce((sum, d) => sum + d.monthly, 0)
+      + jeonseDetails.reduce((sum, d) => sum + d.actualMonthly, 0);
+
+    // DSR 산정 합계 (전세=원리금균등 환산)
+    const dsrMonthlyTotal = mortgageMonthly
+      + creditDetails.reduce((sum, d) => sum + d.monthly, 0)
+      + jeonseDetails.reduce((sum, d) => sum + d.dsrMonthly, 0);
+
+    const totalLoanAmt = loanWon + creditDetails.reduce((sum, d) => sum + d.amountWon, 0)
+      + jeonseDetails.reduce((sum, d) => sum + d.amountWon, 0);
+    const totalInterest = mortgageTotalInterest + creditDetails.reduce((sum, d) => sum + d.interest, 0);
+    const interestRatio = totalLoanAmt > 0 ? (totalInterest / totalLoanAmt) * 100 : 0;
+    const dsr = incomeWon > 0 ? (dsrMonthlyTotal * 12) / incomeWon * 100 : null;
+
+    return { isEP, mortgageMonthly, mortgageLastMonthly, mortgageTotalInterest,
+      creditDetails, jeonseDetails, actualTotalMonthly, dsrMonthlyTotal,
+      totalLoanAmt, totalInterest, interestRatio, dsr };
   }), [loanWon, loanYears, incomeWon, scenarios]);
 
-  // 스케줄 데이터 (주담대 기준, 시나리오별)
+  // 상환 방식에 맞는 스케줄 (주담대 기준)
   const schedules = useMemo(() => scenarios.map(s => {
     const rate = parseFloat(s.rate) || 0;
-    return buildYearlySchedule(loanWon, rate, loanYears);
+    return s.repaymentType === 'equal_principal'
+      ? buildYearlyScheduleEP(loanWon, rate, loanYears)
+      : buildYearlySchedule(loanWon, rate, loanYears);
   }), [loanWon, loanYears, scenarios]);
 
   const hasInput = loanWon > 0 && loanYears > 0;
   const lowerIdx = results.length === 2
-    ? (results[0].totalMonthly <= results[1].totalMonthly ? 0 : 1)
-    : 0;
-  const monthlyDiff = results.length === 2 ? Math.abs(results[0].totalMonthly - results[1].totalMonthly) : 0;
+    ? (results[0].actualTotalMonthly <= results[1].actualTotalMonthly ? 0 : 1) : 0;
+  const monthlyDiff = results.length === 2
+    ? Math.abs(results[0].actualTotalMonthly - results[1].actualTotalMonthly) : 0;
 
   const SCENARIO_COLORS = ['#2a6090', '#5AAF84'];
   const inputStyle: React.CSSProperties = {
@@ -238,16 +318,14 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
     padding: '6px 8px', fontSize: '12px', outline: 'none',
     width: '100%', boxSizing: 'border-box',
   };
-  const labelStyle: React.CSSProperties = {
-    fontSize: '11px', color: '#5f6368', marginBottom: '3px', display: 'block',
-  };
+  const labelStyle: React.CSSProperties = { fontSize: '11px', color: '#5f6368', marginBottom: '3px', display: 'block' };
   const smInputStyle: React.CSSProperties = { ...inputStyle, fontSize: '11px', padding: '4px 6px' };
   const smLabelStyle: React.CSSProperties = { ...labelStyle, fontSize: '10px' };
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-      {/* 공통 입력 — 주담대 금액/기간/연소득 */}
+      {/* 공통 입력 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         <div>
           <label style={labelStyle}>주담대 금액 (억)</label>
@@ -266,13 +344,12 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
         </div>
       </div>
 
-      {/* 시나리오별 설정 (주담대 금리 + 신용대출) */}
+      {/* 시나리오별 설정 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         {scenarios.map((s, i) => (
           <div key={i} style={{
-            border: `1.5px solid ${SCENARIO_COLORS[i]}22`,
-            borderRadius: '8px', padding: '10px',
-            backgroundColor: `${SCENARIO_COLORS[i]}08`,
+            border: `1.5px solid ${SCENARIO_COLORS[i]}22`, borderRadius: '8px',
+            padding: '10px', backgroundColor: `${SCENARIO_COLORS[i]}08`,
           }}>
             <div style={{ fontSize: '11px', fontWeight: 700, color: SCENARIO_COLORS[i], marginBottom: '6px' }}>
               시나리오 {i + 1}
@@ -283,110 +360,172 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
             <input type="number" step="0.1" placeholder="예: 3.5" value={s.rate}
               onChange={e => updateRate(i, e.target.value)} style={inputStyle} />
 
-            {/* 신용대출 입력 행 (최대 2건) */}
+            {/* 상환 방식 토글 */}
+            <div style={{ marginTop: '8px' }}>
+              <label style={labelStyle}>상환 방식</label>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {(['equal_total', 'equal_principal'] as const).map(type => {
+                  const label = type === 'equal_total' ? '원리금균등' : '원금균등';
+                  const active = s.repaymentType === type;
+                  return (
+                    <button key={type} onClick={() => updateRepaymentType(i, type)} style={{
+                      flex: 1, padding: '5px 0', fontSize: '10px', cursor: 'pointer',
+                      borderRadius: '5px', border: `1px solid ${active ? SCENARIO_COLORS[i] : '#dadce0'}`,
+                      backgroundColor: active ? `${SCENARIO_COLORS[i]}18` : '#fff',
+                      color: active ? SCENARIO_COLORS[i] : '#9e9e9e', fontWeight: active ? 700 : 400,
+                    }}>{label}</button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 신용대출 목록 */}
             {s.creditLoans.length > 0 && (
               <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {s.creditLoans.map((cl, li) => (
-                  <div key={li} style={{
-                    backgroundColor: '#fff', borderRadius: '6px',
-                    padding: '7px', border: '1px solid #e8eaed',
-                  }}>
+                  <div key={li} style={{ backgroundColor: '#fff', borderRadius: '6px', padding: '7px', border: '1px solid #e8eaed' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                      <span style={{ fontSize: '10px', fontWeight: 600, color: '#5f6368' }}>
-                        신용대출 {li + 1}
-                      </span>
-                      <button onClick={() => removeCreditLoan(i, li)} style={{
-                        border: 'none', background: 'none', cursor: 'pointer',
-                        fontSize: '13px', color: '#bdbdbd', padding: 0, lineHeight: 1,
-                      }}>×</button>
+                      <span style={{ fontSize: '10px', fontWeight: 600, color: '#5f6368' }}>신용대출 {li + 1}</span>
+                      <button onClick={() => removeCreditLoan(i, li)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#bdbdbd', padding: 0 }}>×</button>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                      <div>
-                        <label style={smLabelStyle}>금액 (만원)</label>
+                      <div><label style={smLabelStyle}>금액 (만원)</label>
                         <input type="number" step="100" placeholder="예: 5000" value={cl.amount}
-                          onChange={e => updateCreditLoan(i, li, 'amount', e.target.value)}
-                          style={smInputStyle} />
-                      </div>
-                      <div>
-                        <label style={smLabelStyle}>금리 (%)</label>
+                          onChange={e => updateCreditLoan(i, li, 'amount', e.target.value)} style={smInputStyle} /></div>
+                      <div><label style={smLabelStyle}>금리 (%)</label>
                         <input type="number" step="0.1" placeholder="5.0" value={cl.rate}
-                          onChange={e => updateCreditLoan(i, li, 'rate', e.target.value)}
-                          style={smInputStyle} />
-                      </div>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <label style={smLabelStyle}>기간 (년)</label>
+                          onChange={e => updateCreditLoan(i, li, 'rate', e.target.value)} style={smInputStyle} /></div>
+                      <div style={{ gridColumn: 'span 2' }}><label style={smLabelStyle}>기간 (년)</label>
                         <input type="number" min={1} max={10} placeholder="5" value={cl.years}
-                          onChange={e => updateCreditLoan(i, li, 'years', e.target.value)}
-                          style={smInputStyle} />
-                      </div>
+                          onChange={e => updateCreditLoan(i, li, 'years', e.target.value)} style={smInputStyle} /></div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* + 신용대출 추가 버튼 (2건 미만일 때만) */}
-            {s.creditLoans.length < 2 && (
-              <button onClick={() => addCreditLoan(i)} style={{
-                width: '100%', marginTop: '8px',
-                border: `1px dashed ${SCENARIO_COLORS[i]}66`,
-                borderRadius: '5px', padding: '5px 0',
-                fontSize: '10px', cursor: 'pointer',
-                backgroundColor: 'transparent', color: SCENARIO_COLORS[i],
-              }}>
-                + 신용대출 추가
-              </button>
+            {/* 전세자금대출 목록 */}
+            {s.jeonseLoans.length > 0 && (
+              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {s.jeonseLoans.map((jl, li) => (
+                  <div key={li} style={{ backgroundColor: '#fffdf0', borderRadius: '6px', padding: '7px', border: '1px solid #e8d880' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                      <span style={{ fontSize: '10px', fontWeight: 600, color: '#8a6800' }}>전세대출 {li + 1}</span>
+                      <button onClick={() => removeJeonseLoan(i, li)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: '#bdbdbd', padding: 0 }}>×</button>
+                    </div>
+                    <div style={{ fontSize: '9px', color: '#b08000', marginBottom: '5px' }}>
+                      실납입=이자만 / DSR=원리금균등 환산 (금감원 기준)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                      <div><label style={smLabelStyle}>금액 (만원)</label>
+                        <input type="number" step="100" placeholder="예: 20000" value={jl.amount}
+                          onChange={e => updateJeonseLoan(i, li, 'amount', e.target.value)} style={smInputStyle} /></div>
+                      <div><label style={smLabelStyle}>금리 (%)</label>
+                        <input type="number" step="0.1" placeholder="3.0" value={jl.rate}
+                          onChange={e => updateJeonseLoan(i, li, 'rate', e.target.value)} style={smInputStyle} /></div>
+                      <div style={{ gridColumn: 'span 2' }}><label style={smLabelStyle}>만기 (년)</label>
+                        <input type="number" min={1} max={10} placeholder="2" value={jl.years}
+                          onChange={e => updateJeonseLoan(i, li, 'years', e.target.value)} style={smInputStyle} /></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
+
+            {/* 추가 버튼 */}
+            <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+              {s.creditLoans.length < 2 && (
+                <button onClick={() => addCreditLoan(i)} style={{
+                  flex: 1, border: `1px dashed ${SCENARIO_COLORS[i]}66`, borderRadius: '5px',
+                  padding: '5px 0', fontSize: '10px', cursor: 'pointer',
+                  backgroundColor: 'transparent', color: SCENARIO_COLORS[i],
+                }}>+ 신용대출</button>
+              )}
+              {s.jeonseLoans.length < 2 && (
+                <button onClick={() => addJeonseLoan(i)} style={{
+                  flex: 1, border: '1px dashed #c8a020', borderRadius: '5px',
+                  padding: '5px 0', fontSize: '10px', cursor: 'pointer',
+                  backgroundColor: 'transparent', color: '#8a6800',
+                }}>+ 전세대출</button>
+              )}
+            </div>
           </div>
         ))}
       </div>
 
-      {/* 결과 비교 카드 */}
+      {/* 결과 카드 */}
       {hasInput ? (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             {results.map((r, i) => {
               const isLower = i === lowerIdx;
-              const hasCreditLoans = r.creditDetails.some(d => d.amountWon > 0);
+              const hasOther = r.creditDetails.some(d => d.amountWon > 0) || r.jeonseDetails.some(d => d.amountWon > 0);
+              const hasJeonse = r.jeonseDetails.some(d => d.amountWon > 0);
               return (
                 <div key={i} style={{
-                  border: `1.5px solid ${SCENARIO_COLORS[i]}55`,
-                  borderRadius: '10px', padding: '12px',
-                  backgroundColor: isLower ? `${SCENARIO_COLORS[i]}10` : '#fff',
+                  border: `1.5px solid ${SCENARIO_COLORS[i]}55`, borderRadius: '10px',
+                  padding: '12px', backgroundColor: isLower ? `${SCENARIO_COLORS[i]}10` : '#fff',
                   position: 'relative',
                 }}>
                   {isLower && (
                     <span style={{
-                      position: 'absolute', top: '8px', right: '8px',
-                      fontSize: '9px', fontWeight: 700, color: '#fff',
-                      backgroundColor: SCENARIO_COLORS[i],
+                      position: 'absolute', top: '8px', right: '8px', fontSize: '9px',
+                      fontWeight: 700, color: '#fff', backgroundColor: SCENARIO_COLORS[i],
                       borderRadius: '6px', padding: '1px 5px',
                     }}>유리</span>
                   )}
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: SCENARIO_COLORS[i], marginBottom: '8px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: SCENARIO_COLORS[i], marginBottom: '2px' }}>
                     시나리오 {i + 1} · {scenarios[i].rate}%
                   </div>
+                  <div style={{ fontSize: '9px', color: '#9e9e9e', marginBottom: '8px' }}>
+                    {r.isEP ? '원금균등 (첫달 기준)' : '원리금균등 (고정)'}
+                  </div>
 
-                  {/* 월 납입 합계 (신용대출 포함 시 내역 표시) */}
+                  {/* 월 납입 합계 */}
                   <div style={{ marginBottom: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                       <span style={{ fontSize: '10px', color: '#9e9e9e' }}>
-                        {hasCreditLoans ? '월 납입 합계' : '월 납입액'}
+                        {hasOther ? '월 납입 합계' : r.isEP ? '월 납입 (첫달)' : '월 납입액'}
                       </span>
                       <span style={{ fontSize: '14px', fontWeight: 700, color: SCENARIO_COLORS[i] }}>
-                        {fmtMan(r.totalMonthly)}
+                        {fmtMan(r.actualTotalMonthly)}
                       </span>
                     </div>
-                    {hasCreditLoans && (
+                    {/* 원금균등: 마지막달 표시 */}
+                    {r.isEP && !hasOther && (
+                      <div style={{ textAlign: 'right', fontSize: '10px', color: '#9e9e9e' }}>
+                        → 마지막달 {fmtMan(r.mortgageLastMonthly)}
+                      </div>
+                    )}
+                    {/* 세부 내역 */}
+                    {(hasOther || r.isEP) && (
                       <div style={{ marginTop: '5px', paddingLeft: '8px', borderLeft: `2px solid ${SCENARIO_COLORS[i]}33` }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9e9e9e', marginBottom: '2px' }}>
-                          <span>└ 주담대 {scenarios[i].rate}%</span>
+                          <span>└ 주담대 {scenarios[i].rate}%{r.isEP ? ' (첫달)' : ''}</span>
                           <span>{fmtMan(r.mortgageMonthly)}</span>
                         </div>
+                        {r.isEP && hasOther && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9e9e9e', marginBottom: '2px' }}>
+                            <span style={{ paddingLeft: '8px' }}>└ 마지막달</span>
+                            <span>{fmtMan(r.mortgageLastMonthly)}</span>
+                          </div>
+                        )}
                         {r.creditDetails.map((cd, li) => cd.amountWon > 0 && (
                           <div key={li} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9e9e9e', marginBottom: '2px' }}>
                             <span>└ 신용{li + 1} {cd.rate}%/{cd.years}년</span>
                             <span>{fmtMan(cd.monthly)}</span>
+                          </div>
+                        ))}
+                        {r.jeonseDetails.map((jd, li) => jd.amountWon > 0 && (
+                          <div key={li} style={{ marginBottom: '2px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9e9e9e' }}>
+                              <span>└ 전세{li + 1} 실납입(이자)</span>
+                              <span>{fmtMan(jd.actualMonthly)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#b08000' }}>
+                              <span style={{ paddingLeft: '8px' }}>└ DSR 환산</span>
+                              <span>{fmtMan(jd.dsrMonthly)}</span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -395,24 +534,23 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
 
                   {/* 총 이자 / 이자 비율 */}
                   {[
-                    { label: '총 이자', value: fmtUk(r.totalInterest) },
+                    { label: '총 이자 (주담대+신용)', value: fmtUk(r.totalInterest) },
                     { label: '이자 비율', value: `${r.interestRatio.toFixed(1)}%` },
                   ].map(row => (
-                    <div key={row.label} style={{
-                      display: 'flex', justifyContent: 'space-between',
-                      alignItems: 'baseline', marginBottom: '4px',
-                    }}>
+                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
                       <span style={{ fontSize: '10px', color: '#9e9e9e' }}>{row.label}</span>
                       <span style={{ fontSize: '12px', fontWeight: 500, color: '#202124' }}>{row.value}</span>
                     </div>
                   ))}
 
-                  {/* DSR (연소득 입력 시에만) */}
+                  {/* DSR */}
                   {r.dsr !== null && (
                     <>
                       <div style={{ height: '1px', backgroundColor: '#f0f0f0', margin: '6px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '10px', color: '#9e9e9e' }}>DSR</span>
+                        <span style={{ fontSize: '10px', color: '#9e9e9e' }}>
+                          DSR{hasJeonse ? ' (전세 환산 포함)' : ''}
+                        </span>
                         <span style={{
                           fontSize: '13px', fontWeight: 700,
                           color: r.dsr <= 40 ? '#5AAF84' : r.dsr <= 50 ? '#E8A838' : '#E06060',
@@ -430,12 +568,9 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
             })}
           </div>
 
-          {/* 두 시나리오 차이 요약 */}
+          {/* 두 시나리오 차이 */}
           {results.length === 2 && monthlyDiff > 0 && (
-            <div style={{
-              backgroundColor: '#f1faf4', border: '1px solid #a8d5b5',
-              borderRadius: '8px', padding: '10px 14px', fontSize: '12px',
-            }}>
+            <div style={{ backgroundColor: '#f1faf4', border: '1px solid #a8d5b5', borderRadius: '8px', padding: '10px 14px', fontSize: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#5f6368' }}>월 납입 차이 (합계 기준)</span>
                 <span style={{ fontWeight: 700, color: '#5AAF84' }}>{fmtMan(monthlyDiff)}</span>
@@ -445,9 +580,8 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
 
           {/* 상환 스케줄 토글 (주담대 기준) */}
           <button onClick={() => setShowSchedule(v => !v)} style={{
-            border: '1px solid #dadce0', borderRadius: '6px',
-            padding: '7px 12px', fontSize: '11px', cursor: 'pointer',
-            backgroundColor: '#fff', color: '#5f6368', textAlign: 'left',
+            border: '1px solid #dadce0', borderRadius: '6px', padding: '7px 12px',
+            fontSize: '11px', cursor: 'pointer', backgroundColor: '#fff', color: '#5f6368', textAlign: 'left',
           }}>
             {showSchedule ? '▲ 상환 스케줄 접기' : '▼ 주담대 연도별 상환 스케줄 보기'}
           </button>
@@ -455,7 +589,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
           {showSchedule && (
             <div style={{ overflowX: 'auto' }}>
               <div style={{ fontSize: '10px', color: '#9e9e9e', marginBottom: '4px' }}>
-                * 주택담보대출 기준 (신용대출 별도)
+                * 주택담보대출 기준 (신용·전세 별도)
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                 <thead>
@@ -463,9 +597,11 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
                     <th style={thStyle}>년차</th>
                     {scenarios.map((s, i) => (
                       <React.Fragment key={i}>
-                        <th style={{ ...thStyle, color: SCENARIO_COLORS[i] }}>원금({s.rate}%)</th>
-                        <th style={{ ...thStyle, color: SCENARIO_COLORS[i] }}>이자({s.rate}%)</th>
-                        <th style={{ ...thStyle, color: SCENARIO_COLORS[i] }}>잔금({s.rate}%)</th>
+                        <th style={{ ...thStyle, color: SCENARIO_COLORS[i] }}>
+                          원금({s.rate}%{s.repaymentType === 'equal_principal' ? '·균등' : ''})
+                        </th>
+                        <th style={{ ...thStyle, color: SCENARIO_COLORS[i] }}>이자</th>
+                        <th style={{ ...thStyle, color: SCENARIO_COLORS[i] }}>잔금</th>
                       </React.Fragment>
                     ))}
                   </tr>
@@ -475,12 +611,12 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
                     <tr key={rowIdx} style={{ borderBottom: '1px solid #f0f0f0' }}>
                       <td style={tdStyle}>{row.year}년</td>
                       {schedules.map((sched, si) => {
-                        const r = sched[rowIdx];
-                        return r ? (
+                        const rv = sched[rowIdx];
+                        return rv ? (
                           <React.Fragment key={si}>
-                            <td style={tdStyle}>{fmtUk(r.principal)}</td>
-                            <td style={{ ...tdStyle, color: '#E06060' }}>{fmtUk(r.interest)}</td>
-                            <td style={tdStyle}>{fmtUk(r.balance)}</td>
+                            <td style={tdStyle}>{fmtUk(rv.principal)}</td>
+                            <td style={{ ...tdStyle, color: '#E06060' }}>{fmtUk(rv.interest)}</td>
+                            <td style={tdStyle}>{fmtUk(rv.balance)}</td>
                           </React.Fragment>
                         ) : (
                           <React.Fragment key={si}>
@@ -496,10 +632,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
           )}
         </>
       ) : (
-        <div style={{
-          backgroundColor: '#f8f9fa', borderRadius: '8px',
-          padding: '20px', fontSize: '11px', color: '#9e9e9e', textAlign: 'center',
-        }}>
+        <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '20px', fontSize: '11px', color: '#9e9e9e', textAlign: 'center' }}>
           대출금액과 상환기간을 입력하면 원리금을 계산합니다.
         </div>
       )}
