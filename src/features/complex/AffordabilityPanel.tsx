@@ -199,7 +199,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
     const mortgageInterest = Math.max(mortgageTotal - loanWon, 0);
 
     const creditDetails = s.creditLoans.map(cl => {
-      const amountWon = (parseFloat(cl.amount) || 0) * 100_000_000;
+      const amountWon = (parseFloat(cl.amount) || 0) * 10_000_000;
       const clRate = parseFloat(cl.rate) || 0;
       const clYears = parseInt(cl.years) || 5;
       const monthly = calcMonthlyPayment(amountWon, clRate, clYears);
@@ -292,8 +292,8 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                       <div>
-                        <label style={smLabelStyle}>금액 (억)</label>
-                        <input type="number" step="0.1" placeholder="0.5" value={cl.amount}
+                        <label style={smLabelStyle}>금액 (천만)</label>
+                        <input type="number" step="1" placeholder="예: 5" value={cl.amount}
                           onChange={e => updateCreditLoan(i, li, 'amount', e.target.value)}
                           style={smInputStyle} />
                       </div>
