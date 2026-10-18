@@ -98,9 +98,26 @@ interface JeonseLoan {
   years: string;  // 만기 년 (보통 2년)
 }
 
+type RateType = 'variable' | 'mixed' | 'periodic' | 'fixed';
+
+const STRESS_MULTIPLIERS: Record<RateType, number> = {
+  variable: 1.0,  // 변동금리 100%
+  mixed:    0.6,  // 혼합형   60%
+  periodic: 0.3,  // 주기형   30%
+  fixed:    0.0,  // 고정금리  0%
+};
+
+const RATE_TYPE_LABELS: Record<RateType, string> = {
+  variable: '변동',
+  mixed:    '혼합',
+  periodic: '주기',
+  fixed:    '고정',
+};
+
 interface LoanScenario {
   rate: string;
   repaymentType: 'equal_total' | 'equal_principal'; // 원리금균등 | 원금균등
+  rateType: RateType;
   creditLoans: CreditLoan[];
   jeonseLoans: JeonseLoan[];
 }
@@ -177,18 +194,18 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
       const saved = localStorage.getItem('loan_calc_scenarios');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // 기존 저장값 마이그레이션 (repaymentType, jeonseLoans 필드 추가)
         return parsed.map((s: LoanScenario) => ({
           rate: s.rate || '3.5',
           repaymentType: s.repaymentType || 'equal_total',
+          rateType: s.rateType || 'variable',
           creditLoans: s.creditLoans || [],
           jeonseLoans: s.jeonseLoans || [],
         }));
       }
     } catch {}
     return [
-      { rate: '3.5', repaymentType: 'equal_total', creditLoans: [], jeonseLoans: [] },
-      { rate: '4.0', repaymentType: 'equal_total', creditLoans: [], jeonseLoans: [] },
+      { rate: '3.5', repaymentType: 'equal_total', rateType: 'variable' as RateType, creditLoans: [], jeonseLoans: [] },
+      { rate: '4.0', repaymentType: 'equal_total', rateType: 'variable' as RateType, creditLoans: [], jeonseLoans: [] },
     ];
   });
   const [showSchedule, setShowSchedule] = useState(false);
@@ -206,6 +223,10 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
 
   const updateRepaymentType = useCallback((idx: number, val: 'equal_total' | 'equal_principal') => {
     setScenarios(prev => prev.map((s, i) => i === idx ? { ...s, repaymentType: val } : s));
+  }, []);
+
+  const updateRateType = useCallback((idx: number, val: RateType) => {
+    setScenarios(prev => prev.map((s, i) => i === idx ? { ...s, rateType: val } : s));
   }, []);
 
   const addCreditLoan = useCallback((idx: number) => {
@@ -243,7 +264,8 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
 
   const results = useMemo(() => scenarios.map(s => {
     const rate = parseFloat(s.rate) || 0;
-    const dsrRate = rate + (isMetro ? STRESS_RATE : 0); // DSR 산정 금리 (스트레스 포함)
+    const stressMultiplier = STRESS_MULTIPLIERS[s.rateType] ?? 1.0;
+    const dsrRate = rate + (isMetro ? STRESS_RATE * stressMultiplier : 0); // DSR 산정 금리 (스트레스 포함)
     const isEP = s.repaymentType === 'equal_principal';
     const r = rate / 100 / 12;
     const rDsr = dsrRate / 100 / 12;
@@ -382,6 +404,31 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
             <label style={labelStyle}>주담대 금리 (%)</label>
             <input type="number" step="0.1" placeholder="예: 3.5" value={s.rate}
               onChange={e => updateRate(i, e.target.value)} style={inputStyle} />
+
+            {/* 금리 유형 (스트레스 배율) */}
+            {isMetro && (
+              <div style={{ marginTop: '8px' }}>
+                <label style={labelStyle}>금리 유형 (스트레스 배율)</label>
+                <div style={{ display: 'flex', gap: '3px' }}>
+                  {(Object.keys(RATE_TYPE_LABELS) as RateType[]).map(rt => {
+                    const active = s.rateType === rt;
+                    const pct = Math.round(STRESS_MULTIPLIERS[rt] * 100);
+                    return (
+                      <button key={rt} onClick={() => updateRateType(i, rt)} style={{
+                        flex: 1, padding: '4px 0', fontSize: '9px', cursor: 'pointer',
+                        borderRadius: '5px', border: `1px solid ${active ? SCENARIO_COLORS[i] : '#dadce0'}`,
+                        backgroundColor: active ? `${SCENARIO_COLORS[i]}18` : '#fff',
+                        color: active ? SCENARIO_COLORS[i] : '#9e9e9e', fontWeight: active ? 700 : 400,
+                        lineHeight: 1.4,
+                      }}>
+                        {RATE_TYPE_LABELS[rt]}<br />
+                        <span style={{ fontSize: '8px' }}>{pct}%</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* 상환 방식 토글 */}
             <div style={{ marginTop: '8px' }}>
@@ -566,7 +613,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
                       <div style={{ height: '1px', backgroundColor: '#f0f0f0', margin: '6px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '10px', color: '#9e9e9e' }}>
-                          DSR{isMetro ? ` (주담대 ${r.dsrRate.toFixed(1)}% 기준)` : ''}{hasJeonse ? '+전세' : ''}
+                          DSR{isMetro && r.dsrRate > parseFloat(scenarios[i].rate) ? ` (+${(r.dsrRate - parseFloat(scenarios[i].rate)).toFixed(1)}% 스트레스)` : ''}{hasJeonse ? '+전세' : ''}
                         </span>
                         <span style={{
                           fontSize: '13px', fontWeight: 700,
