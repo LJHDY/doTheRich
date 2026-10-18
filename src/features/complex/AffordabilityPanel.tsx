@@ -163,9 +163,9 @@ function fmtUk(won: number): string {
   return `${Math.round(won / 10_000).toLocaleString()}만`;
 }
 
-// 만원 단위 포맷
+// 1원 단위 포맷
 function fmtMan(won: number): string {
-  return `${Math.round(won / 10_000).toLocaleString()}만원`;
+  return `${Math.round(won).toLocaleString()}원`;
 }
 
 const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
@@ -192,11 +192,13 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
     ];
   });
   const [showSchedule, setShowSchedule] = useState(false);
+  const [isMetro, setIsMetro] = useState(() => localStorage.getItem('loan_calc_metro') === 'true');
 
   useEffect(() => { localStorage.setItem('loan_calc_uk', loanUk); }, [loanUk]);
   useEffect(() => { localStorage.setItem('loan_calc_years', String(loanYears)); }, [loanYears]);
   useEffect(() => { localStorage.setItem('loan_calc_income', loanCalcIncome); }, [loanCalcIncome]);
   useEffect(() => { localStorage.setItem('loan_calc_scenarios', JSON.stringify(scenarios)); }, [scenarios]);
+  useEffect(() => { localStorage.setItem('loan_calc_metro', String(isMetro)); }, [isMetro]);
 
   const updateRate = useCallback((idx: number, val: string) => {
     setScenarios(prev => prev.map((s, i) => i === idx ? { ...s, rate: val } : s));
@@ -209,7 +211,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
   const addCreditLoan = useCallback((idx: number) => {
     setScenarios(prev => prev.map((s, i) =>
       i === idx && s.creditLoans.length < 2
-        ? { ...s, creditLoans: [...s.creditLoans, { amount: '', rate: '', years: '5' }] } : s));
+        ? { ...s, creditLoans: [...s.creditLoans, { amount: '', rate: '', years: '10' }] } : s));
   }, []);
   const removeCreditLoan = useCallback((si: number, li: number) => {
     setScenarios(prev => prev.map((s, i) =>
@@ -237,32 +239,45 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
   const loanWon = (parseFloat(loanUk) || 0) * 100_000_000;
   const incomeWon = (parseFloat(loanCalcIncome) || 0) * 10_000;
 
+  const STRESS_RATE = 3.0; // 수도권 스트레스 DSR 금리 (%)
+
   const results = useMemo(() => scenarios.map(s => {
     const rate = parseFloat(s.rate) || 0;
+    const dsrRate = rate + (isMetro ? STRESS_RATE : 0); // DSR 산정 금리 (스트레스 포함)
     const isEP = s.repaymentType === 'equal_principal';
     const r = rate / 100 / 12;
+    const rDsr = dsrRate / 100 / 12;
     const n = loanYears * 12;
 
-    // 주담대 — 원리금균등: 고정 월납입 / 원금균등: 첫달(최대)을 DSR 기준으로 사용
-    let mortgageMonthly: number; // DSR 산정 기준값
+    // 주담대 실납입 (원래 금리 기준)
+    let mortgageMonthly: number;
     let mortgageLastMonthly: number;
     let mortgageTotalInterest: number;
     if (isEP && loanWon > 0 && n > 0) {
       const mp = loanWon / n;
-      mortgageMonthly = mp + loanWon * r;             // 첫달 납입 (최대)
-      mortgageLastMonthly = mp * (1 + r);              // 마지막달 납입 (최소)
-      mortgageTotalInterest = loanWon * r * (n + 1) / 2; // 원금균등 총이자 공식
+      mortgageMonthly = mp + loanWon * r;
+      mortgageLastMonthly = mp * (1 + r);
+      mortgageTotalInterest = loanWon * r * (n + 1) / 2;
     } else {
       mortgageMonthly = calcMonthlyPayment(loanWon, rate, loanYears);
       mortgageLastMonthly = mortgageMonthly;
       mortgageTotalInterest = Math.max(mortgageMonthly * loanYears * 12 - loanWon, 0);
     }
 
+    // 주담대 DSR 산정용 월납입 (스트레스 금리 적용)
+    let mortgageDsrMonthly: number;
+    if (isEP && loanWon > 0 && n > 0) {
+      const mp = loanWon / n;
+      mortgageDsrMonthly = mp + loanWon * rDsr;
+    } else {
+      mortgageDsrMonthly = calcMonthlyPayment(loanWon, dsrRate, loanYears);
+    }
+
     // 신용대출 — 원리금균등 고정
     const creditDetails = s.creditLoans.map(cl => {
       const aw = (parseFloat(cl.amount) || 0) * 10_000;
       const cr = parseFloat(cl.rate) || 0;
-      const cy = parseInt(cl.years) || 5;
+      const cy = parseInt(cl.years) || 10;
       const monthly = calcMonthlyPayment(aw, cr, cy);
       return { amountWon: aw, rate: cr, years: cy, monthly, interest: Math.max(monthly * cy * 12 - aw, 0) };
     });
@@ -272,17 +287,19 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
       const aw = (parseFloat(jl.amount) || 0) * 10_000;
       const jr = parseFloat(jl.rate) || 0;
       const jy = parseInt(jl.years) || 2;
-      const actualMonthly = aw * jr / 100 / 12; // 이자만 납입 (DSR 기준도 동일)
+      const actualMonthly = aw * jr / 100 / 12;
       return { amountWon: aw, rate: jr, years: jy, actualMonthly };
     });
 
-    // 월 납입 합계 (주담대 + 신용대출 + 전세이자)
+    // 실 월 납입 합계 (원래 금리 기준)
     const actualTotalMonthly = mortgageMonthly
       + creditDetails.reduce((sum, d) => sum + d.monthly, 0)
       + jeonseDetails.reduce((sum, d) => sum + d.actualMonthly, 0);
 
-    // DSR 산정 합계 = 실납입과 동일 (전세=이자만이 금감원 기준)
-    const dsrMonthlyTotal = actualTotalMonthly;
+    // DSR 산정 합계 (수도권이면 스트레스 금리 적용 주담대 사용)
+    const dsrMonthlyTotal = mortgageDsrMonthly
+      + creditDetails.reduce((sum, d) => sum + d.monthly, 0)
+      + jeonseDetails.reduce((sum, d) => sum + d.actualMonthly, 0);
 
     const totalLoanAmt = loanWon + creditDetails.reduce((sum, d) => sum + d.amountWon, 0)
       + jeonseDetails.reduce((sum, d) => sum + d.amountWon, 0);
@@ -292,8 +309,8 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
 
     return { isEP, mortgageMonthly, mortgageLastMonthly, mortgageTotalInterest,
       creditDetails, jeonseDetails, actualTotalMonthly, dsrMonthlyTotal,
-      totalLoanAmt, totalInterest, interestRatio, dsr };
-  }), [loanWon, loanYears, incomeWon, scenarios]);
+      totalLoanAmt, totalInterest, interestRatio, dsr, dsrRate };
+  }), [loanWon, loanYears, incomeWon, scenarios, isMetro]);
 
   // 상환 방식에 맞는 스케줄 (주담대 기준)
   const schedules = useMemo(() => scenarios.map(s => {
@@ -338,6 +355,15 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
           <label style={labelStyle}>연소득 (만원) — DSR 계산용, 선택</label>
           <input type="number" step="100" placeholder="예: 6000" value={loanCalcIncome}
             onChange={e => setLoanCalcIncome(e.target.value)} style={inputStyle} />
+        </div>
+        <div style={{ gridColumn: 'span 2' }}>
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            fontSize: '11px', color: isMetro ? '#E06060' : '#9e9e9e', cursor: 'pointer',
+          }}>
+            <input type="checkbox" checked={isMetro} onChange={e => setIsMetro(e.target.checked)} />
+            수도권 — DSR 산정 시 주담대 스트레스 금리 +3% 적용
+          </label>
         </div>
       </div>
 
@@ -393,7 +419,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
                         <input type="number" step="0.1" placeholder="5.0" value={cl.rate}
                           onChange={e => updateCreditLoan(i, li, 'rate', e.target.value)} style={smInputStyle} /></div>
                       <div style={{ gridColumn: 'span 2' }}><label style={smLabelStyle}>기간 (년)</label>
-                        <input type="number" min={1} max={10} placeholder="5" value={cl.years}
+                        <input type="number" min={1} max={30} placeholder="10" value={cl.years}
                           onChange={e => updateCreditLoan(i, li, 'years', e.target.value)} style={smInputStyle} /></div>
                     </div>
                   </div>
@@ -540,13 +566,13 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
                       <div style={{ height: '1px', backgroundColor: '#f0f0f0', margin: '6px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '10px', color: '#9e9e9e' }}>
-                          DSR{hasJeonse ? ' (전세 이자 포함)' : ''}
+                          DSR{isMetro ? ` (주담대 ${r.dsrRate.toFixed(1)}% 기준)` : ''}{hasJeonse ? '+전세' : ''}
                         </span>
                         <span style={{
                           fontSize: '13px', fontWeight: 700,
                           color: r.dsr <= 40 ? '#5AAF84' : r.dsr <= 50 ? '#E8A838' : '#E06060',
                         }}>
-                          {r.dsr.toFixed(1)}%
+                          {r.dsr.toFixed(2)}%
                           <span style={{ fontSize: '9px', fontWeight: 400, marginLeft: '4px', color: '#9e9e9e' }}>
                             {r.dsr <= 40 ? '(40% 이하 ✓)' : '(40% 초과 ✗)'}
                           </span>
