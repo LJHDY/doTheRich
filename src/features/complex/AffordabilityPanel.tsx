@@ -211,7 +211,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
   const addCreditLoan = useCallback((idx: number) => {
     setScenarios(prev => prev.map((s, i) =>
       i === idx && s.creditLoans.length < 2
-        ? { ...s, creditLoans: [...s.creditLoans, { amount: '', rate: '', years: '10' }] } : s));
+        ? { ...s, creditLoans: [...s.creditLoans, { amount: '', rate: '', years: '' }] } : s));
   }, []);
   const removeCreditLoan = useCallback((si: number, li: number) => {
     setScenarios(prev => prev.map((s, i) =>
@@ -277,7 +277,7 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
     const creditDetails = s.creditLoans.map(cl => {
       const aw = (parseFloat(cl.amount) || 0) * 10_000;
       const cr = parseFloat(cl.rate) || 0;
-      const cy = parseInt(cl.years) || 10;
+      const cy = parseInt(cl.years) || 0;
       const monthly = calcMonthlyPayment(aw, cr, cy);
       return { amountWon: aw, rate: cr, years: cy, monthly, interest: Math.max(monthly * cy * 12 - aw, 0) };
     });
