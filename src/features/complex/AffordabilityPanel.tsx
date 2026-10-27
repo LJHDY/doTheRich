@@ -172,6 +172,15 @@ function buildYearlyScheduleEP(loanWon: number, annualRatePct: number, years: nu
   return result;
 }
 
+// 만 나이 기반 장래예상소득 (소득 정점 만 45세, 연 3% 성장률 가정)
+function projectIncome(incomeMW: number, birthYear: number): number {
+  if (!incomeMW || !birthYear) return incomeMW;
+  const PEAK_AGE = 45;
+  const age = new Date().getFullYear() - birthYear;
+  if (age >= PEAK_AGE) return incomeMW;
+  return Math.round(incomeMW * Math.pow(1.03, PEAK_AGE - age));
+}
+
 // 억 단위 포맷
 function fmtUk(won: number): string {
   if (won <= 0) return '0원';
@@ -188,7 +197,11 @@ function fmtMan(won: number): string {
 const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
   const [loanUk, setLoanUk] = useState(() => localStorage.getItem('loan_calc_uk') || '');
   const [loanYears, setLoanYears] = useState(() => parseInt(localStorage.getItem('loan_calc_years') || '30'));
-  const [loanCalcIncome, setLoanCalcIncome] = useState(() => localStorage.getItem('loan_calc_income') || '');
+  const [incomeLdy, setIncomeLdy] = useState(() => localStorage.getItem('loan_calc_income_ldy') || '');
+  const [incomeJuhae, setIncomeJuhae] = useState(() => localStorage.getItem('loan_calc_income_juhae') || '');
+  const [birthYearLdy, setBirthYearLdy] = useState(() => localStorage.getItem('loan_calc_birth_ldy') || '');
+  const [birthYearJuhae, setBirthYearJuhae] = useState(() => localStorage.getItem('loan_calc_birth_juhae') || '');
+  const [useFutureIncome, setUseFutureIncome] = useState(() => localStorage.getItem('loan_calc_future_income') === 'true');
   const [scenarios, setScenarios] = useState<LoanScenario[]>(() => {
     try {
       const saved = localStorage.getItem('loan_calc_scenarios');
@@ -213,7 +226,11 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
 
   useEffect(() => { localStorage.setItem('loan_calc_uk', loanUk); }, [loanUk]);
   useEffect(() => { localStorage.setItem('loan_calc_years', String(loanYears)); }, [loanYears]);
-  useEffect(() => { localStorage.setItem('loan_calc_income', loanCalcIncome); }, [loanCalcIncome]);
+  useEffect(() => { localStorage.setItem('loan_calc_income_ldy', incomeLdy); }, [incomeLdy]);
+  useEffect(() => { localStorage.setItem('loan_calc_income_juhae', incomeJuhae); }, [incomeJuhae]);
+  useEffect(() => { localStorage.setItem('loan_calc_birth_ldy', birthYearLdy); }, [birthYearLdy]);
+  useEffect(() => { localStorage.setItem('loan_calc_birth_juhae', birthYearJuhae); }, [birthYearJuhae]);
+  useEffect(() => { localStorage.setItem('loan_calc_future_income', String(useFutureIncome)); }, [useFutureIncome]);
   useEffect(() => { localStorage.setItem('loan_calc_scenarios', JSON.stringify(scenarios)); }, [scenarios]);
   useEffect(() => { localStorage.setItem('loan_calc_metro', String(isMetro)); }, [isMetro]);
 
@@ -258,7 +275,14 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
   }, []);
 
   const loanWon = (parseFloat(loanUk) || 0) * 100_000_000;
-  const incomeWon = (parseFloat(loanCalcIncome) || 0) * 10_000;
+  const incomeLdyMW = parseFloat(incomeLdy) || 0;
+  const incomeJuhaeMW = parseFloat(incomeJuhae) || 0;
+  const birthYearLdyNum = parseInt(birthYearLdy) || 0;
+  const birthYearJuhaeNum = parseInt(birthYearJuhae) || 0;
+  const projLdy = useFutureIncome && birthYearLdyNum ? projectIncome(incomeLdyMW, birthYearLdyNum) : incomeLdyMW;
+  const projJuhae = useFutureIncome && birthYearJuhaeNum ? projectIncome(incomeJuhaeMW, birthYearJuhaeNum) : incomeJuhaeMW;
+  const combinedIncomeMW = projLdy + projJuhae;
+  const incomeWon = combinedIncomeMW * 10_000;
 
   const STRESS_RATE = 3.0; // 수도권 스트레스 DSR 금리 (%)
 
@@ -374,9 +398,43 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
             onChange={e => setLoanYears(parseInt(e.target.value) || 30)} style={inputStyle} />
         </div>
         <div style={{ gridColumn: 'span 2' }}>
-          <label style={labelStyle}>연소득 (만원) — DSR 계산용, 선택</label>
-          <input type="number" step="100" placeholder="예: 6000" value={loanCalcIncome}
-            onChange={e => setLoanCalcIncome(e.target.value)} style={inputStyle} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+            <div>
+              <label style={labelStyle}>나 연소득 (만원)</label>
+              <input type="number" step="100" placeholder="예: 5000" value={incomeLdy}
+                onChange={e => setIncomeLdy(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>주해 연소득 (만원)</label>
+              <input type="number" step="100" placeholder="예: 4000" value={incomeJuhae}
+                onChange={e => setIncomeJuhae(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>나 출생연도</label>
+              <input type="number" placeholder="예: 1993" value={birthYearLdy}
+                onChange={e => setBirthYearLdy(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>주해 출생연도</label>
+              <input type="number" placeholder="예: 1995" value={birthYearJuhae}
+                onChange={e => setBirthYearJuhae(e.target.value)} style={inputStyle} />
+            </div>
+          </div>
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px',
+            fontSize: '11px', color: useFutureIncome ? '#5AAF84' : '#9e9e9e', cursor: 'pointer',
+          }}>
+            <input type="checkbox" checked={useFutureIncome} onChange={e => setUseFutureIncome(e.target.checked)} />
+            장래예상소득 반영 (만 45세 기준 · 연 3% 성장)
+          </label>
+          {(incomeLdyMW > 0 || incomeJuhaeMW > 0) && (
+            <div style={{ fontSize: '10px', color: '#5f6368', marginTop: '4px' }}>
+              부부 합산: <strong>{combinedIncomeMW.toLocaleString()}만원</strong>
+              {useFutureIncome && (incomeLdyMW + incomeJuhaeMW) !== combinedIncomeMW && (
+                <span style={{ color: '#9e9e9e' }}> (현재 {(incomeLdyMW + incomeJuhaeMW).toLocaleString()}만 → 장래 {combinedIncomeMW.toLocaleString()}만)</span>
+              )}
+            </div>
+          )}
         </div>
         <div style={{ gridColumn: 'span 2' }}>
           <label style={{
@@ -717,7 +775,11 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
   // 상단 탭: 구매 가능 분석 / 대출 계산
   const [mainTab, setMainTab] = useState<'afford' | 'loan'>('afford');
 
-  const [income, setIncome] = useState(() => localStorage.getItem('afford_income') || '');
+  const [incomeLdyA, setIncomeLdyA] = useState(() => localStorage.getItem('afford_income_ldy') || '');
+  const [incomeJuhaeA, setIncomeJuhaeA] = useState(() => localStorage.getItem('afford_income_juhae') || '');
+  const [birthYearLdyA, setBirthYearLdyA] = useState(() => localStorage.getItem('afford_birth_ldy') || '');
+  const [birthYearJuhaeA, setBirthYearJuhaeA] = useState(() => localStorage.getItem('afford_birth_juhae') || '');
+  const [useFutureIncomeA, setUseFutureIncomeA] = useState(() => localStorage.getItem('afford_future_income') === 'true');
   const [cash, setCash] = useState(() => localStorage.getItem('afford_cash') || '');
   const [rate, setRate] = useState(() => localStorage.getItem('afford_rate') || '3.5');
   const [loanYears, setLoanYears] = useState(() => parseInt(localStorage.getItem('afford_years') || '30'));
@@ -730,7 +792,11 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
   const [kbPriceMap, setKbPriceMap] = useState<Map<number, number | null>>(new Map());
   const [loadingHistories, setLoadingHistories] = useState(false);
 
-  useEffect(() => { localStorage.setItem('afford_income', income); }, [income]);
+  useEffect(() => { localStorage.setItem('afford_income_ldy', incomeLdyA); }, [incomeLdyA]);
+  useEffect(() => { localStorage.setItem('afford_income_juhae', incomeJuhaeA); }, [incomeJuhaeA]);
+  useEffect(() => { localStorage.setItem('afford_birth_ldy', birthYearLdyA); }, [birthYearLdyA]);
+  useEffect(() => { localStorage.setItem('afford_birth_juhae', birthYearJuhaeA); }, [birthYearJuhaeA]);
+  useEffect(() => { localStorage.setItem('afford_future_income', String(useFutureIncomeA)); }, [useFutureIncomeA]);
   useEffect(() => { localStorage.setItem('afford_cash', cash); }, [cash]);
   useEffect(() => { localStorage.setItem('afford_rate', rate); }, [rate]);
   useEffect(() => { localStorage.setItem('afford_years', String(loanYears)); }, [loanYears]);
@@ -760,7 +826,13 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const incomeManwon = parseFloat(income) || 0;
+  const incomeLdyAMW = parseFloat(incomeLdyA) || 0;
+  const incomeJuhaeAMW = parseFloat(incomeJuhaeA) || 0;
+  const birthYearLdyANum = parseInt(birthYearLdyA) || 0;
+  const birthYearJuhaeANum = parseInt(birthYearJuhaeA) || 0;
+  const projLdyA = useFutureIncomeA && birthYearLdyANum ? projectIncome(incomeLdyAMW, birthYearLdyANum) : incomeLdyAMW;
+  const projJuhaeA = useFutureIncomeA && birthYearJuhaeANum ? projectIncome(incomeJuhaeAMW, birthYearJuhaeANum) : incomeJuhaeAMW;
+  const incomeManwon = projLdyA + projJuhaeA;
   const cashWon = (parseFloat(cash) || 0) * 100_000_000;
   const rateNum = parseFloat(rate) || 0;
   const hasInputs = incomeManwon > 0 && cashWon >= 0 && rateNum > 0;
@@ -914,10 +986,44 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
       {/* 입력 섹션 */}
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #e8eaed', flexShrink: 0 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-          <div>
-            <label style={labelStyle}>연소득 (만원)</label>
-            <input type="number" placeholder="예: 5000" value={income}
-              onChange={e => setIncome(e.target.value)} style={inputStyle} />
+          <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+            <div>
+              <label style={labelStyle}>나 연소득 (만원)</label>
+              <input type="number" placeholder="예: 5000" value={incomeLdyA}
+                onChange={e => setIncomeLdyA(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>주해 연소득 (만원)</label>
+              <input type="number" placeholder="예: 4000" value={incomeJuhaeA}
+                onChange={e => setIncomeJuhaeA(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>나 출생연도</label>
+              <input type="number" placeholder="예: 1993" value={birthYearLdyA}
+                onChange={e => setBirthYearLdyA(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>주해 출생연도</label>
+              <input type="number" placeholder="예: 1995" value={birthYearJuhaeA}
+                onChange={e => setBirthYearJuhaeA(e.target.value)} style={inputStyle} />
+            </div>
+            <div style={{ gridColumn: 'span 2' }}>
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                fontSize: '11px', color: useFutureIncomeA ? '#5AAF84' : '#9e9e9e', cursor: 'pointer',
+              }}>
+                <input type="checkbox" checked={useFutureIncomeA} onChange={e => setUseFutureIncomeA(e.target.checked)} />
+                장래예상소득 반영 (만 45세 기준 · 연 3% 성장)
+              </label>
+              {(incomeLdyAMW > 0 || incomeJuhaeAMW > 0) && (
+                <div style={{ fontSize: '10px', color: '#5f6368', marginTop: '3px' }}>
+                  부부 합산: <strong>{incomeManwon.toLocaleString()}만원</strong>
+                  {useFutureIncomeA && (incomeLdyAMW + incomeJuhaeAMW) !== incomeManwon && (
+                    <span style={{ color: '#9e9e9e' }}> (현재 {(incomeLdyAMW + incomeJuhaeAMW).toLocaleString()}만 → 장래 {incomeManwon.toLocaleString()}만)</span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div>
             <label style={labelStyle}>현금 보유액 (억)</label>
