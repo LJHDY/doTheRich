@@ -172,31 +172,41 @@ function buildYearlyScheduleEP(loanWon: number, annualRatePct: number, years: nu
   return result;
 }
 
-// 통계청 임금구조기본통계 기반 연령별 소득 지수 (만 45~49세 정점 = 100)
-const AGE_INCOME_BRACKETS: { minAge: number; index: number }[] = [
-  { minAge: 55, index: 91 },
-  { minAge: 50, index: 99 },
-  { minAge: 45, index: 100 },
-  { minAge: 40, index: 94 },
-  { minAge: 35, index: 84 },
-  { minAge: 30, index: 71 },
-  { minAge: 25, index: 58 },
-  { minAge: 0,  index: 48 },
+// 은행연합회 모범규준 + 통계청 2024년 임금구조기본통계 (월소득, 원)
+// x₁~x₉: 20~24 / 25~29 / 30~34 / 35~39 / 40~44 / 45~49 / 50~54 / 55~59 / 60세+
+const INCOME_STAT: number[] = [
+  2_536_000, // x1: 20~24세
+  3_072_000, // x2: 25~29세
+  3_571_000, // x3: 30~34세
+  4_123_000, // x4: 35~39세
+  4_411_000, // x5: 40~44세
+  4_551_000, // x6: 45~49세
+  4_486_000, // x7: 50~54세
+  4_089_000, // x8: 55~59세
+  3_147_000, // x9: 60세+
 ];
 
-function getAgeIndex(age: number): number {
-  for (const b of AGE_INCOME_BRACKETS) {
-    if (age >= b.minAge) return b.index;
-  }
-  return 48;
+// 만 나이 → INCOME_STAT 인덱스
+function ageToBracket(age: number): number {
+  if (age < 20) return 0;
+  if (age >= 60) return 8;
+  return Math.floor((age - 20) / 5);
 }
 
-// 만 나이 기반 장래예상소득 (통계청 연령별 소득지수 적용, 정점 만 45세)
-function projectIncome(incomeMW: number, birthYear: number): number {
-  if (!incomeMW || !birthYear) return incomeMW;
+// 장래예상소득 — 은행연합회 공식 산식
+// 적용 대상: 20~34세 (35세 이상은 현재 소득 그대로)
+// 공식: 현재소득 × (현재 구간 + 이후 구간 합) / (구간 수 × 현재 구간 소득)
+// 구간 수 = Math.floor(loanYears / 5) + 1
+function projectIncome(incomeMW: number, birthYear: number, loanYears: number): number {
+  if (!incomeMW || !birthYear || !loanYears) return incomeMW;
   const age = new Date().getFullYear() - birthYear;
-  if (age >= 45) return incomeMW;
-  return Math.round(incomeMW * 100 / getAgeIndex(age));
+  if (age < 20 || age >= 35) return incomeMW;
+  const startIdx = ageToBracket(age);
+  const numBrackets = Math.floor(loanYears / 5) + 1;
+  const endIdx = Math.min(startIdx + numBrackets - 1, INCOME_STAT.length - 1);
+  const actual = endIdx - startIdx + 1;
+  const sum = INCOME_STAT.slice(startIdx, endIdx + 1).reduce((a, b) => a + b, 0);
+  return Math.round(incomeMW * sum / (actual * INCOME_STAT[startIdx]));
 }
 
 // 억 단위 포맷
@@ -297,8 +307,8 @@ const LoanCalcTab: React.FC<{ isMobile?: boolean }> = ({ isMobile }) => {
   const incomeJuhaeMW = parseFloat(incomeJuhae) || 0;
   const birthYearLdyNum = parseInt(birthYearLdy) || 0;
   const birthYearJuhaeNum = parseInt(birthYearJuhae) || 0;
-  const projLdy = useFutureIncome && birthYearLdyNum ? projectIncome(incomeLdyMW, birthYearLdyNum) : incomeLdyMW;
-  const projJuhae = useFutureIncome && birthYearJuhaeNum ? projectIncome(incomeJuhaeMW, birthYearJuhaeNum) : incomeJuhaeMW;
+  const projLdy = useFutureIncome && birthYearLdyNum ? projectIncome(incomeLdyMW, birthYearLdyNum, loanYears) : incomeLdyMW;
+  const projJuhae = useFutureIncome && birthYearJuhaeNum ? projectIncome(incomeJuhaeMW, birthYearJuhaeNum, loanYears) : incomeJuhaeMW;
   const combinedIncomeMW = projLdy + projJuhae;
   const incomeWon = combinedIncomeMW * 10_000;
 
@@ -848,8 +858,8 @@ const AffordabilityPanel: React.FC<Props> = ({ complexes, onClose, isMobile }) =
   const incomeJuhaeAMW = parseFloat(incomeJuhaeA) || 0;
   const birthYearLdyANum = parseInt(birthYearLdyA) || 0;
   const birthYearJuhaeANum = parseInt(birthYearJuhaeA) || 0;
-  const projLdyA = useFutureIncomeA && birthYearLdyANum ? projectIncome(incomeLdyAMW, birthYearLdyANum) : incomeLdyAMW;
-  const projJuhaeA = useFutureIncomeA && birthYearJuhaeANum ? projectIncome(incomeJuhaeAMW, birthYearJuhaeANum) : incomeJuhaeAMW;
+  const projLdyA = useFutureIncomeA && birthYearLdyANum ? projectIncome(incomeLdyAMW, birthYearLdyANum, loanYears) : incomeLdyAMW;
+  const projJuhaeA = useFutureIncomeA && birthYearJuhaeANum ? projectIncome(incomeJuhaeAMW, birthYearJuhaeANum, loanYears) : incomeJuhaeAMW;
   const incomeManwon = projLdyA + projJuhaeA;
   const cashWon = (parseFloat(cash) || 0) * 100_000_000;
   const rateNum = parseFloat(rate) || 0;
