@@ -172,13 +172,31 @@ function buildYearlyScheduleEP(loanWon: number, annualRatePct: number, years: nu
   return result;
 }
 
-// 만 나이 기반 장래예상소득 (소득 정점 만 45세, 연 3% 성장률 가정)
+// 통계청 임금구조기본통계 기반 연령별 소득 지수 (만 45~49세 정점 = 100)
+const AGE_INCOME_BRACKETS: { minAge: number; index: number }[] = [
+  { minAge: 55, index: 91 },
+  { minAge: 50, index: 99 },
+  { minAge: 45, index: 100 },
+  { minAge: 40, index: 94 },
+  { minAge: 35, index: 84 },
+  { minAge: 30, index: 71 },
+  { minAge: 25, index: 58 },
+  { minAge: 0,  index: 48 },
+];
+
+function getAgeIndex(age: number): number {
+  for (const b of AGE_INCOME_BRACKETS) {
+    if (age >= b.minAge) return b.index;
+  }
+  return 48;
+}
+
+// 만 나이 기반 장래예상소득 (통계청 연령별 소득지수 적용, 정점 만 45세)
 function projectIncome(incomeMW: number, birthYear: number): number {
   if (!incomeMW || !birthYear) return incomeMW;
-  const PEAK_AGE = 45;
   const age = new Date().getFullYear() - birthYear;
-  if (age >= PEAK_AGE) return incomeMW;
-  return Math.round(incomeMW * Math.pow(1.03, PEAK_AGE - age));
+  if (age >= 45) return incomeMW;
+  return Math.round(incomeMW * 100 / getAgeIndex(age));
 }
 
 // 억 단위 포맷
